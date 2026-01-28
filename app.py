@@ -5,7 +5,7 @@ import os
 import random
 
 # --- 1. CONFIGURACIÓ DE PÀGINA ---
-st.set_page_config(page_title="RSU Terminal Pro", page_icon="📊", layout="wide")
+st.set_page_config(page_title="RSU Terminal", page_icon="📊", layout="wide")
 
 # --- 2. ESTILO DARK TERMINAL (CSS) ---
 st.markdown("""
@@ -88,7 +88,7 @@ with st.sidebar:
     if os.path.exists("logo.png"):
         st.image("logo.png", width=120)
     st.markdown("### ⚙️ CONTROL")
-    ticker = st.text_input("SYMBOL", value="NVDA").upper()
+    ticker = st.text_input("Ticker", value="NVDA").upper()
     st.write("---")
     
     if os.path.exists("formacion"):
@@ -163,6 +163,7 @@ if st.button(f"EJECUTAR PROMPT RSU"):
 
 st.write("---")
 st.caption(f"RSU Project 2026 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+
 
 
 

@@ -71,7 +71,19 @@ if not st.session_state["auth"]:
                 st.error("Accés Denegat")
     st.stop()
 
-# --- 5. DASHBOARD LAYOUT ---
+# --- 5. FUNCIÓ MILLORA: ÍNDEXS EN TEMPS REAL ---
+def get_market_index(ticker_symbol):
+    try:
+        data = yf.Ticker(ticker_symbol)
+        info = data.fast_info
+        price = info['last_price']
+        prev_close = info['previous_close']
+        change = ((price - prev_close) / prev_close) * 100
+        return price, change
+    except:
+        return 0.0, 0.0
+
+# --- 6. DASHBOARD LAYOUT ---
 with st.sidebar:
     if os.path.exists("logo.png"):
         st.image("logo.png", width=120)
@@ -91,14 +103,26 @@ with head_col1:
 with head_col2:
     st.title(f"Terminal RSU: {ticker}")
 
-# Índexs Ràpids (UI Estil Bloomberg/TradingView)
-c1, c2, c3, c4 = st.columns(4)
-with c1: st.markdown('<div class="metric-card"><p class="metric-title">S&P 500</p><p class="metric-value">4,890.97</p><p style="color:#00c087">▲ +0.45%</p></div>', unsafe_allow_html=True)
-with c2: st.markdown('<div class="metric-card"><p class="metric-title">NASDAQ 100</p><p class="metric-value">17,510.58</p><p style="color:#00c087">▲ +0.82%</p></div>', unsafe_allow_html=True)
-with c3: st.markdown('<div class="metric-card"><p class="metric-title">VIX Index</p><p class="metric-value">13.45</p><p style="color:#f23645">▼ -2.10%</p></div>', unsafe_allow_html=True)
-with c4: st.markdown('<div class="metric-card"><p class="metric-title">FEAR & GREED</p><p class="metric-value">64</p><p style="color:#ffa500;">GREED</p></div>', unsafe_allow_html=True)
+# Índexs Ràpids (MILLORATS AMB DADES REALS)
+sp_p, sp_c = get_market_index("^GSPC")
+ndx_p, ndx_c = get_market_index("^IXIC")
+vix_p, vix_c = get_market_index("^VIX")
 
-# --- 6. ACCIÓ PRINCIPAL ---
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    color = "#00c087" if sp_c >= 0 else "#f23645"
+    st.markdown(f'<div class="metric-card"><p class="metric-title">S&P 500</p><p class="metric-value">{sp_p:,.2f}</p><p style="color:{color}">{"▲" if sp_c >= 0 else "▼"} {sp_c:.2f}%</p></div>', unsafe_allow_html=True)
+with c2:
+    color = "#00c087" if ndx_c >= 0 else "#f23645"
+    st.markdown(f'<div class="metric-card"><p class="metric-title">NASDAQ 100</p><p class="metric-value">{ndx_p:,.2f}</p><p style="color:{color}">{"▲" if ndx_c >= 0 else "▼"} {ndx_c:.2f}%</p></div>', unsafe_allow_html=True)
+with c3:
+    # En el VIX el rojo suele ser cuando sube (miedo)
+    color = "#f23645" if vix_c >= 0 else "#00c087"
+    st.markdown(f'<div class="metric-card"><p class="metric-title">VIX Index</p><p class="metric-value">{vix_p:.2f}</p><p style="color:{color}">{"▲" if vix_c >= 0 else "▼"} {vix_c:.2f}%</p></div>', unsafe_allow_html=True)
+with c4:
+    st.markdown('<div class="metric-card"><p class="metric-title">FEAR & GREED</p><p class="metric-value">64</p><p style="color:#ffa500;">GREED</p></div>', unsafe_allow_html=True)
+
+# --- 7. ACCIÓ PRINCIPAL ---
 if st.button(f"EJECUTAR PROMPT RSU"):
     if error_msg:
         st.error(f"Error: {error_msg}")
@@ -114,7 +138,6 @@ if st.button(f"EJECUTAR PROMPT RSU"):
                             f'<p class="metric-value" style="font-size: 2rem;">{price:.2f} USD</p>'
                             f'</div>', unsafe_allow_html=True)
                 
-                # CORRECCIÓ: He canviat 'val' per 'price' perquè funcioni correctament
                 prompt_rsu = f"""
                 Analitza [TICKER]: {ticker} (Preu: {price}) de manera concisa i organitzada:
                 1. Explica a què es dedica l'empresa com si tingués 12 anys: tres punts breus i analogia.

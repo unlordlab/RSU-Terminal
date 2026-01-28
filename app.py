@@ -141,3 +141,4 @@ if st.button(f"EJECUTAR PROMPT RSU"):
 st.write("---")
 st.caption(f"RSU Project 2026 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
 
+

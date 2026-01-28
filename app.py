@@ -16,20 +16,23 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONFIGURACIÓN IA ---
-# Clave extraída de tus capturas
-API_KEY = "TU_CLAVE_AQUI_SOLO_EN_LOCAL"
+# --- 2. CONFIGURACIÓN IA (MODO SEGURO) ---
+# Intentamos leer la clave desde los Secrets de Streamlit (Nube) 
+# o desde una variable local (PC)
+API_KEY = st.secrets.get("GEMINI_API_KEY")
 
 def conectar_ia():
+    if not API_KEY:
+        return None, None, "No se encontró la API KEY en los Secrets."
     try:
         genai.configure(api_key=API_KEY)
         modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         seleccionado = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in modelos_disponibles else modelos_disponibles[0]
-        return genai.GenerativeModel(seleccionado), seleccionado
-    except:
-        return None, None
+        return genai.GenerativeModel(seleccionado), seleccionado, None
+    except Exception as e:
+        return None, None, str(e)
 
-model, modelo_nombre = conectar_ia()
+model, modelo_nombre, error_msg = conectar_ia()
 
 # --- 3. LOGIN ---
 if "auth" not in st.session_state: st.session_state["auth"] = False
@@ -59,42 +62,35 @@ with st.sidebar:
             st.image(os.path.join("formacion", random.choice(archivos)), use_container_width=True)
 
 st.title(f"📊 Terminal RSU: {ticker}")
-st.caption(f"Motor activo: {modelo_nombre}")
 
 if st.button(f"EJECUTAR IA"):
-    with st.spinner(f"Ejecutando Prompt RSU para {ticker}..."):
-        try:
-            # Obtener datos básicos de precio
-            stock = yf.Ticker(ticker)
-            val = stock.fast_info['last_price']
-            st.markdown(f"<div class='price-card'><h3>Precio Actual: {val:.2f} USD</h3></div>", unsafe_allow_html=True)
-            
-            # --- DEFINICIÓN DEL PROMPT RSU ---
-            # Este prompt utiliza las instrucciones exactas de tu archivo [cite: 1-15]
-            prompt_rsu = f"""
-            Analiza el ticker {ticker} siguiendo estrictamente esta estructura:
-            
-            1. Explica a qué se dedica la empresa como si tuviera 12 años (3 puntos breves y analogía)[cite: 1].
-            2. Resumen profesional (máximo 10 frases): sector, productos, competidores (tickers), métricas y ventaja competitiva (moat)[cite: 2].
-            3. Tabla con: Temas candentes/narrativa, Catalizadores y Datos fundamentales significativos[cite: 3, 4].
-            4. Tabla de principales noticias/eventos de los últimos 3 meses (Fecha, Tipo, Resumen, Enlace)[cite: 5, 6, 7].
-            5. Menciona compras/ventas de insiders recientes[cite: 8].
-            6. Resumen comparativo con competidores y tendencia del sector en el último mes[cite: 9].
-            7. Catalizadores próximos en los siguientes 30 días[cite: 10].
-            8. Cambios en precios objetivo de analistas recientemente[cite: 11].
-            
-            Utiliza un estilo claro, conciso y profesional, enfocado en catalizadores que muevan el precio[cite: 13, 14, 15].
-            """
-            
-            if model:
+    if error_msg:
+        st.error(f"Error de conexión: {error_msg}")
+    else:
+        with st.spinner(f"Ejecutando Prompt RSU para {ticker}..."):
+            try:
+                stock = yf.Ticker(ticker)
+                val = stock.fast_info['last_price']
+                st.markdown(f"<div class='price-card'><h3>Precio Actual: {val:.2f} USD</h3></div>", unsafe_allow_html=True)
+                
+                # Basado en la metodología de catalizadores RSU [cite: 1, 14, 15]
+                prompt_rsu = f"""
+                Analitza [TICKER]: {ticker} (Preu: {val}) de manera concisa i organitzada:
+                1. Empresa per a 12 anys: 3 punts i analogia[cite: 1].
+                2. Resum professional: sector, productes, competidors (tickers), avantatge (moat)[cite: 2].
+                3. Taula: Temes candents, narrativa, catalitzadors i dades fonamentals[cite: 3, 4].
+                4. Taula de notícies (3 mesos): Data, Tipus, Resum i Enllaç[cite: 5, 6, 7].
+                5. Insiders i institucional[cite: 8].
+                6. Comparativa sectorial (últim mes)[cite: 9].
+                7. Catalitzadors propers (30 dies)[cite: 10].
+                8. Canvis en preus objectiu d'analistes[cite: 11].
+                """
+                
                 response = model.generate_content(prompt_rsu)
                 st.markdown("## 🤖 Prompt RSU")
                 st.markdown(response.text)
-            else:
-                st.error("Error: No se pudo conectar con el cerebro de la IA.")
                 
-        except Exception as e:
-            st.error(f"Error al analizar {ticker}: {e}")
+            except Exception as e:
+                st.error(f"Error en el análisis: {e}")
 
-st.write("---")
-st.caption("RSU Finanz-AI Pro | Basado en metodología de catalizadores y fundamentales.")
+st.caption(f"RSU Project 2026 | Motor: {modelo_nombre}")

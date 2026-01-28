@@ -127,7 +127,7 @@ if st.button(f"EJECUTAR PROMPT RSU"):
     if error_msg:
         st.error(f"Error: {error_msg}")
     else:
-        with st.spinner(f"Analitzant catalitzadors per a {ticker}..."):
+        with st.spinner(f"Executant prompt RSU per {ticker}..."):
             try:
                 # Obtenció de dades reals
                 stock = yf.Ticker(ticker)
@@ -171,6 +171,7 @@ if st.button(f"EJECUTAR PROMPT RSU"):
 
 st.write("---")
 st.caption(f"RSU Project 2026 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+
 
 
 

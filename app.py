@@ -5,7 +5,7 @@ import os
 import random
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="RSU Terminal Pro", page_icon="📊", layout="wide")
+st.set_page_config(page_title="RSU Terminal Pro", page_icon="💎", layout="wide")
 
 # --- 2. ESTILO DARK TERMINAL (CSS AVANZADO) ---
 st.markdown("""
@@ -61,15 +61,16 @@ model, modelo_nombre = conectar_ia()
 # --- 4. SEGURIDAD ---
 if "auth" not in st.session_state: st.session_state["auth"] = False
 if not st.session_state["auth"]:
-    col1, col2, col3 = st.columns([1,1.5,1])
+    col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.markdown("<h2 style='text-align:center;'>RSU TERMINAL LOGIN</h2>", unsafe_allow_html=True)
-        pw = st.text_input("Access Key", type="password")
-        if st.button("CONNECT"):
+        if os.path.exists("logo.png"): st.image("logo.png")
+        st.title("🛡️ Acceso RSU")
+        pw = st.text_input("Clave:", type="password")
+        if st.button("ENTRAR"):
             if pw == "RSU2026":
                 st.session_state["auth"] = True
                 st.rerun()
-            else: st.error("Access Denied")
+            else: st.error("Clave Incorrecta")
     st.stop()
 
 # --- 5. DASHBOARD LAYOUT ---
@@ -104,19 +105,28 @@ if st.button(f"RUN PROMPT RSU: {ticker}"):
                         f'</div>', unsafe_allow_html=True)
             
             # PROMPT RSU 
-            prompt_final = f"""
-            Analitza {ticker} basant-te en la metodologia RSU (Preu actual: {price}):
-            1. Explicació per a 12 anys (3 punts i analogia)[cite: 1].
-            2. Resum Professional (màxim 10 frases): sector, productes, competidors (tickers) i fossat (moat)[cite: 2].
-            3. TAULA: Narrativa/Temes candents, Catalitzadors i Fonamentals[cite: 3, 4].
-            4. TAULA NOTÍCIES (3 mesos): Data, Tipus, Resum i Enllaç[cite: 5, 6, 7].
-            5. Insiders i Moviments Institucionals[cite: 8].
-            6. Comparativa sectorial (últim mes)[cite: 9].
-            7. Catalitzadors propers (30 dies)[cite: 10].
-            8. Canvis en Target Price d'analistes[cite: 11].
-            Enfoca't en per què l'acció pot fer un gran moviment[cite: 14, 15].
-            """
-            
+            prompt_rsu = f"""
+                Analitza [TICKER]: {ticker} (Preu: {val})$ de manera concisa i organitzada:
+                1. Explica a què es dedica l'empresa com si tingués 12 anys: tres punts breus sobre el que fa i qualsevol exemple o analogia útil amb la qual em pugui identificar.[cite: 1].
+                2. Resum professional (màxim 10 frases): sector, productes/serveis principals, competidors primaris (llista els tickers), mètriques o fites destacables, avantatge competitiu/fossat (moat), per què són únics i, si es tracta d'una biotecnològica, indica si tenen un producte comercial o estan en fases clíniques.[cite: 2].
+                3. En una taula, proporciona el següent:
+                - Qualsevol tema candent, narrativa o història de l'acció.
+                - Qualsevol catalitzador (resultats, notícies, macro).
+                - Qualsevol dada fonamental significativa (gran creixement en beneficis o ingressos, fossat, producte o servei únic, gestió superior, patents, etc.).
+                [cite: 3, 4].
+                4. Mostra totes les principals notícies/esdeveniments dels últims 3 mesos: Utilitza una taula per a:
+                - Data (AAAA-MM-DD).
+                - Tipus d'esdeveniment (Resultats, Llançament de producte, Millora/Degradació d'analistes, etc.).
+                - Resum breu (màxim 1-2 frases).
+                - Enllaç directe a la font.
+                - Marca qualsevol esdeveniment important que hagi mogut el preu (resultats sorpresa, canvi significatiu en les previsions/guidance, accions d'analistes de primer nivell).[cite: 5, 6, 7].
+                5. Esmenta qualsevol compra/venda recent d'insiders o presentacions institucionals si estan visibles.[cite: 8].
+                6. Resumeix com es mou l'acció en comparació amb els seus competidors principals i la tendència general del sector en l'últim mes (pujada/baixada).[cite: 9].
+                7. Senyala els propers catalitzadors (resultats, llançaments de productes, esdeveniments regulatoris) en els propers 30 dies.[cite: 10].
+                8. Anota qualsevol canvi en els preus objectiu dels analistes per a aquest ticker durant el període esmentat. Dona-li un format de fàcil revisió. Si és possible, utilitza taules per als esdeveniments i els moviments dels parells del sector. Respon amb un estil clar, concís i fàcil de llegir per utilitzar-lo en decisions d'inversió.[cite: 11].
+                n general, centra't en les raons per les quals l'acció pot fer un gran moviment en el futur: beneficis, vendes, previsions (guidance), llançaments de productes, millores/degradacions d'analistes, compres d'insiders (especialment del CEO/Fundador i de l'equip executiu), associacions i catalitzadors del sector o de notícies. Vull centrar-me en accions amb catalitzadors i temàtiques, ja que els catalitzadors són la causa dels grans moviments al mercat de valors.
+                """
+          
             if model:
                 response = model.generate_content(prompt_final)
                 st.markdown('<div class="prompt-container">', unsafe_allow_html=True)
@@ -131,3 +141,4 @@ if st.button(f"RUN PROMPT RSU: {ticker}"):
 
 st.write("---")
 st.caption(f"Terminal RSU v0.1 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+

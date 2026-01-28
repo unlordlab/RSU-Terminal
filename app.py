@@ -128,7 +128,7 @@ if st.button(f"RUN PROMPT RSU: {ticker}"):
                 """
           
             if model:
-                response = model.generate_content(prompt_final)
+                response = model.generate_content(prompt_rsu)
                 st.markdown('<div class="prompt-container">', unsafe_allow_html=True)
                 st.markdown("### 🤖 PROMPT RSU REPORT")
                 st.markdown(response.text)
@@ -141,5 +141,6 @@ if st.button(f"RUN PROMPT RSU: {ticker}"):
 
 st.write("---")
 st.caption(f"Terminal RSU v0.1 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+
 
 

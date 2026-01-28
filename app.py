@@ -106,7 +106,7 @@ if st.button(f"RUN PROMPT RSU: {ticker}"):
             
             # PROMPT RSU 
             prompt_rsu = f"""
-                Analitza [TICKER]: {ticker} (Preu: {val})$ de manera concisa i organitzada:
+                Analitza [TICKER]: {ticker} (Preu: {price})$ de manera concisa i organitzada:
                 1. Explica a què es dedica l'empresa com si tingués 12 anys: tres punts breus sobre el que fa i qualsevol exemple o analogia útil amb la qual em pugui identificar.[cite: 1].
                 2. Resum professional (màxim 10 frases): sector, productes/serveis principals, competidors primaris (llista els tickers), mètriques o fites destacables, avantatge competitiu/fossat (moat), per què són únics i, si es tracta d'una biotecnològica, indica si tenen un producte comercial o estan en fases clíniques.[cite: 2].
                 3. En una taula, proporciona el següent:
@@ -141,4 +141,5 @@ if st.button(f"RUN PROMPT RSU: {ticker}"):
 
 st.write("---")
 st.caption(f"Terminal RSU v0.1 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+
 

@@ -139,4 +139,5 @@ if st.button(f"EJECUTAR PROMPT RSU"):
                 st.error(f"Error en el sistema: {e}")
 
 st.write("---")
-st.caption(f"RSU Project 2026 | Engine: {modelo_nombre}")
+st.caption(f"RSU Project 2026 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+

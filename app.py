@@ -142,16 +142,8 @@ if st.button(f"EJECUTAR PROMPT RSU"):
                 Analitza [TICKER]: {ticker} (Preu: {price})$ de manera concisa i organitzada:
                 1. Explica a què es dedica l'empresa com si tingués 12 anys: tres punts breus sobre el que fa i qualsevol exemple o analogia útil amb la qual em pugui identificar.
                 2. Resum professional (màxim 10 frases): sector, productes/serveis principals, competidors primaris (llista els tickers), mètriques o fites destacables, avantatge competitiu/fossat (moat), per què són únics i, si es tracta d'una biotecnològica, indica si tenen un producte comercial o estan en fases clíniques.
-                3. En una taula, proporciona el següent:
-                  Qualsevol tema candent, narrativa o història de l'acció.
-                  Qualsevol catalitzador (resultats, notícies, macro).
-                  Qualsevol dada fonamental significativa (gran creixement en beneficis o ingressos, fossat, producte o servei únic, gestió superior, patents, etc.).
-                4. Mostra totes les principals notícies/esdeveniments dels últims 3 mesos: Utilitza una taula per a:
-                  Data (AAAA-MM-DD).
-                  Tipus d'esdeveniment (Resultats, Llançament de producte, Millora/Degradació d'analistes, etc.).
-                  Resum breu (màxim 1-2 frases).
-                  Enllaç directe a la font.
-                  Marca qualsevol esdeveniment important que hagi mogut el preu (resultats sorpresa, canvi significatiu en les previsions/guidance, accions d'analistes de primer nivell).
+                3. En una taula, proporciona el següent: Qualsevol tema candent, narrativa o història de l'acció, Qualsevol catalitzador (resultats, notícies, macro), Qualsevol dada fonamental significativa (gran creixement en beneficis o ingressos, fossat, producte o servei únic, gestió superior, patents, etc.).
+                4. Mostra totes les principals notícies/esdeveniments dels últims 3 mesos: Utilitza una taula per a: Data (AAAA-MM-DD). Tipus d'esdeveniment (Resultats, Llançament de producte, Millora/Degradació d'analistes, etc.). Resum breu (màxim 1-2 frases). Enllaç directe a la font. Marca qualsevol esdeveniment important que hagi mogut el preu (resultats sorpresa, canvi significatiu en les previsions/guidance, accions d'analistes de primer nivell).
                 5. Esmenta qualsevol compra/venda recent d'insiders o presentacions institucionals si estan visibles.
                 6. Resumeix com es mou l'acció en comparació amb els seus competidors principals i la tendència general del sector en l'últim mes (pujada/baixada).
                 7. Senyala els propers catalitzadors (resultats, llançaments de productes, esdeveniments regulatoris) en els propers 30 dies.
@@ -171,6 +163,7 @@ if st.button(f"EJECUTAR PROMPT RSU"):
 
 st.write("---")
 st.caption(f"RSU Project 2026 | Market Data via Yahoo Finance | Engine: {modelo_nombre}")
+
 
 
 

@@ -7,23 +7,29 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-# --- CONFIGURACIÓN Y ESTILO ---
+# --- 1. CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="RSU Master Terminal", layout="wide", page_icon="📊")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0c0e12; color: #e0e0e0; }
     [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
-    .metric-card { background-color: #151921; padding: 20px; border-radius: 10px; border: 1px solid #2d3439; text-align: center; }
-    .prompt-container { background-color: #1a1e26; border-left: 5px solid #2962ff; padding: 20px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; }
+    .metric-card {
+        background-color: #151921; padding: 20px; border-radius: 10px;
+        border: 1px solid #2d3439; text-align: center;
+    }
+    .prompt-container {
+        background-color: #1a1e26; border-left: 5px solid #2962ff;
+        padding: 20px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONFIGURACIÓN IA ---
+# --- 2. CONFIGURACIÓN IA (SISTEMA ROBUSTO v1.2) ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 def conectar_ia():
-    if not API_KEY: return None, None, "Falta API KEY"
+    if not API_KEY: return None, None, "Falta API KEY en Secrets"
     try:
         genai.configure(api_key=API_KEY)
         modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
@@ -31,64 +37,133 @@ def conectar_ia():
         return genai.GenerativeModel(sel), sel, None
     except Exception as e: return None, None, str(e)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def obtener_prompt_github():
     try:
-        # ⚠️ REEMPLAZA ESTO CON TU URL RAW REAL
+        # ⚠️ REEMPLAZA CON TU URL RAW DE GITHUB
         url_raw = "https://github.com/unlordlab/RSU-Terminal/blob/df1305016e5028c9db6cc5c0a689ddd661434272/prompt_report.txt"
-        res = requests.get(url_raw)
-        return res.text if res.status_code == 200 else ""
+        response = requests.get(url_raw)
+        if response.status_code == 200:
+            return response.text
+        return ""
     except: return ""
 
 model_ia, modelo_nombre, error_ia = conectar_ia()
 
-# --- ACCESO ---
+# --- 3. ACCESO ---
 if "auth" not in st.session_state: st.session_state["auth"] = False
 if not st.session_state["auth"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
+        if os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
         st.markdown("<h3 style='text-align:center;'>RSU MASTER TERMINAL</h3>", unsafe_allow_html=True)
         password = st.text_input("ACCESS KEY", type="password")
-        if st.button("UNLOCK", use_container_width=True):
+        if st.button("UNLOCK TERMINAL", use_container_width=True):
             if password == "RSU2026":
                 st.session_state["auth"] = True
                 st.rerun()
+            else: st.error("Clave Incorrecta")
     st.stop()
 
-# --- SIDEBAR ---
-with st.sidebar:
-    menu = st.radio("", ["📊 DASHBOARD", "🤖 IA REPORT", "💼 CARTERA", "📄 TESIS", "⚖️ TRADE GRADER", "🎥 ACADEMY"])
-    if st.button("Refrescar GitHub/Caché"): st.cache_data.clear()
+# --- 4. FUNCIONES DE MERCADO ---
+@st.cache_data(ttl=600)
+def get_cnn_fear_greed():
+    try:
+        url = "https://edition.cnn.com/markets/fear-and-greed"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        soup = BeautifulSoup(requests.get(url, headers=headers).content, 'html.parser')
+        return int(soup.find("span", class_="market-fng-gauge__dial-number-value").text)
+    except: return 50
 
-# --- LÓGICA DE MENÚ ---
+def get_market_index(ticker_symbol):
+    try:
+        data = yf.Ticker(ticker_symbol).fast_info
+        p = data['last_price']
+        c = ((p - data['previous_close']) / data['previous_close']) * 100
+        return p, c
+    except: return 0.0, 0.0
+
+# --- 5. SIDEBAR ---
+with st.sidebar:
+    if os.path.exists("logo.png"): st.image("logo.png", width=120)
+    menu = st.radio("", ["📊 DASHBOARD", "🤖 IA REPORT", "💼 CARTERA", "📄 TESIS", "⚖️ TRADE GRADER", "🎥 ACADEMY"])
+    st.write("---")
+    if st.button("🔄 Forzar Refresco GitHub"):
+        st.cache_data.clear()
+        st.success("Caché limpia")
+    
+    fg = get_cnn_fear_greed()
+    fig = go.Figure(go.Indicator(mode="gauge+number", value=fg, gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2962ff"}}, title={'text': "SENTIMIENTO", 'font': {'color': 'white', 'size': 14}}))
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', height=180, margin=dict(l=10,r=10,t=30,b=10))
+    st.plotly_chart(fig, use_container_width=True)
+
+# --- 6. LÓGICA DE MENÚ ---
 if menu == "📊 DASHBOARD":
-    st.title("Market Overview")
-    # (Aquí iría tu lógica de índices que ya funciona)
+    t1, t2, t3 = st.tabs(["📈 MERCADO", "📰 NOTICIAS", "💰 EARNINGS"])
+    with t1:
+        idx = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
+        cols = st.columns(4)
+        for i, (n, s) in enumerate(idx.items()):
+            p, c = get_market_index(s)
+            color = "#00ffad" if (c >= 0 and n != "VIX") or (c < 0 and n == "VIX") else "#f23645"
+            cols[i].markdown(f"""<div class="metric-card"><small>{n}</small><h3>{p:,.1f}</h3><p style="color:{color}">{c:.2f}%</p></div>""", unsafe_allow_html=True)
+    with t2:
+        try:
+            df = pd.read_csv(st.secrets["URL_NOTICIAS"])
+            st.dataframe(df, use_container_width=True)
+        except: st.info("Configura URL_NOTICIAS en Secrets.")
 
 elif menu == "🤖 IA REPORT":
     ticker_input = st.text_input("Ticker", "NVDA").upper()
-    if st.button("GENERAR REPORTE RSU"):
+    if st.button("EJECUTAR ANÁLISIS RSU"):
         if error_ia: st.error(error_ia)
         else:
-            with st.spinner(f"Analizando {ticker_input}..."):
-                # 1. Traemos las instrucciones del .txt
-                instrucciones = obtener_prompt_github()
+            with st.spinner(f"Analizando {ticker_input} con instrucciones de GitHub..."):
+                # 1. Traer el prompt de GitHub
+                template = obtener_prompt_github()
                 
-                # 2. Verificación de seguridad: si no hay {t}, lo forzamos al inicio
-                if "{t}" in instrucciones:
-                    prompt_final = instrucciones.replace("{t}", ticker_input)
+                if not template:
+                    st.error("No se pudo leer el archivo de GitHub. Revisa la URL.")
                 else:
-                    prompt_final = f"Analitza el ticker {ticker_input}. Instruccions adicionals: {instrucciones}"
-                
-                try:
-                    # 3. Llamada real y visualización
-                    response = model_ia.generate_content(prompt_final)
-                    st.markdown("### 📝 REPORTE GENERADO")
-                    st.markdown(f'<div class="prompt-container">{response.text}</div>', unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"Error de IA: {e}")
+                    # 2. REEMPLAZO INTELIGENTE (Detecta [TICKER], {t} o TICKER)
+                    prompt_final = template.replace("[TICKER]", ticker_input)
+                    prompt_final = prompt_final.replace("{t}", ticker_input)
+                    prompt_final = prompt_final.replace("TICKER", ticker_input)
+                    
+                    try:
+                        # 3. Llamada a la IA
+                        res = model_ia.generate_content(prompt_final)
+                        
+                        # 4. Mostrar respuesta
+                        st.markdown(f"### 📋 Informe Estratégico RSU: {ticker_input}")
+                        st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"Error en Gemini: {e}")
 
-# (Resto de secciones: Cartera, Tesis, etc., respetando v1)
+elif menu == "💼 CARTERA":
+    try:
+        df = pd.read_csv(st.secrets["URL_CARTERA"])
+        st.table(df)
+    except: st.warning("Configura URL_CARTERA.")
+
+elif menu == "📄 TESIS":
+    try:
+        df = pd.read_csv(st.secrets["URL_TESIS"])
+        sel = st.selectbox("Tesis:", df['Ticker'].tolist())
+        row = df[df['Ticker'] == sel].iloc[0]
+        st.info(row['Tesis_Corta'])
+        if st.button("AUDITAR"):
+            res = model_ia.generate_content(f"Critica esta tesis: {row['Tesis_Corta']}")
+            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+    except: st.info("Configura URL_TESIS.")
+
 elif menu == "⚖️ TRADE GRADER":
-    st.write("Scorecard activo")
+    st.title("RSU Scorecard")
+    st.write("Calcula la calidad de tu trade según tu estrategia.")
 
+elif menu == "🎥 ACADEMY":
+    st.title("RSU Academy")
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+st.write("---")
+st.caption(f"v1.2 | Engine: {modelo_nombre}")

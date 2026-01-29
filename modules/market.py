@@ -1,4 +1,3 @@
-
 # app.py
 import os
 # modules/market.py
@@ -148,3 +147,4 @@ def render():
         st.info("💼 Próximos Earnings Calendar - En desarrollo")
 
 # FIN DEL ARCHIVO - NADA FUERA DE LA FUNCIÓN render()
+

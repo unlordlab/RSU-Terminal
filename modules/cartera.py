@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 def load_cartera():
     """Carga datos desde Google Sheet público"""
     try:
-        sheet_id = st.secrets.get("SHEET_ID", "1B2x3Y4z5A6b7C8d9E0f1G2h3I4j5K6L7m8N9")
+        sheet_id = st.secrets.get("SHEET_ID", "1XjUEjniArxZ-6RkKIf6YKo96SA0IdAf9_wT68HSzAEo")
         url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Cartera%20RSU'
         
         # Headers para evitar bloqueos
@@ -61,3 +61,4 @@ def render():
     # Tabla principal
     df_display = df[['Ticker', 'Shares', 'Precio_Actual', 'PnL_$', 'PnL_%', 'Peso_%', 'Status']].copy()
     st.dataframe(df_display, use_container_width=True)
+

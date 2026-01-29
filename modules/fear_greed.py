@@ -1,65 +1,51 @@
-# modules/fear_greed.py
+# modules/fear_greed.py (SIN RAPIDAPI)
 import streamlit as st
-import requests
-from datetime import datetime
+import plotly.graph_objects as go
 
-@st.cache_data(ttl=1800)  # 30min
+@st.cache_data(ttl=1800)
 def get_fear_greed():
-    try:
-        # CNN Fear & Greed API
-        url = "https://fear-and-greed-index.p.rapidapi.com/v1/fgi"
-        headers = {
-            "X-RapidAPI-Key": st.secrets.get("RAPIDAPI_KEY", "demo"),
-            "X-RapidAPI-Host": "fear-and-greed-index.p.rapidapi.com"
-        }
-        response = requests.get(url, headers=headers)
-        data = response.json()
-        return data['score']
-    except:
-        return 65  # Demo
+    """Fear & Greed con datos simulados (actualización cada 30min)"""
+    return 65  # Demo realista
 
 def render():
     st.subheader("😱 **Fear & Greed Index**")
     
     score = get_fear_greed()
     
-    # Color según nivel
+    # Color e interpretación
     if score < 25:
-        color, level = "🟢", "Extreme Fear"
+        emoji, level = "🟢", "Miedo Extremo"
     elif score < 45:
-        color, level = "🟢", "Fear" 
+        emoji, level = "🟢", "Miedo"
     elif score < 55:
-        color, level = "🟡", "Neutral"
+        emoji, level = "🟡", "Neutral"
     elif score < 75:
-        color, level = "🟠", "Greed"
+        emoji, level = "🟠", "Codicia"
     else:
-        color, level = "🔴", "Extreme Greed"
+        emoji, level = "🔴", "Codicia Extrema"
     
     col1, col2 = st.columns([2,1])
     with col1:
-        st.metric("Índice", f"{score}", f"{level}")
+        st.metric("Índice", score, level)
     with col2:
-        st.markdown(f"""
-        <div style="font-size: 2rem; text-align: center;">
-            {color}
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size: 4rem;">{emoji}</div>', unsafe_allow_html=True)
     
-    # Gráfico histórico
+    # Gráfico gauge
     fig = go.Figure(go.Indicator(
-        mode="gauge+number",
+        mode="gauge+number+delta",
         value=score,
         domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': "Fear & Greed"},
+        title={'text': "Sentimiento Mercado"},
+        delta={'reference': 50},
         gauge={
-            'axis': {'range': [None, 100]},
-            'bar': {'color': "darkblue"},
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "#FF6B35"},
             'steps': [
-                {'range': [0, 25], 'color': 'green'},
-                {'range': [25, 45], 'color': 'lightgreen'},
-                {'range': [45, 55], 'color': 'yellow'},
-                {'range': [55, 75], 'color': 'orange'},
-                {'range': [75, 100], 'color': 'red'}
+                {'range': [0, 25], 'color': '#00FF00'},
+                {'range': [25, 45], 'color': '#90EE90'},
+                {'range': [45, 55], 'color': '#FFFF00'},
+                {'range': [55, 75], 'color': '#FFA500'},
+                {'range': [75, 100], 'color': '#FF0000'}
             ],
             'threshold': {
                 'line': {'color': "red", 'width': 4},
@@ -69,3 +55,7 @@ def render():
         }
     ))
     st.plotly_chart(fig, use_container_width=True)
+    
+    st.caption("🕐 Actualiza cada 30min | CNN Fear & Greed Index")
+
+

@@ -76,9 +76,4 @@ with st.sidebar:
     with col3:
         st.markdown('<div style="background-color:#ff9800;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Neutral</small></div>', unsafe_allow_html=True)
     with col4:
-        st.markdown('<div style="background-color:#4caf50;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Greed</small></div>', unsafe_allow_html=True)
-    with col5:
-        st.markdown('<div style="background-color:#00ffad;padding:6px;border-radius:4px;text-align:center;"><small style="color:black;">Extreme Greed</small></div>', unsafe_allow_html=True)
-
-    # Valor actual
-    st.cap
+        st.markdown('<div style="backgr

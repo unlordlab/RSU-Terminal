@@ -150,4 +150,37 @@ elif menu == "📄 TESIS":
         sel = st.selectbox("Selecciona Tesis:", df_t['Ticker'].tolist())
         row = df_t[df_t['Ticker'] == sel].iloc[0]
         st.markdown(f"### {row['Titulo']}")
-        st.info(f"Tesis corta: {row['T
+        st.info(f"Tesis corta: {row['Tesis_Corta']}")
+        if st.button("AUDITAR CON IA"):
+            try:
+                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+                res = model.generate_content(f"Haz de abogado del diablo con esta tesis de inversión: {row['Tesis_Corta']}")
+                st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error en auditoría: {e}")
+    except: st.info("Carga tus tesis en Google Sheets.")
+
+elif menu == "⚖️ TRADE GRADER":
+    st.title("RSU Trade Scorecard")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        t_input = st.selectbox("Tendencia", ["A favor", "Neutral", "En contra"])
+        v_input = st.selectbox("Volumen", ["Inusual / Alto", "Normal", "Bajo"])
+    with col_b:
+        c_input = st.selectbox("Catalizador", ["Fuerte (Earnings/FDA)", "Especulativo", "Ninguno"])
+        r_input = st.slider("Ratio Riesgo:Beneficio (1:X)", 1.0, 5.0, 2.0)
+    
+    if st.button("CALCULAR GRADO", use_container_width=True):
+        grado, color = calificar_trade(t_input, v_input, c_input, r_input)
+        st.markdown(f"""
+            <div style="text-align:center; padding:30px; border:3px solid {color}; border-radius:15px; margin-top:20px;">
+                <h1 style="color:{color}; font-size:100px; margin:0;">{grado}</h1>
+                <p style="color:{color}; letter-spacing: 5px;">CALIFICACIÓN RSU</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+elif menu == "🎥 ACADEMY":
+    st.title("RSU Academy")
+    st.video("https://www.youtube.com/watch?v=tu_video_id")
+
+  

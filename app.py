@@ -10,10 +10,12 @@ from datetime import datetime
 # --- 1. CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="RSU Master Terminal", layout="wide", page_icon="📊")
 
+# Configuración segura de la API de Google
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+else:
+    st.warning("⚠️ API Key no configurada en los Secrets de Streamlit.")
 
-# Estilos CSS personalizados
 st.markdown("""
     <style>
     .stApp { background-color: #0c0e12; color: #e0e0e0; }
@@ -24,15 +26,13 @@ st.markdown("""
     }
     .prompt-container {
         background-color: #1a1e26; border-left: 5px solid #2962ff;
-        padding: 20px; border-radius: 5px; margin-top: 10px;
+        padding: 20px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap;
     }
-    .logo-container { text-align: center; padding-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SISTEMA DE ACCESO (CON LOGO) ---
+# --- 2. ACCESO ---
 if "auth" not in st.session_state: st.session_state["auth"] = False
-
 if not st.session_state["auth"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
@@ -77,7 +77,7 @@ def calificar_trade(tendencia, volumen, catalizador, rrr):
     if score >= 40: return "C", "#ff9100"
     return "D", "#f23645"
 
-# --- 4. SIDEBAR (CON LOGO) ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
     try:
         st.image("logo.png", width=150)
@@ -87,7 +87,6 @@ with st.sidebar:
     menu = st.radio("", ["📊 DASHBOARD", "🤖 IA REPORT", "💼 CARTERA", "📄 TESIS", "⚖️ TRADE GRADER", "🎥 ACADEMY"])
     st.write("---")
     
-    # Sentimiento de Mercado
     fg_val = get_cnn_fear_greed()
     fig_gauge = go.Figure(go.Indicator(
         mode="gauge+number", value=fg_val,
@@ -98,9 +97,8 @@ with st.sidebar:
     st.plotly_chart(fig_gauge, use_container_width=True)
 
 # --- 5. LÓGICA DE MENÚ ---
-
 if menu == "📊 DASHBOARD":
-    tab_mkt, tab_news, tab_earn, tab_macro = st.tabs(["📈 MERCADO", "📰 NOTICIAS", "💰 EARNINGS", "🌡️ MACRO"])
+    tab_mkt, tab_news, tab_earn = st.tabs(["📈 MERCADO", "📰 NOTICIAS", "💰 EARNINGS"])
     
     with tab_mkt:
         idx = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
@@ -113,30 +111,31 @@ if menu == "📊 DASHBOARD":
     with tab_news:
         st.subheader("Feed de Noticias RSU")
         try:
-            # Reemplazar con URL de tu Google Sheet (CSV)
             df_n = pd.read_csv(st.secrets["URL_NOTICIAS"]) 
             st.dataframe(df_n, use_container_width=True)
-        except: st.info("Configura la URL de Noticias en los Secrets de Streamlit.")
+        except: st.info("Configura la URL de Noticias en los Secrets.")
 
     with tab_earn:
         st.subheader("Calendario de Resultados")
         stock_list = ["NVDA", "AAPL", "TSLA", "MSFT", "AMZN", "META", "GOOGL"]
         target_earn = st.selectbox("Analizar Expectativas:", stock_list)
         if st.button("PREDICCIÓN IA"):
-        model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
-        res = model.generate_content(f"Analiza expectativas de earnings para {target_earn}. Sé breve.")
-            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
-
-    with tab_macro:
-        st.subheader("Análisis de Correlación Macro")
-        # Aquí puedes añadir la lógica del Macro-Sync que comentamos antes
+            try:
+                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+                res = model.generate_content(f"Analiza expectativas de earnings para {target_earn}. Sé breve.")
+                st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error de conexión con IA: {e}")
 
 elif menu == "🤖 IA REPORT":
     t = st.text_input("Ticker", "NVDA").upper()
     if st.button("GENERAR REPORTE"):
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        res = model.generate_content(f"Reporte institucional para {t}. Analiza catalizadores y niveles.")
-        st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+        try:
+            model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+            res = model.generate_content(f"Reporte institucional para {t}. Analiza catalizadores y niveles clave.")
+            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"Error al generar reporte: {e}")
 
 elif menu == "💼 CARTERA":
     st.title("Cartera Estratégica RSU")
@@ -151,34 +150,4 @@ elif menu == "📄 TESIS":
         sel = st.selectbox("Selecciona Tesis:", df_t['Ticker'].tolist())
         row = df_t[df_t['Ticker'] == sel].iloc[0]
         st.markdown(f"### {row['Titulo']}")
-        st.info(f"Tesis corta: {row['Tesis_Corta']}")
-        if st.button("AUDITAR CON IA"):
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            res = model.generate_content(f"Haz de abogado del diablo con esta tesis de inversión: {row['Tesis_Corta']}")
-            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
-    except: st.info("Carga tus tesis en Google Sheets.")
-
-elif menu == "⚖️ TRADE GRADER":
-    st.title("RSU Trade Scorecard")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        t_input = st.selectbox("Tendencia", ["A favor", "Neutral", "En contra"])
-        v_input = st.selectbox("Volumen", ["Inusual / Alto", "Normal", "Bajo"])
-    with col_b:
-        c_input = st.selectbox("Catalizador", ["Fuerte (Earnings/FDA)", "Especulativo", "Ninguno"])
-        r_input = st.slider("Ratio Riesgo:Beneficio (1:X)", 1.0, 5.0, 2.0)
-    
-    if st.button("CALCULAR GRADO", use_container_width=True):
-        grado, color = calificar_trade(t_input, v_input, c_input, r_input)
-        st.markdown(f"""
-            <div style="text-align:center; padding:30px; border:3px solid {color}; border-radius:15px; margin-top:20px;">
-                <h1 style="color:{color}; font-size:100px; margin:0;">{grado}</h1>
-                <p style="color:{color}; letter-spacing: 5px;">CALIFICACIÓN RSU</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-elif menu == "🎥 ACADEMY":
-    st.title("RSU Academy")
-    # Puedes usar una lista de videos o uno fijo
-    st.video("https://www.youtube.com/watch?v=tu_video_id")
-
+        st.info(f"Tesis corta: {row['T

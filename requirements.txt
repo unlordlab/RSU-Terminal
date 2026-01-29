@@ -1,7 +1,8 @@
 streamlit
 yfinance
-google-generativeai==0.8.3pandas
+google-generativeai
 plotly
 requests
 beautifulsoup4
+
 

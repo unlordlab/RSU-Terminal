@@ -7,14 +7,12 @@ import pandas as pd
 import plotly.graph_objects as go
 
 st.set_page_config(
-    page_title="RSU Master Terminal",
+    page_title="RSU Terminal",
     layout="wide",
     page_icon="📊"
 )
 
-# Estilos globales integrando las nuevas cajas (Index Cards)
-def set_style():
-   st.markdown("""
+st.markdown("""
     <style>
     .stApp { background-color: #0c0e12; color: #e0e0e0; }
     [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
@@ -80,7 +78,6 @@ def set_style():
     .neg { background-color: rgba(242, 54, 69, 0.15); color: #f23645; }
     </style>
 """, unsafe_allow_html=True)
-    )
 
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
@@ -169,6 +166,7 @@ def get_market_index(ticker_symbol):
     except Exception as e:
         # No mostramos el error en UI para no ensuciar, pero devolvemos neutral
         return 0.0, 0.0
+
 
 
 

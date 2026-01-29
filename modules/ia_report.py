@@ -6,7 +6,7 @@ def render():
     model_ia, modelo_nombre, error_ia = get_ia_model()
 
     t_in = st.text_input("Ticker", "NVDA").upper()
-    if st.button("GENERAR REPORTE RSU"):
+    if st.button("GENERAR PROMPT RSU"):
         if error_ia:
             st.error(error_ia)
             return
@@ -28,3 +28,4 @@ def render():
     # Pie de página del motor
     _, modelo_nombre, _ = get_ia_model()
     st.caption(f"Engine: {modelo_nombre}")
+

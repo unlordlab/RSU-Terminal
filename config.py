@@ -14,73 +14,72 @@ st.set_page_config(
 
 # Estilos globales integrando las nuevas cajas (Index Cards)
 def set_style():
-    st.markdown("""
-        <style>
-        .stApp { background-color: #0c0e12; color: #e0e0e0; }
-        [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
-        
-        /* Caja original por si la usas en otras secciones */
-        .metric-card {
-            background-color: #151921; padding: 20px; border-radius: 10px;
-            border: 1px solid #2d3439; text-align: center;
-        }
+   st.markdown("""
+    <style>
+    .stApp { background-color: #0c0e12; color: #e0e0e0; }
+    [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
 
-        /* NUEVAS CAJAS ESTILO INDEX CARD (DASHBOARD) */
-        .index-card {
-            background-color: #151921;
-            border: 1px solid #2d3439;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .index-name-container {
-            display: flex;
-            flex-direction: column;
-            text-align: left;
-        }
-        .index-ticker {
-            color: #e0e0e0;
-            font-weight: bold;
-            font-size: 16px;
-            margin: 0;
-            line-height: 1.2;
-        }
-        .index-fullname {
-            color: #888;
-            font-size: 11px;
-            margin: 0;
-        }
-        .index-price-container {
-            text-align: right;
-        }
-        .index-price {
-            font-weight: bold;
-            font-size: 18px;
-            color: white;
-            margin: 0;
-            line-height: 1.2;
-        }
-        .index-delta {
-            font-size: 12px;
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-weight: bold;
-            display: inline-block;
-            margin-top: 4px;
-        }
-        .pos { background-color: rgba(0, 255, 173, 0.1); color: #00ffad; }
-        .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
+    /* CONTENEDOR DE LA TARJETA */
+    .index-card {
+        background-color: #151921;
+        border: 1px solid #2d3439;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 80px;
+    }
 
-        .prompt-container {
-            background-color: #1a1e26; border-left: 5px solid #2962ff;
-            padding: 20px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
+    /* IZQUIERDA: TEXTOS */
+    .index-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .index-ticker {
+        font-size: 14px;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+        letter-spacing: 0.5px;
+    }
+    .index-fullname {
+        font-size: 11px;
+        color: #808a9d;
+        margin: 0;
+        text-transform: uppercase;
+    }
+
+    /* DERECHA: PRECIOS */
+    .index-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+    }
+    .index-price {
+        font-size: 18px;
+        font-weight: 600;
+        color: #ffffff;
+        margin: 0;
+    }
+
+    /* PASTILLA DE PORCENTAJE (BADGE) */
+    .index-delta {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+    .pos { background-color: rgba(0, 255, 173, 0.15); color: #00ffad; }
+    .neg { background-color: rgba(242, 54, 69, 0.15); color: #f23645; }
+    </style>
+""", unsafe_allow_html=True)
     )
 
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
@@ -170,5 +169,6 @@ def get_market_index(ticker_symbol):
     except Exception as e:
         # No mostramos el error en UI para no ensuciar, pero devolvemos neutral
         return 0.0, 0.0
+
 
 

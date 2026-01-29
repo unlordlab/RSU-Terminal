@@ -102,8 +102,6 @@ with st.sidebar:
     with col5:
         st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#00ffad;font-size:10px;font-weight:500;">Extreme Greed</small></div>', unsafe_allow_html=True)
 
-    st.caption(f"Value: {fng} pts")
-
 # --- ROUTING DE PÁGINAS ---
 if menu == "📊 DASHBOARD":
     market.render()

@@ -67,7 +67,7 @@ with st.sidebar:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ETIQUETAS DE COLOR DEBAJO DEL GAUGE (5 columnas)
+    # ETIQUETAS DE COLOR - STRINGS CORREGIDOS (una línea cada uno)
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown('<div style="background-color:#d32f2f;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Extreme Fear</small></div>', unsafe_allow_html=True)
@@ -76,4 +76,23 @@ with st.sidebar:
     with col3:
         st.markdown('<div style="background-color:#ff9800;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Neutral</small></div>', unsafe_allow_html=True)
     with col4:
-        st.markdown('<div style="backgr
+        st.markdown('<div style="background-color:#4caf50;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Greed</small></div>', unsafe_allow_html=True)
+    with col5:
+        st.markdown('<div style="background-color:#00ffad;padding:6px;border-radius:4px;text-align:center;"><small style="color:black;">Extreme Greed</small></div>', unsafe_allow_html=True)
+
+    # Valor actual
+    st.caption(f"Current: {fng} pts")
+
+# --- ROUTING DE PÁGINAS ---
+if menu == "📊 DASHBOARD":
+    market.render()
+elif menu == "🤖 IA REPORT":
+    ia_report.render()
+elif menu == "💼 CARTERA":
+    cartera.render()
+elif menu == "📄 TESIS":
+    tesis.render()
+elif menu == "⚖️ TRADE GRADER":
+    trade_grader.render()
+elif menu == "🎥 ACADEMY":
+    academy.render()

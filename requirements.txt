@@ -4,5 +4,6 @@ google-generativeai
 plotly
 requests
 beautifulsoup4
+pandas
 
 

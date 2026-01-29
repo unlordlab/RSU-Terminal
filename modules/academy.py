@@ -9,9 +9,9 @@ def render():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        st.video("https://www.youtube.com/watch?v=6kjnyouSnHs")
     with col2:
-        st.video("https://www.youtube.com/watch?v=TEU_ENUXc5A")
+        st.video("https://www.youtube.com/watch?v=WSvGAHejvgU&feature=youtu.be")
     
     st.divider()
     
@@ -20,3 +20,4 @@ def render():
     st.info("""
    
     """)
+

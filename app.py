@@ -41,37 +41,48 @@ with st.sidebar:
 
     st.write("---")
 
-    # Fear & Greed GAUGE MEJORADO
+    # Fear & Greed GAUGE con TÍTULO GRANDE
     fng = get_cnn_fear_greed()
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=fng,
-        number={"suffix": " pts", "font": {"size": 24}},
+        number={"suffix": " pts", "font": {"size": 28, "color": "white"}},
         delta={'reference': 50},
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
             'bar': {'color': "#2962ff"},
             'steps': [
-                {'range': [0, 25], 'color': "#d32f2f"},    # Extreme Fear
-                {'range': [25, 45], 'color': "#f57c00"},   # Fear
-                {'range': [45, 55], 'color': "#ff9800"},   # Neutral
-                {'range': [55, 75], 'color': "#4caf50"},   # Greed
-                {'range': [75, 100], 'color': "#00ffad"},  # Extreme Greed
+                {'range': [0, 25], 'color': "#d32f2f"},
+                {'range': [25, 45], 'color': "#f57c00"},
+                {'range': [45, 55], 'color': "#ff9800"},
+                {'range': [55, 75], 'color': "#4caf50"},
+                {'range': [75, 100], 'color': "#00ffad"},
             ],
             'threshold': {
                 'line': {'color': "white", 'width': 4},
                 'thickness': 0.75,
                 'value': fng
             }
-        },
-        title={"text": "Fear & Greed Index"}
+        }
     ))
+    
+    # TÍTULO GRANDE + layout optimizado
     fig.update_layout(
-        height=220,
-        margin=dict(l=10, r=10, t=40, b=10),
+        height=240,
+        margin=dict(l=10, r=10, t=20, b=10),
         paper_bgcolor='rgba(0,0,0,0)',
-        font={'color': "white", 'size': 12}
+        font={'color': "white"},
+        title={
+            'text': "FEAR & GREED INDEX",
+            'y': 0.95,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': {'size': 18, 'color': 'white', 'family': 'Arial Black'},
+            'pad': {'t': 10}
+        }
     )
+    
     st.plotly_chart(fig, use_container_width=True)
 
     # Label descriptivo

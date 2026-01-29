@@ -1,115 +1,166 @@
-# app.py - RSU Terminal COMPLETO con LOGIN
 import streamlit as st
+import yfinance as yf
+import google.generativeai as genai
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
-import yaml
+import requests
+from bs4 import BeautifulSoup
+import os
 
-# Configuración
-st.set_page_config(page_title="RSU Terminal", layout="wide")
+# --- 1. CONFIGURACIÓN Y ESTILO ---
+st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
 
-# ==================== LOGIN ====================
-def load_config():
-    with open('config.yaml', 'r') as file:
-        return yaml.safe_load(file)
+st.markdown("""
+    <style>
+    .stApp { background-color: #0c0e12; color: #e0e0e0; }
+    [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
+    .metric-card {
+        background-color: #151921; padding: 20px; border-radius: 10px;
+        border: 1px solid #2d3439; text-align: center;
+    }
+    .prompt-container {
+        background-color: #1a1e26; border-left: 5px solid #2962ff;
+        padding: 20px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-def check_credentials(username, password):
-    config = load_config()
-    if username in config['credentials']['usernames']:
-        return config['credentials']['usernames'][username]['password'] == password
-    return False
+# --- 2. CONFIGURACIÓN IA (ANTI-BLOQUEO) ---
+API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
-# Login Screen
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
+def conectar_ia():
+    if not API_KEY: return None, None, "Falta API KEY en Secrets"
+    try:
+        genai.configure(api_key=API_KEY)
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+        modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        sel = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in modelos else modelos[0]
+        return genai.GenerativeModel(model_name=sel, safety_settings=safety_settings), sel, None
+    except Exception as e: return None, None, str(e)
 
-if not st.session_state.authenticated:
-    st.title("🔐 RSU Terminal - Acceso Autorizado")
-    
-    with st.form("login"):
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Entrar"):
-            if check_credentials(username, password):
-                st.session_state.authenticated = True
-                st.success("✅ Bienvenido!")
+@st.cache_data(ttl=600)
+def obtener_prompt_github():
+    try:
+        # ⚠️ REEMPLAZA CON TU URL RAW DE GITHUB
+        url_raw = "https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/prompt_report.txt"
+        response = requests.get(url_raw)
+        return response.text if response.status_code == 200 else ""
+    except: return ""
+
+model_ia, modelo_nombre, error_ia = conectar_ia()
+
+# --- 3. FUNCIONES DE MERCADO ---
+@st.cache_data(ttl=3600)
+def get_cnn_fear_greed():
+    try:
+        url = "https://edition.cnn.com/markets/fear-and-greed"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        soup = BeautifulSoup(requests.get(url, headers=headers).content, 'html.parser')
+        val = soup.find("span", class_="market-fng-gauge__dial-number-value").text
+        return int(val)
+    except: return 50
+
+def get_market_index(ticker_symbol):
+    try:
+        data = yf.Ticker(ticker_symbol).fast_info
+        p = data['last_price']
+        c = ((p - data['previous_close']) / data['previous_close']) * 100
+        return p, c
+    except: return 0.0, 0.0
+
+# --- 4. LOGIN SISTEMA ---
+if "auth" not in st.session_state: st.session_state["auth"] = False
+if not st.session_state["auth"]:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
+        st.markdown("<h4 style='text-align:center;'>RSU TERMINAL ACCESS</h4>", unsafe_allow_html=True)
+        password = st.text_input("PASSWORD", type="password")
+        if st.button("UNLOCK", use_container_width=True):
+            if password == "RSU2026":
+                st.session_state["auth"] = True
                 st.rerun()
-            else:
-                st.error("❌ Credenciales incorrectas")
-    st.stop()
+            else: st.error("Clave Incorrecta")
+    st.stop() # Aquí es donde el código se detiene si no hay login
 
-# ==================== DASHBOARD ====================
-st.markdown('<h1 style="text-align:center;color:#1f77b4">🚀 RSU Terminal</h1>', unsafe_allow_html=True)
+# --- 5. SIDEBAR ---
+with st.sidebar:
+    if os.path.exists("logo.png"): st.image("logo.png", width=150)
+    menu = st.radio("", ["📊 DASHBOARD", "🤖 IA REPORT", "💼 CARTERA", "📄 TESIS", "⚖️ TRADE GRADER", "🎥 ACADEMY"])
+    
+    st.write("---")
+    fng = get_cnn_fear_greed()
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number", value=fng,
+        gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2962ff"},
+               'steps': [{'range': [0, 30], 'color': "#f23645"}, 
+                         {'range': [30, 70], 'color': "#444"},
+                         {'range': [70, 100], 'color': "#00ffad"}]},
+    ))
+    fig.update_layout(height=180, margin=dict(l=20,r=20,t=10,b=10), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+    st.plotly_chart(fig, use_container_width=True)
 
-# Sidebar con módulos
-st.sidebar.title("📂 Módulos")
-modules = {
-    "📚 Academy": "academy",
-    "💼 Cartera": "cartera", 
-    "📈 Credit Spreads": "credit_spreads",
-    "😱 Fear & Greed": "fear_greed",
-    "🤖 IA Report": "ia_report",
-    "📊 Market": "market",
-    "📝 Tesis": "tesis",
-    "🎯 Trade Grader": "trade_grader"
-}
+# --- 6. LÓGICA DE MENÚS ---
 
-selected_module = st.sidebar.selectbox("Selecciona módulo:", list(modules.keys()))
+if menu == "📊 DASHBOARD":
+    st.title("Market Overview")
+    idx = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
+    cols = st.columns(4)
+    for i, (n, s) in enumerate(idx.items()):
+        p, c = get_market_index(s)
+        color = "#00ffad" if (c >= 0 and n != "VIX") or (c < 0 and n == "VIX") else "#f23645"
+        cols[i].markdown(f"""<div class="metric-card"><small>{n}</small><h3>{p:,.1f}</h3><p style="color:{color}">{c:.2f}%</p></div>""", unsafe_allow_html=True)
+    
+    t1, t2 = st.tabs(["📰 NOTICIAS", "💰 EARNINGS"])
+    with t1:
+        try:
+            df = pd.read_csv(st.secrets["URL_NOTICIAS"])
+            st.dataframe(df, use_container_width=True)
+        except: st.info("Falta URL_NOTICIAS en Secrets.")
 
-# ==================== RESUMEN EJECUTIVO ====================
-col1, col2, col3, col4, col5 = st.columns(5)
-with col1: st.metric("🟠 Fear & Greed", "65", "Greed")
-with col2: st.metric("💰 PnL Total", "$2,450", "+12.3%")
-with col3: st.metric("📈 HY Spread", "2.71%", "🟢")
-with col4: st.metric("📋 Posiciones", "3", None)
-with col5: st.metric("🎯 Win Rate", "67%", "+5pp")
+elif menu == "🤖 IA REPORT":
+    t_in = st.text_input("Ticker", "NVDA").upper()
+    if st.button("GENERAR REPORTE RSU"):
+        if error_ia: st.error(error_ia)
+        else:
+            with st.spinner(f"Analizando {t_in}..."):
+                template = obtener_prompt_github()
+                prompt_final = f"Analitza {t_in} seguint això: {template.replace('[TICKER]', t_in)}"
+                try:
+                    res = model_ia.generate_content(prompt_final)
+                    if res.candidates and res.candidates[0].content.parts:
+                        st.markdown(f"### 📋 Informe: {t_in}")
+                        st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+                except Exception as e: st.error(f"Error de IA: {e}")
 
-# ==================== MÓDULOS ====================
-module_map = {
-    "academy": lambda: st.info("📚 Academy - En desarrollo"),
-    "cartera": lambda: render_cartera(),
-    "credit_spreads": lambda: render_credit_spreads(),
-    "fear_greed": lambda: render_fear_greed(),
-    "ia_report": lambda: st.info("🤖 IA Report - Análisis Gemini"),
-    "market": lambda: render_market(),
-    "tesis": lambda: st.info("📝 Tesis - Google Sheets"),
-    "trade_grader": lambda: st.info("🎯 Trade Grader - Scoring automático")
-}
+elif menu == "💼 CARTERA":
+    try:
+        df = pd.read_csv(st.secrets["URL_CARTERA"])
+        st.table(df)
+    except: st.warning("Configura URL_CARTERA.")
 
-try:
-    module_map[modules[selected_module]]()
-except:
-    st.error("Módulo temporalmente no disponible")
+elif menu == "📄 TESIS":
+    try:
+        df = pd.read_csv(st.secrets["URL_TESIS"])
+        sel = st.selectbox("Tesis:", df['Ticker'].tolist())
+        st.info(df[df['Ticker'] == sel]['Tesis_Corta'].values[0])
+    except: st.info("Configura URL_TESIS.")
 
-# Logout
-if st.sidebar.button("🚪 Cerrar Sesión"):
-    st.session_state.authenticated = False
-    st.rerun()
+elif menu == "⚖️ TRADE GRADER":
+    st.subheader("RSU Scorecard")
+    ten = st.selectbox("Tendencia", ["A favor", "Neutral", "En contra"])
+    rrr = st.slider("RRR", 1.0, 5.0, 2.0)
+    if st.button("CALCULAR"):
+        st.success(f"Grado calculado para tendencia {ten}")
 
-# ==================== FUNCIONES MÓDULOS ====================
-def render_cartera():
-    st.subheader("💼 CARTERA RSU")
-    df = pd.DataFrame({
-        'Ticker': ['NVDA', 'TSLA', 'AAPL'],
-        'Shares': [15, -8, 25],
-        'PnL_$': [102, 38, 180],
-        'PnL_%': ['+4.7%', '+1.2%', '+3.8%']
-    })
-    st.dataframe(df)
+elif menu == "🎥 ACADEMY":
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
-def render_credit_spreads():
-    st.subheader("📈 Credit Spreads")
-    dates = pd.date_range(end=datetime.now(), periods=30)
-    fig = go.Figure([go.Scatter(x=dates, y=[2.71]*30, name="HY Spread")])
-    fig.add_hline(y=4.0, line_dash="dash", line_color="red")
-    st.plotly_chart(fig)
+st.write("---")
+st.caption(f"v1.4 | Engine: {modelo_nombre}")
 
-def render_fear_greed():
-    st.subheader("😱 Fear & Greed")
-    st.metric("Índice", 65, "🟠 Codicia")
-
-def render_market():
-    st.subheader("📊 Market Overview")
-    col1, col2 = st.columns(2)
-    with col1: st.metric("S&P 500", "5,890", "+1.2%")
-    with col2: st.metric("VIX", "15.2", "-0.8")

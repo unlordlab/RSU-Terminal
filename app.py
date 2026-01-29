@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 import yfinance as yf
 import google.generativeai as genai
@@ -29,7 +27,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. CONFIGURACIÓN IA (SISTEMA ROBUSTO v1) ---
-API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 def conectar_ia():
     if not API_KEY: return None, None, "Falta API KEY en Secrets"
@@ -42,8 +40,8 @@ def conectar_ia():
 
 def obtener_prompt_github():
     try:
-        # CAMBIA ESTA URL POR TU URL RAW DE GITHUB
-        url_raw = "https://github.com/unlordlab/RSU-Terminal/blob/36ff32012cd8c599a37f2c1b8b51c3dfafb22408/prompt_report.txt"
+        # IMPORTANTE: Asegúrate de que esta URL sea la "RAW"
+        url_raw = "https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/prompt_report.txt"
         response = requests.get(url_raw)
         if response.status_code == 200:
             return response.text
@@ -136,14 +134,25 @@ if menu == "📊 DASHBOARD":
 elif menu == "🤖 IA REPORT":
     ticker_input = st.text_input("Ticker", "NVDA").upper()
     if st.button("GENERAR REPORTE RSU"):
-        if error_ia: st.error(error_ia)
+        if error_ia: 
+            st.error(error_ia)
         else:
-            with st.spinner("Conectando con GitHub y analizando..."):
-                prompt_txt = obtener_prompt_github()
-                # Reemplazamos {t} por el ticker del usuario
-                prompt_final = prompt_txt.replace("{t}", ticker_input)
-                res = model_ia.generate_content(prompt_final)
-                st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+            with st.spinner("Descargando instrucciones y analizando..."):
+                # 1. Obtener el texto del prompt desde GitHub
+                instrucciones_raw = obtener_prompt_github()
+                
+                # 2. Reemplazar la variable {t} por el ticker real
+                prompt_final = instrucciones_raw.replace("{t}", ticker_input)
+                
+                try:
+                    # 3. ENVIAR A LA IA (Aquí estaba el fallo anterior)
+                    respuesta_ia = model_ia.generate_content(prompt_final)
+                    
+                    # 4. MOSTRAR EL RESULTADO DE LA IA
+                    st.markdown("### 📝 REPORTE GENERADO")
+                    st.markdown(f'<div class="prompt-container">{respuesta_ia.text}</div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Error al contactar con Gemini: {e}")
 
 elif menu == "💼 CARTERA":
     try:
@@ -158,8 +167,10 @@ elif menu == "📄 TESIS":
         row = df[df['Ticker'] == sel].iloc[0]
         st.info(row['Tesis_Corta'])
         if st.button("AUDITAR"):
-            res = model_ia.generate_content(f"Critica esta tesis: {row['Tesis_Corta']}")
-            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+            if error_ia: st.error(error_ia)
+            else:
+                res = model_ia.generate_content(f"Critica esta tesis: {row['Tesis_Corta']}")
+                st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
     except: st.info("Configura URL_TESIS.")
 
 elif menu == "⚖️ TRADE GRADER":
@@ -175,8 +186,4 @@ elif menu == "⚖️ TRADE GRADER":
         st.markdown(f'<div style="text-align:center; padding:20px; border:3px solid {color}; border-radius:15px;"><h1 style="color:{color}; font-size:80px;">{g}</h1></div>', unsafe_allow_html=True)
 
 elif menu == "🎥 ACADEMY":
-    st.title("RSU Academy")
-    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-
-st.write("---")
-st.caption(f"v1 | Engine: {modelo_nombre}")
+    st.title("

@@ -1,4 +1,4 @@
-Si us plau, analitza [TICKER] per a mi i proporciona el següent, de manera concisa i clarament organitzada:
+Si us plau, analitza {t} per a mi i proporciona el següent, de manera concisa i clarament organitzada:
 
 1. Explica a què es dedica l'empresa com si tingués 12 anys: tres punts breus sobre el que fa i qualsevol exemple o analogia útil amb la qual em pugui identificar.
 
@@ -31,6 +31,7 @@ Si us plau, analitza [TICKER] per a mi i proporciona el següent, de manera conc
 7. Senyala els propers catalitzadors (resultats, llançaments de productes, esdeveniments regulatoris) en els propers 30 dies.
 
 8. Anota qualsevol canvi en els preus objectiu dels analistes per a aquest ticker durant el període esmentat. Dona-li un format de fàcil revisió. Si és possible, utilitza taules per als esdeveniments i els moviments dels parells del sector. Respon amb un estil clar, concís i fàcil de llegir per utilitzar-lo en decisions d'inversió.
+
 
 
 

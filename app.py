@@ -20,7 +20,7 @@ set_style()
 if not auth.login():
     st.stop()
 
-# --- SIDEBAR con Fear & Greed MEJORADO ---
+# --- SIDEBAR con Fear & Greed + LEYENDA LIMPIA ---
 with st.sidebar:
     # Logo
     if os.path.exists("assets/logo.png"):
@@ -44,7 +44,7 @@ with st.sidebar:
     # TÍTULO GRANDE Fear & Greed
     st.markdown('<h3 style="color:white;text-align:center;margin-bottom:5px;">FEAR & GREED</h3>', unsafe_allow_html=True)
     
-    # Fear & Greed GAUGE
+    # Fear & Greed GAUGE (más alto para evitar cortes)
     fng = get_cnn_fear_greed()
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -63,14 +63,14 @@ with st.sidebar:
         }
     ))
     fig.update_layout(
-        height=160,
+        height=180,  # Más alto para evitar cortes
         margin=dict(l=10, r=10, t=5, b=10),
         paper_bgcolor='rgba(0,0,0,0)',
         font={'color': "white"}
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ESTADO ACTUAL (con icono y color)
+    # ESTADO ACTUAL
     if fng < 25:
         estado = "🟥 Extreme Fear"
         color = "#d32f2f"
@@ -88,19 +88,19 @@ with st.sidebar:
         color = "#00ffad"
 
     st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
+
+    # LEYENDA LIMPIA (una columna, mejor espaciado)
+    st.markdown("**Legend:**", help="")
+    legend_items = [
+        ("#d32f2f", "Extreme Fear (0-25)"),
+        ("#f57c00", "Fear (25-45)"),
+        ("#ff9800", "Neutral (45-55)"),
+        ("#4caf50", "Greed (55-75)"),
+        ("#00ffad", "Extreme Greed (75-100)")
+    ]
     
-    # Etiquetas sutiles debajo
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#d32f2f;font-size:10px;font-weight:500;">Extreme Fear</small></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#f57c00;font-size:10px;font-weight:500;">Fear</small></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#ff9800;font-size:10px;font-weight:500;">Neutral</small></div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#4caf50;font-size:10px;font-weight:500;">Greed</small></div>', unsafe_allow_html=True)
-    with col5:
-        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#00ffad;font-size:10px;font-weight:500;">Extreme Greed</small></div>', unsafe_allow_html=True)
+    for color_hex, label in legend_items:
+        st.markdown(f'<span style="color:{color_hex};font-size:12px;">⬤</span> {label}', unsafe_allow_html=True)
 
 # --- ROUTING DE PÁGINAS ---
 if menu == "📊 DASHBOARD":

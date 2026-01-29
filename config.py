@@ -3,6 +3,8 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="RSU Master Terminal",
@@ -59,13 +61,47 @@ def obtener_prompt_github():
     except:
         return ""
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)  # Cache 30min
 def get_cnn_fear_greed():
     try:
-        url = "https://edition.cnn.com/markets/fear-and-greed"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        soup = BeautifulSoup(requests.get(url, headers=headers).content, 'html.parser')
-        val = soup.find("span", class_="market-fng-gauge__dial-number-value").text
-        return int(val)
-    except:
+        # API directa CNN (más estable)
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/2026-01-01"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            current_value = data['fear_and_greed_historical']['data'][-1]['y']
+            return round(float(current_value), 1)
+        
+        # Fallback scraping mejorado
+        url_scrape = "https://edition.cnn.com/markets/fear-and-greed"
+        soup = BeautifulSoup(requests.get(url_scrape, headers=headers).content, 'html.parser')
+        
+        selectors = [
+            "span.market-fng-gauge__dial-number-value",
+            ".js-fg-current-value",
+            "[data-fng-value]",
+            ".fear-greed__current-value",
+            ".fng-gauge__dial-number-value"
+        ]
+        
+        for selector in selectors:
+            element = soup.select_one(selector)
+            if element:
+                return int(element.get_text().strip())
+        
         return 50
+    except Exception:
+        return 50
+
+@st.cache_data(ttl=3600)
+def get_market_index(ticker_symbol):
+    try:
+        import yfinance as yf
+        data = yf.Ticker(ticker_symbol).fast_info
+        p = data['last_price']
+        c = ((p - data['previous_close']) / data['previous_close']) * 100
+        return p, c
+    except:
+        return 0.0, 0.0

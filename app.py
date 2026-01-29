@@ -123,8 +123,8 @@ if menu == "📊 DASHBOARD":
         stock_list = ["NVDA", "AAPL", "TSLA", "MSFT", "AMZN", "META", "GOOGL"]
         target_earn = st.selectbox("Analizar Expectativas:", stock_list)
         if st.button("PREDICCIÓN IA"):
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            res = model.generate_content(f"Analiza expectativas de earnings para {target_earn}. Sé breve.")
+        model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
+        res = model.generate_content(f"Analiza expectativas de earnings para {target_earn}. Sé breve.")
             st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
 
     with tab_macro:
@@ -181,3 +181,4 @@ elif menu == "🎥 ACADEMY":
     st.title("RSU Academy")
     # Puedes usar una lista de videos o uno fijo
     st.video("https://www.youtube.com/watch?v=tu_video_id")
+

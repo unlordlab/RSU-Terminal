@@ -20,7 +20,7 @@ set_style()
 if not auth.login():
     st.stop()
 
-# --- SIDEBAR con Fear & Greed + ETIQUETAS DE COLOR ---
+# --- SIDEBAR con Fear & Greed SUTIL ---
 with st.sidebar:
     # Logo
     if os.path.exists("assets/logo.png"):
@@ -67,20 +67,19 @@ with st.sidebar:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ETIQUETAS DE COLOR - STRINGS CORREGIDOS (una línea cada uno)
+    # ETIQUETAS SÚPER SUTIL (pequeñas, fondo transparente, solo texto)
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.markdown('<div style="background-color:#d32f2f;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Extreme Fear</small></div>', unsafe_allow_html=True)
+        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#d32f2f;font-size:10px;font-weight:500;">Extreme Fear</small></div>', unsafe_allow_html=True)
     with col2:
-        st.markdown('<div style="background-color:#f57c00;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Fear</small></div>', unsafe_allow_html=True)
+        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#f57c00;font-size:10px;font-weight:500;">Fear</small></div>', unsafe_allow_html=True)
     with col3:
-        st.markdown('<div style="background-color:#ff9800;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Neutral</small></div>', unsafe_allow_html=True)
+        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#ff9800;font-size:10px;font-weight:500;">Neutral</small></div>', unsafe_allow_html=True)
     with col4:
-        st.markdown('<div style="background-color:#4caf50;padding:6px;border-radius:4px;text-align:center;"><small style="color:white;">Greed</small></div>', unsafe_allow_html=True)
+        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#4caf50;font-size:10px;font-weight:500;">Greed</small></div>', unsafe_allow_html=True)
     with col5:
-        st.markdown('<div style="background-color:#00ffad;padding:6px;border-radius:4px;text-align:center;"><small style="color:black;">Extreme Greed</small></div>', unsafe_allow_html=True)
+        st.markdown('<div style="padding:2px;text-align:center;"><small style="color:#00ffad;font-size:10px;font-weight:500;">Extreme Greed</small></div>', unsafe_allow_html=True)
 
-    # Valor actual
     st.caption(f"Current: {fng} pts")
 
 # --- ROUTING DE PÁGINAS ---

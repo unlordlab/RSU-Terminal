@@ -25,7 +25,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONFIGURACIÓN IA (SISTEMA ANTI-BLOQUEO) ---
+# --- 2. CONFIGURACIÓN IA (ANTI-BLOQUEO) ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 def conectar_ia():
@@ -43,11 +43,11 @@ def conectar_ia():
         return genai.GenerativeModel(model_name=sel, safety_settings=safety_settings), sel, None
     except Exception as e: return None, None, str(e)
 
-@st.cache_data(ttl=3600) # Se actualiza cada hora para no saturar GitHub
+@st.cache_data(ttl=600)
 def obtener_prompt_github():
     try:
         # ⚠️ REEMPLAZA CON TU URL RAW DE GITHUB
-        url_raw = "https://github.com/unlordlab/RSU-Terminal/blob/df1305016e5028c9db6cc5c0a689ddd661434272/prompt_report.txt"
+        url_raw = "https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/prompt_report.txt"
         response = requests.get(url_raw)
         return response.text if response.status_code == 200 else ""
     except: return ""
@@ -59,12 +59,11 @@ model_ia, modelo_nombre, error_ia = conectar_ia()
 def get_cnn_fear_greed():
     try:
         url = "https://edition.cnn.com/markets/fear-and-greed"
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         soup = BeautifulSoup(requests.get(url, headers=headers).content, 'html.parser')
-        # Buscamos el valor numérico en el gauge de CNN
         val = soup.find("span", class_="market-fng-gauge__dial-number-value").text
         return int(val)
-    except: return 50 # Valor neutral si falla el scraping
+    except: return 50
 
 def get_market_index(ticker_symbol):
     try:
@@ -74,27 +73,94 @@ def get_market_index(ticker_symbol):
         return p, c
     except: return 0.0, 0.0
 
-def calificar_trade(t, v, c, r):
-    score = 0
-    if t == "A favor": score += 30
-    if v == "Inusual / Alto": score += 25
-    if c == "Fuerte (Earnings/FDA)": score += 25
-    if r >= 3: score += 20
-    grados = {90: ("A+", "#00ffad"), 75: ("A", "#a2ff00"), 60: ("B", "#ffea00"), 40: ("C", "#ff9100"), 0: ("D", "#f23645")}
-    for s, g in grados.items():
-        if score >= s: return g
-
-# --- 4. ACCESO ---
+# --- 4. LOGIN SISTEMA ---
 if "auth" not in st.session_state: st.session_state["auth"] = False
 if not st.session_state["auth"]:
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         if os.path.exists("logo.png"): st.image("logo.png", use_container_width=True)
-        st.markdown("<h3 style='text-align:center;'>RSU MASTER TERMINAL</h3>", unsafe_allow_html=True)
-        password = st.text_input("ACCESS KEY", type="password")
-        if st.button("UNLOCK TERMINAL", use_container_width=True):
+        st.markdown("<h4 style='text-align:center;'>RSU TERMINAL ACCESS</h4>", unsafe_allow_html=True)
+        password = st.text_input("PASSWORD", type="password")
+        if st.button("UNLOCK", use_container_width=True):
             if password == "RSU2026":
                 st.session_state["auth"] = True
                 st.rerun()
             else: st.error("Clave Incorrecta")
-    st.stop
+    st.stop() # Aquí es donde el código se detiene si no hay login
+
+# --- 5. SIDEBAR ---
+with st.sidebar:
+    if os.path.exists("logo.png"): st.image("logo.png", width=150)
+    menu = st.radio("", ["📊 DASHBOARD", "🤖 IA REPORT", "💼 CARTERA", "📄 TESIS", "⚖️ TRADE GRADER", "🎥 ACADEMY"])
+    
+    st.write("---")
+    fng = get_cnn_fear_greed()
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number", value=fng,
+        gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2962ff"},
+               'steps': [{'range': [0, 30], 'color': "#f23645"}, 
+                         {'range': [30, 70], 'color': "#444"},
+                         {'range': [70, 100], 'color': "#00ffad"}]},
+    ))
+    fig.update_layout(height=180, margin=dict(l=20,r=20,t=10,b=10), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+    st.plotly_chart(fig, use_container_width=True)
+
+# --- 6. LÓGICA DE MENÚS ---
+
+if menu == "📊 DASHBOARD":
+    st.title("Market Overview")
+    idx = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
+    cols = st.columns(4)
+    for i, (n, s) in enumerate(idx.items()):
+        p, c = get_market_index(s)
+        color = "#00ffad" if (c >= 0 and n != "VIX") or (c < 0 and n == "VIX") else "#f23645"
+        cols[i].markdown(f"""<div class="metric-card"><small>{n}</small><h3>{p:,.1f}</h3><p style="color:{color}">{c:.2f}%</p></div>""", unsafe_allow_html=True)
+    
+    t1, t2 = st.tabs(["📰 NOTICIAS", "💰 EARNINGS"])
+    with t1:
+        try:
+            df = pd.read_csv(st.secrets["URL_NOTICIAS"])
+            st.dataframe(df, use_container_width=True)
+        except: st.info("Falta URL_NOTICIAS en Secrets.")
+
+elif menu == "🤖 IA REPORT":
+    t_in = st.text_input("Ticker", "NVDA").upper()
+    if st.button("GENERAR REPORTE RSU"):
+        if error_ia: st.error(error_ia)
+        else:
+            with st.spinner(f"Analizando {t_in}..."):
+                template = obtener_prompt_github()
+                prompt_final = f"Analitza {t_in} seguint això: {template.replace('[TICKER]', t_in)}"
+                try:
+                    res = model_ia.generate_content(prompt_final)
+                    if res.candidates and res.candidates[0].content.parts:
+                        st.markdown(f"### 📋 Informe: {t_in}")
+                        st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+                except Exception as e: st.error(f"Error de IA: {e}")
+
+elif menu == "💼 CARTERA":
+    try:
+        df = pd.read_csv(st.secrets["URL_CARTERA"])
+        st.table(df)
+    except: st.warning("Configura URL_CARTERA.")
+
+elif menu == "📄 TESIS":
+    try:
+        df = pd.read_csv(st.secrets["URL_TESIS"])
+        sel = st.selectbox("Tesis:", df['Ticker'].tolist())
+        st.info(df[df['Ticker'] == sel]['Tesis_Corta'].values[0])
+    except: st.info("Configura URL_TESIS.")
+
+elif menu == "⚖️ TRADE GRADER":
+    st.subheader("RSU Scorecard")
+    ten = st.selectbox("Tendencia", ["A favor", "Neutral", "En contra"])
+    rrr = st.slider("RRR", 1.0, 5.0, 2.0)
+    if st.button("CALCULAR"):
+        st.success(f"Grado calculado para tendencia {ten}")
+
+elif menu == "🎥 ACADEMY":
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+st.write("---")
+st.caption(f"v1.4 | Engine: {modelo_nombre}")
+

@@ -61,47 +61,62 @@ def obtener_prompt_github():
     except:
         return ""
 
-@st.cache_data(ttl=1800)  # Cache 30min
+@st.cache_data(ttl=1800)
 def get_cnn_fear_greed():
     try:
-        # API directa CNN (más estable)
-        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/2026-01-01"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers)
         
+        # Intentar API primero
+        url_api = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        response = requests.get(url_api, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            current_value = data['fear_and_greed_historical']['data'][-1]['y']
-            return round(float(current_value), 1)
+            if 'fear_and_greed_historical' in data and data['fear_and_greed_historical']['data']:
+                return round(float(data['fear_and_greed_historical']['data'][-1]['y']), 1)
         
-        # Fallback scraping mejorado
+        # Fallback scraping
         url_scrape = "https://edition.cnn.com/markets/fear-and-greed"
         soup = BeautifulSoup(requests.get(url_scrape, headers=headers).content, 'html.parser')
         
         selectors = [
-            "span.market-fng-gauge__dial-number-value",
-            ".js-fg-current-value",
-            "[data-fng-value]",
-            ".fear-greed__current-value",
-            ".fng-gauge__dial-number-value"
+            "span[data-testid*='fear-greed']",
+            ".fear-greed-gauge__value",
+            ".js-fng-score",
+            "span.fng-score"
         ]
         
         for selector in selectors:
             element = soup.select_one(selector)
-            if element:
+            if element and element.get_text().strip().isdigit():
                 return int(element.get_text().strip())
         
         return 50
-    except Exception:
+    except:
         return 50
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)  # Cache 5min para precios
 def get_market_index(ticker_symbol):
     try:
         import yfinance as yf
-        data = yf.Ticker(ticker_symbol).fast_info
-        p = data['last_price']
-        c = ((p - data['previous_close']) / data['previous_close']) * 100
-        return p, c
-    except:
+        ticker = yf.Ticker(ticker_symbol)
+        
+        # Método más robusto
+        info = ticker.fast_info
+        if info and info['last_price'] is not None:
+            current = info['last_price']
+            previous = info.get('previous_close', current)
+            change = ((current - previous) / previous) * 100 if previous != 0 else 0
+            return current, change
+        
+        # Fallback: download histórico
+        hist = ticker.history(period="2d")
+        if not hist.empty:
+            current = hist['Close'][-1]
+            previous = hist['Close'][-2]
+            change = ((current - previous) / previous) * 100
+            return current, change
+        
+        return 0.0, 0.0
+    except Exception as e:
+        st.error(f"Error {ticker_symbol}: {e}")
         return 0.0, 0.0

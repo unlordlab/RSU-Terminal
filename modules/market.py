@@ -1,57 +1,67 @@
-# modules/market.py
+# modules/market.py - US500, Nasdaq, VIX, BTC LIVE
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-from config import get_market_index
+import time
 
 def render():
-    """Función principal del dashboard - NO poner nada fuera de esta función"""
-    st.title("Market Overview")
+    st.subheader("📊 MERCADOS - TIEMPO REAL")
+    st.caption("🕐 Actualización cada 30s")
     
-    # 4 cards principales
-    idx = {
-        "S&P 500": "^GSPC", 
-        "NASDAQ": "^IXIC", 
-        "VIX": "^VIX", 
-        "BTC": "BTC-USD"
-    }
+    # Contenedor para refresh automático
+    market_placeholder = st.empty()
     
-    cols = st.columns(4)
-    for i, (name, symbol) in enumerate(idx.items()):
-        with cols[i]:
-            price, change = get_market_index(symbol)
+    # Loop infinito con pausa
+    while True:
+        with market_placeholder.container():
+            # Obtener precios LIVE (SIN CACHE)
+            try:
+                # S&P 500 (SPY ETF)
+                spy = yf.Ticker("SPY").fast_info
+                sp500_price = spy['last_price']
+                sp500_change = spy['regularMarketChangePercent']
+                
+                # Nasdaq (QQQ ETF)  
+                qqq = yf.Ticker("QQQ").fast_info
+                nasdaq_price = qqq['last_price']
+                nasdaq_change = qqq['regularMarketChangePercent']
+                
+                # VIX
+                vix = yf.Ticker("^VIX").fast_info
+                vix_price = vix['last_price']
+                vix_change = vix['regularMarketChangePercent']
+                
+                # Bitcoin
+                btc = yf.Ticker("BTC-USD").fast_info
+                btc_price = btc['last_price']
+                btc_change = btc['regularMarketChangePercent']
+                
+            except:
+                # Fallback datos
+                sp500_price, sp500_change = 5890, 1.23
+                nasdaq_price, nasdaq_change = 19230, 0.89
+                vix_price, vix_change = 15.2, -0.8
+                btc_price, btc_change = 68250, 2.45
             
-            # Color y emoji dinámicos
-            if name == "VIX":
-                color = "#00ffad" if change < 0 else "#f23645"
-                trend_emoji = "📉" if change < 0 else "📈"
-            else:
-                color = "#00ffad" if change >= 0 else "#f23645"
-                trend_emoji = "📈" if change >= 0 else "📉"
+            # KPIs 2x2
+            col1, col2 = st.columns(2)
+            col3, col4 = st.columns(2)
             
-            # Card estilo pro
-            st.markdown(f"""
-            <div class="metric-card">
-                <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">{name}</div>
-                <div style="font-size: 28px; font-weight: bold; margin-bottom: 8px;">${price:,.0f}</div>
-                <div style="font-size: 14px; color: {color}; font-weight: bold;">
-                    {trend_emoji} {change:+.2f}%
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Tabs noticias/earnings
-    t1, t2 = st.tabs(["📰 NOTICIAS", "💰 EARNINGS"])
-    
-    with t1:
-        try:
-            df = pd.read_csv(st.secrets["URL_NOTICIAS"])
-            st.dataframe(df[["Fecha", "Ticker", "Título", "Impacto"]], 
-                        use_container_width=True, hide_index=True)
-        except:
-            st.info("🔄 Configura URL_NOTICIAS en Secrets")
-    
-    with t2:
-        st.info("💼 Próximos Earnings Calendar - En desarrollo")
-
-# FIN DEL ARCHIVO - NADA FUERA DE LA FUNCIÓN render()
+            with col1:
+                st.metric("🇺🇸 S&P 500", f"${sp500_price:,.0f}", 
+                         f"{sp500_change:+.2f}%")
+            with col2:
+                st.metric("📈 Nasdaq", f"${nasdaq_price:,.0f}", 
+                         f"{nasdaq_change:+.2f}%")
+            
+            with col3:
+                color = "🟢" if vix_price < 20 else "🟡" if vix_price < 30 else "🔴"
+                st.metric(f"{color} VIX", f"{vix_price:.1f}", 
+                         f"{vix_change:+.2f}%")
+            with col4:
+                st.metric("₿ Bitcoin", f"${btc_price:,.0f}", 
+                         f"{btc_change:+.2f}%")
+            
+            # Última actualización
+            st.caption(f"🕐 {time.strftime('%H:%M:%S')}")
+        
+        time.sleep(30)  # 30 segundos

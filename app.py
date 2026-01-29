@@ -1,11 +1,10 @@
-
+# app.py
 import os
 import streamlit as st
 import plotly.graph_objects as go
+import pandas as pd
 
 from config import set_style, get_cnn_fear_greed
-
-# Importamos cada módulo directamente; __init__.py puede estar vacío
 import modules.auth as auth
 import modules.market as market
 import modules.ia_report as ia_report
@@ -21,7 +20,7 @@ set_style()
 if not auth.login():
     st.stop()
 
-# --- SIDEBAR ---
+# --- SIDEBAR MEJORADO ---
 with st.sidebar:
     # Logo
     if os.path.exists("assets/logo.png"):
@@ -42,30 +41,54 @@ with st.sidebar:
 
     st.write("---")
 
-    # Fear & Greed
+    # Fear & Greed GAUGE MEJORADO
     fng = get_cnn_fear_greed()
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=fng,
-            gauge={
-                "axis": {"range": [0, 100]},
-                "bar": {"color": "#2962ff"},
-                "steps": [
-                    {"range": [0, 30], "color": "#f23645"},
-                    {"range": [30, 70], "color": "#444"},
-                    {"range": [70, 100], "color": "#00ffad"},
-                ],
-            },
-        )
-    )
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=fng,
+        number={"suffix": " pts", "font": {"size": 24}},
+        delta={'reference': 50},
+        gauge={
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
+            'bar': {'color': "#2962ff"},
+            'steps': [
+                {'range': [0, 25], 'color': "#d32f2f"},    # Extreme Fear
+                {'range': [25, 45], 'color': "#f57c00"},   # Fear
+                {'range': [45, 55], 'color': "#ff9800"},   # Neutral
+                {'range': [55, 75], 'color': "#4caf50"},   # Greed
+                {'range': [75, 100], 'color': "#00ffad"},  # Extreme Greed
+            ],
+            'threshold': {
+                'line': {'color': "white", 'width': 4},
+                'thickness': 0.75,
+                'value': fng
+            }
+        },
+        title={"text": "Fear & Greed Index"}
+    ))
     fig.update_layout(
-        height=180,
-        margin=dict(l=20, r=20, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={"color": "white"},
+        height=220,
+        margin=dict(l=10, r=10, t=40, b=10),
+        paper_bgcolor='rgba(0,0,0,0)',
+        font={'color': "white", 'size': 12}
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # Label descriptivo
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.metric("Actual", f"{fng}", "0 pts")
+    with col2:
+        if fng < 25:
+            st.caption("🟥 Extreme Fear")
+        elif fng < 45:
+            st.caption("🟧 Fear")
+        elif fng < 55:
+            st.caption("🟡 Neutral")
+        elif fng < 75:
+            st.caption("🟩 Greed")
+        else:
+            st.caption("🟩 Extreme Greed")
 
 # --- ROUTING DE PÁGINAS ---
 if menu == "📊 DASHBOARD":

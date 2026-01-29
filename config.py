@@ -140,21 +140,35 @@ def get_market_index(ticker_symbol):
     try:
         import yfinance as yf
         ticker = yf.Ticker(ticker_symbol)
-        info = ticker.fast_info
-        if info and info['last_price'] is not None:
-            current = info['last_price']
-            previous = info.get('previous_close', current)
-            change = ((current - previous) / previous) * 100 if previous != 0 else 0
-            return current, change
         
-        hist = ticker.history(period="2d")
-        if not hist.empty:
-            current = hist['Close'][-1]
-            previous = hist['Close'][-2]
-            change = ((current - previous) / previous) * 100
-            return current, change
+        # 1. Intentar obtener datos históricos de los últimos 5 días (más fiable para índices)
+        hist = ticker.history(period="5d")
+        
+        if not hist.empty and len(hist) >= 2:
+            current = hist['Close'].iloc[-1]
+            previous = hist['Close'].iloc[-2]
+            
+            # Si el mercado está abierto, yfinance puede dar el mismo precio en Close 
+            # de hoy y de ayer hasta que se actualice. Forzamos precio actual:
+            fast_price = ticker.fast_info.get('last_price')
+            if fast_price:
+                current = fast_price
+                
+            change_pct = ((current - previous) / previous) * 100
+            return current, change_pct
+            
+        # 2. Fallback si lo anterior falla (usando fast_info directamente)
+        info = ticker.fast_info
+        current = info.get('last_price')
+        previous = info.get('previous_close')
+        
+        if current and previous:
+            change_pct = ((current - previous) / previous) * 100
+            return current, change_pct
+            
         return 0.0, 0.0
     except Exception as e:
-        st.error(f"Error {ticker_symbol}: {e}")
+        # No mostramos el error en UI para no ensuciar, pero devolvemos neutral
         return 0.0, 0.0
+
 

@@ -1,3 +1,5 @@
+
+
 import streamlit as st
 import yfinance as yf
 import google.generativeai as genai
@@ -11,7 +13,6 @@ import os
 # --- 1. CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="RSU Master Terminal", layout="wide", page_icon="📊")
 
-# Estilos CSS RSU
 st.markdown("""
     <style>
     .stApp { background-color: #0c0e12; color: #e0e0e0; }
@@ -27,23 +28,28 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONFIGURACIÓN IA (SISTEMA ROBUSTO) ---
-API_KEY = st.secrets.get("GEMINI_API_KEY")
+# --- 2. CONFIGURACIÓN IA (SISTEMA ROBUSTO v1) ---
+API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
 def conectar_ia():
-    if not API_KEY: return None, None, "Falta GEMINI_API_KEY en Secrets"
+    if not API_KEY: return None, None, "Falta API KEY en Secrets"
     try:
         genai.configure(api_key=API_KEY)
         modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        if 'models/gemini-1.5-flash' in modelos:
-            sel = 'models/gemini-1.5-flash'
-        elif 'models/gemini-pro' in modelos:
-            sel = 'models/gemini-pro'
-        else:
-            sel = modelos[0]
+        sel = 'models/gemini-1.5-flash' if 'models/gemini-1.5-flash' in modelos else modelos[0]
         return genai.GenerativeModel(sel), sel, None
-    except Exception as e: 
-        return None, None, str(e)
+    except Exception as e: return None, None, str(e)
+
+def obtener_prompt_github():
+    try:
+        # CAMBIA ESTA URL POR TU URL RAW DE GITHUB
+        url_raw = "https://github.com/unlordlab/RSU-Terminal/blob/36ff32012cd8c599a37f2c1b8b51c3dfafb22408/prompt_report.txt"
+        response = requests.get(url_raw)
+        if response.status_code == 200:
+            return response.text
+        return "Analiza el ticker {t} de forma profesional."
+    except:
+        return "Analiza el ticker {t} de forma profesional."
 
 model_ia, modelo_nombre, error_ia = conectar_ia()
 
@@ -75,9 +81,9 @@ def get_cnn_fear_greed():
 def get_market_index(ticker_symbol):
     try:
         data = yf.Ticker(ticker_symbol).fast_info
-        price = data['last_price']
-        change = ((price - data['previous_close']) / data['previous_close']) * 100
-        return price, change
+        p = data['last_price']
+        c = ((p - data['previous_close']) / data['previous_close']) * 100
+        return p, c
     except: return 0.0, 0.0
 
 def calificar_trade(tendencia, volumen, catalizador, rrr):
@@ -90,94 +96,87 @@ def calificar_trade(tendencia, volumen, catalizador, rrr):
     elif catalizador == "Especulativo": score += 10
     if rrr >= 3: score += 20
     elif rrr >= 2: score += 10
-    
-    if score >= 90: return "A+", "#00ffad"
-    if score >= 75: return "A", "#a2ff00"
-    if score >= 60: return "B", "#ffea00"
-    if score >= 40: return "C", "#ff9100"
-    return "D", "#f23645"
+    grados = {90: ("A+", "#00ffad"), 75: ("A", "#a2ff00"), 60: ("B", "#ffea00"), 40: ("C", "#ff9100"), 0: ("D", "#f23645")}
+    for s, g in grados.items():
+        if score >= s: return g
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
     if os.path.exists("logo.png"): st.image("logo.png", width=120)
     menu = st.radio("", ["📊 DASHBOARD", "🤖 IA REPORT", "💼 CARTERA", "📄 TESIS", "⚖️ TRADE GRADER", "🎥 ACADEMY"])
     st.write("---")
-    fg_val = get_cnn_fear_greed()
-    fig_gauge = go.Figure(go.Indicator(
-        mode="gauge+number", value=fg_val,
-        gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2962ff"}},
-        title={'text': "SENTIMIENTO", 'font': {'color': 'white', 'size': 14}}
-    ))
-    fig_gauge.update_layout(paper_bgcolor='rgba(0,0,0,0)', height=180, margin=dict(l=10,r=10,t=30,b=10))
-    st.plotly_chart(fig_gauge, use_container_width=True)
+    fg = get_cnn_fear_greed()
+    fig = go.Figure(go.Indicator(mode="gauge+number", value=fg, gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2962ff"}}, title={'text': "SENTIMIENTO", 'font': {'color': 'white', 'size': 14}}))
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', height=180, margin=dict(l=10,r=10,t=30,b=10))
+    st.plotly_chart(fig, use_container_width=True)
 
 # --- 6. LÓGICA DE MENÚ ---
 if menu == "📊 DASHBOARD":
-    tab_mkt, tab_news, tab_earn = st.tabs(["📈 MERCADO", "📰 NOTICIAS", "💰 EARNINGS"])
-    with tab_mkt:
-        indices = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
+    t1, t2, t3 = st.tabs(["📈 MERCADO", "📰 NOTICIAS", "💰 EARNINGS"])
+    with t1:
+        idx = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
         cols = st.columns(4)
-        for i, (name, sym) in enumerate(indices.items()):
-            p, c = get_market_index(sym)
-            color = "#00ffad" if (c >= 0 and name != "VIX") or (c < 0 and name == "VIX") else "#f23645"
-            cols[i].markdown(f"""<div class="metric-card"><small>{name}</small><h3>{p:,.1f}</h3><p style="color:{color}">{c:.2f}%</p></div>""", unsafe_allow_html=True)
-    with tab_news:
+        for i, (n, s) in enumerate(idx.items()):
+            p, c = get_market_index(s)
+            color = "#00ffad" if (c >= 0 and n != "VIX") or (c < 0 and n == "VIX") else "#f23645"
+            cols[i].markdown(f"""<div class="metric-card"><small>{n}</small><h3>{p:,.1f}</h3><p style="color:{color}">{c:.2f}%</p></div>""", unsafe_allow_html=True)
+    with t2:
         try:
-            df_n = pd.read_csv(st.secrets["URL_NOTICIAS"])
-            st.dataframe(df_n, use_container_width=True)
+            df = pd.read_csv(st.secrets["URL_NOTICIAS"])
+            st.dataframe(df, use_container_width=True)
         except: st.info("Configura URL_NOTICIAS en Secrets.")
-    with tab_earn:
-        stock_list = ["NVDA", "AAPL", "TSLA", "MSFT"]
-        target = st.selectbox("Expectativas:", stock_list)
-        if st.button("PREDICCIÓN IA"):
+    with t3:
+        target = st.selectbox("Ticker:", ["NVDA", "AAPL", "TSLA", "MSFT"])
+        if st.button("PREDECIR"):
             if error_ia: st.error(error_ia)
             else:
-                res = model_ia.generate_content(f"Analiza expectativas próximas de {target}")
+                res = model_ia.generate_content(f"Próximos earnings de {target}")
                 st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
 
 elif menu == "🤖 IA REPORT":
-    t = st.text_input("Ticker", "NVDA").upper()
+    ticker_input = st.text_input("Ticker", "NVDA").upper()
     if st.button("GENERAR REPORTE RSU"):
         if error_ia: st.error(error_ia)
         else:
-            with st.spinner("Analizando..."):
-                res = model_ia.generate_content(f"Haz un reporte institucional de {t}")
+            with st.spinner("Conectando con GitHub y analizando..."):
+                prompt_txt = obtener_prompt_github()
+                # Reemplazamos {t} por el ticker del usuario
+                prompt_final = prompt_txt.replace("{t}", ticker_input)
+                res = model_ia.generate_content(prompt_final)
                 st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
 
 elif menu == "💼 CARTERA":
     try:
-        df_c = pd.read_csv(st.secrets["URL_CARTERA"])
-        st.table(df_c)
-    except: st.warning("Configura URL_CARTERA en Secrets.")
+        df = pd.read_csv(st.secrets["URL_CARTERA"])
+        st.table(df)
+    except: st.warning("Configura URL_CARTERA.")
 
 elif menu == "📄 TESIS":
     try:
-        df_t = pd.read_csv(st.secrets["URL_TESIS"])
-        sel = st.selectbox("Tesis:", df_t['Ticker'].tolist())
-        row = df_t[df_t['Ticker'] == sel].iloc[0]
+        df = pd.read_csv(st.secrets["URL_TESIS"])
+        sel = st.selectbox("Tesis:", df['Ticker'].tolist())
+        row = df[df['Ticker'] == sel].iloc[0]
         st.info(row['Tesis_Corta'])
         if st.button("AUDITAR"):
-            if error_ia: st.error(error_ia)
-            else:
-                res = model_ia.generate_content(f"Critica esta tesis: {row['Tesis_Corta']}")
-                st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
-    except: st.info("Configura URL_TESIS en Secrets.")
+            res = model_ia.generate_content(f"Critica esta tesis: {row['Tesis_Corta']}")
+            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+    except: st.info("Configura URL_TESIS.")
 
 elif menu == "⚖️ TRADE GRADER":
-    col_a, col_b = st.columns(2)
-    with col_a:
+    c1, c2 = st.columns(2)
+    with c1:
         t_in = st.selectbox("Tendencia", ["A favor", "Neutral", "En contra"])
         v_in = st.selectbox("Volumen", ["Inusual / Alto", "Normal", "Bajo"])
-    with col_b:
+    with c2:
         c_in = st.selectbox("Catalizador", ["Fuerte (Earnings/FDA)", "Especulativo", "Ninguno"])
         r_in = st.slider("RRR", 1.0, 5.0, 2.0)
     if st.button("CALCULAR"):
-        g, c = calificar_trade(t_in, v_in, c_in, r_in)
-        st.markdown(f'<div style="text-align:center; padding:20px; border:3px solid {c}; border-radius:15px;"><h1 style="color:{c}; font-size:80px;">{g}</h1></div>', unsafe_allow_html=True)
+        g, color = calificar_trade(t_in, v_in, c_in, r_in)
+        st.markdown(f'<div style="text-align:center; padding:20px; border:3px solid {color}; border-radius:15px;"><h1 style="color:{color}; font-size:80px;">{g}</h1></div>', unsafe_allow_html=True)
 
 elif menu == "🎥 ACADEMY":
     st.title("RSU Academy")
     st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
 st.write("---")
-st.caption(f"Engine: {modelo_nombre if modelo_nombre else 'Error'}")
+st.caption(f"v1 | Engine: {modelo_nombre}")

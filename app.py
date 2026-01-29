@@ -42,7 +42,7 @@ def conectar_ia():
 def obtener_prompt_github():
     try:
         # ⚠️ PON AQUÍ TU URL RAW DE GITHUB
-        url_raw = "https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/prompt_report.txt"
+        url_raw = "https://github.com/unlordlab/RSU-Terminal/blob/df1305016e5028c9db6cc5c0a689ddd661434272/prompt_report.txt"
         response = requests.get(url_raw)
         return response.text if response.status_code == 200 else ""
     except: return ""
@@ -106,3 +106,4 @@ elif menu == "🎥 ACADEMY":
     st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
 st.caption(f"v1.3 | Engine: {modelo_nombre}")
+

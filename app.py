@@ -28,16 +28,13 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. CONFIGURACIÓN IA (SISTEMA ROBUSTO) ---
-# Usamos el nombre del secreto que definiste: GEMINI_API_KEY
 API_KEY = st.secrets.get("GEMINI_API_KEY")
 
 def conectar_ia():
     if not API_KEY: return None, None, "Falta GEMINI_API_KEY en Secrets"
     try:
         genai.configure(api_key=API_KEY)
-        # Listamos modelos para ver cuáles están disponibles en tu cuenta/región
         modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        # Prioridad: 1.5-flash -> 1.5-pro -> el primero disponible
         if 'models/gemini-1.5-flash' in modelos:
             sel = 'models/gemini-1.5-flash'
         elif 'models/gemini-pro' in modelos:
@@ -117,7 +114,6 @@ with st.sidebar:
 # --- 6. LÓGICA DE MENÚ ---
 if menu == "📊 DASHBOARD":
     tab_mkt, tab_news, tab_earn = st.tabs(["📈 MERCADO", "📰 NOTICIAS", "💰 EARNINGS"])
-    
     with tab_mkt:
         indices = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "VIX": "^VIX", "BTC": "BTC-USD"}
         cols = st.columns(4)
@@ -125,13 +121,11 @@ if menu == "📊 DASHBOARD":
             p, c = get_market_index(sym)
             color = "#00ffad" if (c >= 0 and name != "VIX") or (c < 0 and name == "VIX") else "#f23645"
             cols[i].markdown(f"""<div class="metric-card"><small>{name}</small><h3>{p:,.1f}</h3><p style="color:{color}">{c:.2f}%</p></div>""", unsafe_allow_html=True)
-
     with tab_news:
         try:
             df_n = pd.read_csv(st.secrets["URL_NOTICIAS"])
             st.dataframe(df_n, use_container_width=True)
         except: st.info("Configura URL_NOTICIAS en Secrets.")
-
     with tab_earn:
         stock_list = ["NVDA", "AAPL", "TSLA", "MSFT"]
         target = st.selectbox("Expectativas:", stock_list)
@@ -151,5 +145,39 @@ elif menu == "🤖 IA REPORT":
                 st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
 
 elif menu == "💼 CARTERA":
+    try:
+        df_c = pd.read_csv(st.secrets["URL_CARTERA"])
+        st.table(df_c)
+    except: st.warning("Configura URL_CARTERA en Secrets.")
 
+elif menu == "📄 TESIS":
+    try:
+        df_t = pd.read_csv(st.secrets["URL_TESIS"])
+        sel = st.selectbox("Tesis:", df_t['Ticker'].tolist())
+        row = df_t[df_t['Ticker'] == sel].iloc[0]
+        st.info(row['Tesis_Corta'])
+        if st.button("AUDITAR"):
+            if error_ia: st.error(error_ia)
+            else:
+                res = model_ia.generate_content(f"Critica esta tesis: {row['Tesis_Corta']}")
+                st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+    except: st.info("Configura URL_TESIS en Secrets.")
 
+elif menu == "⚖️ TRADE GRADER":
+    col_a, col_b = st.columns(2)
+    with col_a:
+        t_in = st.selectbox("Tendencia", ["A favor", "Neutral", "En contra"])
+        v_in = st.selectbox("Volumen", ["Inusual / Alto", "Normal", "Bajo"])
+    with col_b:
+        c_in = st.selectbox("Catalizador", ["Fuerte (Earnings/FDA)", "Especulativo", "Ninguno"])
+        r_in = st.slider("RRR", 1.0, 5.0, 2.0)
+    if st.button("CALCULAR"):
+        g, c = calificar_trade(t_in, v_in, c_in, r_in)
+        st.markdown(f'<div style="text-align:center; padding:20px; border:3px solid {c}; border-radius:15px;"><h1 style="color:{c}; font-size:80px;">{g}</h1></div>', unsafe_allow_html=True)
+
+elif menu == "🎥 ACADEMY":
+    st.title("RSU Academy")
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+st.write("---")
+st.caption(f"Engine: {modelo_nombre if modelo_nombre else 'Error'}")

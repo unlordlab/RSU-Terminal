@@ -12,16 +12,68 @@ st.set_page_config(
     page_icon="📊"
 )
 
-# Estilos globales
+# Estilos globales integrando las nuevas cajas (Index Cards)
 def set_style():
     st.markdown("""
         <style>
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
+        
+        /* Caja original por si la usas en otras secciones */
         .metric-card {
             background-color: #151921; padding: 20px; border-radius: 10px;
             border: 1px solid #2d3439; text-align: center;
         }
+
+        /* NUEVAS CAJAS ESTILO INDEX CARD (DASHBOARD) */
+        .index-card {
+            background-color: #151921;
+            border: 1px solid #2d3439;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .index-name-container {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+        .index-ticker {
+            color: #e0e0e0;
+            font-weight: bold;
+            font-size: 16px;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .index-fullname {
+            color: #888;
+            font-size: 11px;
+            margin: 0;
+        }
+        .index-price-container {
+            text-align: right;
+        }
+        .index-price {
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .index-delta {
+            font-size: 12px;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 4px;
+        }
+        .pos { background-color: rgba(0, 255, 173, 0.1); color: #00ffad; }
+        .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
+
         .prompt-container {
             background-color: #1a1e26; border-left: 5px solid #2962ff;
             padding: 20px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap;
@@ -65,8 +117,6 @@ def obtener_prompt_github():
 def get_cnn_fear_greed():
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        
-        # Intentar API primero
         url_api = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
         response = requests.get(url_api, headers=headers)
         if response.status_code == 200:
@@ -74,33 +124,22 @@ def get_cnn_fear_greed():
             if 'fear_and_greed_historical' in data and data['fear_and_greed_historical']['data']:
                 return round(float(data['fear_and_greed_historical']['data'][-1]['y']), 1)
         
-        # Fallback scraping
         url_scrape = "https://edition.cnn.com/markets/fear-and-greed"
         soup = BeautifulSoup(requests.get(url_scrape, headers=headers).content, 'html.parser')
-        
-        selectors = [
-            "span[data-testid*='fear-greed']",
-            ".fear-greed-gauge__value",
-            ".js-fng-score",
-            "span.fng-score"
-        ]
-        
+        selectors = ["span[data-testid*='fear-greed']", ".fear-greed-gauge__value", ".js-fng-score", "span.fng-score"]
         for selector in selectors:
             element = soup.select_one(selector)
             if element and element.get_text().strip().isdigit():
                 return int(element.get_text().strip())
-        
         return 50
     except:
         return 50
 
-@st.cache_data(ttl=300)  # Cache 5min para precios
+@st.cache_data(ttl=300)
 def get_market_index(ticker_symbol):
     try:
         import yfinance as yf
         ticker = yf.Ticker(ticker_symbol)
-        
-        # Método más robusto
         info = ticker.fast_info
         if info and info['last_price'] is not None:
             current = info['last_price']
@@ -108,15 +147,14 @@ def get_market_index(ticker_symbol):
             change = ((current - previous) / previous) * 100 if previous != 0 else 0
             return current, change
         
-        # Fallback: download histórico
         hist = ticker.history(period="2d")
         if not hist.empty:
             current = hist['Close'][-1]
             previous = hist['Close'][-2]
             change = ((current - previous) / previous) * 100
             return current, change
-        
         return 0.0, 0.0
     except Exception as e:
         st.error(f"Error {ticker_symbol}: {e}")
         return 0.0, 0.0
+

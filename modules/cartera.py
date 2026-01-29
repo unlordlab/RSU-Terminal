@@ -1,4 +1,4 @@
-# modules/cartera.py (FUNCIONA CON CUALQUIER ESTRUCTURA)
+# modules/cartera.py 
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -23,7 +23,7 @@ def load_cartera():
         })
 
 def render():
-    st.subheader("💼 CARTERA RSU")
+    st.subheader("💼 CARTERA RSU 5 años/crecimiento")
     
     df = load_cartera()
     
@@ -64,3 +64,4 @@ def render():
     
     # Tabla
     st.dataframe(df[['Ticker','Shares','PnL_$','PnL_%','Peso_%']], use_container_width=True)
+

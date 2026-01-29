@@ -186,4 +186,8 @@ elif menu == "⚖️ TRADE GRADER":
         st.markdown(f'<div style="text-align:center; padding:20px; border:3px solid {color}; border-radius:15px;"><h1 style="color:{color}; font-size:80px;">{g}</h1></div>', unsafe_allow_html=True)
 
 elif menu == "🎥 ACADEMY":
-    st.title("
+    st.title("RSU Academy")
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+st.write("---")
+st.caption(f"v1 | Engine: {modelo_nombre}")

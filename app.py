@@ -1,117 +1,128 @@
-# app.py
-import os
+# app.py - RSU Terminal Dashboard COMPLETO
 import streamlit as st
 import plotly.graph_objects as go
+from datetime import datetime
+import yfinance as yf
 import pandas as pd
 
-from config import set_style, get_cnn_fear_greed
-import modules.auth as auth
-import modules.market as market
-import modules.ia_report as ia_report
-import modules.cartera as cartera
-import modules.tesis as tesis
-import modules.trade_grader as trade_grader
-import modules.academy as academy
+# Importar módulos
+from modules import cartera, credit_spreads, fear_greed
 
-# --- ESTILO GLOBAL ---
-set_style()
+# Configuración página
+st.set_page_config(
+    page_title="RSU Terminal",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- LOGIN ---
-if not auth.login():
-    st.stop()
+# CSS personalizado
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: 700;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# --- SIDEBAR con Fear & Greed + LEYENDA LIMPIA ---
-with st.sidebar:
-    # Logo
-    if os.path.exists("assets/logo.png"):
-        st.image("assets/logo.png", width=150)
-
-    # Menú principal
-    menu = st.radio(
-        "",
-        [
-            "📊 DASHBOARD",
-            "🤖 IA REPORT",
-            "💼 CARTERA",
-            "📄 TESIS",
-            "⚖️ TRADE GRADER",
-            "🎥 ACADEMY",
-        ],
-    )
-
-    st.write("---")
-
-    # TÍTULO GRANDE Fear & Greed
-    st.markdown('<h3 style="color:white;text-align:center;margin-bottom:5px;">FEAR & GREED</h3>', unsafe_allow_html=True)
+def main():
+    # Header principal
+    st.markdown('<h1 class="main-header">🚀 RSU Terminal</h1>', unsafe_allow_html=True)
     
-    # Fear & Greed GAUGE (más alto para evitar cortes)
-    fng = get_cnn_fear_greed()
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=fng,
-        number={"font": {"size": 24, "color": "white"}},
-        gauge={
-            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': "#2962ff"},
-            'steps': [
-                {'range': [0, 25], 'color': "#d32f2f"},
-                {'range': [25, 45], 'color': "#f57c00"},
-                {'range': [45, 55], 'color': "#ff9800"},
-                {'range': [55, 75], 'color': "#4caf50"},
-                {'range': [75, 100], 'color': "#00ffad"},
-            ]
-        }
-    ))
-    fig.update_layout(
-        height=180,  # Más alto para evitar cortes
-        margin=dict(l=10, r=10, t=5, b=10),
-        paper_bgcolor='rgba(0,0,0,0)',
-        font={'color': "white"}
+    # Sidebar
+    st.sidebar.title("📊 Dashboard")
+    page = st.sidebar.selectbox(
+        "Navegación:",
+        ["📈 Overview", "💼 Cartera", "📈 Credit Spreads", "😱 Fear & Greed"]
     )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # ESTADO ACTUAL
-    if fng < 25:
-        estado = "🟥 Extreme Fear"
-        color = "#d32f2f"
-    elif fng < 45:
-        estado = "🟧 Fear"
-        color = "#f57c00"
-    elif fng < 55:
-        estado = "🟡 Neutral"
-        color = "#ff9800"
-    elif fng < 75:
-        estado = "🟩 Greed"
-        color = "#4caf50"
-    else:
-        estado = "🟩 Extreme Greed"
-        color = "#00ffad"
-
-    st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
-
-    # LEYENDA LIMPIA (una columna, mejor espaciado)
-    st.markdown("**Legend:**", help="")
-    legend_items = [
-        ("#d32f2f", "Extreme Fear (0-25)"),
-        ("#f57c00", "Fear (25-45)"),
-        ("#ff9800", "Neutral (45-55)"),
-        ("#4caf50", "Greed (55-75)"),
-        ("#00ffad", "Extreme Greed (75-100)")
-    ]
     
-    for color_hex, label in legend_items:
-        st.markdown(f'<span style="color:{color_hex};font-size:12px;">⬤</span> {label}', unsafe_allow_html=True)
+    # Tabs principales
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "💼 Cartera", "📈 Credit Spreads", "😱 Fear & Greed"])
+    
+    with tab1:
+        render_overview()
+    
+    with tab2:
+        cartera.render()
+    
+    with tab3:
+        credit_spreads.render()
+    
+    with tab4:
+        fear_greed.render()
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666;'>
+        Desarrollado con ❤️ para Zaragoza, España | Jan 2026
+    </div>
+    """, unsafe_allow_html=True)
 
-# --- ROUTING DE PÁGINAS ---
-if menu == "📊 DASHBOARD":
-    market.render()
-elif menu == "🤖 IA REPORT":
-    ia_report.render()
-elif menu == "💼 CARTERA":
-    cartera.render()
-elif menu == "📄 TESIS":
-    tesis.render()
-elif menu == "⚖️ TRADE GRADER":
-    trade_grader.render()
-elif menu == "🎥 ACADEMY":
-    academy.render()
+def render_overview():
+    """Dashboard principal con KPIs clave"""
+    st.subheader("📊 Resumen Ejecutivo")
+    
+    # KPIs principales
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        # Fear & Greed
+        fg_value = 65  # Demo - se actualiza desde módulo
+        fg_color = "🟢" if fg_value < 50 else "🟡" if fg_value < 75 else "🔴"
+        st.metric(f"{fg_color} Fear & Greed", fg_value, None)
+    
+    with col2:
+        # Cartera PnL
+        total_pnl = 2450  # Demo - desde cartera
+        st.metric("💰 Total PnL", f"${total_pnl:,}", "+12.3%")
+    
+    with col3:
+        # HY Spread
+        hy_spread = 2.71
+        st.metric("📈 HY Spread", f"{hy_spread}%", "-0.02%")
+    
+    with col4:
+        # Posiciones
+        positions = 3
+        st.metric("📋 Posiciones", positions, None)
+    
+    # Gráficos principales
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📈 Cartera PnL")
+        fig_pnl = go.Figure()
+        fig_pnl.add_trace(go.Bar(
+            x=['NVDA', 'TSLA', 'AAPL'],
+            y=[102, 38, 180],
+            marker_color=['green', 'green', 'green']
+        ))
+        fig_pnl.update_layout(height=300, showlegend=False)
+        st.plotly_chart(fig_pnl, use_container_width=True)
+    
+    with col2:
+        st.subheader("📊 Credit Spreads")
+        fig_spread = go.Figure()
+        fig_spread.add_trace(go.Scatter(
+            x=pd.date_range(end=datetime.now(), periods=30),
+            y=[2.71, 2.69, 2.68, 2.64] * 8,
+            mode='lines'
+        ))
+        fig_spread.add_hline(y=4.0, line_dash="dash", line_color="red")
+        fig_spread.update_layout(height=300, showlegend=False)
+        st.plotly_chart(fig_spread, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
+

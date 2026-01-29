@@ -35,7 +35,7 @@ def conectar_ia():
 def obtener_prompt_github():
     try:
         # ⚠️ REEMPLAZA ESTO CON TU URL RAW REAL
-        url_raw = "https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/prompt_report.txt"
+        url_raw = "https://github.com/unlordlab/RSU-Terminal/blob/df1305016e5028c9db6cc5c0a689ddd661434272/prompt_report.txt"
         res = requests.get(url_raw)
         return res.text if res.status_code == 200 else ""
     except: return ""
@@ -91,3 +91,4 @@ elif menu == "🤖 IA REPORT":
 # (Resto de secciones: Cartera, Tesis, etc., respetando v1)
 elif menu == "⚖️ TRADE GRADER":
     st.write("Scorecard activo")
+

@@ -10,11 +10,11 @@ from datetime import datetime
 # --- 1. CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="RSU Master Terminal", layout="wide", page_icon="📊")
 
-# Configuración segura de la API de Google
+# Configuración de Google AI
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.warning("⚠️ API Key no configurada en los Secrets de Streamlit.")
+    st.error("⚠️ Falta GOOGLE_API_KEY en los Secrets de Streamlit.")
 
 st.markdown("""
     <style>
@@ -121,21 +121,21 @@ if menu == "📊 DASHBOARD":
         target_earn = st.selectbox("Analizar Expectativas:", stock_list)
         if st.button("PREDICCIÓN IA"):
             try:
-                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 res = model.generate_content(f"Analiza expectativas de earnings para {target_earn}. Sé breve.")
                 st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
             except Exception as e:
-                st.error(f"Error de conexión con IA: {e}")
+                st.error(f"Error: {e}")
 
 elif menu == "🤖 IA REPORT":
     t = st.text_input("Ticker", "NVDA").upper()
     if st.button("GENERAR REPORTE"):
         try:
-            model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             res = model.generate_content(f"Reporte institucional para {t}. Analiza catalizadores y niveles clave.")
             st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"Error al generar reporte: {e}")
+            st.error(f"Error: {e}")
 
 elif menu == "💼 CARTERA":
     st.title("Cartera Estratégica RSU")
@@ -153,11 +153,11 @@ elif menu == "📄 TESIS":
         st.info(f"Tesis corta: {row['Tesis_Corta']}")
         if st.button("AUDITAR CON IA"):
             try:
-                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
-                res = model.generate_content(f"Haz de abogado del diablo con esta tesis de inversión: {row['Tesis_Corta']}")
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                res = model.generate_content(f"Haz de abogado del diablo con esta tesis: {row['Tesis_Corta']}")
                 st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
             except Exception as e:
-                st.error(f"Error en auditoría: {e}")
+                st.error(f"Error: {e}")
     except: st.info("Carga tus tesis en Google Sheets.")
 
 elif menu == "⚖️ TRADE GRADER":
@@ -182,5 +182,5 @@ elif menu == "⚖️ TRADE GRADER":
 elif menu == "🎥 ACADEMY":
     st.title("RSU Academy")
     st.video("https://www.youtube.com/watch?v=tu_video_id")
-
   
+

@@ -6,7 +6,7 @@ import yfinance as yf
 import pandas as pd
 
 # Importar módulos
-from modules import cartera, credit_spreads, fear_greed
+# from modules import cartera, credit_spreads, fear_greed
 
 # Configuración página
 st.set_page_config(
@@ -125,3 +125,4 @@ def render_overview():
 
 if __name__ == "__main__":
     main()
+

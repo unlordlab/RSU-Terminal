@@ -1,9 +1,11 @@
-# app.py
+
 import os
 import streamlit as st
 import plotly.graph_objects as go
 
 from config import set_style, get_cnn_fear_greed
+
+# Importamos cada módulo directamente; __init__.py puede estar vacío
 import modules.auth as auth
 import modules.market as market
 import modules.ia_report as ia_report
@@ -78,5 +80,3 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.render()
 elif menu == "🎥 ACADEMY":
     academy.render()
-
-

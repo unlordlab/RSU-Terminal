@@ -2,13 +2,21 @@
 import streamlit as st
 
 def render():
-    st.subheader("RSU Academy")
+    st.subheader("🔥 RSU Academy")
     
-    # Múltiples vídeos (afegeix els teus enllaços aquí)
-    videos = [
-        "https://www.youtube.com/watch?v=6kjnyouSnHs",
-        # "https://www.youtube.com/watch?v=TEU_ENUXc5A",  # Afegeix més
-    ]
+    # ========== EXEMPLE 1: VÍDEOS SIMPLES ==========
+    st.markdown("## 📺 Vídeos Ràpids")
+    col1, col2 = st.columns(2)
     
-    for video_url in videos:
-        st.video(video_url, format="video")
+    with col1:
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    with col2:
+        st.video("https://www.youtube.com/watch?v=TEU_ENUXc5A")
+    
+    st.divider()
+    
+    
+    st.markdown("---")
+    st.info("""
+   
+    """)

@@ -7,7 +7,7 @@ from config import get_ia_model, obtener_prompt_github
 def render():
     st.title("🤖 IA Market Analysis")
     
-    # 1. INPUT BOX (Sempre visible a dalt)
+    # 1. INPUT BOX
     t_in = st.text_input("Introdueix el Ticker (Ex: NVDA, TSLA, BTC-USD)", "NVDA").upper()
     
     try:
@@ -15,12 +15,12 @@ def render():
         ticker_data = yf.Ticker(t_in)
         info = ticker_data.info
         
-        # Extracció de dades per a la capçalera
+        # Extracció de dades
         full_name = info.get('longName', t_in)
         sector = info.get('sector', 'N/A')
         industry = info.get('industry', 'N/A')
         market_cap = info.get('marketCap', 0)
-        description = info.get('longBusinessSummary', 'No hi ha descripció disponible per a aquest ticker.')
+        description = info.get('longBusinessSummary', 'No hi ha descripció disponible.')
         
         # Preu i variació
         price = info.get('currentPrice') or info.get('regularMarketPrice', 0.0)
@@ -29,7 +29,7 @@ def render():
         change_pct = (change / prev_close) * 100
         delta_color = "#00ffad" if change >= 0 else "#f23645"
 
-        # 2. RENDERITZACIÓ CAPÇALERA ESTIL YAHOO/TRADINGVIEW
+        # 2. RENDERITZACIÓ CAPÇALERA
         st.markdown(f"""
             <div style="background-color: #151921; padding: 20px; border-radius: 10px; border: 1px solid #2d3439; margin-top: 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -49,11 +49,11 @@ def render():
             </div>
         """, unsafe_allow_html=True)
 
-        # 3. GRÀFIC DE TRADINGVIEW
+        # 3. GRÀFIC DE TRADINGVIEW (Alçada ampliada a 650px)
         st.write("")
         tradingview_widget = f"""
-            <div class="tradingview-widget-container" style="height:500px; width:100%;">
-                <div id="tradingview_chart"></div>
+            <div class="tradingview-widget-container" style="height:650px; width:100%;">
+                <div id="tradingview_chart" style="height:100%; width:100%;"></div>
                 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
                 <script type="text/javascript">
                 new TradingView.widget({{
@@ -73,14 +73,15 @@ def render():
                 </script>
             </div>
         """
-        components.html(tradingview_widget, height=500)
+        # El paràmetre height de components.html ha de ser lleugerament superior al del div (650 vs 670)
+        components.html(tradingview_widget, height=670)
 
         # 4. DESCRIPCIÓ BREU
         st.write("---")
         with st.expander(f"📖 Sobre {full_name}", expanded=True):
             st.write(description)
 
-        # 5. BOTÓ GENERAR PROMPT RSU (Ara situat a sota)
+        # 5. BOTÓ GENERAR PROMPT RSU
         st.write("")
         if st.button("🚀 GENERAR INFORME IA ESTRATÈGIC"):
             model_ia, modelo_nombre, error_ia = get_ia_model()
@@ -104,8 +105,6 @@ def render():
                         st.error(f"Error de l'IA: {e}")
 
     except Exception as e:
-        st.error(f"No s'han pogut carregar les dades de mercat per a {t_in}. Revisa el Ticker.")
+        st.error(f"No s'han pogut carregar les dades per a {t_in}. Revisa el Ticker.")
 
-    # Peu de pàgina
-    _, modelo_nombre, _ = get_ia_model()
-    st.caption(f"Market Data: Yahoo Finance | Chart: TradingView | Engine: {modelo_nombre}")
+    st.caption(f"Market Data: Yahoo Finance | Chart: TradingView")

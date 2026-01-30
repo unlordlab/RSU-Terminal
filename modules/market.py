@@ -10,12 +10,6 @@ def render():
     
     # --- CAJA IZQUIERDA: MARKET INDICES ---
     with col_idx:
-        st.markdown("""
-            <div class="group-container">
-                <div class="group-header"><p class="group-title">Market Indices</p></div>
-                <div class="group-content">
-        """, unsafe_allow_html=True)
-        
         indices = [
             {"label": "S&P 500", "full": "US 500 Index", "t": "^GSPC"},
             {"label": "NASDAQ 100", "full": "Nasdaq Composite", "t": "^IXIC"},
@@ -23,10 +17,18 @@ def render():
             {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
         ]
         
+        # Iniciamos la construcción del HTML completo
+        html_content = """
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">Market Indices</p></div>
+                <div class="group-content">
+        """
+        
+        # Agregamos cada tarjeta al string de HTML
         for idx in indices:
             p, c = get_market_index(idx['t'])
             color_class = "pos" if c >= 0 else "neg"
-            st.markdown(f"""
+            html_content += f"""
                 <div class="index-card">
                     <div>
                         <p class="index-ticker">{idx['label']}</p>
@@ -37,8 +39,16 @@ def render():
                         <span class="index-delta {color_class}">{c:+.2f}%</span>
                     </div>
                 </div>
-            """, unsafe_allow_html=True)
-        st.markdown('</div></div>', unsafe_allow_html=True)
+            """
+        
+        # Cerramos los contenedores HTML
+        html_content += """
+                </div>
+            </div>
+        """
+        
+        # Renderizamos el bloque completo de una sola vez
+        st.markdown(html_content, unsafe_allow_html=True)
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:

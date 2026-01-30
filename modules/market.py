@@ -1,3 +1,5 @@
+
+
 # modules/market.py
 import streamlit as st
 import streamlit.components.v1 as components
@@ -10,6 +12,7 @@ def render():
     
     # --- CAJA IZQUIERDA: MARKET INDICES ---
     with col_idx:
+        # Abrimos el contenedor
         st.markdown("""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Indices</p></div>
@@ -38,18 +41,22 @@ def render():
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+        
+        # Cerramos los divs de la caja izquierda
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
+        # Abrimos el contenedor
         st.markdown("""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
                 <div class="group-content">
         """, unsafe_allow_html=True)
         
+        # Ajustamos height a 380px para alinear con los 4 índices de la izquierda
         spread_widget = """
-        <div style="height:275px; width:100%;">
+        <div style="height:380px; width:100%;">
           <div id="tv_spread" style="height:100%;"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
           <script type="text/javascript">
@@ -63,7 +70,10 @@ def render():
           </script>
         </div>
         """
-        components.html(spread_widget, height=280)
+        # Renderizamos el componente (height un poco mayor para el iframe)
+        components.html(spread_widget, height=390)
+        
+        # Cerramos los divs de la caja derecha
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.write("---")

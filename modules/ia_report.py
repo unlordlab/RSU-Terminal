@@ -1,21 +1,21 @@
+# modules/market.py
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
 from config import get_ia_model, obtener_prompt_github
 
 def render():
-    # 1. Selector de Ticker
-    t_in = st.text_input("Introduir Ticker (ex: NVDA, TSLA, BTC-USD)", "NVDA").upper()
+    # 1. Input del Ticker
+    t_in = st.text_input("Introduir Ticker", "NVDA").upper()
     
     if not t_in:
-        st.warning("Escriu un ticker per començar.")
+        st.warning("Escriu un ticker.")
         return
 
-    # 2. GRÀFIC DE TRADINGVIEW (Restaurat)
-    # Alçada professional de 650px com volies
+    # 2. GRÀFIC GRAN (670px)
     tradingview_widget = f"""
-    <div class="tradingview-widget-container" style="height:650px;">
-      <div id="tradingview_chart"></div>
+    <div style="height:670px;">
+      <div id="tradingview_chart" style="height:100%;"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
       new TradingView.widget({{
@@ -35,26 +35,23 @@ def render():
       </script>
     </div>
     """
-    components.html(tradingview_widget, height=650)
+    components.html(tradingview_widget, height=670)
 
-    # 3. DADES DE YFINANCE PER A L'OVERVIEW
+    # 3. Dades de yfinance
     ticker_data = yf.Ticker(t_in)
     info = ticker_data.info
 
-    # 4. ABOUT SECTION
+    # 4. About & Tabs
     st.markdown(f"### About {t_in}")
-    st.write(info.get('longBusinessSummary', 'No hi ha descripció disponible.'))
+    st.write(info.get('longBusinessSummary', 'Sense descripció.'))
 
-    # 5. PESTANYES (Overview, Financials, etc.)
-    tabs = st.tabs(["Overview", "Earnings", "Seasonality", "Insider", "Financials", "Options"])
+    tabs = st.tabs(["Overview", "Earnings", "Seasonality", "Insider", "Financials"])
 
-    with tabs[0]: # PESTANYA OVERVIEW
+    with tabs[0]: # Overview amb les targetes
         st.markdown('<div class="overview-box">', unsafe_allow_html=True)
-        st.markdown('<p style="color:#00ffad; font-size:14px; font-weight:bold;">💵 Valuation Multiples</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#00ffad; font-weight:bold;">💵 Valuation Multiples</p>', unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
-        
-        # Mètriques clau de valoració
         metrics = [
             {"label": "P/E (Trailing)", "val": info.get('trailingPE'), "tag": "Trailing"},
             {"label": "P/S (TTM)", "val": info.get('priceToSalesTrailing12Months'), "tag": "TTM"},
@@ -77,15 +74,5 @@ def render():
                 """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with tabs[4]: # PESTANYA FINANCIALS
-        st.subheader("Income Statement")
+    with tabs[4]: # Financials
         st.dataframe(ticker_data.financials, use_container_width=True)
-
-    # 6. BOTÓ D'IA (Opcional, si el vols dins de Market)
-    st.write("---")
-    if st.button("🪄 GENERAR ANÀLISI IA"):
-        model_ia, _, _ = get_ia_model()
-        with st.spinner("Analitzant..."):
-            template = obtener_prompt_github()
-            res = model_ia.generate_content(f"Analitza {t_in}: {template}")
-            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)

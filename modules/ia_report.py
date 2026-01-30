@@ -1,92 +1,111 @@
 # modules/ia_report.py
 import streamlit as st
-from streamlit.components.v1 import html
+import streamlit.components.v1 as components
+import yfinance as yf
 from config import get_ia_model, obtener_prompt_github
 
 def render():
-    model_ia, modelo_nombre, error_ia = get_ia_model()
+    st.title("🤖 IA Market Analysis")
     
-    st.subheader("🤖 IA Report RSU")
+    # 1. INPUT BOX (Sempre visible a dalt)
+    t_in = st.text_input("Introdueix el Ticker (Ex: NVDA, TSLA, BTC-USD)", "NVDA").upper()
     
-    # ========== CSS PERSONALITZAT per al botó ==========
-    st.markdown("""
-    <style>
-    .btn-rsu-custom {
-        background: linear-gradient(45deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 12px !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        padding: 12px 24px !important;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4) !important;
-        width: 100% !important;
-        transition: all 0.3s ease !important;
-        height: 50px !important;
-    }
-    .btn-rsu-custom:hover {
-        background: linear-gradient(45deg, #5a67d8 0%, #6b46c1 100%) !important;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
-        transform: translateY(-2px) !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    t_in = st.text_input("Ticker", "NVDA").upper()
-    
-    # ========== BOTO CORREGIT ==========
-    if st.button("🔥 GENERAR PROMPT RSU", key="btn_rsu", help="Analitza l'actiu amb IA + Gràfic TradingView"):
-        if error_ia:
-            st.error(error_ia)
-            return
-            
-        # ========== WIDGET TRADINGVIEW - QUADRAT ==========
-        st.markdown("### 📈 Gràfic TradingView")
-        tradingview_widget = f"""
-        <div style="max-width: 600px; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.1);">
-          <div class="tradingview-widget-container" style="height: 500px;">
-            <div id="tradingview_{t_in}" style="height: 500px;"></div>
-            <div class="tradingview-widget-copyright">
-              <a href="https://es.tradingview.com/" rel="noopener" target="_blank">
-                <span style="color: #667eea; font-size: 12px;">{t_in} - TradingView</span>
-              </a>
-            </div>
-            <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-            <script type="text/javascript">
-              new TradingView.widget({{
-                "width": 600,
-                "height": 500,
-                "symbol": "{t_in}",
-                "interval": "1D",
-                "timezone": "Europe/Madrid",
-                "theme": "light",
-                "style": "1",
-                "locale": "es",
-                "toolbar_bg": "#f8fafc",
-                "enable_publishing": false,
-                "hide_legend": true,
-                "save_image": false,
-                "container_id": "tradingview_{t_in}"
-              }});
-            </script>
-          </div>
-        </div>
-        """
-        html(tradingview_widget, height=520)
+    try:
+        # Obtenir dades financeres amb yfinance
+        ticker_data = yf.Ticker(t_in)
+        info = ticker_data.info
         
-        # ========== PROMPT IA ==========
-        st.divider()
-        with st.spinner(f"🤖 Generant anàlisi IA de {t_in}..."):
-            template = obtener_prompt_github()
-            prompt_final = f"Analitza {t_in} seguint això: {template.replace('[TICKER]', t_in)}"
+        # Extracció de dades per a la capçalera
+        full_name = info.get('longName', t_in)
+        sector = info.get('sector', 'N/A')
+        industry = info.get('industry', 'N/A')
+        market_cap = info.get('marketCap', 0)
+        description = info.get('longBusinessSummary', 'No hi ha descripció disponible per a aquest ticker.')
+        
+        # Preu i variació
+        price = info.get('currentPrice') or info.get('regularMarketPrice', 0.0)
+        prev_close = info.get('previousClose', 1.0)
+        change = price - prev_close
+        change_pct = (change / prev_close) * 100
+        delta_color = "#00ffad" if change >= 0 else "#f23645"
+
+        # 2. RENDERITZACIÓ CAPÇALERA ESTIL YAHOO/TRADINGVIEW
+        st.markdown(f"""
+            <div style="background-color: #151921; padding: 20px; border-radius: 10px; border: 1px solid #2d3439; margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h1 style="margin: 0; color: white; font-size: 2.5rem;">{t_in}</h1>
+                        <p style="margin: 0; color: #888; font-size: 1.1rem;">{full_name}</p>
+                        <p style="margin: 0; color: #555; font-size: 0.9rem;">{sector.upper()} · {industry.upper()}</p>
+                        <p style="margin: 5px 0 0 0; color: #555; font-size: 0.8rem;">Market Cap: ${market_cap:,.0f}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <h1 style="margin: 0; color: white; font-size: 2.5rem;">${price:,.2f}</h1>
+                        <p style="margin: 0; color: {delta_color}; font-size: 1.2rem; font-weight: bold;">
+                            {'+' if change >= 0 else ''}{change:,.2f} ({'+' if change >= 0 else ''}{change_pct:,.2f}%)
+                        </p>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # 3. GRÀFIC DE TRADINGVIEW
+        st.write("")
+        tradingview_widget = f"""
+            <div class="tradingview-widget-container" style="height:500px; width:100%;">
+                <div id="tradingview_chart"></div>
+                <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                <script type="text/javascript">
+                new TradingView.widget({{
+                  "autosize": true,
+                  "symbol": "{t_in}",
+                  "interval": "D",
+                  "timezone": "Etc/UTC",
+                  "theme": "dark",
+                  "style": "1",
+                  "locale": "en",
+                  "toolbar_bg": "#f1f3f6",
+                  "enable_publishing": false,
+                  "hide_side_toolbar": false,
+                  "allow_symbol_change": true,
+                  "container_id": "tradingview_chart"
+                }});
+                </script>
+            </div>
+        """
+        components.html(tradingview_widget, height=500)
+
+        # 4. DESCRIPCIÓ BREU
+        st.write("---")
+        with st.expander(f"📖 Sobre {full_name}", expanded=True):
+            st.write(description)
+
+        # 5. BOTÓ GENERAR PROMPT RSU (Ara situat a sota)
+        st.write("")
+        if st.button("🚀 GENERAR INFORME IA ESTRATÈGIC"):
+            model_ia, modelo_nombre, error_ia = get_ia_model()
             
-            try:
-                res = model_ia.generate_content(prompt_final)
-                text = getattr(res, "text", None)
-                if text:
-                    st.markdown(f"### 📋 Informe complet: {t_in}")
-                    st.markdown(text)
-                else:
-                    st.warning("No s'ha rebut resposta de l'IA.")
-            except Exception as e:
-                st.error(f"Error generant el prompt: {str(e)}")
+            if error_ia:
+                st.error(error_ia)
+            else:
+                with st.spinner(f"L'IA està analitzant els fonamentals de {t_in}..."):
+                    template = obtener_prompt_github()
+                    prompt_final = f"Analitza {t_in} seguint això: {template.replace('[TICKER]', t_in)}"
+                    try:
+                        res = model_ia.generate_content(prompt_final)
+                        text = getattr(res, "text", None)
+                        if text:
+                            st.markdown("---")
+                            st.markdown(f"### 🤖 IA Strategic Analysis")
+                            st.markdown(f'<div class="prompt-container">{text}</div>', unsafe_allow_html=True)
+                        else:
+                            st.warning("No s'ha pogut obtenir text del model.")
+                    except Exception as e:
+                        st.error(f"Error de l'IA: {e}")
+
+    except Exception as e:
+        st.error(f"No s'han pogut carregar les dades de mercat per a {t_in}. Revisa el Ticker.")
+
+    # Peu de pàgina
+    _, modelo_nombre, _ = get_ia_model()
+    st.caption(f"Market Data: Yahoo Finance | Chart: TradingView | Engine: {modelo_nombre}")

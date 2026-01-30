@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# Configuración de página única
+# Configuración de página única (se llama una sola vez)
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -22,10 +22,12 @@ def set_style():
             border: 1px solid #2d3439;
             border-radius: 12px; 
             padding: 0px; 
-            margin-bottom: 20px;
+            height: 100%;
             overflow: hidden;
+            margin-bottom: 20px;
         }
         
+        /* Cabecera con título DENTRO de la caja */
         .group-header {
             background-color: #1a1e26;
             padding: 12px 20px;
@@ -45,14 +47,8 @@ def set_style():
 
         /* Tarjetas de Índices */
         .index-card {
-            background-color: #1a1e26; 
-            border: 1px solid #2d3439; 
-            border-radius: 8px;
-            padding: 12px 15px; 
-            margin-bottom: 10px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
+            background-color: #1a1e26; border: 1px solid #2d3439; border-radius: 8px;
+            padding: 12px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
         }
         .index-ticker { color: white; font-weight: bold; font-size: 14px; margin: 0; }
         .index-fullname { color: #555; font-size: 10px; margin: 0; text-transform: uppercase; }
@@ -71,13 +67,16 @@ def get_market_index(ticker_symbol):
         t = yf.Ticker(ticker_symbol)
         hist = t.history(period="2d")
         if not hist.empty and len(hist) >= 2:
-            current = float(hist['Close'].iloc[-1])
-            prev = float(hist['Close'].iloc[-2])
+            current = hist['Close'].iloc[-1]
+            prev = hist['Close'].iloc[-2]
+            try:
+                live = t.fast_info.last_price
+                if live: current = live
+            except: pass
             change = ((current - prev) / prev) * 100
             return current, change
         return 0.0, 0.0
-    except Exception:
-        return 0.0, 0.0
+    except: return 0.0, 0.0
 
 @st.cache_data(ttl=3600)
 def get_cnn_fear_greed():
@@ -88,7 +87,7 @@ def get_cnn_fear_greed():
         return int(val.text.strip()) if val else 50
     except: return 50
 
-# --- FUNCIONES IA Y PROMPTS ---
+# --- FUNCIONES PARA OTROS MÓDULOS ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource

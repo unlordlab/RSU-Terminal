@@ -4,14 +4,19 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
-    st.write("") # Espaciador superior
+    # Título Principal del Dashboard
+    st.markdown("# Market Dashboard")
+    st.write("") 
 
     col_idx, col_spread = st.columns([1, 2])
     
-    # --- CAJA IZQUIERDA: ÍNDICES ---
+    # --- CAJA IZQUIERDA: MARKET INDICES ---
     with col_idx:
-        st.markdown('<div class="group-container">', unsafe_allow_html=True)
-        st.markdown('<div class="group-title">Market Indices</div>', unsafe_allow_html=True)
+        # Abrimos el contenedor y ponemos el título dentro inmediatamente
+        st.markdown(f"""
+            <div class="group-container">
+                <div class="group-title">Market Indices</div>
+        """, unsafe_allow_html=True)
         
         indices = [
             {"label": "S&P 500", "full": "US 500 Index", "t": "^GSPC"},
@@ -35,15 +40,18 @@ def render():
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True) # Cerramos group-container
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
-        st.markdown('<div class="group-container">', unsafe_allow_html=True)
-        st.markdown('<div class="group-title">US High Yield Credit Spreads (OAS)</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="group-container">
+                <div class="group-title">US High Yield Credit Spreads (OAS)</div>
+        """, unsafe_allow_html=True)
         
         spread_widget = """
-        <div style="height:275px;">
+        <div style="height:275px; width:100%;">
           <div id="tv_spread" style="height:100%;"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
           <script type="text/javascript">
@@ -58,6 +66,7 @@ def render():
         </div>
         """
         components.html(spread_widget, height=280)
-        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True) # Cerramos group-container
 
     st.write("---")

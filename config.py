@@ -69,6 +69,7 @@ def get_market_index(ticker_symbol):
         if not hist.empty and len(hist) >= 2:
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
+            # Intentar obtener precio más reciente si el mercado está abierto
             try:
                 live = t.fast_info.last_price
                 if live: current = live
@@ -103,3 +104,4 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
+

@@ -36,7 +36,6 @@ def render():
                 </div>
             </div>"""
 
-        # Inyectamos TODO el contenedor de una vez
         st.markdown(f"""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Indices</p></div>
@@ -46,36 +45,41 @@ def render():
 
     # --- COLUMNA DERECHA: CREDIT SPREADS ---
     with col_spread:
-        # Altura fija para alinear con los 4 índices de la izquierda
-        # (Aproximadamente 4 tarjetas de 85px + padding = 400px)
-        h_box = 400 
+        # Altura calculada para igualar visualmente los 4 índices (aprox 415px)
+        altura_optima = 415 
 
-        # Creamos la caja vacía pero con la altura correcta
+        # Iniciamos el contenedor oscuro
         st.markdown(f"""
-            <div class="group-container" style="height: {h_box + 60}px;">
+            <div class="group-container" style="height: {altura_optima + 55}px;">
                 <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
-                <div class="group-content" style="padding: 10px;">
+                <div class="group-content" style="padding: 10px; height: {altura_optima}px;">
         """, unsafe_allow_html=True)
         
-        # El widget de TradingView se coloca aquí
+        # Widget de TradingView ajustado a temporalidad diaria ("1D")
         widget_code = f"""
-        <div style="height:{h_box}px; width:100%;">
+        <div style="height:{altura_optima - 20}px; width:100%;">
           <div id="tv_spread" style="height:100%;"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
           <script type="text/javascript">
           new TradingView.MediumWidget({{
-            "symbols": [["FRED:BAMLH0A0HYM2|1M"]],
-            "chartOnly": true, "width": "100%", "height": "100%",
-            "locale": "en", "colorTheme": "dark", "gridLineColor": "transparent",
-            "trendLineColor": "#f23645", "underLineColor": "rgba(242, 54, 69, 0.15)",
+            "symbols": [["FRED:BAMLH0A0HYM2|1D"]],
+            "chartOnly": false, 
+            "width": "100%", 
+            "height": "100%",
+            "locale": "en", 
+            "colorTheme": "dark", 
+            "gridLineColor": "transparent",
+            "trendLineColor": "#f23645", 
+            "underLineColor": "rgba(242, 54, 69, 0.15)",
             "container_id": "tv_spread"
           }});
           </script>
         </div>
         """
-        components.html(widget_code, height=h_box)
+        # Renderizamos el widget dentro de la zona de contenido
+        components.html(widget_code, height=altura_optima - 10)
         
-        # Cerramos manualmente el contenedor
+        # Cerramos los divs del contenedor oscuro
         st.markdown("</div></div>", unsafe_allow_html=True)
 
     st.write("---")

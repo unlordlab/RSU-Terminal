@@ -85,7 +85,7 @@ def render():
     st.subheader("🤖 RSU Artificial Intelligence")
     st.info("Prem el botó per generar un informe complet basat en el prompt personalitzat de RSU.")
     
-    if st.button("🪄 GENERAR INFORME IA (RSU)", use_container_width=True):
+    if st.button("🪄 GENERAR INFORME IA (PROMPT RSU)", use_container_width=True):
         model_ia, modelo_nombre, error_ia = get_ia_model()
         if error_ia:
             st.error(f"Error: {error_ia}")
@@ -100,3 +100,4 @@ def render():
                     st.caption(f"Generat amb: {modelo_nombre}")
                 except Exception as e:
                     st.error(f"Error en l'IA: {e}")
+

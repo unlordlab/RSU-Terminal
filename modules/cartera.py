@@ -1,28 +1,44 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 def render():
     st.title("💼 Cartera Estratégica RSU")
     
     try:
         url = st.secrets["URL_CARTERA"]
+        # Cargamos los datos
         df = pd.read_csv(f"{url}&cache_bus={pd.Timestamp.now().timestamp()}").dropna(how='all')
         df.columns = [c.strip() for c in df.columns]
 
-        # 1. Normalización de Texto
-        for col in ['Estado', 'Ticker']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.strip().str.upper()
+        # 1. FUNCIÓN DE LIMPIEZA NUMÉRICA (Maneja comas de Google Sheets)
+        def clean_numeric(value):
+            if pd.isna(value): return 0.0
+            val_str = str(value).strip().replace('$', '').replace('%', '').replace(' ', '')
+            # Si el formato es europeo (1.234,56), quitamos el punto de miles y cambiamos coma por punto
+            if ',' in val_str:
+                val_str = val_str.replace('.', '').replace(',', '.')
+            try:
+                return float(val_str)
+            except:
+                return 0.0
 
-        # 2. LIMPIEZA NUMÉRICA (Evita el error 'f' for 'str')
-        # Forzamos a que estas columnas sean números, si hay texto lo convierte en 0 o NaN
-        cols_numericas = ['Precio Compra', 'Precio Actual', 'P&L Terminal (%)', 'Inversión', 'Valor Actual', 'Comisiones']
-        for col in cols_numericas:
+        # Aplicamos la limpieza a todas las columnas de dinero y %
+        cols_to_fix = ['Precio Compra', 'Precio Actual', 'P&L Terminal (%)', 'Inversión', 'Valor Actual', 'Comisiones']
+        for col in cols_to_fix:
             if col in df.columns:
-                # Convertimos a string, quitamos símbolos de moneda y pasamos a numérico
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace('[$,%]', '', regex=True), errors='coerce').fillna(0)
+                df[col] = df[col].apply(clean_numeric)
 
-        # 3. Conversión de Fecha
+        # 2. RE-CÁLCULO DE SEGURIDAD (Si el sheet manda 0, lo calculamos aquí)
+        # Calculamos el P&L Terminal (%) si llega vacío o en 0
+        df['P&L Terminal (%)'] = df.apply(
+            lambda x: ((x['Precio Actual'] - x['Precio Compra']) / x['Precio Compra'] * 100) 
+            if x['Precio Compra'] != 0 else 0, axis=1
+        )
+
+        # 3. Normalización de Texto
+        df['Estado'] = df['Estado'].astype(str).str.strip().str.upper()
+        df['Ticker'] = df['Ticker'].astype(str).str.strip()
         df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
         df = df.dropna(subset=['Fecha', 'Ticker'])
 
@@ -49,10 +65,9 @@ def render():
         if not abiertas.empty:
             cols_vista = ['Fecha', 'Ticker', 'Precio Compra', 'Precio Actual', 'P&L Terminal (%)', 'Comentarios']
             
-            # Aplicamos formato asegurando que los datos son numéricos
             st.dataframe(
                 abiertas[cols_vista].sort_values(by='Fecha', ascending=False)
-                .style.applymap(lambda x: f"color: {'#00ffad' if x >= 0 else '#f23645'}", subset=['P&L Terminal (%)'])
+                .style.map(lambda x: f"color: {'#00ffad' if x >= 0 else '#f23645'}", subset=['P&L Terminal (%)'])
                 .format({
                     'Precio Compra': '${:.2f}', 
                     'Precio Actual': '${:.2f}', 
@@ -72,15 +87,15 @@ def render():
             st.markdown("##### 📥 Últimas 5 Entradas")
             if not abiertas.empty:
                 ult_compras = abiertas.sort_values(by='Fecha', ascending=False).head(5).copy()
-                ult_compras['Fecha'] = ult_compras['Fecha'].dt.strftime('%d/%m/%Y')
-                st.table(ult_compras[['Fecha', 'Ticker', 'Precio Compra']])
+                ult_compras['Fecha_F'] = ult_compras['Fecha'].dt.strftime('%d/%m/%Y')
+                st.table(ult_compras[['Fecha_F', 'Ticker', 'Precio Compra']].rename(columns={'Fecha_F': 'Fecha'}))
 
         with col_der:
             st.markdown("##### 📤 Últimas 5 Salidas")
             if not cerradas.empty:
                 ult_ventas = cerradas.sort_values(by='Fecha', ascending=False).head(5).copy()
-                ult_ventas['Fecha'] = ult_ventas['Fecha'].dt.strftime('%d/%m/%Y')
-                st.table(ult_ventas[['Fecha', 'Ticker', 'P&L Terminal (%)', 'Comentarios']])
+                ult_ventas['Fecha_F'] = ult_ventas['Fecha'].dt.strftime('%d/%m/%Y')
+                st.table(ult_ventas[['Fecha_F', 'Ticker', 'P&L Terminal (%)', 'Comentarios']].rename(columns={'Fecha_F': 'Fecha'}))
 
     except Exception as e:
-        st.error(f"⚠️ Error al sincronizar la cartera: {e}")
+        st.error(f"⚠️ Error: {e}")

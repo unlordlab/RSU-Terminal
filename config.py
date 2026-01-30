@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# Configuración de página única (se llama una sola vez)
+# Configuración de página única
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -27,7 +27,7 @@ def set_style():
             margin-bottom: 20px;
         }
         
-        /* Cabecera con título DENTRO de la caja */
+        /* Cabecera con título */
         .group-header {
             background-color: #1a1e26;
             padding: 12px 20px;
@@ -69,7 +69,6 @@ def get_market_index(ticker_symbol):
         if not hist.empty and len(hist) >= 2:
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
-            # Intentar obtener precio más reciente si el mercado está abierto
             try:
                 live = t.fast_info.last_price
                 if live: current = live
@@ -88,7 +87,6 @@ def get_cnn_fear_greed():
         return int(val.text.strip()) if val else 50
     except: return 50
 
-# --- FUNCIONES PARA OTROS MÓDULOS ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource

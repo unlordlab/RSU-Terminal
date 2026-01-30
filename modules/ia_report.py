@@ -5,14 +5,16 @@ import yfinance as yf
 from config import get_ia_model, obtener_prompt_github
 
 def render():
-    # 1. Input del Ticker
-    t_in = st.text_input("Introduir Ticker", "NVDA").upper()
+    # 1. Selector de Ticker a la part superior
+    col_input, col_info = st.columns([1, 2])
+    with col_input:
+        t_in = st.text_input("Introduir Ticker", "NVDA").upper()
     
     if not t_in:
-        st.warning("Escriu un ticker.")
+        st.warning("Si us plau, introdueix un ticker per analitzar.")
         return
 
-    # 2. GRÀFIC GRAN (670px)
+    # 2. EL GRÀFIC GRAN (670px) - Estil Terminal
     tradingview_widget = f"""
     <div style="height:670px;">
       <div id="tradingview_chart" style="height:100%;"></div>
@@ -37,19 +39,41 @@ def render():
     """
     components.html(tradingview_widget, height=670)
 
-    # 3. Dades de yfinance
+    # 3. Dades de yfinance per a la resta de seccions
     ticker_data = yf.Ticker(t_in)
     info = ticker_data.info
 
-    # 4. About & Tabs
-    st.markdown(f"### About {t_in}")
-    st.write(info.get('longBusinessSummary', 'Sense descripció.'))
+    # 4. BOTÓ DE GENERAR INFORME IA (RSU PROMPT)
+    st.write("---")
+    col_btn, col_empty = st.columns([1, 3])
+    with col_btn:
+        generate_btn = st.button("🪄 GENERAR INFORME IA (RSU)", use_container_width=True)
+    
+    if generate_btn:
+        model_ia, modelo_nombre, error_ia = get_ia_model()
+        if error_ia:
+            st.error(f"Error de configuració: {error_ia}")
+        else:
+            with st.spinner(f"L'IA està analitzant els fonamentals de {t_in}..."):
+                template = obtener_prompt_github()
+                prompt_final = f"Analitza {t_in} seguint això: {template.replace('[TICKER]', t_in)}"
+                try:
+                    res = model_ia.generate_content(prompt_final)
+                    st.markdown(f"### 📋 Informe d'IA: {t_in}")
+                    st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Error en generar l'informe: {e}")
 
+    # 5. SECCIÓ ABOUT & PESTANYES
+    st.markdown(f"### About {info.get('longName', t_in)}")
+    st.write(info.get('longBusinessSummary', 'No hi ha descripció disponible.'))
+
+    # Pestanyes d'anàlisi
     tabs = st.tabs(["Overview", "Earnings", "Seasonality", "Insider", "Financials"])
 
-    with tabs[0]: # Overview amb les targetes
+    with tabs[0]: # Pestanya Overview amb les caixes de ràtios
         st.markdown('<div class="overview-box">', unsafe_allow_html=True)
-        st.markdown('<p style="color:#00ffad; font-weight:bold;">💵 Valuation Multiples</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#00ffad; font-weight:bold; font-size:14px;">💵 Valuation Multiples</p>', unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
         metrics = [
@@ -74,5 +98,6 @@ def render():
                 """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with tabs[4]: # Financials
+    with tabs[4]: # Pestanya Financials
+        st.subheader("Financial Statements")
         st.dataframe(ticker_data.financials, use_container_width=True)

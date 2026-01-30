@@ -4,20 +4,21 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
-    st.markdown("## Market Dashboard")
-    
+    # Eliminamos el título general de Streamlit para usar los de las cajas
+    st.write("") 
+
     col_idx, col_spread = st.columns([1, 2])
     
-    # --- CAIXA ESQUERRA: ÍNDEXS ---
+    # --- CAJA IZQUIERDA: ÍNDICES CON NOMBRE COMPLETO ---
     with col_idx:
         st.markdown('<div class="group-container">', unsafe_allow_html=True)
         st.markdown('<div class="group-title">Market Indices</div>', unsafe_allow_html=True)
         
         indices = [
-            {"label": "SPY", "t": "SPY"},
-            {"label": "QQQ", "t": "QQQ"},
-            {"label": "DIA", "t": "DIA"},
-            {"label": "IWM", "t": "IWM"}
+            {"label": "S&P 500", "full": "US 500 Index", "t": "^GSPC"},
+            {"label": "NASDAQ 100", "full": "Nasdaq Composite", "t": "^IXIC"},
+            {"label": "DOW JONES", "full": "Industrial Average", "t": "^DJI"},
+            {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
         ]
         
         for idx in indices:
@@ -25,60 +26,41 @@ def render():
             color_class = "pos" if c >= 0 else "neg"
             st.markdown(f"""
                 <div class="index-card">
-                    <p class="index-ticker">{idx['label']}</p>
+                    <div>
+                        <p class="index-ticker">{idx['label']}</p>
+                        <p class="index-fullname">{idx['full']}</p>
+                    </div>
                     <div style="text-align:right;">
-                        <p class="index-price">${p:,.2f}</p>
+                        <p class="index-price">{p:,.2f}</p>
                         <span class="index-delta {color_class}">{c:+.2f}%</span>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- CAIXA DRETA: CREDIT SPREADS (Ticker BAMLH0A0HYM2) ---
+    # --- CAJA DRETA: CREDIT SPREADS CON TRADINGVIEW ---
     with col_spread:
         st.markdown('<div class="group-container">', unsafe_allow_html=True)
         st.markdown('<div class="group-title">US High Yield Credit Spreads (OAS)</div>', unsafe_allow_html=True)
         
-        # Widget de TradingView mini per al Spread
         spread_widget = """
-        <div style="height:250px;">
-          <div id="tv_spread"></div>
+        <div style="height:275px;">
+          <div id="tv_spread" style="height:100%;"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
           <script type="text/javascript">
           new TradingView.MediumWidget({
             "symbols": [["FRED:BAMLH0A0HYM2|1M"]],
-            "chartOnly": true,
-            "width": "100%",
-            "height": "100%",
-            "locale": "en",
-            "colorTheme": "dark",
-            "gridLineColor": "rgba(42, 46, 57, 0)",
-            "fontColor": "#787b86",
-            "trendLineColor": "#f23645",
-            "underLineColor": "rgba(242, 54, 69, 0.15)",
+            "chartOnly": true, "width": "100%", "height": "100%",
+            "locale": "en", "colorTheme": "dark", "gridLineColor": "transparent",
+            "trendLineColor": "#f23645", "underLineColor": "rgba(242, 54, 69, 0.15)",
             "container_id": "tv_spread"
           });
           </script>
         </div>
         """
-        components.html(spread_widget, height=255)
+        components.html(spread_widget, height=280)
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # El buscador y gráfico grande irán en la sección de "IA REPORT" o "ANÁLISIS" 
+    # para no ensuciar el Dashboard inicial, o puedes añadir un divisor aquí:
     st.write("---")
-    
-    # 3. BUSCADOR I GRÀFIC GRAN DE TICKER
-    t_search = st.text_input("🔍 Analitzar Ticker Específic", "NVDA").upper()
-    
-    main_chart = f"""
-    <div style="height:600px;">
-      <div id="tv_main"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-      new TradingView.widget({{
-        "autosize": true, "symbol": "{t_search}", "interval": "D", "timezone": "Etc/UTC",
-        "theme": "dark", "style": "1", "locale": "en", "container_id": "tv_main"
-      }});
-      </script>
-    </div>
-    """
-    components.html(main_chart, height=600)

@@ -10,25 +10,23 @@ def render():
     
     # --- CAJA IZQUIERDA: MARKET INDICES ---
     with col_idx:
-        indices_data = [
+        st.markdown("""
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">Market Indices</p></div>
+                <div class="group-content">
+        """, unsafe_allow_html=True)
+        
+        indices = [
             {"label": "S&P 500", "full": "US 500 Index", "t": "^GSPC"},
             {"label": "NASDAQ 100", "full": "Nasdaq Composite", "t": "^IXIC"},
             {"label": "DOW JONES", "full": "Industrial Average", "t": "^DJI"},
             {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
         ]
         
-        # Iniciamos el contenedor y el área oscura
-        html_indices = """
-            <div class="group-container">
-                <div class="group-header"><p class="group-title">Market Indices</p></div>
-                <div class="group-content">
-        """
-        
-        # Generamos las tarjetas y las sumamos a la cadena principal
-        for idx in indices_data:
+        for idx in indices:
             p, c = get_market_index(idx['t'])
             color_class = "pos" if c >= 0 else "neg"
-            html_indices += f"""
+            st.markdown(f"""
                 <div class="index-card">
                     <div>
                         <p class="index-ticker">{idx['label']}</p>
@@ -39,13 +37,8 @@ def render():
                         <span class="index-delta {color_class}">{c:+.2f}%</span>
                     </div>
                 </div>
-            """
-        
-        # Cerramos los divs en la misma cadena
-        html_indices += "</div></div>"
-        
-        # Renderizamos todo el bloque de una sola vez para evitar errores visuales
-        st.markdown(html_indices, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
@@ -74,3 +67,4 @@ def render():
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.write("---")
+

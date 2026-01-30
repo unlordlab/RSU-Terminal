@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
+# Configuración de página única
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -39,18 +40,17 @@ def set_style():
         .pos { background-color: rgba(0, 255, 173, 0.1); color: #00ffad; }
         .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
         
-        /* Ocultar elementos innecesarios de Streamlit en widgets */
-        iframe { border-radius: 8px; }
+        .prompt-container { background-color: #1a1e26; border-left: 5px solid #2962ff; padding: 20px; border-radius: 5px; white-space: pre-wrap; }
         </style>
         """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=60)
 def get_market_index(ticker_symbol):
     try:
-        # Aseguramos el formato de índice para Yahoo Finance
         ticker = yf.Ticker(ticker_symbol)
+        # Usamos history para asegurar que obtenemos datos de cierre previos correctos para el %
         data = ticker.history(period="2d")
-        if not data.empty:
+        if not data.empty and len(data) >= 2:
             current = data['Close'].iloc[-1]
             prev = data['Close'].iloc[-2]
             change = ((current - prev) / prev) * 100
@@ -67,4 +67,21 @@ def get_cnn_fear_greed():
         return int(val.text.strip()) if val else 50
     except: return 50
 
-# ... (Mantener get_ia_model y obtener_prompt_github igual que antes)
+# --- FUNCIONES DE IA ---
+API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+
+@st.cache_resource
+def get_ia_model():
+    try:
+        if not API_KEY: return None, None, "API Key no configurada"
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        return model, "Gemini 1.5 Flash", None
+    except Exception as e: return None, None, str(e)
+
+@st.cache_data(ttl=600)
+def obtener_prompt_github():
+    try:
+        r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
+        return r.text if r.status_code == 200 else ""
+    except: return ""

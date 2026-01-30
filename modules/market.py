@@ -4,12 +4,11 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
-    # Eliminamos el título general de Streamlit para usar los de las cajas
-    st.write("") 
+    st.write("") # Espaciador superior
 
     col_idx, col_spread = st.columns([1, 2])
     
-    # --- CAJA IZQUIERDA: ÍNDICES CON NOMBRE COMPLETO ---
+    # --- CAJA IZQUIERDA: ÍNDICES ---
     with col_idx:
         st.markdown('<div class="group-container">', unsafe_allow_html=True)
         st.markdown('<div class="group-title">Market Indices</div>', unsafe_allow_html=True)
@@ -38,7 +37,7 @@ def render():
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- CAJA DRETA: CREDIT SPREADS CON TRADINGVIEW ---
+    # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
         st.markdown('<div class="group-container">', unsafe_allow_html=True)
         st.markdown('<div class="group-title">US High Yield Credit Spreads (OAS)</div>', unsafe_allow_html=True)
@@ -61,6 +60,4 @@ def render():
         components.html(spread_widget, height=280)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # El buscador y gráfico grande irán en la sección de "IA REPORT" o "ANÁLISIS" 
-    # para no ensuciar el Dashboard inicial, o puedes añadir un divisor aquí:
     st.write("---")

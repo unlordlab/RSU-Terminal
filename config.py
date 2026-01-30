@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# Configuración inicial única
+# Configuración de página única (se llama una sola vez)
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -16,17 +16,18 @@ def set_style():
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
         
-        /* Contenedor Principal de Cajas */
+        /* Contenedores del Dashboard */
         .group-container {
             background-color: #11141a; 
             border: 1px solid #2d3439;
             border-radius: 12px; 
-            padding: 0px; /* Quitamos padding superior para que el título pegue arriba */
+            padding: 0px; 
             height: 100%;
             overflow: hidden;
+            margin-bottom: 20px;
         }
         
-        /* Título DENTRO de la caja con fondo diferenciado */
+        /* Cabecera con título DENTRO de la caja */
         .group-header {
             background-color: #1a1e26;
             padding: 12px 20px;
@@ -39,7 +40,7 @@ def set_style():
             font-weight: bold; 
             text-transform: uppercase; 
             letter-spacing: 1px;
-            margin: 0;
+            margin: 0 !important;
         }
 
         .group-content { padding: 20px; }
@@ -63,18 +64,16 @@ def set_style():
 @st.cache_data(ttl=60)
 def get_market_index(ticker_symbol):
     try:
-        # Forzamos descarga de 5 días para asegurar que el cálculo del % sea correcto
         t = yf.Ticker(ticker_symbol)
-        hist = t.history(period="5d")
+        hist = t.history(period="2d")
         if not hist.empty and len(hist) >= 2:
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
-            # Si el mercado está abierto, yfinance a veces no actualiza Close rápido, usamos fast_info
+            # Intentar obtener precio más reciente si el mercado está abierto
             try:
-                live_price = t.fast_info.last_price
-                if live_price: current = live_price
+                live = t.fast_info.last_price
+                if live: current = live
             except: pass
-            
             change = ((current - prev) / prev) * 100
             return current, change
         return 0.0, 0.0
@@ -89,6 +88,7 @@ def get_cnn_fear_greed():
         return int(val.text.strip()) if val else 50
     except: return 50
 
+# --- FUNCIONES PARA OTROS MÓDULOS ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource

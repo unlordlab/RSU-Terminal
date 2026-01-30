@@ -5,6 +5,7 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
+    # Ajuste de margen superior para el título
     st.markdown('<h1 style="margin-top:-60px; margin-bottom:20px;">Market Dashboard</h1>', unsafe_allow_html=True)
     
     col_idx, col_spread = st.columns([1, 2])
@@ -18,12 +19,13 @@ def render():
             {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
         ]
         
-        # Generamos el HTML de todas las tarjetas primero
+        # 1. Generamos el contenido de las tarjetas en una variable
         cards_html = ""
         for idx in indices:
             p, c = get_market_index(idx['t'])
             color_class = "pos" if c >= 0 else "neg"
-            price_display = f"{p:,.2f}" if p > 0 else "Cargando..."
+            # Si el precio es 0, mostramos un mensaje de carga
+            price_text = f"{p:,.2f}" if p > 0 else "Cargando..."
             
             cards_html += f"""
                 <div class="index-card">
@@ -32,13 +34,13 @@ def render():
                         <p class="index-fullname">{idx['full']}</p>
                     </div>
                     <div style="text-align:right;">
-                        <p class="index-price">{price_display}</p>
+                        <p class="index-price">{price_text}</p>
                         <span class="index-delta {color_class}">{c:+.2f}%</span>
                     </div>
                 </div>
             """
 
-        # Metemos TODO el bloque HTML junto para que no se "rompa" el div
+        # 2. Renderizamos TODO el contenedor en un solo bloque para que no se rompa el diseño
         st.markdown(f"""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Indices</p></div>
@@ -50,20 +52,20 @@ def render():
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
-        # Calculamos la altura para que coincida visualmente con los 4 índices de la izquierda
-        # Cada tarjeta mide unos 85px + márgenes. 400px es el punto dulce.
-        altura_grafico = 400
-        
-        # 1. Abrimos el contenedor oscuro
+        # Altura calculada para que la caja oscura se estire y coincida con la izquierda
+        altura_visual = 405 
+
+        # Abrimos el contenedor oscuro
         st.markdown(f"""
-            <div class="group-container">
+            <div class="group-container" style="height: 100%;">
                 <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
-                <div class="group-content" style="height: {altura_grafico + 20}px; padding: 10px;">
+                <div class="group-content" style="height: {altura_visual}px; padding: 10px;">
         """, unsafe_allow_html=True)
         
-        # 2. Insertamos el componente de TradingView
+        # Insertamos el widget de TradingView
+        # Usamos doble llave {{ }} para el JSON del widget para que Python no se confunda
         spread_widget = f"""
-        <div style="height:{altura_grafico}px; width:100%;">
+        <div style="height:{altura_visual-20}px; width:100%;">
           <div id="tv_spread" style="height:100%;"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
           <script type="text/javascript">
@@ -77,9 +79,9 @@ def render():
           </script>
         </div>
         """
-        components.html(spread_widget, height=altura_grafico)
+        components.html(spread_widget, height=altura_visual-10)
         
-        # 3. Cerramos el contenedor oscuro
+        # Cerramos el contenedor oscuro
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.write("---")

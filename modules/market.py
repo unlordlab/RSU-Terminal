@@ -17,14 +17,14 @@ def render():
             {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
         ]
         
-        # 1. Iniciamos el contenedor y la parte oscura (group-content)
+        # Iniciamos la construcción del HTML completo para evitar errores de renderizado
         html_indices = """
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Indices</p></div>
                 <div class="group-content">
         """
         
-        # 2. Generamos el contenido de las tarjetas dinámicamente
+        # Generamos cada tarjeta y la añadimos al string
         for idx in indices:
             p, c = get_market_index(idx['t'])
             color_class = "pos" if c >= 0 else "neg"
@@ -41,21 +41,20 @@ def render():
                 </div>
             """
         
-        # 3. Cerramos los divs dentro del mismo string para evitar el error visual
+        # Cerramos los contenedores div
         html_indices += "</div></div>"
         
-        # 4. Renderizamos todo el bloque de una vez
+        # Renderizamos todo el bloque de una sola vez
         st.markdown(html_indices, unsafe_allow_html=True)
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
-        # Hacemos lo mismo aquí para mantener la simetría y evitar errores
-        html_spread_header = """
+        # Abrimos el contenedor superior y el contenido oscuro
+        st.markdown("""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
                 <div class="group-content">
-        """
-        st.markdown(html_spread_header, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
         
         spread_widget = """
         <div style="height:275px; width:100%;">
@@ -74,7 +73,7 @@ def render():
         """
         components.html(spread_widget, height=280)
         
-        # Cerramos el contenedor de la derecha
+        # Cerramos el contenedor oscuro y el principal de la derecha
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.write("---")

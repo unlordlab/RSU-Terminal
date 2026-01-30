@@ -1,87 +1,91 @@
-# modules/ia_report.py
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 from config import get_ia_model, obtener_prompt_github
 
 def render():
-    model_ia, modelo_nombre, error_ia = get_ia_model()
-
-    # Selector de Ticker
-    t_in = st.text_input("Introduir Ticker (ex: NVDA, AAPL)", "NVDA").upper()
+    # 1. Selector de Ticker
+    t_in = st.text_input("Introduir Ticker (ex: NVDA, TSLA, BTC-USD)", "NVDA").upper()
     
     if not t_in:
-        st.warning("Si us plau, introdueix un ticker.")
+        st.warning("Escriu un ticker per començar.")
         return
 
-    # Obtenir dades de yfinance
+    # 2. GRÀFIC DE TRADINGVIEW (Restaurat)
+    # Alçada professional de 650px com volies
+    tradingview_widget = f"""
+    <div class="tradingview-widget-container" style="height:650px;">
+      <div id="tradingview_chart"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "autosize": true,
+        "symbol": "{t_in}",
+        "interval": "D",
+        "timezone": "Etc/UTC",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": true,
+        "container_id": "tradingview_chart"
+      }});
+      </script>
+    </div>
+    """
+    components.html(tradingview_widget, height=650)
+
+    # 3. DADES DE YFINANCE PER A L'OVERVIEW
     ticker_data = yf.Ticker(t_in)
     info = ticker_data.info
 
-    # --- SECCIÓ 1: ABOUT ---
+    # 4. ABOUT SECTION
     st.markdown(f"### About {t_in}")
-    st.write(info.get('longBusinessSummary', 'No hi ha descripció disponible per a aquest ticker.'))
+    st.write(info.get('longBusinessSummary', 'No hi ha descripció disponible.'))
 
-    # --- SECCIÓ 2: PESTANYES (Com a la imatge) ---
+    # 5. PESTANYES (Overview, Financials, etc.)
     tabs = st.tabs(["Overview", "Earnings", "Seasonality", "Insider", "Financials", "Options"])
 
     with tabs[0]: # PESTANYA OVERVIEW
         st.markdown('<div class="overview-box">', unsafe_allow_html=True)
-        st.markdown('<h4>📊 Company Overview</h4>', unsafe_allow_html=True)
-        st.caption("Valuation metrics and analyst consensus")
+        st.markdown('<p style="color:#00ffad; font-size:14px; font-weight:bold;">💵 Valuation Multiples</p>', unsafe_allow_html=True)
         
-        st.markdown('<p style="color:#00ffad; font-size:13px; margin-top:10px; font-weight:bold;">💵 Valuation Multiples</p>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
         
-        # Graella de mètriques
-        col1, col2, col3 = st.columns(3)
-        
-        # Mètriques a mostrar
-        metrics_list = [
-            {"label": "P/E (Trailing)", "value": info.get('trailingPE'), "tag": "Trailing", "sub": "Price to Earnings"},
-            {"label": "P/S (TTM)", "value": info.get('priceToSalesTrailing12Months'), "tag": "TTM", "sub": "Price to Sales"},
-            {"label": "EV/EBITDA", "value": info.get('enterpriseToEbitda'), "tag": "TTM", "sub": "Enterprise / EBITDA"},
-            {"label": "Forward P/E", "value": info.get('forwardPE'), "tag": "Next 12M", "sub": "Expected P/E"},
-            {"label": "PEG Ratio", "value": info.get('pegRatio'), "tag": "Growth", "sub": "P/E to Growth"}
+        # Mètriques clau de valoració
+        metrics = [
+            {"label": "P/E (Trailing)", "val": info.get('trailingPE'), "tag": "Trailing"},
+            {"label": "P/S (TTM)", "val": info.get('priceToSalesTrailing12Months'), "tag": "TTM"},
+            {"label": "EV/EBITDA", "val": info.get('enterpriseToEbitda'), "tag": "TTM"},
+            {"label": "Forward P/E", "val": info.get('forwardPE'), "tag": "Next 12M"},
+            {"label": "PEG Ratio", "val": info.get('pegRatio'), "tag": "Growth"}
         ]
 
-        for i, m in enumerate(metrics_list):
-            target_col = [col1, col2, col3][i % 3]
+        for i, m in enumerate(metrics):
+            target_col = [c1, c2, c3][i % 3]
             with target_col:
-                val = f"{m['value']:.2f}x" if m['value'] and isinstance(m['value'], (int, float)) else "N/A"
+                v = f"{m['val']:.2f}x" if isinstance(m['val'], (int, float)) else "N/A"
                 st.markdown(f"""
                     <div class="valuation-card">
                         <span class="val-tag">{m['tag']}</span>
                         <div class="val-label">{m['label']}</div>
-                        <div class="val-value">{val}</div>
+                        <div class="val-value">{v}</div>
                         <div class="val-sub-label">Sector avg: --</div>
-                        <div class="val-sub-label">{m['sub']}</div>
                     </div>
                 """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with tabs[4]: # PESTANYA FINANCIALS
-        st.markdown("### Financial Statements")
+        st.subheader("Income Statement")
         st.dataframe(ticker_data.financials, use_container_width=True)
 
-    # --- SECCIÓ 3: GENERADOR D'IA (Sota les pestanyes o on prefereixis) ---
+    # 6. BOTÓ D'IA (Opcional, si el vols dins de Market)
     st.write("---")
-    st.subheader("🤖 RSU AI Report Generator")
-    if st.button("GENERAR INFORME COMPLET"):
-        if error_ia:
-            st.error(error_ia)
-            return
-
-        with st.spinner(f"L'IA està analitzant {t_in}..."):
+    if st.button("🪄 GENERAR ANÀLISI IA"):
+        model_ia, _, _ = get_ia_model()
+        with st.spinner("Analitzant..."):
             template = obtener_prompt_github()
-            prompt_final = f"Analitza {t_in} seguint això: {template.replace('[TICKER]', t_in)}"
-            try:
-                res = model_ia.generate_content(prompt_final)
-                text = getattr(res, "text", None)
-                if text:
-                    st.markdown(f"### 📋 Informe d'IA: {t_in}")
-                    st.markdown(f'<div class="prompt-container">{text}</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("L'IA no ha retornat text.")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    st.caption(f"Engine: {modelo_nombre}")
+            res = model_ia.generate_content(f"Analitza {t_in}: {template}")
+            st.markdown(f'<div class="prompt-container">{res.text}</div>', unsafe_allow_html=True)

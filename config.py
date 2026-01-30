@@ -1,3 +1,4 @@
+
 # config.py
 import streamlit as st
 import google.generativeai as genai
@@ -5,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# Configuración de página única (se llama una sola vez)
+# Configuración de página única
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -16,7 +17,6 @@ def set_style():
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
         
-        /* Contenedores del Dashboard */
         .group-container {
             background-color: #11141a; 
             border: 1px solid #2d3439;
@@ -27,7 +27,6 @@ def set_style():
             margin-bottom: 20px;
         }
         
-        /* Cabecera con título DENTRO de la caja */
         .group-header {
             background-color: #1a1e26;
             padding: 12px 20px;
@@ -45,7 +44,6 @@ def set_style():
 
         .group-content { padding: 20px; }
 
-        /* Tarjetas de Índices */
         .index-card {
             background-color: #1a1e26; border: 1px solid #2d3439; border-radius: 8px;
             padding: 12px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
@@ -69,7 +67,6 @@ def get_market_index(ticker_symbol):
         if not hist.empty and len(hist) >= 2:
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
-            # Intentar obtener precio más reciente si el mercado está abierto
             try:
                 live = t.fast_info.last_price
                 if live: current = live
@@ -88,7 +85,6 @@ def get_cnn_fear_greed():
         return int(val.text.strip()) if val else 50
     except: return 50
 
-# --- FUNCIONES PARA OTROS MÓDULOS ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource

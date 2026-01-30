@@ -83,7 +83,7 @@ def render():
 
         # 5. BOTÓ GENERAR PROMPT RSU
         st.write("")
-        if st.button("🚀 GENERAR INFORME IA ESTRATÈGIC"):
+        if st.button("🚀 GENERAR PROMPT RSU"):
             model_ia, modelo_nombre, error_ia = get_ia_model()
             
             if error_ia:
@@ -108,3 +108,4 @@ def render():
         st.error(f"No s'han pogut carregar les dades per a {t_in}. Revisa el Ticker.")
 
     st.caption(f"Market Data: Yahoo Finance | Chart: TradingView")
+

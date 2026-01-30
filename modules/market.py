@@ -4,18 +4,16 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
-    # Título Principal del Dashboard
-    st.markdown("# Market Dashboard")
-    st.write("") 
-
+    st.markdown('<h1 style="margin-top:-50px;">Market Dashboard</h1>', unsafe_allow_html=True)
+    
     col_idx, col_spread = st.columns([1, 2])
     
     # --- CAJA IZQUIERDA: MARKET INDICES ---
     with col_idx:
-        # Abrimos el contenedor y ponemos el título dentro inmediatamente
-        st.markdown(f"""
+        st.markdown("""
             <div class="group-container">
-                <div class="group-title">Market Indices</div>
+                <div class="group-header"><p class="group-title">Market Indices</p></div>
+                <div class="group-content">
         """, unsafe_allow_html=True)
         
         indices = [
@@ -40,14 +38,14 @@ def render():
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True) # Cerramos group-container
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
-        st.markdown(f"""
+        st.markdown("""
             <div class="group-container">
-                <div class="group-title">US High Yield Credit Spreads (OAS)</div>
+                <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
+                <div class="group-content">
         """, unsafe_allow_html=True)
         
         spread_widget = """
@@ -66,7 +64,6 @@ def render():
         </div>
         """
         components.html(spread_widget, height=280)
-        
-        st.markdown('</div>', unsafe_allow_html=True) # Cerramos group-container
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.write("---")

@@ -7,33 +7,35 @@ def render():
     model_ia, modelo_nombre, error_ia = get_ia_model()
     
     st.subheader("🤖 IA Report RSU")
+    
+    # ========== CSS PERSONALITZAT per al botó ==========
+    st.markdown("""
+    <style>
+    .btn-rsu-custom {
+        background: linear-gradient(45deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        padding: 12px 24px !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4) !important;
+        width: 100% !important;
+        transition: all 0.3s ease !important;
+        height: 50px !important;
+    }
+    .btn-rsu-custom:hover {
+        background: linear-gradient(45deg, #5a67d8 0%, #6b46c1 100%) !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
+        transform: translateY(-2px) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     t_in = st.text_input("Ticker", "NVDA").upper()
     
-    # ========== BOTO PERSONALITZAT amb colors del logo ==========
-    if st.button(
-        "🔥 GENERAR PROMPT RSU", 
-        type="primary",
-        use_container_width=True,
-        help="Analitza l'actiu amb IA + Gràfic TradingView",
-        **{
-            "style": """
-                background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-weight: 600;
-                font-size: 16px;
-                padding: 12px 24px;
-                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-                transition: all 0.3s ease;
-            """,
-            "hover_style": """
-                background: linear-gradient(45deg, #5a67d8 0%, #6b46c1 100%);
-                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-                transform: translateY(-2px);
-            """
-        }
-    ):
+    # ========== BOTO CORREGIT ==========
+    if st.button("🔥 GENERAR PROMPT RSU", key="btn_rsu", help="Analitza l'actiu amb IA + Gràfic TradingView"):
         if error_ia:
             st.error(error_ia)
             return

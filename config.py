@@ -104,4 +104,3 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
-

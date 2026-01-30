@@ -33,7 +33,7 @@ with st.sidebar:
         "",
         [
             "📊 DASHBOARD",
-            "🤖 IA REPORT"",
+            "🤖 IA REPORT",
             "💼 CARTERA",
             "📄 TESIS",
             "⚖️ TRADE GRADER",
@@ -152,5 +152,6 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.render()
 elif menu == "🎥 ACADEMY":
     academy.render()
+
 
 

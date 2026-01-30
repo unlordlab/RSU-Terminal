@@ -11,33 +11,14 @@ if 'page_config_set' not in st.session_state:
     st.session_state.page_config_set = True
 
 def set_style():
-    """Estilos CSS globales optimizados para evitar renderizado de texto plano."""
+    """Estilos CSS optimizados para evitar renderizado de texto plano."""
     st.markdown("""
         <style>
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
         
-        /* Contenedor principal de tarjetas */
-        .dashboard-card {
-            background-color: #11141a;
-            border: 1px solid #2d3439;
-            border-radius: 12px;
-            padding: 20px;
-            height: 460px;
-            overflow: hidden;
-        }
-        
-        .card-header {
-            color: #888;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 15px;
-        }
-
-        /* Filas de índices */
-        .index-row {
+        /* Estilos para el contenido interno de las tarjetas */
+        .index-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -47,6 +28,12 @@ def set_style():
         
         .pos { color: #00ffad; font-weight: bold; }
         .neg { color: #f23645; font-weight: bold; }
+        
+        /* Ajuste de títulos dentro de contenedores */
+        .card-header-text {
+            color: #888; font-size: 11px; font-weight: bold; 
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -78,9 +65,8 @@ def get_cnn_fear_greed():
     except:
         return 50
 
-# --- LÓGICA DE INTELIGENCIA ARTIFICIAL ---
+# --- LÓGICA DE IA ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
-
 @st.cache_resource
 def get_ia_model():
     if not API_KEY: return None, None, "API Key missing"
@@ -93,5 +79,4 @@ def obtener_prompt_github():
     try:
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
-    except:
-        return ""
+    except: return ""

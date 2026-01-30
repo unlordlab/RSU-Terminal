@@ -1,10 +1,9 @@
-
 # app.py
 import os
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-import math  # Import necesario para el cálculo de la aguja
+import math
 
 from config import set_style, get_cnn_fear_greed
 import modules.auth as auth
@@ -15,20 +14,15 @@ import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
 
-# --- ESTILO GLOBAL ---
 set_style()
 
-# --- LOGIN ---
 if not auth.login():
     st.stop()
 
-# --- SIDEBAR con Fear & Greed + LEYENDA LIMPIA ---
 with st.sidebar:
-    # Logo
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
 
-    # Menú principal
     menu = st.radio(
         "",
         [
@@ -42,11 +36,8 @@ with st.sidebar:
     )
 
     st.write("---")
-
-    # TÍTULO GRANDE Fear & Greed
     st.markdown('<h3 style="color:white;text-align:center;margin-bottom:5px;">FEAR & GREED</h3>', unsafe_allow_html=True)
 
-    # --- LÓGICA DEL GRÁFICO CON AGUJA ---
     fng = get_cnn_fear_greed()
     
     fig = go.Figure(go.Indicator(
@@ -55,7 +46,7 @@ with st.sidebar:
         number={"font": {"size": 24, "color": "white"}},
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': "rgba(0,0,0,0)"}, # Hacemos la barra azul invisible
+            'bar': {'color': "rgba(0,0,0,0)"},
             'bgcolor': "rgba(0,0,0,0)",
             'borderwidth': 0,
             'steps': [
@@ -68,23 +59,19 @@ with st.sidebar:
         }
     ))
 
-    # Cálculo de la posición de la aguja
-    # El gauge de Plotly va de 180 grados (valor 0) a 0 grados (valor 100)
     theta = 180 - (fng / 100) * 180
-    r = 0.85 # Longitud de la aguja
+    r = 0.85
     x_head = r * math.cos(math.radians(theta))
     y_head = r * math.sin(math.radians(theta))
 
-    # Añadir la aguja (línea blanca)
     fig.add_shape(
         type='line',
-        x0=0.5, y0=0.15, # Centro base
-        x1=0.5 + x_head/2.2, y1=0.15 + y_head/1.2, # Ajuste de escala
+        x0=0.5, y0=0.15,
+        x1=0.5 + x_head/2.2, y1=0.15 + y_head/1.2,
         line=dict(color='white', width=4),
         xref='paper', yref='paper'
     )
 
-    # Añadir el eje central (círculo blanco)
     fig.add_shape(
         type='circle',
         x0=0.48, y0=0.12, x1=0.52, y1=0.18,
@@ -101,27 +88,20 @@ with st.sidebar:
     
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # ESTADO ACTUAL
     if fng < 25:
-        estado = "🟥 Extreme Fear"
-        color = "#d32f2f"
+        estado, color = "🟥 Extreme Fear", "#d32f2f"
     elif fng < 45:
-        estado = "🟧 Fear"
-        color = "#f57c00"
+        estado, color = "🟧 Fear", "#f57c00"
     elif fng < 55:
-        estado = "🟡 Neutral"
-        color = "#ff9800"
+        estado, color = "🟡 Neutral", "#ff9800"
     elif fng < 75:
-        estado = "🟩 Greed"
-        color = "#4caf50"
+        estado, color = "🟩 Greed", "#4caf50"
     else:
-        estado = "🟩 Extreme Greed"
-        color = "#00ffad"
+        estado, color = "🟩 Extreme Greed", "#00ffad"
 
     st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
 
-    # LEYENDA LIMPIA (una columna, mejor espaciado)
-    st.markdown("**Legend:**", help="")
+    st.markdown("**Legend:**")
     legend_items = [
         ("#d32f2f", "Extreme Fear (0-25)"),
         ("#f57c00", "Fear (25-45)"),
@@ -139,7 +119,6 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
-# --- ENRUTAMIENTO DE PÁGINAS ---
 if menu == "📊 DASHBOARD":
     market.render()
 elif menu == "🤖 IA REPORT":
@@ -152,6 +131,3 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.render()
 elif menu == "🎥 ACADEMY":
     academy.render()
-
-
-

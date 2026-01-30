@@ -4,7 +4,6 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
-    # Título del Dashboard
     st.markdown('<h1 style="margin-top:-50px;">Market Dashboard</h1>', unsafe_allow_html=True)
     
     col_idx, col_spread = st.columns([1, 2])
@@ -18,44 +17,45 @@ def render():
             {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
         ]
         
-        # Generar las tarjetas HTML antes de armar el contenedor final
-        html_cards = ""
-        for idx in indices:
-            price, change = get_market_index(idx['t'])
-            color_class = "pos" if change >= 0 else "neg"
-            
-            html_cards += f"""
-            <div class="index-card">
-                <div>
-                    <p class="index-ticker">{idx['label']}</p>
-                    <p class="index-fullname">{idx['full']}</p>
-                </div>
-                <div style="text-align:right;">
-                    <p class="index-price">{price:,.2f}</p>
-                    <span class="index-delta {color_class}">{change:+.2f}%</span>
-                </div>
-            </div>
-            """
-
-        # Ensamble final del contenedor completo
-        full_indices_box = f"""
+        # 1. Iniciamos el contenedor y la parte oscura (group-content)
+        html_indices = """
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Indices</p></div>
                 <div class="group-content">
-                    {html_cards}
-                </div>
-            </div>
         """
-        st.markdown(full_indices_box, unsafe_allow_html=True)
+        
+        # 2. Generamos el contenido de las tarjetas dinámicamente
+        for idx in indices:
+            p, c = get_market_index(idx['t'])
+            color_class = "pos" if c >= 0 else "neg"
+            html_indices += f"""
+                <div class="index-card">
+                    <div>
+                        <p class="index-ticker">{idx['label']}</p>
+                        <p class="index-fullname">{idx['full']}</p>
+                    </div>
+                    <div style="text-align:right;">
+                        <p class="index-price">{p:,.2f}</p>
+                        <span class="index-delta {color_class}">{c:+.2f}%</span>
+                    </div>
+                </div>
+            """
+        
+        # 3. Cerramos los divs dentro del mismo string para evitar el error visual
+        html_indices += "</div></div>"
+        
+        # 4. Renderizamos todo el bloque de una vez
+        st.markdown(html_indices, unsafe_allow_html=True)
 
     # --- CAJA DERECHA: CREDIT SPREADS ---
     with col_spread:
-        # Abrimos el contenedor para el gráfico de TradingView
-        st.markdown("""
+        # Hacemos lo mismo aquí para mantener la simetría y evitar errores
+        html_spread_header = """
             <div class="group-container">
                 <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
                 <div class="group-content">
-        """, unsafe_allow_html=True)
+        """
+        st.markdown(html_spread_header, unsafe_allow_html=True)
         
         spread_widget = """
         <div style="height:275px; width:100%;">
@@ -72,10 +72,9 @@ def render():
           </script>
         </div>
         """
-        # El widget requiere components.html para ejecutar el JavaScript de TradingView
         components.html(spread_widget, height=280)
         
-        # Cerramos los divs de la caja derecha
+        # Cerramos el contenedor de la derecha
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.write("---")

@@ -87,6 +87,7 @@ def get_cnn_fear_greed():
         return int(val.text.strip()) if val else 50
     except: return 50
 
+# --- FUNCIONES PARA OTROS MÓDULOS ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource

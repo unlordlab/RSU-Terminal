@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# Configuración de página única
+# Configuración de página
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -18,14 +18,23 @@ def set_style():
         
         /* Contenedores del Dashboard */
         .group-container {
-            background-color: #11141a; border: 1px solid #2d3439;
-            border-radius: 12px; padding: 20px; height: 100%;
+            background-color: #11141a; 
+            border: 1px solid #2d3439;
+            border-radius: 12px; 
+            padding: 20px; 
+            height: 100%;
         }
         
         /* Título DENTRO de la caja */
         .group-title { 
-            color: #888; font-size: 12px; font-weight: bold; 
-            margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;
+            color: #888; 
+            font-size: 12px; 
+            font-weight: bold; 
+            margin-bottom: 20px; 
+            text-transform: uppercase; 
+            letter-spacing: 1px;
+            border-bottom: 1px solid #2d3439;
+            padding-bottom: 10px;
         }
 
         /* Tarjetas de Índices */
@@ -48,7 +57,6 @@ def set_style():
 def get_market_index(ticker_symbol):
     try:
         ticker = yf.Ticker(ticker_symbol)
-        # Usamos history para asegurar que obtenemos datos de cierre previos correctos para el %
         data = ticker.history(period="2d")
         if not data.empty and len(data) >= 2:
             current = data['Close'].iloc[-1]
@@ -57,31 +65,3 @@ def get_market_index(ticker_symbol):
             return current, change
         return 0.0, 0.0
     except: return 0.0, 0.0
-
-@st.cache_data(ttl=3600)
-def get_cnn_fear_greed():
-    try:
-        r = requests.get("https://edition.cnn.com/markets/fear-and-greed")
-        soup = BeautifulSoup(r.text, 'html.parser')
-        val = soup.find("span", class_="market-fng-gauge__dial-number-value")
-        return int(val.text.strip()) if val else 50
-    except: return 50
-
-# --- FUNCIONES DE IA ---
-API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
-
-@st.cache_resource
-def get_ia_model():
-    try:
-        if not API_KEY: return None, None, "API Key no configurada"
-        genai.configure(api_key=API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        return model, "Gemini 1.5 Flash", None
-    except Exception as e: return None, None, str(e)
-
-@st.cache_data(ttl=600)
-def obtener_prompt_github():
-    try:
-        r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
-        return r.text if r.status_code == 200 else ""
-    except: return ""

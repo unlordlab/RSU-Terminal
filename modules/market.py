@@ -4,83 +4,53 @@ import streamlit.components.v1 as components
 from config import get_market_index
 
 def render():
-    # Título principal con ajuste de margen
-    st.markdown('<h1 style="margin-top:-60px; margin-bottom:25px;">Market Dashboard</h1>', unsafe_allow_html=True)
+    # Título con margen negativo para subirlo
+    st.markdown('<h2 style="margin-top:-50px; margin-bottom:20px;">Market Dashboard</h2>', unsafe_allow_html=True)
     
-    # Columnas 1:1 para asegurar que tengan la misma anchura
-    col_idx, col_widget = st.columns([1, 1])
-    
-    # Altura fija para que ambas cajas terminen igual (simetría)
-    BOX_HEIGHT = 440
+    # Columnas equilibradas
+    col1, col2 = st.columns([1, 1])
+    BOX_HEIGHT = 450
 
-    # --- COLUMNA IZQUIERDA: MARKET INDICES ---
-    with col_idx:
+    with col1:
+        # Iniciamos la caja decorativa
+        st.markdown('<div class="market-box">', unsafe_allow_html=True)
+        st.markdown('<p style="color:#888; font-weight:bold; font-size:12px; margin-bottom:15px; text-transform:uppercase;">Market Indices</p>', unsafe_allow_html=True)
+        
         indices = [
-            {"label": "S&P 500", "full": "US 500 Index", "t": "^GSPC"},
-            {"label": "NASDAQ 100", "full": "Nasdaq Composite", "t": "^IXIC"},
-            {"label": "DOW JONES", "full": "Industrial Average", "t": "^DJI"},
-            {"label": "RUSSELL 2000", "full": "Small Cap Index", "t": "^RUT"}
+            ("S&P 500", "^GSPC"),
+            ("NASDAQ 100", "^IXIC"),
+            ("DOW JONES", "^DJI"),
+            ("RUSSELL 2000", "^RUT")
         ]
         
-        cards_html = ""
-        for idx in indices:
-            p, c = get_market_index(idx['t'])
-            color_class = "pos" if c >= 0 else "neg"
-            # Fallback por si el precio llega a 0
-            price_display = f"{p:,.2f}" if p > 0 else "Cargando..."
+        for name, ticker in indices:
+            price, change = get_market_index(ticker)
+            color_class = "pos" if change >= 0 else "neg"
             
-            cards_html += f"""
-            <div class="index-card">
-                <div>
-                    <p class="index-ticker">{idx['label']}</p>
-                    <p class="index-fullname">{idx['full']}</p>
+            # Renderizado individual por cada fila
+            st.markdown(f"""
+                <div class="index-row">
+                    <div>
+                        <div style="font-weight:bold; font-size:14px; color:white;">{name}</div>
+                        <div style="color:#555; font-size:10px; text-transform:uppercase;">{ticker}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:16px; font-weight:bold; color:white;">{price:,.2f}</div>
+                        <div class="{color_class}" style="font-size:11px;">{change:+.2f}%</div>
+                    </div>
                 </div>
-                <div style="text-align:right;">
-                    <p class="index-price">{price_display}</p>
-                    <span class="index-delta {color_class}">{c:+.2f}%</span>
-                </div>
-            </div>"""
-
-        # Renderizamos la caja de índices
-        st.markdown(f"""
-            <div class="group-container" style="height: {BOX_HEIGHT}px;">
-                <div class="group-header"><p class="group-title">Market Indices</p></div>
-                <div class="group-content">{cards_html}</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    # --- COLUMNA DERECHA: CREDIT SPREADS (WIDGET INTEGRADO) ---
-    with col_widget:
-        # Inyectamos el HTML del contenedor y el widget en un solo componente para evitar errores de CSS
-        full_widget_html = f"""
-        <style>
-            .group-container {{
-                background-color: #11141a; 
-                border: 1px solid #2d3439;
-                border-radius: 12px; 
-                height: {BOX_HEIGHT}px;
-                overflow: hidden;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            }}
-            .group-header {{
-                background-color: #1a1e26;
-                padding: 12px 20px;
-                border-bottom: 1px solid #2d3439;
-            }}
-            .group-title {{ 
-                color: #888; font-size: 11px; font-weight: bold; 
-                text-transform: uppercase; margin: 0; letter-spacing: 1px;
-            }}
-            .group-content {{ padding: 10px; height: calc(100% - 50px); }}
-        </style>
+            """, unsafe_allow_html=True)
         
-        <div class="group-container">
-            <div class="group-header"><p class="group-title">US High Yield Credit Spreads (OAS)</p></div>
-            <div class="group-content">
-                <div id="tv_spread" style="height:100%; width:100%;"></div>
-            </div>
+        # Cerramos la caja
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col2:
+        # Widget de TradingView encapsulado en un contenedor idéntico al de la izquierda
+        html_widget = f"""
+        <div style="background-color: #11141a; border: 1px solid #2d3439; border-radius: 12px; height: {BOX_HEIGHT}px; overflow: hidden; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+            <p style="color:#888; font-weight:bold; font-size:12px; margin-bottom:15px; text-transform: uppercase; letter-spacing:1px;">Credit Spreads (OAS)</p>
+            <div id="tv_chart_spread" style="height: 350px; width: 100%;"></div>
         </div>
-        
         <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
         <script type="text/javascript">
         new TradingView.MediumWidget({{
@@ -92,12 +62,12 @@ def render():
           "colorTheme": "dark", 
           "gridLineColor": "transparent",
           "trendLineColor": "#f23645", 
-          "underLineColor": "rgba(242, 54, 69, 0.15)",
-          "container_id": "tv_spread"
+          "underLineColor": "rgba(242, 54, 69, 0.1)",
+          "container_id": "tv_chart_spread"
         }});
         </script>
         """
-        # Usamos BOX_HEIGHT + un pequeño margen para el iframe de Streamlit
-        components.html(full_widget_html, height=BOX_HEIGHT + 10)
+        # El height del component debe ser ligeramente mayor al del div para evitar scroll
+        components.html(html_widget, height=BOX_HEIGHT + 10)
 
     st.write("---")

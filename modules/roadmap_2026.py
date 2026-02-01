@@ -1,4 +1,5 @@
 import streamlit as st
-def show():
+
+def render():
     st.title("🗺️ 2026 Roadmap")
-    st.write("Contenido en desarrollo...")
+    st.write("Planificación estratégica de activos para el ciclo 2026.")

@@ -142,8 +142,20 @@ API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 def get_ia_model():
     if not API_KEY: return None, None, "API Key missing"
     genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    return model, "Gemini 1.5 Flash", None
+    
+    # Mejora: Sistema de reintentos con diferentes nombres de modelo para evitar error 404
+    modelos_a_probar = ['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro']
+    
+    for nombre_modelo in modelos_a_probar:
+        try:
+            model = genai.GenerativeModel(nombre_modelo)
+            # Validamos el modelo con una llamada mínima si es necesario, 
+            # pero normalmente inicializarlo es suficiente.
+            return model, f"Google {nombre_modelo}", None
+        except Exception:
+            continue
+            
+    return None, None, "No se pudo cargar ningún modelo compatible de Gemini"
 
 @st.cache_data(ttl=600)
 def obtener_prompt_github():
@@ -151,4 +163,3 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
-

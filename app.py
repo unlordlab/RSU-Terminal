@@ -53,7 +53,7 @@ with st.sidebar:
         "MENÚ PRINCIPAL",
         [
             "📊 DASHBOARD", 
-            "📈 RS/RW ALGO", 
+            "📈 SCANNER RS/RW", 
             "📅 EARNINGS", # <--- Opción añadida
             "📝 TESIS", 
             "💼 CARTERA", 
@@ -161,3 +161,4 @@ elif menu == "🇺🇸 TRUMP PLAYBOOK":
 
 elif menu == "🎓 ACADEMY":
     academy.render()
+

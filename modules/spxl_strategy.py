@@ -29,7 +29,7 @@ def render():
             st.download_button(
                 label="📄 Descargar Estrategia Completa (PDF)",
                 data=pdf_bytes,
-                file_name="https://github.com/unlordlab/RSU-Terminal/assets/SPXL.pdfassets/SPXL.pdf",
+                file_name="https://github.com/unlordlab/RSU-Terminal/assets/SPXL.pdf/assets/SPXL.pdf",
                 mime="application/pdf"
             )
         else:
@@ -129,5 +129,6 @@ def render():
 # Para ejecutar la función si el script se corre directamente
 if __name__ == "__main__":
     render()
+
 
 

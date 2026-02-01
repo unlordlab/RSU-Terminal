@@ -8,15 +8,16 @@ def render():
     st.caption("Terminal RSU - Gestión de Compras Escaladas y Riesgo de Crédito")
 
     # --- DESCRIPCIÓN DE LA ESTRATEGIA ---
-    with st.expander("📖 Descripción de la Estrategia", expanded=False):
+    with st.expander("📖 Filosofía y Premisas", expanded=False):
         st.markdown("""
-        **Filosofía:** Esta estrategia busca capitalizar las correcciones del mercado utilizando el ETF apalancado **SPXL** (3x S&P 500). 
-        En lugar de adivinar el suelo, se realizan compras promediadas en niveles de caída específicos.
+        **Premisa Fundamental:** Esta estrategia se basa estrictamente en la premisa de que el mercado de EE.UU. (**S&P 500 / US500**) mantendrá su **macro tendencia alcista** a largo plazo, recuperándose históricamente de todas sus correcciones.
         
-        **Puntos Clave:**
-        * **Entradas:** Se activan al caer un 15%, 10%, 7% y 10% respectivamente.
-        * **Salida:** Objetivo de beneficio del **+20%** sobre el precio medio.
-        * **Freno de Seguridad:** Si los diferenciales de crédito (CDS) se disparan, se detiene la operativa para evitar "cisnes negros" o crisis sistémicas.
+        **Metodología:**
+        * Se utiliza el ETF apalancado **SPXL** (3x Bull) para maximizar retornos en las recuperaciones.
+        * No se intenta predecir el "suelo" exacto; se promedia el precio en niveles de caída predefinidos.
+        * **Entradas:** 4 fases escalonadas al caer un 15%, 10%, 7% y 10%.
+        * **Salida:** Venta total al alcanzar un **+20%** de beneficio sobre el precio medio.
+        * **Seguridad:** Uso de spreads de crédito (CDS) como freno de emergencia ante crisis sistémicas.
         """)
 
     # --- DATOS DE MERCADO EN TIEMPO REAL ---
@@ -39,46 +40,55 @@ def render():
     
     with col_pos1:
         tiene_posicion = st.checkbox("¿Tienes una posición abierta actualmente?")
-        capital_total = st.number_input("Capital total destinado a esta estrategia ($):", value=10000, step=500)
+        capital_total = st.number_input("Capital total para esta estrategia ($):", value=10000, step=500)
     
     with col_pos2:
         if tiene_posicion:
             precio_medio = st.number_input("Tu precio medio de compra ($):", value=0.0, step=0.1)
-            fase_actual = st.selectbox("¿En qué fase de compra te encuentras?", ["1ª Compra", "2ª Compra", "3ª Compra", "4ª Compra"])
         else:
             precio_medio = 0.0
 
     # --- ALERTAS DE COMPRA Y VENTA ---
     st.write("---")
+    
+    # Lógica de Venta
     if tiene_posicion and precio_medio > 0:
         target_venta = precio_medio * 1.20
         rendimiento = ((precio_actual - precio_medio) / precio_medio) * 100
         
-        st.subheader("🔔 Señales de Venta")
+        st.subheader("🔔 Estado de Señales")
         if precio_actual >= target_venta:
             st.balloons()
-            st.success(f"🎯 **SEÑAL DE VENTA ACTIVA:** El precio (${precio_actual:.2f}) ha alcanzado el objetivo del +20% (${target_venta:.2f}).")
+            st.success(f"🎯 **SEÑAL DE VENTA ACTIVA:** Objetivo del +20% alcanzado (${target_venta:.2f}).")
         else:
             st.info(f"Rendimiento actual: **{rendimiento:.2f}%**. Objetivo de venta en: **${target_venta:.2f}**")
     
-    # Alerta de Compra
+    # Lógica de Compra (Alerta Global)
     if caida_desde_max <= -15:
-        st.error(f"🚨 **SEÑAL DE COMPRA ACTIVA:** SPXL ha caído un {caida_desde_max:.2f}% desde máximos.")
+        st.error(f"🚨 **SEÑAL DE COMPRA ACTIVA:** El precio ha caído un {caida_desde_max:.2f}% desde máximos.")
+    else:
+        st.info(f"Distancia desde el máximo anual: **{caida_desde_max:.2f}%** (La 1ª compra se activa al -15%)")
 
-    # --- TABLA DE REGLAS ---
-    st.subheader("🪜 Plan de Ejecución Basado en Reglas")
+    # --- TABLA DE REGLAS BASADA EN EL MÁXIMO ---
+    st.subheader("🪜 Niveles de Ejecución (Basados en Máximo Anual)")
+    p1 = max_periodo * 0.85
+    p2 = p1 * 0.90
+    p3 = p2 * 0.93
+    p4 = p3 * 0.90
+    
     fases = [
-        {"Fase": "1ª Compra", "Trigger": "-15% desde Máx", "Precio Objetivo": max_periodo * 0.85, "Capital": "20%", "Inversión": capital_total * 0.20},
-        {"Fase": "2ª Compra", "Trigger": "-10% desde 1ª", "Precio Objetivo": (max_periodo * 0.85) * 0.90, "Capital": "15%", "Inversión": capital_total * 0.15},
-        {"Fase": "3ª Compra", "Trigger": "-7% desde 2ª", "Precio Objetivo": ((max_periodo * 0.85) * 0.90) * 0.93, "Capital": "20%", "Inversión": capital_total * 0.20},
-        {"Fase": "4ª Compra", "Trigger": "-10% desde 3ª", "Precio Objetivo": (((max_periodo * 0.85) * 0.90) * 0.93) * 0.90, "Capital": "20%", "Inversión": capital_total * 0.20},
+        {"Fase": "1ª Compra", "Trigger": "-15% desde Máx", "Precio Ref": p1, "Cap %": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "2ª Compra", "Trigger": "-10% desde 1ª", "Precio Ref": p2, "Cap %": "15%", "Monto": capital_total * 0.15},
+        {"Fase": "3ª Compra", "Trigger": "-7% desde 2ª", "Precio Ref": p3, "Cap %": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "4ª Compra", "Trigger": "-10% desde 3ª", "Precio Ref": p4, "Cap %": "20%", "Monto": capital_total * 0.20},
     ]
-    st.table(pd.DataFrame(fases).style.format({"Precio Objetivo": "{:.2f}$", "Inversión": "{:,.2f}$"}))
+    st.table(pd.DataFrame(fases).style.format({"Precio Ref": "{:.2f}$", "Monto": "{:,.2f}$"}))
+    st.caption(f"💰 Reserva de Efectivo de Seguridad (25%): ${(capital_total * 0.25):,.2f}")
 
     # --- RIESGO SISTÉMICO (CDS corregido) ---
     st.write("---")
-    st.subheader("🚨 Monitor de Riesgo (BAMLH0A0HYM2)")
-    st.caption("Si este spread supera los 10.7, no se ejecutan más compras (Pánico detectado).")
+    st.subheader("🚨 Monitor de Riesgo Sistémico")
+    st.markdown(f"Ticker: **BAMLH0A0HYM2** | **Límite de Seguridad: 10.7**")
     
     tv_widget_html = f"""
     <div class="tradingview-widget-container">
@@ -99,3 +109,4 @@ def render():
     </div>
     """
     components.html(tv_widget_html, height=420)
+    st.warning("Si el gráfico anterior muestra un pico vertical brusco hacia 10.7, detén las compras aunque el precio caiga.")

@@ -1,3 +1,4 @@
+# app.py
 import os
 import streamlit as st
 import plotly.graph_objects as go
@@ -13,14 +14,15 @@ import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
 
-# --- IMPORTACIÓN SEGURA DE NUEVOS MÓDULOS ---
+# --- IMPORTACIÓN DE NUEVOS MÓDULOS ---
 try:
     import modules.spxl_strategy as spxl_strategy
     import modules.roadmap_2026 as roadmap_2026
     import modules.trump_playbook as trump_playbook
     import modules.rsu_algoritmo as rsu_algoritmo
+    NUEVOS_MODULOS_OK = True
 except ImportError:
-    pass
+    NUEVOS_MODULOS_OK = False
 
 set_style()
 
@@ -31,14 +33,15 @@ with st.sidebar:
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
 
+    # Menú actualizado con las nuevas secciones insertadas
     menu = st.radio(
         "",
         [
             "📊 DASHBOARD",
-            "📈 ESTRATEGIA SPXL",
-            "🗺️ 2026 ROADMAP",
-            "🇺🇸 TRUMP PLAYBOOK",
-            "🤖 RSU ALGORITMO",
+            "📈 ESTRATEGIA SPXL",  # Nueva
+            "🗺️ 2026 ROADMAP",     # Nueva
+            "🇺🇸 TRUMP PLAYBOOK",   # Nueva
+            "🤖 RSU ALGORITMO",    # Nueva
             "🤖 IA REPORT",
             "💼 CARTERA",
             "📄 TESIS",
@@ -52,26 +55,53 @@ with st.sidebar:
 
     fng = get_cnn_fear_greed()
     
+    # Tu código original del Gauge (respetado al máximo)
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=fng,
         number={"font": {"size": 24, "color": "white"}},
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': "#2962ff"},
+            'bar': {'color': "rgba(0,0,0,0)"},
             'bgcolor': "rgba(0,0,0,0)",
-            'borderwidth': 2,
-            'bordercolor': "#555",
+            'borderwidth': 0,
             'steps': [
-                {'range': [0, 25], 'color': '#d32f2f'},
-                {'range': [25, 45], 'color': '#f57c00'},
-                {'range': [45, 55], 'color': '#ff9800'},
-                {'range': [55, 75], 'color': '#4caf50'},
-                {'range': [75, 100], 'color': '#00ffad'},
+                {'range': [0, 25], 'color': "#d32f2f"},
+                {'range': [25, 45], 'color': "#f57c00"},
+                {'range': [45, 55], 'color': "#ff9800"},
+                {'range': [55, 75], 'color': "#4caf50"},
+                {'range': [75, 100], 'color': "#00ffad"},
             ],
         }
     ))
-    fig.update_layout(height=180, margin=dict(l=20, r=20, t=30, b=0), paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"})
+
+    theta = 180 - (fng / 100) * 180
+    r = 0.85
+    x_head = r * math.cos(math.radians(theta))
+    y_head = r * math.sin(math.radians(theta))
+
+    fig.add_shape(
+        type='line',
+        x0=0.5, y0=0.15,
+        x1=0.5 + x_head/2.2, y1=0.15 + y_head/1.2,
+        line=dict(color='white', width=4),
+        xref='paper', yref='paper'
+    )
+
+    fig.add_shape(
+        type='circle',
+        x0=0.48, y0=0.12, x1=0.52, y1=0.18,
+        fillcolor='white', line_color='white',
+        xref='paper', yref='paper'
+    )
+
+    fig.update_layout(
+        height=180,
+        margin=dict(l=15, r=15, t=5, b=25),
+        paper_bgcolor='rgba(0,0,0,0)',
+        font={'color': "white"}
+    )
+    
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     if fng < 25:
@@ -95,38 +125,34 @@ with st.sidebar:
         ("#4caf50", "Greed (55-75)"),
         ("#00ffad", "Extreme Greed (75-100)"),
     ]
+
     for col, txt in legend_items:
         st.markdown(
             f'<div style="display:flex; align-items:center; margin-bottom:3px;">'
-            f'<div style="width:12px;height:12px;background-color:{col};margin-right:8px;border-radius:2px;"></div>'
-            f'<span style="font-size:0.8rem;color:#ccc;">{txt}</span></div>', 
+            f'<div style="width:12px; height:12px; background-color:{col}; border-radius:2px; margin-right:8px;"></div>'
+            f'<span style="font-size:0.8rem; color:#ccc;">{txt}</span>'
+            f'</div>',
             unsafe_allow_html=True
         )
 
-# --- LÓGICA DE NAVEGACIÓN CON VERIFICACIÓN DE ATRIBUTOS ---
-def safe_show(module, function_name):
-    if hasattr(module, function_name):
-        getattr(module, function_name)()
-    else:
-        st.error(f"Error: La función '{function_name}' no existe en el módulo '{module.__name__}'.")
-
+# --- LÓGICA DE NAVEGACIÓN (Usando .render() para compatibilidad) ---
 if menu == "📊 DASHBOARD":
-    safe_show(market, "show_dashboard")
+    market.render()
 elif menu == "📈 ESTRATEGIA SPXL":
-    safe_show(spxl_strategy, "show")
+    spxl_strategy.render()
 elif menu == "🗺️ 2026 ROADMAP":
-    safe_show(roadmap_2026, "show")
+    roadmap_2026.render()
 elif menu == "🇺🇸 TRUMP PLAYBOOK":
-    safe_show(trump_playbook, "show")
+    trump_playbook.render()
 elif menu == "🤖 RSU ALGORITMO":
-    safe_show(rsu_algoritmo, "show")
+    rsu_algoritmo.render()
 elif menu == "🤖 IA REPORT":
-    safe_show(ia_report, "show")
+    ia_report.render()
 elif menu == "💼 CARTERA":
-    safe_show(cartera, "show")
+    cartera.render()
 elif menu == "📄 TESIS":
-    safe_show(tesis, "show")
+    tesis.render()
 elif menu == "⚖️ TRADE GRADER":
-    safe_show(trade_grader, "show")
+    trade_grader.render()
 elif menu == "🎥 ACADEMY":
-    safe_show(academy, "show")
+    academy.render()

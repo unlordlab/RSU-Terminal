@@ -4,87 +4,67 @@ import pandas as pd
 from config import get_ia_model
 
 def get_earnings_data(ticker_symbol):
-    """Extrae datos con headers para evitar bloqueos de Yahoo Finance."""
+    """Obtiene datos financieros minimizando bloqueos."""
     try:
-        # Usamos un ticker con sesión para evitar bloqueos 404/403 de Yahoo
         stock = yf.Ticker(ticker_symbol)
-        
-        # Acceder a info de manera segura
         info = stock.info
-        if not info or 'regularMarketPrice' not in info and 'currentPrice' not in info:
-            # Reintento mínimo si falla la primera carga
-            info = stock.fast_info 
-            
-        calendar = stock.calendar
-        next_date = "No disponible"
         
-        if calendar is not None:
-            if isinstance(calendar, dict):
-                next_date = calendar.get('Earnings Date', ["N/A"])[0]
-            elif isinstance(calendar, pd.DataFrame) and not calendar.empty:
-                next_date = calendar.iloc[0, 0]
-
+        # Datos esenciales
         data = {
             "ticker": ticker_symbol,
             "name": info.get('longName', ticker_symbol),
-            "price": info.get('currentPrice') or info.get('regularMarketPrice') or info.get('lastPrice'),
-            "revenue_growth": info.get('revenueGrowth'),
-            "ebitda_margins": info.get('ebitdaMargins'),
-            "eps_actual": info.get('trailingEps'),
-            "forward_pe": info.get('forwardPE'),
-            "debt_to_equity": info.get('debtToEquity'),
-            "next_earnings": next_date
+            "price": info.get('currentPrice') or info.get('regularMarketPreviousClose'),
+            "rev_growth": info.get('revenueGrowth'),
+            "ebitda_margin": info.get('ebitdaMargins'),
+            "pe_ratio": info.get('forwardPE'),
+            "eps": info.get('trailingEps'),
+            "cash": info.get('freeCashflow')
         }
         return data
-    except Exception as e:
-        st.error(f"Error técnico en yfinance: {e}")
+    except Exception:
         return None
-
-def generate_capyfin_style_analysis(data):
-    """Genera el análisis con manejo de error de modelo 404."""
-    model, _, _ = get_ia_model()
-    
-    if not model:
-        return "⚠️ Error: No se pudo cargar el modelo de IA. Revisa tu API Key."
-
-    prompt = f"""
-    Actúa como analista senior de Capyfin. Analiza {data['ticker']} ({data['name']}):
-    - Precio actual: {data['price']}
-    - Crecimiento Ingresos: {data['revenue_growth']}
-    - Margen EBITDA: {data['ebitda_margins']}
-    - PER: {data['forward_pe']}
-    
-    Genera un informe con:
-    ### 📊 Métricas Clave
-    ### ✅ Puntos Fuertes
-    ### ❌ Puntos Débiles
-    ### 💡 Conclusión
-    """
-    
-    try:
-        # Forzamos el uso de un modelo que siempre existe si el de config falla
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Error en la IA: {str(e)}. Intenta revisar el nombre del modelo en config.py."
 
 def render():
     st.title("📅 Earnings Insight")
-    
-    ticker = st.text_input("Introduce el Ticker", value="AAPL").upper()
-    
-    if st.button("Generar Reporte Capyfin"):
-        with st.spinner("Buscando datos..."):
+    st.markdown("---")
+
+    col1, _ = st.columns([1, 2])
+    with col1:
+        ticker = st.text_input("Introduce Ticker", value="NVDA").upper()
+
+    if st.button("Analizar Reporte"):
+        with st.spinner(f"Extrayendo métricas de {ticker}..."):
             data = get_earnings_data(ticker)
             
-            if data and data['price']:
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Precio", f"${data['price']:.2f}")
-                c2.metric("Próximo Reporte", str(data['next_earnings']).split(' ')[0])
-                c3.metric("Rev. Growth", f"{data['revenue_growth']:.2%}" if data['revenue_growth'] else "N/A")
-                c4.metric("Forward P/E", f"{data['forward_pe']:.2f}" if data['forward_pe'] else "N/A")
-                
-                st.markdown("---")
-                st.markdown(generate_capyfin_style_analysis(data))
+            if not data or not data['price']:
+                st.error("No se pudieron obtener datos. Revisa el ticker.")
+                return
+
+            # Cabecera Estilo Capyfin
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Precio", f"${data['price']:.2f}")
+            c2.metric("EPS", f"{data['eps']:.2f}" if data['eps'] else "N/A")
+            c3.metric("Rev. Growth", f"{data['rev_growth']:.1%}" if data['rev_growth'] else "N/A")
+            c4.metric("Forward P/E", f"{data['pe_ratio']:.1f}" if data['pe_ratio'] else "N/A")
+
+            st.write("---")
+
+            # Llamada a IA
+            model, name, err = get_ia_model()
+            if model:
+                prompt = f"""
+                Analiza como experto en Capyfin la empresa {data['name']} ({data['ticker']}).
+                Métricas: Crecimiento {data['rev_growth']}, Margen EBITDA {data['ebitda_margin']}, PER {data['pe_ratio']}.
+                Genera:
+                1. MÉTRICAS CLAVE (Resumen breve)
+                2. ✅ PUNTOS FUERTES (Bullet points)
+                3. ❌ PUNTOS DÉBILES (Bullet points)
+                4. 💡 CONCLUSIÓN
+                """
+                try:
+                    response = model.generate_content(prompt)
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"Error en la IA: {e}")
             else:
-                st.error(f"No hay conexión con Yahoo Finance para {ticker}. Inténtalo en unos segundos.")
+                st.warning(f"IA no disponible: {err}")

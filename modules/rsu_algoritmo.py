@@ -1,4 +1,5 @@
 import streamlit as st
-def show():
+
+def render():
     st.title("🤖 RSU Algoritmo")
-    st.write("Contenido en desarrollo...")
+    st.write("Cálculo de optimización para la venta de Restricted Stock Units.")

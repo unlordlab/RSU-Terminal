@@ -5,6 +5,13 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
+# --- CREDENCIALES DE ALPACA (EXTRAÍDAS DE TU TXT) ---
+ALPACA_API_KEY = "PK5F3ZYQ5V5OMMN2XWUB64GB4Q"
+ALPACA_SECRET_KEY = "5BsiRC9kqEoi3wWahzKJrLdgGWPvP5vy3gSySSBbitWC"
+ALPACA_BASE_URL = "https://paper-api.alpaca.markets/v2"
+# URL para WebSockets (Market Data)
+ALPACA_WS_URL = "wss://stream.data.alpaca.markets/v2/iex"
+
 # Configuración de página única (se llama una sola vez)
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
@@ -58,6 +65,19 @@ def set_style():
         .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
         
         .prompt-container { background-color: #1a1e26; border-left: 5px solid #2962ff; padding: 20px; border-radius: 5px; white-space: pre-wrap; }
+        
+        /* Estilos específicos para el Semáforo RSU */
+        .semaforo-luz {
+            height: 50px;
+            width: 50px;
+            border-radius: 50%;
+            margin: 10px auto;
+            opacity: 0.2;
+        }
+        .luz-roja { background-color: #ff4b4b; box-shadow: 0 0 20px #ff4b4b; }
+        .luz-ambar { background-color: #ffaa00; box-shadow: 0 0 20px #ffaa00; }
+        .luz-verde { background-color: #00ffad; box-shadow: 0 0 20px #00ffad; }
+        .luz-on { opacity: 1.0; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -69,7 +89,6 @@ def get_market_index(ticker_symbol):
         if not hist.empty and len(hist) >= 2:
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
-            # Intentar obtener precio más reciente si el mercado está abierto
             try:
                 live = t.fast_info.last_price
                 if live: current = live
@@ -104,4 +123,3 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
-

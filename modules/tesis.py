@@ -6,24 +6,37 @@ def render():
     st.markdown('<h2 style="color: #00ffad;">📄 Tesis de Inversión</h2>', unsafe_allow_html=True)
 
     try:
-        # Cargamos el índice (el Sheet con los links a los Docs)
+        # 1. Cargar el índice desde tus secrets
         url_indice = st.secrets["URL_TESIS"]
-        df = pd.read_csv(url_indice)
         
-        sel = st.selectbox("Selecciona un activo:", df['Ticker'].tolist())
+        @st.cache_data(ttl=600)
+        def load_index(url):
+            return pd.read_csv(url)
+            
+        df = load_index(url_indice)
+        
+        # 2. Selector de Activo
+        sel = st.selectbox("Selecciona un activo para ver el análisis:", df['Ticker'].tolist())
         data = df[df['Ticker'] == sel].iloc[0]
 
-        # 1. Imagen de Encabezado (Opcional, si no está ya en el Doc)
-        if pd.notna(data['Imagen_Encabezado']):
-            st.image(data['Imagen_Encabezado'], use_container_width=True)
+        # 3. Encabezado rápido (Rating y Target)
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"### {data['Nombre']}")
+        with col2:
+            st.metric("Rating", data['Rating'])
+        with col3:
+            st.metric("Target", f"${data['Precio_Objetivo']}")
 
-        # 2. Datos Rápidos
-        st.markdown(f"### {data['Nombre']} | Rating: {data['Rating']}")
         st.divider()
 
-        # 3. Mostrar el Google Doc (iframe)
-        # Ajustamos la altura (height) para que sea cómodo de leer
-        components.iframe(data['URL_Doc'], height=800, scrolling=True)
+        # 4. Mostrar el Google Doc
+        # Usamos la URL que pasaste (la de /pub)
+        url_doc = data['URL_Doc']
+        
+        # El componente iframe permite insertar el documento directamente
+        components.iframe(url_doc, height=900, scrolling=True)
 
     except Exception as e:
-        st.error("Error al cargar el índice de tesis.")
+        st.warning("⚠️ Configura el índice de tesis correctamente.")
+        st.info("Asegúrate de que tu Google Sheet tenga una columna llamada 'URL_Doc' con el enlace que me acabas de pasar.")

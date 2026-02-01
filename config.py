@@ -1,4 +1,6 @@
 # config.py
+import os
+import time
 import streamlit as st
 import google.generativeai as genai
 import requests
@@ -106,7 +108,33 @@ def get_cnn_fear_greed():
         val = soup.find("span", class_="market-fng-gauge__dial-number-value")
         return int(val.text.strip()) if val else 50
     except: return 50
+        
+# contador personas
 
+def actualizar_contador_usuarios():
+    # Creamos una carpeta para sesiones si no existe
+    if not os.path.exists("sessions"):
+        os.makedirs("sessions")
+    
+    # El ID de sesión de Streamlit es único por pestaña/usuario
+    session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+    session_file = f"sessions/{session_id}"
+    
+    # Creamos/Actualizamos el archivo de la sesión con el timestamp actual
+    with open(session_file, "w") as f:
+        f.write(str(time.time()))
+    
+    # Limpiamos sesiones inactivas (más de 30 segundos sin refrescar)
+    count = 0
+    ahora = time.time()
+    for f in os.listdir("sessions"):
+        f_path = os.path.join("sessions", f)
+        if ahora - os.path.getmtime(f_path) > 30:
+            os.remove(f_path)
+        else:
+            count += 1
+    return count
+    
 # --- FUNCIONES PARA OTROS MÓDULOS ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
@@ -123,3 +151,4 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
+

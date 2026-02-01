@@ -7,7 +7,7 @@ beautifulsoup4
 pandas
 pyyaml
 pandas_ta
-alpha_vantage
+alpaca-py
 
 
 

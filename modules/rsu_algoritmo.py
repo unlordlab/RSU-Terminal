@@ -2,107 +2,87 @@
 import streamlit as st
 import pandas as pd
 import pandas_ta as ta
-import plotly.express as px
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockLatestBarRequest
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY
+import yfinance as yf
 
 class RSUAlgoritmo:
     def __init__(self):
-        self.df = pd.DataFrame(columns=['close', 'volume'])
         self.estado_actual = "CALIBRANDO"
-        self.puntos_necesarios = 20 # Mínimo para RSI estable
 
-    def procesar_dato(self, precio, volumen):
-        nuevo_dato = pd.DataFrame([{'close': precio, 'volume': volumen}])
-        self.df = pd.concat([self.df, nuevo_dato], ignore_index=True)
-        
-        if len(self.df) > 300:
-            self.df = self.df.iloc[-300:].reset_index(drop=True)
+    def obtener_rsi_semanal(self):
+        try:
+            # Descargamos datos semanales del SPY (últimos 2 años para asegurar el RSI)
+            ticker = yf.Ticker("SPY")
+            df = ticker.history(interval="1wk", period="2y")
             
-        if len(self.df) < self.puntos_necesarios:
-            return "CALIBRANDO"
+            if df.empty or len(df) < 14:
+                return None, None
             
-        return self.calcular_logica()
+            # Calculamos RSI de 14 periodos sobre el cierre semanal
+            df['rsi'] = ta.rsi(df['Close'], length=14)
+            rsi_actual = df['rsi'].iloc[-1]
+            precio_actual = df['Close'].iloc[-1]
+            
+            return rsi_actual, precio_actual
+        except:
+            return None, None
 
-    def calcular_logica(self):
-        # Cálculos Técnicos
-        self.df['rsi'] = ta.rsi(self.df['close'], length=14)
-        rsi_actual = self.df['rsi'].iloc[-1]
-        sma_200 = self.df['close'].rolling(window=min(len(self.df), 200)).mean().iloc[-1]
-        precio_actual = self.df['close'].iloc[-1]
-        
-        # Lógica CHoCH (Ruptura de máximo de 5 velas)
-        max_reciente = self.df['close'].iloc[-6:-1].max()
-        choch_alcista = precio_actual > max_reciente
-
-        # Determinación de color
-        if precio_actual > sma_200 and rsi_actual > 35 and choch_alcista:
-            self.estado_actual = "VERDE"
-        elif rsi_actual < 35:
-            self.estado_actual = "AMBAR"
-        elif precio_actual < sma_200 or rsi_actual > 70:
-            self.estado_actual = "ROJO"
-        
-        return self.estado_actual
+    def calcular_color(self, rsi):
+        # Lógica solicitada:
+        # < 30 (Sobreventa) -> VERDE
+        # 30 - 70 -> AMBAR
+        # > 70 (Sobrecompra) -> ROJO
+        if rsi < 30:
+            return "VERDE"
+        elif rsi > 70:
+            return "ROJO"
+        else:
+            return "AMBAR"
 
 def render():
     st.title("🤖 RSU ALGORITMO - SEMÁFORO")
+    st.info("Estrategia basada exclusivamente en el RSI Semanal del S&P 500 (SPY).")
     
-    try:
-        # Cliente de Datos Alpaca
-        client = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)
-        request_params = StockLatestBarRequest(symbol_or_symbols="SPY")
-        latest_bar = client.get_stock_latest_bar(request_params)
+    # Usamos el motor de la sesión
+    engine = st.session_state.algoritmo_engine
+    
+    with st.spinner('Calculando RSI Semanal...'):
+        rsi_semanal, precio = engine.obtener_rsi_semanal()
         
-        precio = latest_bar["SPY"].close
-        volumen = latest_bar["SPY"].volume
+    if rsi_semanal is not None:
+        estado = engine.calcular_color(rsi_semanal)
         
-        # Procesar dato en el motor de sesión
-        engine = st.session_state.algoritmo_engine
-        estado = engine.procesar_dato(precio, volumen)
-        
-        # --- UI: BARRA DE PROGRESO DE CALIBRACIÓN ---
-        puntos_actuales = len(engine.df)
-        if estado == "CALIBRANDO":
-            progreso = puntos_actuales / engine.puntos_necesarios
-            st.write(f"⚙️ Calibrando motor: {puntos_actuales}/{engine.puntos_necesarios} datos")
-            st.progress(min(progreso, 1.0))
-        
-        # --- UI: SEMÁFORO ---
+        # Lógica de luces para el HTML
         luz_r = "luz-on" if estado == "ROJO" else ""
         luz_a = "luz-on" if estado == "AMBAR" else ""
         luz_v = "luz-on" if estado == "VERDE" else ""
 
         st.markdown(f"""
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; background: #11141a; border-radius: 20px; border: 1px solid #2962ff; margin-bottom: 25px;">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background: #11141a; border-radius: 20px; border: 1px solid #2962ff;">
                 <div style="display: flex; gap: 30px;">
-                    <div class="semaforo-luz luz-roja {luz_r}" style="width: 70px; height: 70px;"></div>
-                    <div class="semaforo-luz luz-ambar {luz_a}" style="width: 70px; height: 70px;"></div>
-                    <div class="semaforo-luz luz-verde {luz_v}" style="width: 70px; height: 70px;"></div>
+                    <div class="semaforo-luz luz-roja {luz_r}" style="width: 80px; height: 80px;"></div>
+                    <div class="semaforo-luz luz-ambar {luz_a}" style="width: 80px; height: 80px;"></div>
+                    <div class="semaforo-luz luz-verde {luz_v}" style="width: 80px; height: 80px;"></div>
                 </div>
-                <div style="margin-top: 25px; text-align: center;">
-                    <h1 style="color: white; font-size: 42px; margin: 0;">{estado}</h1>
-                    <p style="color: #00ffad; font-size: 20px; font-weight: bold; margin-top: 5px;">${precio:.2f}</p>
+                <div style="margin-top: 30px; text-align: center;">
+                    <h1 style="color: white; font-size: 48px; margin: 0;">{estado}</h1>
+                    <p style="color: #888; font-size: 18px; margin-top: 10px;">
+                        RSI Semanal: <span style="color:#2962ff;">{rsi_semanal:.2f}</span> | Precio: ${precio:.2f}
+                    </p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # --- UI: GRÁFICA DE MONITOREO ---
-        if puntos_actuales > 1:
-            fig = px.line(engine.df, y="close", title="Seguimiento de Precio (Tick-by-Tick)",
-                         color_discrete_sequence=["#2962ff"])
-            fig.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font_color="white",
-                height=300,
-                margin=dict(l=0, r=0, t=30, b=0)
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        # Comparativa visual
+        st.write("---")
+        st.write("**Parámetros de la estrategia:**")
+        col1, col2, col3 = st.columns(3)
+        col1.error("🔴 RSI > 70: Riesgo Alto")
+        col2.warning("🟡 RSI 30-70: Neutral")
+        col3.success("🟢 RSI < 30: Oportunidad")
+        
+    else:
+        st.error("No se pudieron recuperar los datos de Yahoo Finance. Reintenta en unos instantes.")
 
-        if st.button("🔄 Forzar Tick"):
-            st.rerun()
+    if st.button("🔄 Forzar Recálculo"):
+        st.rerun()
 
-    except Exception as e:
-        st.error(f"Error en la señal: {e}")

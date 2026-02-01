@@ -1,4 +1,5 @@
 import streamlit as st
-def show():
+
+def render():
     st.title("🇺🇸 Trump Playbook")
-    st.write("Contenido en desarrollo...")
+    st.write("Análisis de sectores beneficiados por políticas fiscales y arancelarias.")

@@ -7,14 +7,13 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# --- CREDENCIALES DE ALPACA (EXTRAÍDAS DE TU TXT) ---
+# --- CREDENCIALES DE ALPACA ---
 ALPACA_API_KEY = "PK5F3ZYQ5V5OMMN2XWUB64GB4Q"
 ALPACA_SECRET_KEY = "5BsiRC9kqEoi3wWahzKJrLdgGWPvP5vy3gSySSBbitWC"
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets/v2"
-# URL para WebSockets (Market Data)
 ALPACA_WS_URL = "wss://stream.data.alpaca.markets/v2/iex"
 
-# Configuración de página única (se llama una sola vez)
+# Configuración de página única
 if 'page_config_set' not in st.session_state:
     st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
     st.session_state.page_config_set = True
@@ -24,62 +23,13 @@ def set_style():
         <style>
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
-        
-        /* Contenedores del Dashboard */
-        .group-container {
-            background-color: #11141a; 
-            border: 1px solid #2d3439;
-            border-radius: 12px; 
-            padding: 0px; 
-            height: 100%;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
-        
-        /* Cabecera con título DENTRO de la caja */
-        .group-header {
-            background-color: #1a1e26;
-            padding: 12px 20px;
-            border-bottom: 1px solid #2d3439;
-        }
-        
-        .group-title { 
-            color: #888; 
-            font-size: 12px; 
-            font-weight: bold; 
-            text-transform: uppercase; 
-            letter-spacing: 1px;
-            margin: 0 !important;
-        }
-
+        .group-container { background-color: #11141a; border: 1px solid #2d3439; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+        .group-header { background-color: #1a1e26; padding: 12px 20px; border-bottom: 1px solid #2d3439; }
+        .group-title { color: #888; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 !important; }
         .group-content { padding: 20px; }
-
-        /* Tarjetas de Índices */
-        .index-card {
-            background-color: #1a1e26; border: 1px solid #2d3439; border-radius: 8px;
-            padding: 12px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
-        }
-        .index-ticker { color: white; font-weight: bold; font-size: 14px; margin: 0; }
-        .index-fullname { color: #555; font-size: 10px; margin: 0; text-transform: uppercase; }
-        .index-price { font-weight: bold; font-size: 16px; color: white; margin: 0; }
-        .index-delta { font-size: 11px; border-radius: 4px; padding: 2px 6px; font-weight: bold; }
+        .index-card { background-color: #1a1e26; border: 1px solid #2d3439; border-radius: 8px; padding: 12px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .pos { background-color: rgba(0, 255, 173, 0.1); color: #00ffad; }
         .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
-        
-        .prompt-container { background-color: #1a1e26; border-left: 5px solid #2962ff; padding: 20px; border-radius: 5px; white-space: pre-wrap; }
-        
-        /* Estilos específicos para el Semáforo RSU */
-        .semaforo-luz {
-            height: 50px;
-            width: 50px;
-            border-radius: 50%;
-            margin: 10px auto;
-            opacity: 0.2;
-        }
-        .luz-roja { background-color: #ff4b4b; box-shadow: 0 0 20px #ff4b4b; }
-        .luz-ambar { background-color: #ffaa00; box-shadow: 0 0 20px #ffaa00; }
-        .luz-verde { background-color: #00ffad; box-shadow: 0 0 20px #00ffad; }
-        .luz-on { opacity: 1.0; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -91,10 +41,6 @@ def get_market_index(ticker_symbol):
         if not hist.empty and len(hist) >= 2:
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
-            try:
-                live = t.fast_info.last_price
-                if live: current = live
-            except: pass
             change = ((current - prev) / prev) * 100
             return current, change
         return 0.0, 0.0
@@ -108,54 +54,45 @@ def get_cnn_fear_greed():
         val = soup.find("span", class_="market-fng-gauge__dial-number-value")
         return int(val.text.strip()) if val else 50
     except: return 50
-        
-# contador personas
 
 def actualizar_contador_usuarios():
-    # Creamos una carpeta para sesiones si no existe
-    if not os.path.exists("sessions"):
-        os.makedirs("sessions")
-    
-    # El ID de sesión de Streamlit es único por pestaña/usuario
+    if not os.path.exists("sessions"): os.makedirs("sessions")
     session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
     session_file = f"sessions/{session_id}"
-    
-    # Creamos/Actualizamos el archivo de la sesión con el timestamp actual
-    with open(session_file, "w") as f:
-        f.write(str(time.time()))
-    
-    # Limpiamos sesiones inactivas (más de 30 segundos sin refrescar)
+    with open(session_file, "w") as f: f.write(str(time.time()))
     count = 0
     ahora = time.time()
     for f in os.listdir("sessions"):
         f_path = os.path.join("sessions", f)
-        if ahora - os.path.getmtime(f_path) > 30:
-            os.remove(f_path)
-        else:
-            count += 1
+        if ahora - os.path.getmtime(f_path) > 30: os.remove(f_path)
+        else: count += 1
     return count
-    
-# --- FUNCIONES PARA OTROS MÓDULOS ---
+
+# --- MEJORA SISTEMA DE IA ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource
 def get_ia_model():
+    """Busca el modelo disponible para evitar el error 404."""
     if not API_KEY: return None, None, "API Key missing"
     genai.configure(api_key=API_KEY)
     
-    # Mejora: Sistema de reintentos con diferentes nombres de modelo para evitar error 404
-    modelos_a_probar = ['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro']
+    # Lista de modelos en orden de preferencia
+    modelos_disponibles = [
+        'gemini-1.5-flash',       # Versión estándar
+        'gemini-1.5-flash-latest',# Versión más nueva
+        'gemini-pro'              # Versión estable anterior
+    ]
     
-    for nombre_modelo in modelos_a_probar:
+    for nombre in modelos_disponibles:
         try:
-            model = genai.GenerativeModel(nombre_modelo)
-            # Validamos el modelo con una llamada mínima si es necesario, 
-            # pero normalmente inicializarlo es suficiente.
-            return model, f"Google {nombre_modelo}", None
+            model = genai.GenerativeModel(nombre)
+            # Prueba rápida de inicialización
+            return model, nombre, None
         except Exception:
             continue
             
-    return None, None, "No se pudo cargar ningún modelo compatible de Gemini"
+    return None, None, "No se encontró ningún modelo Gemini compatible."
 
 @st.cache_data(ttl=600)
 def obtener_prompt_github():

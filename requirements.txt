@@ -7,6 +7,10 @@ beautifulsoup4
 pandas
 pyyaml
 pandas_ta
+alpaca-trade-api
+alpha_vantage
+
+
 
 
 

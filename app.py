@@ -112,7 +112,7 @@ with st.sidebar:
 
     st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
 
-    st.markdown("**Legend:**")
+    st.markdown("**Sentimiento:**")
     legend_items = [
         ("#d32f2f", "Extreme Fear (0-25)"),
         ("#f57c00", "Fear (25-45)"),
@@ -161,5 +161,6 @@ elif menu == "🇺🇸 TRUMP PLAYBOOK":
 
 elif menu == "🎓 ACADEMY":
     academy.render()
+
 
 

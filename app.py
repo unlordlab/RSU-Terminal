@@ -15,14 +15,10 @@ import modules.trade_grader as trade_grader
 import modules.academy as academy
 
 # --- IMPORTACIÓN DE NUEVOS MÓDULOS ---
-try:
-    import modules.spxl_strategy as spxl_strategy
-    import modules.roadmap_2026 as roadmap_2026
-    import modules.trump_playbook as trump_playbook
-    import modules.rsu_algoritmo as rsu_algoritmo
-    NUEVOS_MODULOS_OK = True
-except ImportError:
-    NUEVOS_MODULOS_OK = False
+import modules.spxl_strategy as spxl_strategy
+import modules.roadmap_2026 as roadmap_2026
+import modules.trump_playbook as trump_playbook
+import modules.rsu_algoritmo as rsu_algoritmo
 
 set_style()
 
@@ -33,15 +29,14 @@ with st.sidebar:
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
 
-    # Menú actualizado con las nuevas secciones insertadas
     menu = st.radio(
         "",
         [
             "📊 DASHBOARD",
-            "📈 ESTRATEGIA SPXL",  # Nueva
-            "🗺️ 2026 ROADMAP",     # Nueva
-            "🇺🇸 TRUMP PLAYBOOK",   # Nueva
-            "🤖 RSU ALGORITMO",    # Nueva
+            "📈 ESTRATEGIA SPXL",
+            "🗺️ 2026 ROADMAP",
+            "🇺🇸 TRUMP PLAYBOOK",
+            "🤖 RSU ALGORITMO",
             "🤖 IA REPORT",
             "💼 CARTERA",
             "📄 TESIS",
@@ -55,7 +50,6 @@ with st.sidebar:
 
     fng = get_cnn_fear_greed()
     
-    # Tu código original del Gauge (respetado al máximo)
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=fng,
@@ -135,7 +129,7 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
-# --- LÓGICA DE NAVEGACIÓN (Usando .render() para compatibilidad) ---
+# --- NAVEGACIÓN CORREGIDA ---
 if menu == "📊 DASHBOARD":
     market.render()
 elif menu == "📈 ESTRATEGIA SPXL":

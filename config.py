@@ -67,19 +67,6 @@ def set_style():
         .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
         
         .prompt-container { background-color: #1a1e26; border-left: 5px solid #2962ff; padding: 20px; border-radius: 5px; white-space: pre-wrap; }
-        
-        /* Estilos específicos para el Semáforo RSU */
-        .semaforo-luz {
-            height: 50px;
-            width: 50px;
-            border-radius: 50%;
-            margin: 10px auto;
-            opacity: 0.2;
-        }
-        .luz-roja { background-color: #ff4b4b; box-shadow: 0 0 20px #ff4b4b; }
-        .luz-ambar { background-color: #ffaa00; box-shadow: 0 0 20px #ffaa00; }
-        .luz-verde { background-color: #00ffad; box-shadow: 0 0 20px #00ffad; }
-        .luz-on { opacity: 1.0; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -126,33 +113,44 @@ def actualizar_contador_usuarios():
             count += 1
     return count
     
-# --- MEJORA: SISTEMA DE IA CON FALLBACK ---
+# --- MEJORA DEFINITIVA: DETECCIÓN DE MODELO ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 @st.cache_resource
 def get_ia_model():
-    """Busca el modelo disponible para evitar el error 404 de API version."""
+    """Consulta la lista de modelos permitidos para evitar el error 404."""
     if not API_KEY: 
         return None, None, "API Key missing"
     
     genai.configure(api_key=API_KEY)
     
-    # Lista de nombres de modelos a probar por prioridad
-    modelos_a_probar = [
-        'gemini-1.5-flash',
-        'gemini-1.5-pro',
-        'gemini-pro'
-    ]
-    
-    for nombre in modelos_a_probar:
+    try:
+        # Listamos modelos y buscamos uno que soporte generación de contenido
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        if not available_models:
+            return None, None, "No models available for this API Key"
+
+        # Prioridad: 1.5-flash, luego 1.5-pro, luego el primero de la lista
+        target_model = ""
+        for m in available_models:
+            if "gemini-1.5-flash" in m:
+                target_model = m
+                break
+        
+        if not target_model:
+            target_model = available_models[0] # Usar cualquiera disponible
+
+        model = genai.GenerativeModel(target_model)
+        return model, target_model, None
+
+    except Exception as e:
+        # Fallback manual por si list_models() falla (algunas restricciones de API)
         try:
-            model = genai.GenerativeModel(nombre)
-            # Retornamos el primero que no de error al inicializarse
-            return model, nombre, None
-        except Exception:
-            continue
-            
-    return None, None, "No se encontró ningún modelo Gemini compatible."
+            model = genai.GenerativeModel('gemini-pro')
+            return model, "gemini-pro", None
+        except:
+            return None, None, f"Error detectando modelos: {str(e)}"
 
 @st.cache_data(ttl=600)
 def obtener_prompt_github():

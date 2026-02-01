@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import streamlit.components.v1 as components
+import os
 
 def render():
     st.title("📈 ESTRATEGIA COMERCIAL SPXL")
@@ -19,6 +20,20 @@ def render():
         * **Salida:** Venta total al alcanzar un **+20%** de beneficio sobre el precio medio.
         * **Seguridad:** Uso de spreads de crédito (CDS) como freno de emergencia ante crisis sistémicas.
         """)
+        
+        # --- BOTÓN DE DESCARGA PDF ---
+        pdf_path = "assets/spxl.pdf"
+        if os.path.exists(pdf_path):
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+            st.download_button(
+                label="📄 Descargar Estrategia Completa (PDF)",
+                data=pdf_bytes,
+                file_name="https://github.com/unlordlab/RSU-Terminal/blob/74b32fab73f5a82571d704aeb51d36350681ba58/assets/SPXL.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.error("Archivo PDF no encontrado en la ruta assets/spxl.pdf")
 
     # --- DATOS DE MERCADO EN TIEMPO REAL ---
     try:
@@ -110,3 +125,7 @@ def render():
     """
     components.html(tv_widget_html, height=420)
     st.warning("Si el gráfico anterior muestra un pico vertical brusco hacia 10.7, detén las compras aunque el precio caiga.")
+
+# Para ejecutar la función si el script se corre directamente
+if __name__ == "__main__":
+    render()

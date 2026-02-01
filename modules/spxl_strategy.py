@@ -5,12 +5,24 @@ import streamlit.components.v1 as components
 
 def render():
     st.title("📈 ESTRATEGIA COMERCIAL SPXL")
-    st.caption("Terminal RSU - Gestión de Compras Escaladas")
+    st.caption("Terminal RSU - Gestión de Compras Escaladas y Riesgo de Crédito")
 
-    # --- DATOS DE MERCADO ---
+    # --- DESCRIPCIÓN DE LA ESTRATEGIA ---
+    with st.expander("📖 Descripción de la Estrategia", expanded=False):
+        st.markdown("""
+        **Filosofía:** Esta estrategia busca capitalizar las correcciones del mercado utilizando el ETF apalancado **SPXL** (3x S&P 500). 
+        En lugar de adivinar el suelo, se realizan compras promediadas en niveles de caída específicos.
+        
+        **Puntos Clave:**
+        * **Entradas:** Se activan al caer un 15%, 10%, 7% y 10% respectivamente.
+        * **Salida:** Objetivo de beneficio del **+20%** sobre el precio medio.
+        * **Freno de Seguridad:** Si los diferenciales de crédito (CDS) se disparan, se detiene la operativa para evitar "cisnes negros" o crisis sistémicas.
+        """)
+
+    # --- DATOS DE MERCADO EN TIEMPO REAL ---
     try:
-        ticker = "SPXL"
-        data = yf.Ticker(ticker)
+        ticker_symbol = "SPXL"
+        data = yf.Ticker(ticker_symbol)
         hist = data.history(period="1y")
         if not hist.empty:
             precio_actual = hist['Close'].iloc[-1]
@@ -21,72 +33,69 @@ def render():
     except:
         precio_actual, max_periodo, caida_desde_max = 0, 0, 0
 
-    # --- CALCULADORA Y GESTIÓN DE POSICIÓN ---
-    col_input, col_metrics = st.columns([1, 1.5])
-
-    with col_input:
-        st.subheader("📝 Gestión de Capital")
-        capital_total = st.number_input("Capital total para SPXL ($):", value=10000, step=500)
-        precio_medio = st.number_input("Tu precio medio actual ($):", value=0.0, step=0.1)
-        
-        if precio_medio > 0:
-            target_venta = precio_medio * 1.20
-            st.success(f"🎯 **Venta (+20%): ${target_venta:.2f}**")
-
-    with col_metrics:
-        st.subheader("📊 Estado del Mercado")
-        m1, m2 = st.columns(2)
-        m1.metric("Precio Actual", f"${precio_actual:.2f}")
-        m2.metric("Máximo Anual", f"${max_periodo:.2f}")
-        
-        if caida_desde_max <= -15:
-            st.error(f"🚨 ALERTA: Caída del {caida_desde_max:.2f}%")
+    # --- SECCIÓN DE POSICIÓN ABIERTA ---
+    st.subheader("🛒 Tu Posición Actual")
+    col_pos1, col_pos2 = st.columns(2)
+    
+    with col_pos1:
+        tiene_posicion = st.checkbox("¿Tienes una posición abierta actualmente?")
+        capital_total = st.number_input("Capital total destinado a esta estrategia ($):", value=10000, step=500)
+    
+    with col_pos2:
+        if tiene_posicion:
+            precio_medio = st.number_input("Tu precio medio de compra ($):", value=0.0, step=0.1)
+            fase_actual = st.selectbox("¿En qué fase de compra te encuentras?", ["1ª Compra", "2ª Compra", "3ª Compra", "4ª Compra"])
         else:
-            st.info(f"Distancia al máximo: {caida_desde_max:.2f}%")
+            precio_medio = 0.0
 
+    # --- ALERTAS DE COMPRA Y VENTA ---
     st.write("---")
-
-    # --- REGLAS DE COMPRA ---
-    st.subheader("🪜 Plan de Ejecución")
+    if tiene_posicion and precio_medio > 0:
+        target_venta = precio_medio * 1.20
+        rendimiento = ((precio_actual - precio_medio) / precio_medio) * 100
+        
+        st.subheader("🔔 Señales de Venta")
+        if precio_actual >= target_venta:
+            st.balloons()
+            st.success(f"🎯 **SEÑAL DE VENTA ACTIVA:** El precio (${precio_actual:.2f}) ha alcanzado el objetivo del +20% (${target_venta:.2f}).")
+        else:
+            st.info(f"Rendimiento actual: **{rendimiento:.2f}%**. Objetivo de venta en: **${target_venta:.2f}**")
     
+    # Alerta de Compra
+    if caida_desde_max <= -15:
+        st.error(f"🚨 **SEÑAL DE COMPRA ACTIVA:** SPXL ha caído un {caida_desde_max:.2f}% desde máximos.")
+
+    # --- TABLA DE REGLAS ---
+    st.subheader("🪜 Plan de Ejecución Basado en Reglas")
     fases = [
-        {"Fase": "1ª Compra", "Trigger": "-15% desde Máx", "Precio Ref": max_periodo * 0.85, "Capital": "20%", "Monto": capital_total * 0.20},
-        {"Fase": "2ª Compra", "Trigger": "-10% desde 1ª", "Precio Ref": (max_periodo * 0.85) * 0.90, "Capital": "15%", "Monto": capital_total * 0.15},
-        {"Fase": "3ª Compra", "Trigger": "-7% desde 2ª", "Precio Ref": ((max_periodo * 0.85) * 0.90) * 0.93, "Capital": "20%", "Monto": capital_total * 0.20},
-        {"Fase": "4ª Compra", "Trigger": "-10% desde 3ª", "Precio Ref": (((max_periodo * 0.85) * 0.90) * 0.93) * 0.90, "Capital": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "1ª Compra", "Trigger": "-15% desde Máx", "Precio Objetivo": max_periodo * 0.85, "Capital": "20%", "Inversión": capital_total * 0.20},
+        {"Fase": "2ª Compra", "Trigger": "-10% desde 1ª", "Precio Objetivo": (max_periodo * 0.85) * 0.90, "Capital": "15%", "Inversión": capital_total * 0.15},
+        {"Fase": "3ª Compra", "Trigger": "-7% desde 2ª", "Precio Objetivo": ((max_periodo * 0.85) * 0.90) * 0.93, "Capital": "20%", "Inversión": capital_total * 0.20},
+        {"Fase": "4ª Compra", "Trigger": "-10% desde 3ª", "Precio Objetivo": (((max_periodo * 0.85) * 0.90) * 0.93) * 0.90, "Capital": "20%", "Inversión": capital_total * 0.20},
     ]
-    
-    df_fases = pd.DataFrame(fases)
-    st.table(df_fases.style.format({"Precio Ref": "{:.2f}$", "Monto": "{:,.2f}$"}))
-    st.caption(f"💰 Reserva de Efectivo (25%): ${(capital_total * 0.25):,.2f}")
+    st.table(pd.DataFrame(fases).style.format({"Precio Objetivo": "{:.2f}$", "Inversión": "{:,.2f}$"}))
 
-    # --- WIDGET TRADINGVIEW (CDS) ---
+    # --- RIESGO SISTÉMICO (CDS corregido) ---
     st.write("---")
-    st.subheader("🚨 Monitor de Riesgo (CDS - BAMLHOA0HYM2)")
+    st.subheader("🚨 Monitor de Riesgo (BAMLH0A0HYM2)")
+    st.caption("Si este spread supera los 10.7, no se ejecutan más compras (Pánico detectado).")
     
-    # Widget insertado mediante Iframe directo de TradingView
-    tv_widget_html = """
+    tv_widget_html = f"""
     <div class="tradingview-widget-container">
       <div id="tradingview_chart"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
-      new TradingView.widget({
+      new TradingView.widget({{
         "width": "100%",
         "height": 400,
-        "symbol": "FRED:BAMLHOA0HYM2",
+        "symbol": "FRED:BAMLH0A0HYM2",
         "interval": "D",
-        "timezone": "Etc/UTC",
         "theme": "dark",
         "style": "1",
         "locale": "es",
-        "toolbar_bg": "#f1f3f6",
-        "enable_publishing": false,
-        "allow_symbol_change": true,
         "container_id": "tradingview_chart"
-      });
+      }});
       </script>
     </div>
     """
     components.html(tv_widget_html, height=420)
-
-    st.warning("⚠️ **Regla de Seguridad:** Si el gráfico anterior supera **10.7**, detén las compras.")

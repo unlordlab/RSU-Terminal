@@ -22,7 +22,7 @@ def render():
         """)
         
         # --- BOTÓN DE DESCARGA PDF ---
-        pdf_path = "assets/spxl.pdf"
+        pdf_path = "assets/SPXL.pdf"
         if os.path.exists(pdf_path):
             with open(pdf_path, "rb") as f:
                 pdf_bytes = f.read()
@@ -129,6 +129,7 @@ def render():
 # Para ejecutar la función si el script se corre directamente
 if __name__ == "__main__":
     render()
+
 
 
 

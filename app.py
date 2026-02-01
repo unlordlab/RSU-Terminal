@@ -35,6 +35,20 @@ if 'algoritmo_engine' not in st.session_state:
 with st.sidebar:
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
+        
+with st.sidebar:
+    if os.path.exists("assets/logo.png"):
+        st.image("assets/logo.png", width=150)
+    
+    # --- CONTADOR DE USUARIOS ---
+    usuarios_activos = actualizar_contador_usuarios()
+    st.markdown(f"""
+        <div style="text-align:center; padding:10px; background-color:#1a1e26; border-radius:10px; border:1px solid #2962ff; margin-bottom:20px;">
+            <span style="color:#00ffad; font-weight:bold; font-size:20px;">● {usuarios_activos}</span>
+            <span style="color:#888; font-size:12px; margin-left:5px;">USUARIOS ONLINE</span>
+        </div>
+    """, unsafe_allow_html=True)
+    # ----------------------------
 
     menu = st.radio(
         "",
@@ -163,3 +177,4 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.render()
 elif menu == "🎥 ACADEMY":
     academy.render()
+

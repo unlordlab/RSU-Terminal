@@ -2,116 +2,118 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-import time
 
 class RSRWEngine:
     def __init__(self):
         self.benchmark = "SPY"
 
     def get_sp500_tickers(self):
-        # Lista estática de los principales activos para evitar bloqueos de Wikipedia
-        # He incluido una lista representativa amplia. 
-        # En una app pro, se puede cargar desde un CSV local.
+        # Lista de alta liquidez para evitar errores de conexión masiva
         return [
-            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "GOOG", "META", "TSLA", "BRK-B", "UNH",
-            "JNJ", "XOM", "JPM", "V", "PG", "MA", "AVGO", "HD", "CVX", "LLY", "ABBV",
-            "MRK", "COST", "PEP", "ADBE", "WMT", "KO", "CSCO", "TMO", "MCD", "CRM",
-            "PFE", "BAC", "ACN", "NFLX", "LIN", "ORCL", "AMD", "ABT", "DHR", "DIS",
-            "TXN", "RTX", "NEST", "PM", "CAT", "INTC", "UNP", "INTU", "LOW", "AMAT",
-            "IBM", "HON", "GE", "AXP", "AMGN", "T", "COP", "SBUX", "DE", "LMT",
-            "BA", "GS", "SPGI", "PLD", "MDLZ", "SYK", "GILD", "BLK", "ADI", "TJX",
-            "ISRG", "VRTX", "AMT", "CB", "MMC", "CVS", "NOW", "EL", "CI", "BMY",
-            "ADP", "MDT", "MU", "SCHW", "ZTS", "MO", "LRCX", "DUK", "PGR", "ITW",
-            "BDX", "BSX", "C", "SLB", "EOG", "TGT", "CL", "WM", "HUM", "SO",
-            "AON", "MPC", "ORLY", "MCO", "EMR", "ICE", "ETN", "CSX", "MCK", "NSC",
-            "MAR", "FDX", "ROP", "PSX", "ADSK", "PH", "APH", "MSI", "ECL", "SNPS",
-            "GD", "HCA", "AIG", "MDT", "MET", "TRV", "PCAR", "D", "KMB", "SRE",
-            "STZ", "A", "O", "CTAS", "VLO", "DOW", "PAYX", "JCI", "KDP", "TEL",
-            "EW", "IQV", "ALGN", "PRU", "IDXX", "CNC", "HES", "DXCM", "KMI", "DLR"
-            # Puedes añadir los 500 aquí si lo deseas, pero con estos 150 ya cubres el 80% del movimiento del SP500
+            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA", "BRK-B", "UNH", "JNJ",
+            "XOM", "JPM", "V", "PG", "MA", "AVGO", "HD", "CVX", "LLY", "ABBV", "MRK", 
+            "COST", "PEP", "ADBE", "WMT", "KO", "CSCO", "TMO", "MCD", "CRM", "BAC", 
+            "NFLX", "ORCL", "AMD", "ABT", "DIS", "TXN", "PM", "CAT", "INTC", "UNP", 
+            "IBM", "HON", "GE", "SBUX", "DE", "LMT", "BA", "GS", "BLK", "ADI", "TJX",
+            "MU", "SCHW", "LRCX", "TGT", "CL", "WM", "ETN", "MAR", "FDX", "ORLY", "PH"
         ]
 
     def scan_market(self, tickers, period_days=30):
         all_symbols = tickers + [self.benchmark]
-        
-        # Intentar descarga masiva
         try:
-            data = yf.download(all_symbols, period=f"{period_days+50}d", interval="1d", progress=False, threads=True)
+            # Descarga de datos
+            data = yf.download(all_symbols, period=f"{period_days+40}d", interval="1d", progress=False)
             
-            if data.empty or 'Close' not in data:
-                return pd.DataFrame(), 0.0
+            if data.empty: return pd.DataFrame(), 0.0
 
-            close_data = data['Close']
-            volume_data = data['Volume']
+            # Limpieza de columnas MultiIndex si existen
+            close = data['Close']
+            volume = data['Volume']
 
-            # Eliminar columnas con todos los valores NaN
-            close_data = close_data.dropna(axis=1, how='all')
-            
-            # Calcular rendimientos
-            returns = (close_data.iloc[-1] / close_data.iloc[-period_days]) - 1
+            # Calcular rendimientos: (Precio Hoy / Precio hace N días) - 1
+            returns = (close.iloc[-1] / close.iloc[-period_days]) - 1
             spy_ret = returns[self.benchmark]
+            
+            # RS Score = Diferencia respecto al SPY
             rs_scores = returns - spy_ret
             
-            # RVOL
-            avg_vol = volume_data.rolling(50).mean().iloc[-1]
-            rvol = volume_data.iloc[-1] / avg_vol
+            # RVOL = Volumen actual / Media de 50 días
+            rvol = volume.iloc[-1] / volume.rolling(50).mean().iloc[-1]
             
-            results = pd.DataFrame({
-                'Precio': close_data.iloc[-1],
+            # Construir DataFrame final
+            df = pd.DataFrame({
+                'Precio': close.iloc[-1],
                 'RS Score': rs_scores,
                 'RVOL': rvol
-            }).drop(self.benchmark, errors='ignore')
+            }).dropna()
             
-            return results.dropna(), spy_ret
+            if self.benchmark in df.index:
+                df = df.drop(self.benchmark)
+                
+            return df, spy_ret
         except Exception as e:
-            st.error(f"Error en descarga masiva: {e}")
+            st.error(f"Error en el escáner: {e}")
             return pd.DataFrame(), 0.0
 
 def render():
     st.title("🔍 Scanner de Fuerza Relativa (RS/RW)")
+    st.markdown("---")
     
+    # Usar el motor desde session_state
     if 'rsrw_engine' not in st.session_state:
         st.session_state.rsrw_engine = RSRWEngine()
     
     engine = st.session_state.rsrw_engine
 
-    col_a, col_b = st.columns([1, 2])
-    with col_a:
-        dias = st.slider("Días de análisis", 5, 60, 30)
-    with col_b:
-        st.info("💡 Escanea la fuerza de los activos institucionales vs SPY.")
+    dias = st.slider("Días de análisis (Periodo de comparación)", 5, 60, 30)
 
     if st.button("🔥 EJECUTAR SCANNER"):
-        with st.spinner("Sincronizando con Wall Street..."):
+        with st.spinner("Analizando activos..."):
             tickers = engine.get_sp500_tickers()
             results, spy_perf = engine.scan_market(tickers, dias)
             
             if not results.empty:
-                st.metric("Rendimiento SPY", f"{spy_perf:.2%}")
+                st.metric("Rendimiento SPY (Periodo)", f"{spy_perf:.2%}")
                 
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.markdown('<h3 style="color:#00ffad;">🚀 TOP RS</h3>', unsafe_allow_html=True)
-                    st.dataframe(results.nlargest(15, 'RS Score').style.format({'RS Score': '{:.2%}', 'RVOL': '{:.2f}', 'Precio': '${:.2f}'}), use_container_width=True)
+                    st.markdown('<h3 style="color:#00ffad;">🚀 TOP RS (Fuerte)</h3>', unsafe_allow_html=True)
+                    # Filtramos solo los que tienen score positivo y ordenamos de mayor a menor
+                    df_rs = results[results['RS Score'] > 0].nlargest(15, 'RS Score')
+                    st.dataframe(df_rs.style.format({'RS Score': '{:.2%}', 'RVOL': '{:.2f}', 'Precio': '${:.2f}'}), use_container_width=True)
+                
                 with c2:
-                    st.markdown('<h3 style="color:#d32f2f;">📉 TOP RW</h3>', unsafe_allow_html=True)
-                    st.dataframe(results.nsmallest(15, 'RS Score').style.format({'RS Score': '{:.2%}', 'RVOL': '{:.2f}', 'Precio': '${:.2f}'}), use_container_width=True)
+                    st.markdown('<h3 style="color:#d32f2f;">📉 TOP RW (Débil)</h3>', unsafe_allow_html=True)
+                    # Filtramos solo los que tienen score negativo y ordenamos de menor a mayor
+                    df_rw = results[results['RS Score'] < 0].nsmallest(15, 'RS Score')
+                    st.dataframe(df_rw.style.format({'RS Score': '{:.2%}', 'RVOL': '{:.2f}', 'Precio': '${:.2f}'}), use_container_width=True)
             else:
-                st.warning("No se recibieron datos. Intenta de nuevo en unos segundos.")
+                st.warning("No se recibieron datos del servidor de Yahoo Finance.")
 
     st.divider()
-    # (El resto del código de VWAP se mantiene igual...)
     st.subheader("🎯 Validación Técnica Intradía")
-    symbol = st.text_input("Ticker:", "NVDA").upper()
+    symbol = st.text_input("Introduce Ticker para VWAP:", "NVDA").upper()
+    
     if symbol:
         df = yf.download(symbol, period="1d", interval="5m", progress=False)
         if not df.empty:
             if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+            
+            # Cálculo de VWAP
             tp = (df['High'] + df['Low'] + df['Close']) / 3
             df['VWAP'] = (tp * df['Volume']).cumsum() / df['Volume'].cumsum()
             
             fig = go.Figure()
             fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Precio"))
             fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#ffaa00', dash='dash'), name="VWAP"))
-            fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False)
+            fig.update_layout(template="plotly_dark", height=400, xaxis_rangeslider_visible=False, margin=dict(l=0,r=0,b=0,t=0))
             st.plotly_chart(fig, use_container_width=True)
+
+            try:
+                curr_p = float(df['Close'].iloc[-1])
+                curr_v = float(df['VWAP'].iloc[-1])
+                if curr_p > curr_v:
+                    st.markdown('<div style="color:#00ffad; font-weight:bold;">✅ BULLISH: Precio > VWAP</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="color:#d32f2f; font-weight:bold;">⚠️ BEARISH: Precio < VWAP</div>', unsafe_allow_html=True)
+            except: pass

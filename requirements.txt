@@ -5,11 +5,8 @@ plotly
 requests
 beautifulsoup4
 pandas
-requests
 pyyaml
-
-
-
-
+pandas_ta
+alpaca-trade-api
 
 

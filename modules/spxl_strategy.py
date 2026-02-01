@@ -35,19 +35,41 @@ def render():
         else:
             st.error("Archivo PDF no encontrado en la ruta assets/spxl.pdf")
 
-    # --- DATOS DE MERCADO EN TIEMPO REAL ---
+# --- DATOS DE MERCADO EN TIEMPO REAL (Añadido US500) ---
     try:
-        ticker_symbol = "SPXL"
-        data = yf.Ticker(ticker_symbol)
-        hist = data.history(period="1y")
-        if not hist.empty:
-            precio_actual = hist['Close'].iloc[-1]
-            max_periodo = hist['High'].max()
+        ticker_spxl = "SPXL"
+        ticker_us500 = "^GSPC" # Ticker para el S&P 500
+        
+        data_spxl = yf.Ticker(ticker_spxl)
+        hist_spxl = data_spxl.history(period="1y")
+        
+        data_us500 = yf.Ticker(ticker_us500)
+        hist_us500 = data_us500.history(period="2d")
+        
+        if not hist_spxl.empty:
+            precio_actual = hist_spxl['Close'].iloc[-1]
+            cierre_anterior_spxl = hist_spxl['Close'].iloc[-2]
+            max_periodo = hist_spxl['High'].max()
             caida_desde_max = ((precio_actual - max_periodo) / max_periodo) * 100
+            var_spxl = ((precio_actual - cierre_anterior_spxl) / cierre_anterior_spxl) * 100
         else:
-            precio_actual, max_periodo, caida_desde_max = 0, 0, 0
+            precio_actual, max_periodo, caida_desde_max, var_spxl = 0, 0, 0, 0
+
+        if not hist_us500.empty:
+            precio_us500 = hist_us500['Close'].iloc[-1]
+            cierre_anterior_us500 = hist_us500['Close'].iloc[-2]
+            var_us500 = ((precio_us500 - cierre_anterior_us500) / cierre_anterior_us500) * 100
+        else:
+            precio_us500, var_us500 = 0, 0
     except:
-        precio_actual, max_periodo, caida_desde_max = 0, 0, 0
+        precio_actual, max_periodo, caida_desde_max, var_spxl = 0, 0, 0, 0
+        precio_us500, var_us500 = 0, 0
+
+    # --- MÉTRICAS DE ÚLTIMA SESIÓN ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("SPXL (Actual)", f"${precio_actual:.2f}", f"{var_spxl:.2f}%")
+    m2.metric("S&P 500 (US500)", f"{precio_us500:,.2f}", f"{var_us500:.2f}%")
+    m3.metric("Drawdown Máx", f"{caida_desde_max:.2f}%", delta_color="inverse")
 
     # --- SECCIÓN DE POSICIÓN ABIERTA ---
     st.subheader("🛒 Tu Posición Actual")
@@ -129,6 +151,7 @@ def render():
 # Para ejecutar la función si el script se corre directamente
 if __name__ == "__main__":
     render()
+
 
 
 

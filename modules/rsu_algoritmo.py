@@ -1,62 +1,76 @@
+# modules/rsu_algoritmo.py
+import streamlit as st
 import pandas as pd
 import pandas_ta as ta
+from alpaca_trade_api.rest import REST
+from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
 
 class RSUAlgoritmo:
     def __init__(self):
-        # Memoria del algoritmo: guardamos los últimos precios para calcular indicadores
         self.df = pd.DataFrame(columns=['close', 'volume'])
-        self.estado_actual = "ROJO" # Estado inicial
-        self.soporte_previo = None
-        self.resistencia_previa = None
+        self.estado_actual = "CALIBRANDO"
 
     def procesar_dato(self, precio, volumen):
-        """Añade un nuevo precio y recalcula el semáforo"""
-        # 1. Actualizar datos
         nuevo_dato = pd.DataFrame([{'close': precio, 'volume': volumen}])
         self.df = pd.concat([self.df, nuevo_dato], ignore_index=True)
-        
-        # Mantener solo las últimas 300 velas para optimizar rendimiento
         if len(self.df) > 300:
             self.df = self.df.iloc[-300:].reset_index(drop=True)
-
-        # 2. Si no hay suficientes datos para el RSI (necesita al menos 14), esperamos
         if len(self.df) < 20:
-            return "CALIBRANDO..."
-
+            return "CALIBRANDO"
         return self.calcular_logica()
 
     def calcular_logica(self):
-        # --- INDICADORES ---
-        # RSI de 14 periodos
         self.df['rsi'] = ta.rsi(self.df['close'], length=14)
         rsi_actual = self.df['rsi'].iloc[-1]
-        
-        # Macro tendencia (Media Móvil de 200 periodos o proporcional a los datos)
         sma_200 = self.df['close'].rolling(window=min(len(self.df), 200)).mean().iloc[-1]
         precio_actual = self.df['close'].iloc[-1]
         
-        # --- LÓGICA DE RILEY & CORRECCIONES ---
-        en_correccion = rsi_actual < 35  # Basado en tu premisa de comprar en correcciones
-        
-        # --- CHANGE OF CHARACTER (CHoCH) ---
-        # Detectamos si el precio rompe el máximo de las últimas 5 velas (giro al alza)
         max_reciente = self.df['close'].iloc[-6:-1].max()
         choch_alcista = precio_actual > max_reciente
 
-        # --- LÓGICA DEL SEMÁFORO ---
-        
-        # 🟢 VERDE: Precio > SMA200 (Macro alcista) + Salida de sobreventa + CHoCH alcista
         if precio_actual > sma_200 and rsi_actual > 35 and choch_alcista:
-            # Aquí se cumple la premisa de Riley tras una corrección
             self.estado_actual = "VERDE"
-            
-        # 🟡 ÁMBAR: Estamos en corrección (RSI bajo) pero aún no hay CHoCH
-        elif en_correccion:
+        elif rsi_actual < 35:
             self.estado_actual = "AMBAR"
-            
-        # 🔴 ROJO: Macro bajista o mercado sobreextendido (RSI > 70)
         elif precio_actual < sma_200 or rsi_actual > 70:
             self.estado_actual = "ROJO"
         
-        # Si no cambia drásticamente, mantiene el último estado conocido
         return self.estado_actual
+
+def render():
+    st.title("🤖 RSU ALGORITMO - SEMÁFORO")
+    st.write("Análisis en tiempo real del US500 basado en RSI, CHoCH y Macro Tendencia.")
+
+    # Conexión a la API
+    try:
+        api = REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL)
+        bar = api.get_latest_bar("SPY")
+        
+        # Obtener el estado del motor almacenado en la sesión
+        estado = st.session_state.algoritmo_engine.procesar_dato(bar.c, bar.v)
+        
+        # Lógica de luces
+        luz_r = "luz-on" if estado == "ROJO" else ""
+        luz_a = "luz-on" if estado == "AMBAR" else ""
+        luz_v = "luz-on" if estado == "VERDE" else ""
+
+        # Visualización central del semáforo
+        st.markdown(f"""
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background: #11141a; border-radius: 20px; border: 1px solid #2962ff; margin-top: 20px;">
+                <div style="display: flex; gap: 30px;">
+                    <div class="semaforo-luz luz-roja {luz_r}" style="width: 80px; height: 80px;"></div>
+                    <div class="semaforo-luz luz-ambar {luz_a}" style="width: 80px; height: 80px;"></div>
+                    <div class="semaforo-luz luz-verde {luz_v}" style="width: 80px; height: 80px;"></div>
+                </div>
+                <div style="margin-top: 30px; text-align: center;">
+                    <h1 style="color: white; font-size: 48px; margin: 0;">{estado}</h1>
+                    <p style="color: #888; font-size: 18px;">Precio SPY: ${bar.c} | Vol: {bar.v}</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🔄 Forzar Actualización"):
+            st.rerun()
+
+    except Exception as e:
+        st.error(f"No se pudo conectar con el mercado: {e}")

@@ -132,7 +132,7 @@ with st.sidebar:
 if menu == "📊 DASHBOARD":
     market.render()
 
-elif menu == "📈 RS/RW ALGO":
+elif menu == "📈 SCANNER RS/RW":
     rsrw.render()
 
 elif menu == "📅 EARNINGS": # <--- Lógica de navegación nueva
@@ -161,4 +161,5 @@ elif menu == "🇺🇸 TRUMP PLAYBOOK":
 
 elif menu == "🎓 ACADEMY":
     academy.render()
+
 

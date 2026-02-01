@@ -12,7 +12,7 @@ def render():
         @st.cache_data(ttl=60)
         def load_index(url):
             data = pd.read_csv(url)
-            # Normalización de nombres de columnas
+            # Normalización de nombres de columnas (quita espacios y pone en minúsculas)
             data.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in data.columns]
             
             # Convertir fecha para ordenar (DD/MM/YYYY)
@@ -32,18 +32,24 @@ def render():
         
         for idx, row in df.reset_index(drop=True).iterrows():
             with cols[idx % 3]:
-                # --- LIMPIEZA DE URL DE IMAGEN ---
-                img_url = str(row.get('imagen', '')).strip()
+                # --- PROCESAMIENTO SEGURO DE IMAGEN ---
+                img_val = row.get('imagen', '')
+                # Si el valor es nulo o vacío, usamos un placeholder para evitar el error "Error opening ''"
+                if pd.isna(img_val) or str(img_val).strip() == "":
+                    img_url = "https://via.placeholder.com/400x225?text=Sin+Imagen"
+                else:
+                    img_url = str(img_val).strip()
+                    # Conversión forzada de GitHub a RAW
+                    if "github.com" in img_url:
+                        img_url = img_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                        if "?raw=true" in img_url:
+                            img_url = img_url.replace("?raw=true", "")
                 
-                # Convertimos cualquier link de GitHub al formato RAW real
-                if "github.com" in img_url:
-                    img_url = img_url.replace("github.com", "raw.githubusercontent.com")
-                    img_url = img_url.replace("/blob/", "/")
-                    if "?raw=true" in img_url:
-                        img_url = img_url.replace("?raw=true", "")
-                
-                # Renderizado de imagen
-                st.image(img_url, use_container_width=True)
+                # Intentar mostrar la imagen
+                try:
+                    st.image(img_url, use_container_width=True)
+                except Exception:
+                    st.image("https://via.placeholder.com/400x225?text=Error+Carga", use_container_width=True)
                 
                 st.markdown(f"**{row['ticker']}**")
                 st.caption(f"📅 {row.get('fecha', 'S/D')} | Rating: {row.get('rating', 'N/A')}")
@@ -59,18 +65,14 @@ def render():
             st.subheader(f"🔍 Análisis Detallado: {sel_row.get('nombre', sel_row['ticker'])}")
             
             url_doc = str(sel_row.get('urldoc', '')).strip()
-            
             if url_doc.startswith("http"):
-                # Forzar el modo 'embedded' para quitar menús de edición y permisos
+                # Modo embedded para vista limpia
                 if "/pub" in url_doc:
                     sep = "&" if "?" in url_doc else "?"
                     if "embedded=true" not in url_doc:
                         url_doc += f"{sep}embedded=true"
                 
-                # Iframe de alta fidelidad
                 components.iframe(url_doc, height=1000, scrolling=True)
-            else:
-                st.warning("Enlace de documento no válido.")
 
     except Exception as e:
         st.error(f"Error en la galería: {e}")

@@ -5,87 +5,81 @@ from streamlit_tradingview_widget import streamlit_tradingview_widget
 
 def render():
     st.title("📈 ESTRATEGIA COMERCIAL SPXL")
-    st.caption("Basada en reglas v0.1 - Direxion Daily S&P 500 Bull 3X Shares [cite: 11]")
+    st.caption("Terminal RSU - Basada en Reglas de Corrección de Mercado")
 
-    # --- OBTENCIÓN DE DATOS EN TIEMPO REAL ---
+    # --- DATOS DE MERCADO ---
     try:
-        spxl = yf.Ticker("SPXL")
-        datos = spxl.history(period="1y")
-        precio_actual = datos['Close'].iloc[-1]
-        max_periodo = datos['High'].max()
+        ticker = "SPXL"
+        data = yf.Ticker(ticker)
+        hist = data.history(period="1y")
+        precio_actual = hist['Close'].iloc[-1]
+        max_periodo = hist['High'].max()
         caida_desde_max = ((precio_actual - max_periodo) / max_periodo) * 100
-    except:
+    except Exception as e:
+        st.error("Error al conectar con Yahoo Finance")
         precio_actual, max_periodo, caida_desde_max = 0, 0, 0
 
-    # --- CALCULADORA DE POSICIONES ---
-    st.subheader("🧮 Calculadora de Estrategia")
-    capital_total = st.number_input("Introduce tu capital total destinado ($):", min_value=0.0, value=10000.0, step=1000.0)
-    
-    col_calc_1, col_calc_2 = st.columns([2, 1])
+    # --- CALCULADORA Y GESTIÓN DE POSICIÓN ---
+    col_input, col_metrics = st.columns([1, 1.5])
 
-    with col_calc_1:
-        # Definición de fases según el documento
-        fases = [
-            {"Nombre": "1ª Compra", "Trigger": "15% desde Máx", "Capital %": 0.20, "Ref": "Máximo Hist."},
-            {"Nombre": "2ª Compra", "Trigger": "10% desde 1ª", "Capital %": 0.15, "Ref": "Precio 1ª"},
-            {"Nombre": "3ª Compra", "Trigger": "7% desde 2ª", "Capital %": 0.20, "Ref": "Precio 2ª"},
-            {"Nombre": "4ª Compra", "Trigger": "10% desde 3ª", "Capital %": 0.20, "Ref": "Precio 3ª"}
-        ]
+    with col_input:
+        st.subheader("📝 Gestión de Capital")
+        capital_total = st.number_input("Capital total para SPXL ($):", value=10000, step=500)
+        precio_medio = st.number_input("Tu precio medio actual ($):", value=0.0, step=0.1, help="Si ya tienes acciones, pon tu precio promedio de compra.")
         
-        df_estrategia = pd.DataFrame([
-            {
-                "Fase": f["Nombre"],
-                "Disparador": f["Trigger"],
-                "Inversión ($)": f"{capital_total * f['Capital %']:,.2f}",
-                "Referencia": f["Ref"]
-            } for f in fases
-        ])
-        st.table(df_estrategia)
-        st.caption(f"Reserva de seguridad (Efectivo): ${(capital_total * 0.25):,.2f} (25%) ")
+        # Cálculo de Take Profit
+        if precio_medio > 0:
+            target_venta = precio_medio * 1.20
+            st.success(f"🎯 **Objetivo de Venta (+20%): ${target_venta:.2f}**")
 
-    with col_calc_2:
-        st.metric("Precio Actual SPXL", f"${precio_actual:.2f}")
-        st.metric("Máximo Anual", f"${max_periodo:.2f}")
-        color_delta = "inverse" if caida_desde_max < -15 else "normal"
-        st.metric("Caída desde Máximo", f"{caida_desde_max:.2f}%", delta_color=color_delta)
-
-    # --- SEMÁFORO DE ALERTAS ---
-    st.subheader("🔔 Estado de Compra / Venta")
-    
-    # Lógica de aviso de compra [cite: 83, 84, 108]
-    if caida_desde_max <= -15:
-        st.error(f"🚨 **ALERTA DE COMPRA ACTIVA:** El SPXL ha caído un {caida_desde_max:.2f}%. Se cumple la condición de la 1ª Compra (-15%). [cite: 83]")
-    elif precio_actual >= (precio_actual * 1.20): # Nota: lógica simplificada para el ejemplo
-        st.success("🎯 **OBJETIVO DE VENTA:** El precio ha alcanzado el +20% desde tu entrada media. [cite: 108]")
-    else:
-        st.info("⌛ **ESPERANDO DISPARADOR:** El mercado no ha alcanzado niveles de compra o venta según las reglas.")
+    with col_metrics:
+        st.subheader("📊 Estado del Mercado")
+        m1, m2 = st.columns(2)
+        m1.metric("Precio Actual", f"${precio_actual:.2f}")
+        m2.metric("Máximo Anual", f"${max_periodo:.2f}")
+        
+        # Alerta de Compra dinámica
+        if caida_desde_max <= -15:
+            st.error(f"🚨 ALERTA: Caída del {caida_desde_max:.2f}%. ¡Zona de 1ª Compra!")
+        else:
+            st.info(f"Distancia al máximo: {caida_desde_max:.2f}%")
 
     st.write("---")
 
-    # --- WIDGET TRADINGVIEW (CDS) ---
-    st.subheader("🚨 Mecanismo de Seguridad: Riesgo Sistémico")
-    st.markdown("""
-    Monitorea el ticker **BAMLHOA0HYM2** (Credit Default Swaps). 
-    Si supera **10.7**, detén las compras inmediatamente. [cite: 138, 141]
-    """)
+    # --- REGLAS DE COMPRA ESCALONADA ---
+    st.subheader("🪜 Plan de Ejecución")
     
-    # Widget de TradingView para el ticker de CDS
-    # Nota: Usamos US High Yield Index como proxy si el ticker exacto tiene restricciones de visualización
+    fases = [
+        {"Fase": "1ª Compra", "Disparador": "-15% desde Máx", "Precio Ref": max_periodo * 0.85, "Capital": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "2ª Compra", "Disparador": "-10% desde 1ª", "Precio Ref": (max_periodo * 0.85) * 0.90, "Capital": "15%", "Monto": capital_total * 0.15},
+        {"Fase": "3ª Compra", "Disparador": "-7% desde 2ª", "Precio Ref": ((max_periodo * 0.85) * 0.90) * 0.93, "Capital": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "4ª Compra", "Disparador": "-10% desde 3ª", "Precio Ref": (((max_periodo * 0.85) * 0.90) * 0.93) * 0.90, "Capital": "20%", "Monto": capital_total * 0.20},
+    ]
+    
+    df_fases = pd.DataFrame(fases)
+    st.table(df_fases.style.format({"Precio Ref": "{:.2f}$", "Monto": "{:,.2f}$"}))
+    st.caption(f"💰 Reserva de Efectivo (25%): ${(capital_total * 0.25):,.2f}")
+
+    # --- RIESGO SISTÉMICO (CDS) ---
+    st.write("---")
+    st.subheader("🚨 Monitor de Riesgo Sistémico (CDS)")
+    st.markdown("""
+    **Regla de Oro:** Si el ticker **BAMLHOA0HYM2** (ICE BofA US High Yield Index Option-Adjusted Spread) sube de **10.7**, se detienen todas las compras.
+    """)
+
+    # Widget de TradingView para los CDS (usando el código de FRED)
     streamlit_tradingview_widget(
-        symbol="FRED:BAMLHOA0HYM2", 
+        symbol="FRED:BAMLHOA0HYM2",
         dataset="FRED",
         height=400,
-        theme="dark"
+        theme="dark",
+        autosize=True
     )
 
-    # --- RESUMEN DE REGLAS ---
-    with st.expander("📚 Resumen de Reglas de la Estrategia"):
+    # --- FOOTER ---
+    with st.expander("ℹ️ Ayuda sobre las reglas"):
         st.write("""
-        * **SPXL:** ETF apalancado 3x sobre el S&P 500. [cite: 41]
-        * **Comprar en bajadas:** No intentamos adivinar el suelo, escalamos la posición. [cite: 57, 58]
-        * **Take Profit:** Vender todo al alcanzar un **+20%** de beneficio sobre el precio medio. [cite: 106, 108]
-        * **Liquidez:** Siempre mantenemos un **25% en efectivo** para casos extremos. [cite: 67, 130]
+        1. **Comprar** solo cuando el precio toque los niveles de la tabla.
+        2. **Vender** la posición completa cuando el beneficio sea del 20%.
+        3. **No comprar** si el gráfico de arriba (CDS) muestra un pico de pánico financiero.
         """)
-
-    st.write("---")
-    st.warning("⚠️ **Advertencia de Riesgo:** El trading en ETFs apalancados como SPXL conlleva volatilidad extrema. [cite: 18, 20]")

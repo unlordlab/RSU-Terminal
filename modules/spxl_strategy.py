@@ -1,4 +1,5 @@
 import streamlit as st
-def show():
+
+def render():
     st.title("📈 Estrategia SPXL")
-    st.write("Contenido en desarrollo...")
+    st.info("Estrategia de apalancamiento basada en volatilidad y Fear & Greed.")

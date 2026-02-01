@@ -2,8 +2,9 @@
 import streamlit as st
 import pandas as pd
 import pandas_ta as ta
-from alpaca_trade_api.rest import REST
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestBarRequest
+from config import ALPACA_API_KEY, ALPACA_SECRET_KEY
 
 class RSUAlgoritmo:
     def __init__(self):
@@ -39,22 +40,23 @@ class RSUAlgoritmo:
 
 def render():
     st.title("🤖 RSU ALGORITMO - SEMÁFORO")
-    st.write("Análisis en tiempo real del US500 basado en RSI, CHoCH y Macro Tendencia.")
-
-    # Conexión a la API
+    
     try:
-        api = REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL)
-        bar = api.get_latest_bar("SPY")
+        # Nueva forma de conectar con alpaca-py
+        client = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)
+        request_params = StockLatestBarRequest(symbol_or_symbols="SPY")
+        latest_bar = client.get_stock_latest_bar(request_params)
         
-        # Obtener el estado del motor almacenado en la sesión
-        estado = st.session_state.algoritmo_engine.procesar_dato(bar.c, bar.v)
+        precio = latest_bar["SPY"].close
+        volumen = latest_bar["SPY"].volume
+        
+        estado = st.session_state.algoritmo_engine.procesar_dato(precio, volumen)
         
         # Lógica de luces
         luz_r = "luz-on" if estado == "ROJO" else ""
         luz_a = "luz-on" if estado == "AMBAR" else ""
         luz_v = "luz-on" if estado == "VERDE" else ""
 
-        # Visualización central del semáforo
         st.markdown(f"""
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background: #11141a; border-radius: 20px; border: 1px solid #2962ff; margin-top: 20px;">
                 <div style="display: flex; gap: 30px;">
@@ -64,13 +66,13 @@ def render():
                 </div>
                 <div style="margin-top: 30px; text-align: center;">
                     <h1 style="color: white; font-size: 48px; margin: 0;">{estado}</h1>
-                    <p style="color: #888; font-size: 18px;">Precio SPY: ${bar.c} | Vol: {bar.v}</p>
+                    <p style="color: #888; font-size: 18px;">Precio SPY: ${precio:.2f} | Vol: {int(volumen)}</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🔄 Forzar Actualización"):
+        if st.button("🔄 Actualizar"):
             st.rerun()
 
     except Exception as e:
-        st.error(f"No se pudo conectar con el mercado: {e}")
+        st.error(f"Error en la conexión de datos: {e}")

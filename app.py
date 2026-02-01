@@ -6,7 +6,6 @@ import pandas as pd
 import math
 
 # --- IMPORTACIÓN DE CONFIGURACIÓN Y MÓDULOS ---
-# Se añade la función del contador a las importaciones
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios
 import modules.auth as auth
 import modules.market as market
@@ -15,13 +14,12 @@ import modules.cartera as cartera
 import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
-import modules.rsrw as rsrw  
 
-# --- NUEVOS MÓDULOS ---
+# --- NUEVOS MÓDULOS Y ESTRATEGIA RS/RW ---
 import modules.spxl_strategy as spxl_strategy
 import modules.roadmap_2026 as roadmap_2026
 import modules.trump_playbook as trump_playbook
-
+import modules.rsrw as rsrw  # Módulo del Scanner
 
 # Aplicar estilos definidos en config.py
 set_style()
@@ -30,10 +28,9 @@ set_style()
 if not auth.login():
     st.stop()
 
-# Inicializamos el motor del algoritmo en la sesión si no existe
-if 'algoritmo_engine' not in st.session_state:
-    st.session_state.algoritmo_engine = rsu_algoritmo.RSUAlgoritmo()
-    
+# Inicializamos el motor del algoritmo RS/RW en la sesión si no existe
+if 'rsrw_engine' not in st.session_state:
+    st.session_state.rsrw_engine = rsrw.RSRWEngine()
 
 # --- SIDEBAR UNIFICADO ---
 with st.sidebar:
@@ -50,17 +47,16 @@ with st.sidebar:
             </div>
         """, unsafe_allow_html=True)
     except Exception as e:
-        # Falla silenciosa si la función no está en config.py todavía
         pass
 
     menu = st.radio(
         "",
         [
             "📊 DASHBOARD",
+            "🔍 SCANNER RS/RW",  # Sección dedicada añadida
             "📈 ESTRATEGIA SPXL",
             "🗺️ 2026 ROADMAP",
             "🇺🇸 TRUMP PLAYBOOK",
-            "🤖 RSU ALGORITMO",
             "🤖 IA REPORT",
             "💼 CARTERA",
             "📄 TESIS",
@@ -95,7 +91,6 @@ with st.sidebar:
         }
     ))
 
-    # Lógica de la aguja
     theta = 180 - (fng / 100) * 180
     r = 0.85
     x_head = r * math.cos(math.radians(theta))
@@ -123,17 +118,17 @@ with st.sidebar:
     for col, txt in legend_items:
         st.markdown(f'<div style="display:flex; align-items:center; margin-bottom:3px;"><div style="width:12px; height:12px; background-color:{col}; border-radius:2px; margin-right:8px;"></div><span style="font-size:0.8rem; color:#ccc;">{txt}</span></div>', unsafe_allow_html=True)
 
-# --- NAVEGACIÓN (FUERA DEL SIDEBAR) ---
+# --- NAVEGACIÓN (LÓGICA DE RENDERIZADO) ---
 if menu == "📊 DASHBOARD":
     market.render()
+elif menu == "🔍 SCANNER RS/RW":
+    rsrw.render()
 elif menu == "📈 ESTRATEGIA SPXL":
     spxl_strategy.render()
 elif menu == "🗺️ 2026 ROADMAP":
     roadmap_2026.render()
 elif menu == "🇺🇸 TRUMP PLAYBOOK":
     trump_playbook.render()
-elif menu == "🤖 RSU ALGORITMO":
-    rsu_algoritmo.render()
 elif menu == "🤖 IA REPORT":
     ia_report.render()
 elif menu == "💼 CARTERA":
@@ -144,6 +139,4 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.render()
 elif menu == "🎥 ACADEMY":
     academy.render()
-
-
 

@@ -15,12 +15,13 @@ import modules.cartera as cartera
 import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
+import modules.rsrw as rsrw  
 
 # --- NUEVOS MÓDULOS ---
 import modules.spxl_strategy as spxl_strategy
 import modules.roadmap_2026 as roadmap_2026
 import modules.trump_playbook as trump_playbook
-import modules.rsu_algoritmo as rsu_algoritmo
+
 
 # Aplicar estilos definidos en config.py
 set_style()
@@ -32,6 +33,7 @@ if not auth.login():
 # Inicializamos el motor del algoritmo en la sesión si no existe
 if 'algoritmo_engine' not in st.session_state:
     st.session_state.algoritmo_engine = rsu_algoritmo.RSUAlgoritmo()
+    
 
 # --- SIDEBAR UNIFICADO ---
 with st.sidebar:
@@ -142,5 +144,6 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.render()
 elif menu == "🎥 ACADEMY":
     academy.render()
+
 
 

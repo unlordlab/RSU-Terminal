@@ -14,11 +14,15 @@ import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
 
-# --- NUEVOS IMPORTES ---
-import modules.spxl_strategy as spxl_strategy
-import modules.roadmap_2026 as roadmap_2026
-import modules.trump_playbook as trump_playbook
-import modules.rsu_algoritmo as rsu_algoritmo
+# Importación de nuevos módulos
+try:
+    import modules.spxl_strategy as spxl_strategy
+    import modules.roadmap_2026 as roadmap_2026
+    import modules.trump_playbook as trump_playbook
+    import modules.rsu_algoritmo as rsu_algoritmo
+    NUEVOS_MODULOS_OK = True
+except ImportError:
+    NUEVOS_MODULOS_OK = False
 
 set_style()
 
@@ -29,6 +33,7 @@ with st.sidebar:
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", width=150)
 
+    # Menú actualizado con las nuevas secciones
     menu = st.radio(
         "",
         [
@@ -85,17 +90,9 @@ with st.sidebar:
 
     st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
 
-# Lógica de navegación
+# Lógica de navegación respetando el código anterior
 if menu == "📊 DASHBOARD":
     market.show_dashboard()
-elif menu == "📈 ESTRATEGIA SPXL":
-    spxl_strategy.show()
-elif menu == "🗺️ 2026 ROADMAP":
-    roadmap_2026.show()
-elif menu == "🇺🇸 TRUMP PLAYBOOK":
-    trump_playbook.show()
-elif menu == "🤖 RSU ALGORITMO":
-    rsu_algoritmo.show()
 elif menu == "🤖 IA REPORT":
     ia_report.show()
 elif menu == "💼 CARTERA":
@@ -106,4 +103,15 @@ elif menu == "⚖️ TRADE GRADER":
     trade_grader.show()
 elif menu == "🎥 ACADEMY":
     academy.show()
-
+# Lógica para las nuevas secciones
+elif NUEVOS_MODULOS_OK:
+    if menu == "📈 ESTRATEGIA SPXL":
+        spxl_strategy.show()
+    elif menu == "🗺️ 2026 ROADMAP":
+        roadmap_2026.show()
+    elif menu == "🇺🇸 TRUMP PLAYBOOK":
+        trump_playbook.show()
+    elif menu == "🤖 RSU ALGORITMO":
+        rsu_algoritmo.show()
+else:
+    st.error("Error: Los archivos de los nuevos módulos no se encuentran en la carpeta 'modules/'.")

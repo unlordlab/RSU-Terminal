@@ -14,22 +14,20 @@ class RSRWEngine:
             df = pd.read_html(url)[0]
             return df['Symbol'].str.replace('.', '-', regex=False).tolist()
         except:
-            return ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"] # Fallback
+            return ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"]
 
     def scan_market(_self, tickers, period_days=30):
         all_symbols = tickers + [_self.benchmark]
-        # Descarga masiva de precios y volumen
         data = yf.download(all_symbols, period=f"{period_days+50}d", interval="1d", progress=False)
         
+        # Corregir posible Multi-Index de yfinance
         close_data = data['Close']
         volume_data = data['Volume']
         
-        # Rendimiento relativo
         returns = (close_data.iloc[-1] / close_data.iloc[-period_days]) - 1
         spy_ret = returns[_self.benchmark]
         rs_scores = returns - spy_ret
         
-        # Volumen Relativo (RVOL)
         avg_vol = volume_data.rolling(50).mean().iloc[-1]
         current_vol = volume_data.iloc[-1]
         rvol = current_vol / avg_vol
@@ -46,7 +44,10 @@ def render():
     st.title("🔍 Scanner de Fuerza Relativa (RS/RW)")
     st.markdown("---")
     
-    # Usamos el engine guardado en session_state
+    # Asegurar que el engine esté en session_state
+    if 'rsrw_engine' not in st.session_state:
+        st.session_state.rsrw_engine = RSRWEngine()
+    
     engine = st.session_state.rsrw_engine
 
     col_a, col_b = st.columns([1, 2])
@@ -79,10 +80,15 @@ def render():
     
     if symbol:
         df_intraday = yf.download(symbol, period="1d", interval="5m", progress=False)
+        
         if not df_intraday.empty:
+            # Forzamos a que las columnas sean simples (no MultiIndex)
+            if isinstance(df_intraday.columns, pd.MultiIndex):
+                df_intraday.columns = df_intraday.columns.get_level_values(0)
+
             # Cálculo de VWAP
-            vp = (df_intraday['Close'] + df_intraday['High'] + df_intraday['Low']) / 3 * df_intraday['Volume']
-            df_intraday['VWAP'] = vp.cumsum() / df_intraday['Volume'].cumsum()
+            tp = (df_intraday['High'] + df_intraday['Low'] + df_intraday['Close']) / 3
+            df_intraday['VWAP'] = (tp * df_intraday['Volume']).cumsum() / df_intraday['Volume'].cumsum()
             
             fig = go.Figure()
             fig.add_trace(go.Candlestick(x=df_intraday.index, open=df_intraday['Open'], high=df_intraday['High'], 
@@ -92,7 +98,16 @@ def render():
                               margin=dict(l=0,r=0,b=0,t=30), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True)
 
-            if df_intraday['Close'].iloc[-1] > df_intraday['VWAP'].iloc[-1]:
-                st.markdown('<div class="index-delta pos">✅ BULLISH: Sobre VWAP</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="index-delta neg">⚠️ BEARISH: Bajo VWAP</div>', unsafe_allow_html=True)
+            # EXPLICACIÓN DEL FIX: Usamos .item() o float() para asegurar que comparamos números escalares
+            try:
+                current_price = float(df_intraday['Close'].iloc[-1])
+                current_vwap = float(df_intraday['VWAP'].iloc[-1])
+                
+                if current_price > current_vwap:
+                    st.markdown('<div class="index-delta pos">✅ BULLISH: Sobre VWAP</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="index-delta neg">⚠️ BEARISH: Bajo VWAP</div>', unsafe_allow_html=True)
+            except:
+                st.error("Error al comparar valores de precio y VWAP.")
+        else:
+            st.warning("No se encontraron datos intradía para este ticker.")

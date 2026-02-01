@@ -8,105 +8,143 @@ def render():
     st.title("📈 ESTRATEGIA COMERCIAL SPXL")
     st.caption("Terminal RSU - Gestión de Compras Escaladas y Riesgo de Crédito")
 
-    # --- DATOS DE MERCADO EN TIEMPO REAL ---
-    try:
-        # Tickers: SPXL y S&P 500 (^GSPC)
-        ticker_spxl = "SPXL"
-        ticker_sp500 = "^GSPC"
-        
-        # Descarga de datos (último año para SPXL, 2 días para el cierre del S&P)
-        df_spxl = yf.Ticker(ticker_spxl).history(period="1y")
-        df_sp500 = yf.Ticker(ticker_sp500).history(period="2d")
-        
-        if not df_spxl.empty:
-            precio_actual = df_spxl['Close'].iloc[-1]
-            cierre_prev_spxl = df_spxl['Close'].iloc[-2]
-            max_periodo = df_spxl['High'].max()
-            caida_desde_max = ((precio_actual - max_periodo) / max_periodo) * 100
-            var_spxl = ((precio_actual - cierre_prev_spxl) / cierre_prev_spxl) * 100
-        else:
-            precio_actual, max_periodo, caida_desde_max, var_spxl = 0, 0, 0, 0
-
-        if not df_sp500.empty:
-            precio_sp500 = df_sp500['Close'].iloc[-1]
-            cierre_prev_sp500 = df_sp500['Close'].iloc[-2]
-            var_sp500 = ((precio_sp500 - cierre_prev_sp500) / cierre_prev_sp500) * 100
-        else:
-            precio_sp500, var_sp500 = 0, 0
-            
-    except Exception as e:
-        st.error(f"Error al obtener datos: {e}")
-        precio_actual, max_periodo, caida_desde_max, var_spxl = 0, 0, 0, 0
-        precio_sp500, var_sp500 = 0, 0
-
-    # --- MÉTRICAS DE ÚLTIMA SESIÓN ---
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("SPXL (Último)", f"${precio_actual:.2f}", f"{var_spxl:.2f}%")
-    col_m2.metric("S&P 500 (US500)", f"{precio_sp500:,.2f}", f"{var_sp500:.2f}%")
-    col_m3.metric("Caída desde Máx", f"{caida_desde_max:.2f}%", delta_color="inverse")
-
-    # --- DESCRIPCIÓN DE LA ESTRATEGIA ---
+    # --- DESCRIPCIÓN DE LA ESTRATEGIA (Texto original íntegro) ---
     with st.expander("📖 Filosofía y Premisas", expanded=False):
         st.markdown("""
-        **Premisa Fundamental:** El mercado de EE.UU. (**S&P 500**) mantiene su macro tendencia alcista histórica.
-        * **Entradas:** 4 fases (Caída 15%, 10%, 7%, 10%).
-        * **Salida:** Objetivo +20% sobre el precio medio.
+        **Premisa Fundamental:** Esta estrategia se basa estrictamente en la premisa de que el mercado de EE.UU. (**S&P 500 / US500**) mantendrá su **macro tendencia alcista** a largo plazo, recuperándose históricamente de todas sus correcciones.
+        
+        **Metodología:**
+        * Se utiliza el ETF apalancado **SPXL** (3x Bull) para maximizar retornos en las recuperaciones.
+        * No se intenta predecir el "suelo" exacto; se promedia el precio en niveles de caída predefinidos.
+        * **Entradas:** 4 fases escalonadas al caer un 15%, 10%, 7% y 10%.
+        * **Salida:** Venta total al alcanzar un **+20%** de beneficio sobre el precio medio.
+        * **Seguridad:** Uso de spreads de crédito (CDS) como freno de emergencia ante crisis sistémicas.
         """)
         
+        # --- BOTÓN DE DESCARGA PDF ---
         pdf_path = "assets/SPXL.pdf"
         if os.path.exists(pdf_path):
             with open(pdf_path, "rb") as f:
-                st.download_button("📄 Descargar Estrategia (PDF)", f.read(), "SPXL.pdf", "application/pdf")
+                pdf_bytes = f.read()
+            st.download_button(
+                label="📄 Descargar Estrategia Completa (PDF)",
+                data=pdf_bytes,
+                file_name="SPXL.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.error("Archivo PDF no encontrado en la ruta assets/spxl.pdf")
 
-    # --- SECCIÓN DE POSICIÓN ---
+    # --- DATOS DE MERCADO EN TIEMPO REAL (Añadido US500) ---
+    try:
+        ticker_spxl = "SPXL"
+        ticker_us500 = "^GSPC" # Ticker para el S&P 500
+        
+        data_spxl = yf.Ticker(ticker_spxl)
+        hist_spxl = data_spxl.history(period="1y")
+        
+        data_us500 = yf.Ticker(ticker_us500)
+        hist_us500 = data_us500.history(period="2d")
+        
+        if not hist_spxl.empty:
+            precio_actual = hist_spxl['Close'].iloc[-1]
+            cierre_anterior_spxl = hist_spxl['Close'].iloc[-2]
+            max_periodo = hist_spxl['High'].max()
+            caida_desde_max = ((precio_actual - max_periodo) / max_periodo) * 100
+            var_spxl = ((precio_actual - cierre_anterior_spxl) / cierre_anterior_spxl) * 100
+        else:
+            precio_actual, max_periodo, caida_desde_max, var_spxl = 0, 0, 0, 0
+
+        if not hist_us500.empty:
+            precio_us500 = hist_us500['Close'].iloc[-1]
+            cierre_anterior_us500 = hist_us500['Close'].iloc[-2]
+            var_us500 = ((precio_us500 - cierre_anterior_us500) / cierre_anterior_us500) * 100
+        else:
+            precio_us500, var_us500 = 0, 0
+    except:
+        precio_actual, max_periodo, caida_desde_max, var_spxl = 0, 0, 0, 0
+        precio_us500, var_us500 = 0, 0
+
+    # --- MÉTRICAS DE ÚLTIMA SESIÓN ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("SPXL (Actual)", f"${precio_actual:.2f}", f"{var_spxl:.2f}%")
+    m2.metric("S&P 500 (US500)", f"{precio_us500:,.2f}", f"{var_us500:.2f}%")
+    m3.metric("Drawdown Máx", f"{caida_desde_max:.2f}%", delta_color="inverse")
+
+    # --- SECCIÓN DE POSICIÓN ABIERTA ---
     st.subheader("🛒 Tu Posición Actual")
-    cp1, cp2 = st.columns(2)
-    with cp1:
-        tiene_posicion = st.checkbox("¿Tienes una posición abierta?")
-        capital_total = st.number_input("Capital total ($):", value=10000, step=500)
-    with cp2:
-        precio_medio = st.number_input("Precio medio ($):", value=0.0, step=0.1) if tiene_posicion else 0.0
+    col_pos1, col_pos2 = st.columns(2)
+    
+    with col_pos1:
+        tiene_posicion = st.checkbox("¿Tienes una posición abierta actualmente?")
+        capital_total = st.number_input("Capital total para esta estrategia ($):", value=10000, step=500)
+    
+    with col_pos2:
+        if tiene_posicion:
+            precio_medio = st.number_input("Tu precio medio de compra ($):", value=0.0, step=0.1)
+        else:
+            precio_medio = 0.0
 
-    # --- ALERTAS ---
+    # --- ALERTAS DE COMPRA Y VENTA ---
     st.write("---")
+    
     if tiene_posicion and precio_medio > 0:
         target_venta = precio_medio * 1.20
         rendimiento = ((precio_actual - precio_medio) / precio_medio) * 100
+        
+        st.subheader("🔔 Estado de Señales")
         if precio_actual >= target_venta:
             st.balloons()
-            st.success(f"🎯 **VENTA ACTIVA:** Objetivo alcanzado en ${target_venta:.2f}")
+            st.success(f"🎯 **SEÑAL DE VENTA ACTIVA:** Objetivo del +20% alcanzado (${target_venta:.2f}).")
         else:
-            st.info(f"Rendimiento: **{rendimiento:.2f}%**. Venta en: **${target_venta:.2f}**")
+            st.info(f"Rendimiento actual: **{rendimiento:.2f}%**. Objetivo de venta en: **${target_venta:.2f}**")
     
     if caida_desde_max <= -15:
-        st.error(f"🚨 **COMPRA ACTIVA:** Caída del {caida_desde_max:.2f}% detectada.")
+        st.error(f"🚨 **SEÑAL DE COMPRA ACTIVA:** El precio ha caído un {caida_desde_max:.2f}% desde máximos.")
+    else:
+        st.info(f"Distancia desde el máximo anual: **{caida_desde_max:.2f}%** (La 1ª compra se activa al -15%)")
 
-    # --- TABLA DE NIVELES (Corregida) ---
-    st.subheader("🪜 Niveles de Ejecución")
+    # --- TABLA DE REGLAS (Cálculos corregidos) ---
+    st.subheader("🪜 Niveles de Ejecución (Basados en Máximo Anual)")
     p1 = max_periodo * 0.85
     p2 = p1 * 0.90
     p3 = p2 * 0.93
     p4 = p3 * 0.90
     
     fases = [
-        {"Fase": "1ª Compra", "Trigger": "-15% desde Máx", "Precio": p1, "Monto": capital_total * 0.20},
-        {"Fase": "2ª Compra", "Trigger": "-10% desde 1ª", "Precio": p2, "Monto": capital_total * 0.15},
-        {"Fase": "3ª Compra", "Trigger": "-7% desde 2ª", "Precio": p3, "Monto": capital_total * 0.20},
-        {"Fase": "4ª Compra", "Trigger": "-10% desde 3ª", "Precio": p4, "Monto": capital_total * 0.20},
+        {"Fase": "1ª Compra", "Trigger": "-15% desde Máx", "Precio Ref": p1, "Cap %": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "2ª Compra", "Trigger": "-10% desde 1ª", "Precio Ref": p2, "Cap %": "15%", "Monto": capital_total * 0.15},
+        {"Fase": "3ª Compra", "Trigger": "-7% desde 2ª", "Precio Ref": p3, "Cap %": "20%", "Monto": capital_total * 0.20},
+        {"Fase": "4ª Compra", "Trigger": "-10% desde 3ª", "Precio Ref": p4, "Cap %": "20%", "Monto": capital_total * 0.20},
     ]
-    st.table(pd.DataFrame(fases).style.format({"Precio": "{:.2f}$", "Monto": "{:,.2f}$"}))
+    st.table(pd.DataFrame(fases).style.format({"Precio Ref": "{:.2f}$", "Monto": "{:,.2f}$"}))
+    st.caption(f"💰 Reserva de Efectivo de Seguridad (25%): ${(capital_total * 0.25):,.2f}")
 
     # --- RIESGO SISTÉMICO ---
     st.write("---")
-    st.subheader("🚨 Monitor de Riesgo Sistémico (FRED)")
-    tv_widget = """
-    <div class="tradingview-widget-container"><div id="tv_chart"></div>
-    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-    <script type="text/javascript">
-      new TradingView.widget({"width": "100%","height": 400,"symbol": "FRED:BAMLH0A0HYM2","interval": "D","theme": "dark","container_id": "tv_chart"});
-    </script></div>
+    st.subheader("🚨 Monitor de Riesgo Sistémico")
+    st.markdown(f"Ticker: **BAMLH0A0HYM2** | **Límite de Seguridad: 10.7**")
+    
+    tv_widget_html = f"""
+    <div class="tradingview-widget-container">
+      <div id="tradingview_chart"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "width": "100%",
+        "height": 400,
+        "symbol": "FRED:BAMLH0A0HYM2",
+        "interval": "D",
+        "theme": "dark",
+        "style": "1",
+        "locale": "es",
+        "container_id": "tradingview_chart"
+      }});
+      </script>
+    </div>
     """
-    components.html(tv_widget, height=420)
+    components.html(tv_widget_html, height=420)
+    st.warning("Si el gráfico anterior muestra un pico vertical brusco hacia 10.7, detén las compras aunque el precio caiga.")
 
 if __name__ == "__main__":
     render()

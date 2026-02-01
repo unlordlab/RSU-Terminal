@@ -13,16 +13,14 @@ import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
 
-# --- IMPORTACIÓN DE NUEVOS MÓDULOS ---
-# Usamos try/except para evitar que la app caiga si aún no has creado los archivos
+# --- IMPORTACIÓN SEGURA DE NUEVOS MÓDULOS ---
 try:
     import modules.spxl_strategy as spxl_strategy
     import modules.roadmap_2026 as roadmap_2026
     import modules.trump_playbook as trump_playbook
     import modules.rsu_algoritmo as rsu_algoritmo
-    NUEVOS_MODULOS_PRESENTES = True
 except ImportError:
-    NUEVOS_MODULOS_PRESENTES = False
+    pass
 
 set_style()
 
@@ -89,7 +87,6 @@ with st.sidebar:
 
     st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
 
-    # --- LEYENDA ORIGINAL RE-INTEGRADA ---
     st.markdown("**Legend:**")
     legend_items = [
         ("#d32f2f", "Extreme Fear (0-25)"),
@@ -106,28 +103,30 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
-# --- LÓGICA DE NAVEGACIÓN ---
+# --- LÓGICA DE NAVEGACIÓN CON VERIFICACIÓN DE ATRIBUTOS ---
+def safe_show(module, function_name):
+    if hasattr(module, function_name):
+        getattr(module, function_name)()
+    else:
+        st.error(f"Error: La función '{function_name}' no existe en el módulo '{module.__name__}'.")
+
 if menu == "📊 DASHBOARD":
-    market.show_dashboard()
+    safe_show(market, "show_dashboard")
 elif menu == "📈 ESTRATEGIA SPXL":
-    if NUEVOS_MODULOS_PRESENTES: spxl_strategy.show()
-    else: st.warning("Módulo no encontrado.")
+    safe_show(spxl_strategy, "show")
 elif menu == "🗺️ 2026 ROADMAP":
-    if NUEVOS_MODULOS_PRESENTES: roadmap_2026.show()
-    else: st.warning("Módulo no encontrado.")
+    safe_show(roadmap_2026, "show")
 elif menu == "🇺🇸 TRUMP PLAYBOOK":
-    if NUEVOS_MODULOS_PRESENTES: trump_playbook.show()
-    else: st.warning("Módulo no encontrado.")
+    safe_show(trump_playbook, "show")
 elif menu == "🤖 RSU ALGORITMO":
-    if NUEVOS_MODULOS_PRESENTES: rsu_algoritmo.show()
-    else: st.warning("Módulo no encontrado.")
+    safe_show(rsu_algoritmo, "show")
 elif menu == "🤖 IA REPORT":
-    ia_report.show()
+    safe_show(ia_report, "show")
 elif menu == "💼 CARTERA":
-    cartera.show()
+    safe_show(cartera, "show")
 elif menu == "📄 TESIS":
-    tesis.show()
+    safe_show(tesis, "show")
 elif menu == "⚖️ TRADE GRADER":
-    trade_grader.show()
+    safe_show(trade_grader, "show")
 elif menu == "🎥 ACADEMY":
-    academy.show()
+    safe_show(academy, "show")

@@ -14,6 +14,12 @@ import modules.tesis as tesis
 import modules.trade_grader as trade_grader
 import modules.academy as academy
 
+# --- NUEVOS IMPORTES ---
+import modules.spxl_strategy as spxl_strategy
+import modules.roadmap_2026 as roadmap_2026
+import modules.trump_playbook as trump_playbook
+import modules.rsu_algoritmo as rsu_algoritmo
+
 set_style()
 
 if not auth.login():
@@ -27,6 +33,10 @@ with st.sidebar:
         "",
         [
             "📊 DASHBOARD",
+            "📈 ESTRATEGIA SPXL",
+            "🗺️ 2026 ROADMAP",
+            "🇺🇸 TRUMP PLAYBOOK",
+            "🤖 RSU ALGORITMO",
             "🤖 IA REPORT",
             "💼 CARTERA",
             "📄 TESIS",
@@ -46,46 +56,20 @@ with st.sidebar:
         number={"font": {"size": 24, "color": "white"}},
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': "rgba(0,0,0,0)"},
+            'bar': {'color': "#2962ff"},
             'bgcolor': "rgba(0,0,0,0)",
-            'borderwidth': 0,
+            'borderwidth': 2,
+            'bordercolor': "#555",
             'steps': [
-                {'range': [0, 25], 'color': "#d32f2f"},
-                {'range': [25, 45], 'color': "#f57c00"},
-                {'range': [45, 55], 'color': "#ff9800"},
-                {'range': [55, 75], 'color': "#4caf50"},
-                {'range': [75, 100], 'color': "#00ffad"},
+                {'range': [0, 25], 'color': '#d32f2f'},
+                {'range': [25, 45], 'color': '#f57c00'},
+                {'range': [45, 55], 'color': '#ff9800'},
+                {'range': [55, 75], 'color': '#4caf50'},
+                {'range': [75, 100], 'color': '#00ffad'},
             ],
         }
     ))
-
-    theta = 180 - (fng / 100) * 180
-    r = 0.85
-    x_head = r * math.cos(math.radians(theta))
-    y_head = r * math.sin(math.radians(theta))
-
-    fig.add_shape(
-        type='line',
-        x0=0.5, y0=0.15,
-        x1=0.5 + x_head/2.2, y1=0.15 + y_head/1.2,
-        line=dict(color='white', width=4),
-        xref='paper', yref='paper'
-    )
-
-    fig.add_shape(
-        type='circle',
-        x0=0.48, y0=0.12, x1=0.52, y1=0.18,
-        fillcolor='white', line_color='white',
-        xref='paper', yref='paper'
-    )
-
-    fig.update_layout(
-        height=180,
-        margin=dict(l=15, r=15, t=5, b=25),
-        paper_bgcolor='rgba(0,0,0,0)',
-        font={'color': "white"}
-    )
-    
+    fig.update_layout(height=180, margin=dict(l=20, r=20, t=30, b=0), paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"})
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     if fng < 25:
@@ -101,33 +85,25 @@ with st.sidebar:
 
     st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
 
-    st.markdown("**Legend:**")
-    legend_items = [
-        ("#d32f2f", "Extreme Fear (0-25)"),
-        ("#f57c00", "Fear (25-45)"),
-        ("#ff9800", "Neutral (45-55)"),
-        ("#4caf50", "Greed (55-75)"),
-        ("#00ffad", "Extreme Greed (75-100)"),
-    ]
-
-    for col, txt in legend_items:
-        st.markdown(
-            f'<div style="display:flex; align-items:center; margin-bottom:3px;">'
-            f'<div style="width:12px; height:12px; background-color:{col}; border-radius:2px; margin-right:8px;"></div>'
-            f'<span style="font-size:0.8rem; color:#ccc;">{txt}</span>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
+# Lógica de navegación
 if menu == "📊 DASHBOARD":
-    market.render()
+    market.show_dashboard()
+elif menu == "📈 ESTRATEGIA SPXL":
+    spxl_strategy.show()
+elif menu == "🗺️ 2026 ROADMAP":
+    roadmap_2026.show()
+elif menu == "🇺🇸 TRUMP PLAYBOOK":
+    trump_playbook.show()
+elif menu == "🤖 RSU ALGORITMO":
+    rsu_algoritmo.show()
 elif menu == "🤖 IA REPORT":
-    ia_report.render()
+    ia_report.show()
 elif menu == "💼 CARTERA":
-    cartera.render()
+    cartera.show()
 elif menu == "📄 TESIS":
-    tesis.render()
+    tesis.show()
 elif menu == "⚖️ TRADE GRADER":
-    trade_grader.render()
+    trade_grader.show()
 elif menu == "🎥 ACADEMY":
-    academy.render()
+    academy.show()
+

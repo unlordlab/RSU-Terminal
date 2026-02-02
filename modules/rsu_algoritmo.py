@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
+from config import set_style  # <--- IMPORTAMOS LA FUNCIÓN
 
 class RSUAlgoritmo:
     def __init__(self):
@@ -10,14 +11,12 @@ class RSUAlgoritmo:
 
     def obtener_rsi_semanal(self):
         try:
-            # Descargamos datos semanales del SPY (últimos 2 años para asegurar el RSI)
             ticker = yf.Ticker("SPY")
             df = ticker.history(interval="1wk", period="2y")
             
             if df.empty or len(df) < 14:
                 return None, None
             
-            # Calculamos RSI de 14 periodos sobre el cierre semanal
             df['rsi'] = ta.rsi(df['Close'], length=14)
             rsi_actual = df['rsi'].iloc[-1]
             precio_actual = df['Close'].iloc[-1]
@@ -27,10 +26,6 @@ class RSUAlgoritmo:
             return None, None
 
     def calcular_color(self, rsi):
-        # Lógica solicitada:
-        # < 30 (Sobreventa) -> VERDE
-        # 30 - 70 -> AMBAR
-        # > 70 (Sobrecompra) -> ROJO
         if rsi < 30:
             return "VERDE"
         elif rsi > 70:
@@ -39,10 +34,15 @@ class RSUAlgoritmo:
             return "AMBAR"
 
 def render():
+    set_style() # <--- FORZAMOS LA CARGA DE LOS ESTILOS AL RENDERIZAR
+    
     st.title("🤖 RSU ALGORITMO - SEMÁFORO")
     st.info("Estrategia basada exclusivamente en el RSI Semanal del S&P 500 (SPY).")
     
-    # Usamos el motor de la sesión
+    # Verificación de seguridad por si no se inicializó en app.py
+    if 'algoritmo_engine' not in st.session_state:
+        st.session_state.algoritmo_engine = RSUAlgoritmo()
+        
     engine = st.session_state.algoritmo_engine
     
     with st.spinner('Calculando RSI Semanal...'):
@@ -51,7 +51,7 @@ def render():
     if rsi_semanal is not None:
         estado = engine.calcular_color(rsi_semanal)
         
-        # Lógica de luces para el HTML
+        # Estas clases coinciden con tu config.py
         luz_r = "luz-on" if estado == "ROJO" else ""
         luz_a = "luz-on" if estado == "AMBAR" else ""
         luz_v = "luz-on" if estado == "VERDE" else ""
@@ -72,7 +72,6 @@ def render():
             </div>
         """, unsafe_allow_html=True)
         
-        # Comparativa visual
         st.write("---")
         st.write("**Parámetros de la estrategia:**")
         col1, col2, col3 = st.columns(3)
@@ -81,8 +80,7 @@ def render():
         col3.success("🟢 RSI < 30: Oportunidad")
         
     else:
-        st.error("No se pudieron recuperar los datos de Yahoo Finance. Reintenta en unos instantes.")
+        st.error("No se pudieron recuperar los datos. Reintenta en unos instantes.")
 
     if st.button("🔄 Forzar Recálculo"):
         st.rerun()
-

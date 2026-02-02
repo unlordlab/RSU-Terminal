@@ -8,16 +8,12 @@ def get_buzztickr_data():
     """Extrae el Top 10 con todas las métricas solicitadas de BuzzTickr."""
     try:
         url = "https://www.buzztickr.com/reddit-buzz/"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
         
         data = []
-        # Buscamos la tabla específica por su clase o ID común en ese sitio
-        table = soup.find('table', {'id': 'reddit-buzz-table'}) or soup.find('table')
-        
+        table = soup.find('table') 
         if table:
             rows = table.find_all('tr')[1:11] 
             for row in rows:
@@ -32,14 +28,6 @@ def get_buzztickr_data():
                         "c": cols[5].text.strip(),
                         "s": cols[7].text.strip()
                     })
-        
-        # Si el scraper falla, devolvemos datos placeholder para no romper la armonía visual
-        if not data:
-            return [
-                {"rk": "01", "tkr": "SPY", "it": "45", "ct": "12", "p": "150", "c": "800", "s": "2%"},
-                {"rk": "02", "tkr": "TSLA", "it": "38", "ct": "08", "p": "120", "c": "650", "s": "1%"},
-                {"rk": "03", "tkr": "NVDA", "it": "30", "ct": "15", "p": "95", "c": "420", "s": "0%"},
-            ]
         return data
     except:
         return []
@@ -49,7 +37,7 @@ def render():
     
     col1, col2, col3 = st.columns(3)
     
-    # --- COLUMNA 1: MARKET INDICES ---
+    # --- COLUMNA 1: MARKET INDICES (Zona Oscura) ---
     with col1:
         indices_list = [
             {"label": "S&P 500", "full": "US 500 INDEX", "t": "^GSPC"},
@@ -87,10 +75,9 @@ def render():
     with col2:
         st.markdown("""
             <div class="group-container">
-                <div class="group-header" style="text-align:center;"><p class="group-title">US High Yield Credit Spreads</p></div>
+                <div class="group-header"><p class="group-title">US High Yield Credit Spreads</p></div>
                 <div class="group-content" style="background-color: #11141a; padding: 10px;">
         """, unsafe_allow_html=True)
-        
         components.html("""
             <div style="height:280px; width:100%; border-radius:8px; overflow:hidden;">
               <div id="tv_spread" style="height:100%;"></div>
@@ -100,42 +87,39 @@ def render():
               </script>
             </div>
         """, height=285)
-        
         st.markdown("</div></div>", unsafe_allow_html=True)
 
-    # --- COLUMNA 3: BUZZTICKR ---
+    # --- COLUMNA 3: BUZZTICKR (Zona Oscura con Rank, TKR, IT, CT, Posts, Comments, Spam) ---
     with col3:
         tickers = get_buzztickr_data()
         
-        # Generamos la tabla de BuzzTickr con el mismo estilo que los índices
-        buzz_items_html = """
-        <div style="display: grid; grid-template-columns: 20px 45px 1fr 1fr 1fr 1fr 1fr; gap: 2px; font-size: 9px; color: #555; font-weight: bold; margin-bottom: 10px; text-align: center; padding: 0 5px;">
+        # Estructura de cabecera fija
+        buzz_html = """
+        <div style="display: grid; grid-template-columns: 20px 45px 1fr 1fr 1fr 1fr 1fr; gap: 2px; font-size: 9px; color: #555; font-weight: bold; margin-bottom: 10px; text-align: center;">
             <span>RK</span><span>TKR</span><span>IT</span><span>CT</span><span>P</span><span>C</span><span>S</span>
         </div>
         """
         
-        for t in tickers:
-            buzz_items_html += f"""
-            <div style="background-color: #0c0e12; padding: 6px 4px; border-radius: 4px; margin-bottom: 4px; border: 1px solid #1a1e26; display: grid; grid-template-columns: 20px 45px 1fr 1fr 1fr 1fr 1fr; gap: 2px; text-align: center; align-items: center; font-size: 10px;">
-                <span style="color: #444;">{t['rk']}</span>
-                <span style="color: #00ffad; font-weight: bold; text-align: left; padding-left: 5px;">{t['tkr']}</span>
-                <span style="color: #ccc;">{t['it']}</span>
-                <span style="color: #ccc;">{t['ct']}</span>
-                <span style="color: #ccc;">{t['p']}</span>
-                <span style="color: #ccc;">{t['c']}</span>
-                <span style="color: #f23645;">{t['s']}</span>
-            </div>"""
+        if tickers:
+            for t in tickers:
+                buzz_html += f"""
+                <div style="background-color: #0c0e12; padding: 6px 4px; border-radius: 4px; margin-bottom: 4px; border: 1px solid #1a1e26; display: grid; grid-template-columns: 20px 45px 1fr 1fr 1fr 1fr 1fr; gap: 2px; text-align: center; align-items: center; font-size: 10px;">
+                    <span style="color: #444;">{t['rk']}</span>
+                    <span style="color: #00ffad; font-weight: bold; text-align: left; padding-left: 5px;">{t['tkr']}</span>
+                    <span style="color: #ccc;">{t['it']}</span>
+                    <span style="color: #ccc;">{t['ct']}</span>
+                    <span style="color: #ccc;">{t['p']}</span>
+                    <span style="color: #ccc;">{t['c']}</span>
+                    <span style="color: #f23645;">{t['s']}</span>
+                </div>"""
+        else:
+            buzz_html += '<div style="color:#555; text-align:center; font-size:11px; padding:20px;">Fetching Reddit Pulse...</div>'
 
         st.markdown(f"""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">BuzzTickr Reddit Top 10</p></div>
                 <div class="group-content" style="background-color: #11141a; padding: 15px;">
-                    {buzz_items_html}
+                    {buzz_html}
                 </div>
             </div>
         """, unsafe_allow_html=True)
-
-    # Hilera 2, 3, 4 (Vacías)
-    for i in range(2, 5):
-        st.write("---")
-        st.columns(3)

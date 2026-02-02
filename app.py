@@ -9,18 +9,22 @@ import math
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios
 import modules.auth as auth
 import modules.market as market
-import modules.ia_report as ia_report
+import modules.manifest as manifest        # Nuevo
+import modules.rsu_club as rsu_club        # Nuevo
+import modules.rsrw as rsrw
+import modules.algoritmo_rsu as algoritmo_rsu # Nuevo
+import modules.ema_edge as ema_edge        # Nuevo
+import modules.earnings as earnings
 import modules.cartera as cartera
 import modules.tesis as tesis
-import modules.trade_grader as trade_grader
+import modules.ia_report as ia_report
 import modules.academy as academy
-import modules.rsrw as rsrw  
-
-# --- NUEVOS MÓDULOS ---
+import modules.trade_grader as trade_grader
 import modules.spxl_strategy as spxl_strategy
 import modules.roadmap_2026 as roadmap_2026
 import modules.trump_playbook as trump_playbook
-import modules.earnings as earnings # <--- Nuevo módulo integrado
+import modules.comunidad as comunidad        # Nuevo
+import modules.disclaimer as disclaimer      # Nuevo
 
 # Aplicar estilos definidos en config.py
 set_style()
@@ -49,20 +53,28 @@ with st.sidebar:
     
     st.write("---")
     
+  with st.sidebar:
+    # ...
     menu = st.radio(
-        "MENÚ PRINCIPAL",
+        "NAVIGATION",
         [
             "📊 DASHBOARD", 
+            "📜 MANIFEST",
+            "♣️ RSU CLUB",      # <--- Nueva sección aquí
             "📈 SCANNER RS/RW", 
-            "📅 EARNINGS", # <--- Opción añadida
-            "📝 TESIS", 
+            "🤖 ALGORITMO RSU",
+            "⚡ EMA EDGE",
+            "📅 EARNINGS", 
             "💼 CARTERA", 
-            "🤖 IA REPORT", 
-            "🎯 TRADE GRADER", 
-            "🚀 SPXL STRATEGY", 
-            "🗺️ ROADMAP 2026", 
-            "🇺🇸 TRUMP PLAYBOOK", 
-            "🎓 ACADEMY"
+            "📝 TESIS",
+            "🤖 AI REPORT",
+            "🎓 ACADEMY",
+            "🏆 TRADE GRADER",
+            "🚀 SPXL STRATEGY",
+            "🗺️ ROADMAP 2026",
+            "🇺🇸 TRUMP PLAYBOOK",
+            "👥 COMUNIDAD",
+            "⚠️ DISCLAIMER"
         ]
     )
 
@@ -132,22 +144,37 @@ with st.sidebar:
 if menu == "📊 DASHBOARD":
     market.render()
 
+elif menu == "📜 MANIFEST":
+    manifest.render()
+
+elif menu == "♣️ RSU CLUB":
+    rsu_club.render()
+
 elif menu == "📈 SCANNER RS/RW":
     rsrw.render()
 
-elif menu == "📅 EARNINGS": # <--- Lógica de navegación nueva
-    earnings.render()
+elif menu == "🤖 ALGORITMO RSU":
+    algoritmo_rsu.render()
 
-elif menu == "📝 TESIS":
-    tesis.render()
+elif menu == "⚡ EMA EDGE":
+    ema_edge.render()
+
+elif menu == "📅 EARNINGS":
+    earnings.render()
 
 elif menu == "💼 CARTERA":
     cartera.render()
 
-elif menu == "🤖 IA REPORT":
+elif menu == "📝 TESIS":
+    tesis.render()
+
+elif menu == "🤖 AI REPORT":
     ia_report.render()
 
-elif menu == "🎯 TRADE GRADER":
+elif menu == "🎓 ACADEMY":
+    academy.render()
+
+elif menu == "🏆 TRADE GRADER":
     trade_grader.render()
 
 elif menu == "🚀 SPXL STRATEGY":
@@ -159,8 +186,12 @@ elif menu == "🗺️ ROADMAP 2026":
 elif menu == "🇺🇸 TRUMP PLAYBOOK":
     trump_playbook.render()
 
-elif menu == "🎓 ACADEMY":
-    academy.render()
+elif menu == "👥 COMUNIDAD":
+    comunidad.render()
+
+elif menu == "⚠️ DISCLAIMER":
+    disclaimer.render()
+
 
 
 

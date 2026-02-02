@@ -21,6 +21,25 @@ if 'page_config_set' not in st.session_state:
 def set_style():
     st.markdown("""
         <style>
+        .semaforo-luz {
+            border-radius: 50%;
+            background-color: #222; /* Color apagado por defecto */
+            border: 4px solid #333;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+        .luz-roja.luz-on { 
+            background-color: #ff4b4b; 
+            box-shadow: 0 0 40px #ff4b4b, inset 0 0 20px rgba(0,0,0,0.2); 
+        }
+        .luz-ambar.luz-on { 
+            background-color: #ffaa00; 
+            box-shadow: 0 0 40px #ffaa00, inset 0 0 20px rgba(0,0,0,0.2); 
+        }
+        .luz-verde.luz-on { 
+            background-color: #00ffad; 
+            box-shadow: 0 0 40px #00ffad, inset 0 0 20px rgba(0,0,0,0.2); 
+        }
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
         
@@ -185,4 +204,5 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
+
 

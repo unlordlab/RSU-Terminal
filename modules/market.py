@@ -9,7 +9,7 @@ def get_overall_top_10():
     """Extrae los tickers del Top 10 de Reddit Buzz."""
     try:
         url = "https://www.buzztickr.com/reddit-buzz/"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         r = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')
         
@@ -36,7 +36,7 @@ def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
     # Altura común para la primera fila
-    BOX_HEIGHT = "400px"
+    BOX_HEIGHT = "380px"
 
     # --- FILA 1 ---
     col1, col2, col3 = st.columns(3)
@@ -49,21 +49,26 @@ def render():
             {"label": "DOW JONES", "full": "INDUSTRIAL AVG", "t": "^DJI"},
             {"label": "RUSSELL 2000", "full": "SMALL CAP", "t": "^RUT"}
         ]
-        indices_html = "".join([f'''
+        
+        indices_html = ""
+        for idx in indices_list:
+            p, c = get_market_index(idx['t'])
+            color = "#00ffad" if c >= 0 else "#f23645"
+            indices_html += f'''
             <div style="background-color: #0c0e12; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border: 1px solid #1a1e26;">
                 <div>
                     <div style="font-weight: bold; color: white; font-size: 13px;">{idx['label']}</div>
                     <div style="color: #555; font-size: 10px;">{idx['full']}</div>
                 </div>
                 <div style="text-align: right;">
-                    <div style="font-weight: bold; color: white;">{get_market_index(idx['t'])[0]:,.2f}</div>
-                    <div style="color: {"#00ffad" if get_market_index(idx['t'])[1] >= 0 else "#f23645"}; font-size: 11px; font-weight: bold;">{get_market_index(idx['t'])[1]:+.2f}%</div>
+                    <div style="font-weight: bold; color: white;">{p:,.2f}</div>
+                    <div style="color: {color}; font-size: 11px; font-weight: bold;">{c:+.2f}%</div>
                 </div>
-            </div>''' for idx in indices_list])
+            </div>'''
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # 2. CALENDARIO ECONÓMICO (Widget de TradingView - Más estable)
+    # 2. CALENDARIO ECONÓMICO (TradingView Widget)
     with col2:
         st.markdown(f'''
             <div class="group-container">
@@ -71,9 +76,8 @@ def render():
                 <div class="group-content" style="background-color: #11141a; padding: 0px; height: {BOX_HEIGHT}; overflow: hidden;">
         ''', unsafe_allow_html=True)
         
-        # Widget de Calendario de TradingView
         components.html('''
-            <div class="tradingview-widget-container">
+            <div class="tradingview-widget-container" style="height:100%; width:100%;">
               <div class="tradingview-widget-container__widget"></div>
               <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
               {
@@ -82,15 +86,12 @@ def render():
               "width": "100%",
               "height": "100%",
               "locale": "en",
-              "importanceFilter": "-1,0,1",
-              "currencyFilter": "USD,EUR,GBP"
+              "importanceFilter": "0,1",
+              "currencyFilter": "USD,EUR"
               }
               </script>
             </div>
-            <style>
-                iframe { height: 380px !important; }
-            </style>
-        ''', height=390)
+        ''', height=375)
         
         st.markdown('</div></div>', unsafe_allow_html=True)
 
@@ -106,7 +107,7 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">{buzz_items}</div></div>''', unsafe_allow_html=True)
 
-    # --- HILERAS ADICIONALES ---
+    # --- HILERAS FUTURAS ---
     for row_idx in range(2, 5):
         st.write("") 
         cols = st.columns(3)
@@ -114,7 +115,7 @@ def render():
             with c:
                 st.markdown(f'''
                     <div class="group-container">
-                        <div class="group-header"><p class="group-title">Modulo {row_idx}.{i+1}</p></div>
+                        <div class="group-header"><p class="group-title">Module {row_idx}.{i+1}</p></div>
                         <div class="group-content" style="background-color: #11141a; height: 250px; display: flex; align-items: center; justify-content: center;">
                             <p style="color: #333; font-size: 0.8rem; font-weight: bold; letter-spacing: 2px;">DISPONIBLE</p>
                         </div>

@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 import re
 
 def get_overall_top_10():
-    """Extrae los tickers del Top 10 de Reddit Buzz."""
+    """Extrae los tickers del Top 10 de Reddit Buzz de forma robusta."""
     try:
         url = "https://www.buzztickr.com/reddit-buzz/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -35,7 +35,7 @@ def get_overall_top_10():
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # Altura común para la primera fila
+    # Altura maestra para la primera fila
     BOX_HEIGHT = "380px"
 
     # --- FILA 1 ---
@@ -68,7 +68,7 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # 2. CALENDARIO ECONÓMICO (TradingView Widget)
+    # 2. CALENDARIO ECONÓMICO (TradingView Widget Integrado)
     with col2:
         st.markdown(f'''
             <div class="group-container">
@@ -77,19 +77,8 @@ def render():
         ''', unsafe_allow_html=True)
         
         components.html('''
-            <div class="tradingview-widget-container" style="height:100%; width:100%;">
-              <div class="tradingview-widget-container__widget"></div>
-              <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
-              {
-              "colorTheme": "dark",
-              "isMaximized": true,
-              "width": "100%",
-              "height": "100%",
-              "locale": "en",
-              "importanceFilter": "0,1",
-              "currencyFilter": "USD,EUR"
-              }
-              </script>
+            <div class="tradingview-widget-container" style="width: 100%; height: 100%;">
+              <iframe scrolling="no" allowtransparency="true" frameborder="0" src="https://www.tradingview-widget.com/embed-widget/events/?locale=en#%7B%22colorTheme%22%3A%22dark%22%2C%22isMaximized%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22importanceFilter%22%3A%220%2C1%22%2C%22currencyFilter%22%3A%22USD%2CEUR%22%7D" style="box-sizing: border-box; height: 100%; width: 100%;"></iframe>
             </div>
         ''', height=375)
         
@@ -107,7 +96,7 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">{buzz_items}</div></div>''', unsafe_allow_html=True)
 
-    # --- HILERAS FUTURAS ---
+    # --- HILERAS FUTURAS (2, 3, 4) ---
     for row_idx in range(2, 5):
         st.write("") 
         cols = st.columns(3)
@@ -115,9 +104,9 @@ def render():
             with c:
                 st.markdown(f'''
                     <div class="group-container">
-                        <div class="group-header"><p class="group-title">Module {row_idx}.{i+1}</p></div>
-                        <div class="group-content" style="background-color: #11141a; height: 250px; display: flex; align-items: center; justify-content: center;">
-                            <p style="color: #333; font-size: 0.8rem; font-weight: bold; letter-spacing: 2px;">DISPONIBLE</p>
+                        <div class="group-header"><p class="group-title">Modulo {row_idx}.{i+1}</p></div>
+                        <div class="group-content" style="background-color: #11141a; height: 250px; display: flex; align-items: center; justify-content: center; border-radius: 0 0 8px 8px;">
+                            <p style="color: #222; font-size: 0.7rem; font-weight: bold; letter-spacing: 3px;">VOID</p>
                         </div>
                     </div>
                 ''', unsafe_allow_html=True)

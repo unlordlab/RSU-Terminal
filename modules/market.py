@@ -36,7 +36,7 @@ def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
     # Altura común para la primera fila
-    BOX_HEIGHT = "380px"
+    BOX_HEIGHT = "400px"
 
     # --- FILA 1 ---
     col1, col2, col3 = st.columns(3)
@@ -63,7 +63,7 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # 2. CALENDARIO ECONÓMICO (Versión Widget Directo)
+    # 2. CALENDARIO ECONÓMICO (Widget de TradingView - Más estable)
     with col2:
         st.markdown(f'''
             <div class="group-container">
@@ -71,14 +71,26 @@ def render():
                 <div class="group-content" style="background-color: #11141a; padding: 0px; height: {BOX_HEIGHT}; overflow: hidden;">
         ''', unsafe_allow_html=True)
         
-        # Widget embebido de Investing con configuración de colores manual para integrarse
+        # Widget de Calendario de TradingView
         components.html('''
-            <iframe src="https://ec.forex-pro.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&category=_unemployment,central_banks,inflation,economic_activity&importance=2,3&features=datepicker,timezone&countries=5&calType=day&timeZone=58&lang=1" 
-            width="100%" height="380" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0"></iframe>
+            <div class="tradingview-widget-container">
+              <div class="tradingview-widget-container__widget"></div>
+              <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
+              {
+              "colorTheme": "dark",
+              "isMaximized": true,
+              "width": "100%",
+              "height": "100%",
+              "locale": "en",
+              "importanceFilter": "-1,0,1",
+              "currencyFilter": "USD,EUR,GBP"
+              }
+              </script>
+            </div>
             <style>
-                iframe { background: #11141a; filter: invert(0.88) hue-rotate(180deg); }
+                iframe { height: 380px !important; }
             </style>
-        ''', height=375)
+        ''', height=390)
         
         st.markdown('</div></div>', unsafe_allow_html=True)
 

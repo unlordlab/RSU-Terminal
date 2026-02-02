@@ -12,7 +12,7 @@ import modules.market as market
 import modules.manifest as manifest        
 import modules.rsu_club as rsu_club        
 import modules.rsrw as rsrw
-import modules.algoritmo_rsu as algoritmo_rsu 
+import modules.rsu_algoritmo as algoritmo_rsu 
 import modules.ema_edge as ema_edge        
 import modules.earnings as earnings
 import modules.cartera as cartera
@@ -169,5 +169,6 @@ elif menu == "👥 COMUNIDAD":
     comunidad.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
+
 
 

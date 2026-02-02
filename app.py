@@ -144,7 +144,7 @@ elif menu == "♣️ RSU CLUB":
 elif menu == "📈 SCANNER RS/RW":
     rsrw.render()
 elif menu == "🤖 ALGORITMO RSU":
-    algoritmo_rsu.render()
+    rsu_algoritmo.render()
 elif menu == "⚡ EMA EDGE":
     ema_edge.render()
 elif menu == "📅 EARNINGS":
@@ -169,6 +169,7 @@ elif menu == "👥 COMUNIDAD":
     comunidad.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
+
 
 
 

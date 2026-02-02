@@ -37,9 +37,8 @@ def render():
     
     col1, col2, col3 = st.columns(3)
     
-    # --- COLUMNA 1: MARKET INDICES (DENTRO DE LA CAJA OSCURA) ---
+    # --- COLUMNA 1: MARKET INDICES ---
     with col1:
-        indices_html = ""
         indices_list = [
             {"label": "S&P 500", "full": "US 500 INDEX", "t": "^GSPC"},
             {"label": "NASDAQ 100", "full": "NASDAQ COMP", "t": "^IXIC"},
@@ -47,27 +46,27 @@ def render():
             {"label": "RUSSELL 2000", "full": "SMALL CAP", "t": "^RUT"}
         ]
         
+        inner_html = ""
         for idx in indices_list:
             p, c = get_market_index(idx['t'])
-            color_style = "color: #00ffad;" if c >= 0 else "color: #f23645;"
-            indices_html += f"""
-                <div style="background-color: #0c0e12; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border: 1px solid #1a1e26;">
-                    <div>
-                        <div style="font-weight: bold; color: white; font-size: 13px;">{idx['label']}</div>
-                        <div style="color: #555; font-size: 10px;">{idx['full']}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-weight: bold; color: white;">{p:,.2f}</div>
-                        <div style="{color_style} font-size: 11px; font-weight: bold;">{c:+.2f}%</div>
-                    </div>
+            color = "#00ffad" if c >= 0 else "#f23645"
+            inner_html += f"""
+            <div style="background-color: #0c0e12; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border: 1px solid #1a1e26;">
+                <div>
+                    <div style="font-weight: bold; color: white; font-size: 13px;">{idx['label']}</div>
+                    <div style="color: #555; font-size: 10px;">{idx['full']}</div>
                 </div>
-            """
-        
+                <div style="text-align: right;">
+                    <div style="font-weight: bold; color: white;">{p:,.2f}</div>
+                    <div style="color: {color}; font-size: 11px; font-weight: bold;">{c:+.2f}%</div>
+                </div>
+            </div>"""
+
         st.markdown(f"""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Indices</p></div>
                 <div class="group-content" style="background-color: #11141a; padding: 15px;">
-                    {indices_html}
+                    {inner_html}
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -92,33 +91,33 @@ def render():
         
         st.markdown("</div></div>", unsafe_allow_html=True)
 
-    # --- COLUMNA 3: BUZZTICKR (RANK, TKR, IT, CT, P, C, S) ---
+    # --- COLUMNA 3: BUZZTICKR ---
     with col3:
         tickers = get_buzztickr_data()
-        buzz_html = """
-            <div style="display: grid; grid-template-columns: 25px 1.2fr 1fr 1fr 1fr 1fr 1fr; gap: 2px; font-size: 9px; color: #555; font-weight: bold; margin-bottom: 10px; text-align: center; padding: 0 5px;">
-                <span>RK</span><span>TKR</span><span>IT</span><span>CT</span><span>P</span><span>C</span><span>S</span>
-            </div>
-        """
         
+        # Generamos el HTML de los items primero
+        buzz_items_html = ""
         for t in tickers:
-            buzz_html += f"""
-                <div style="background-color: #0c0e12; padding: 6px 4px; border-radius: 4px; margin-bottom: 4px; border: 1px solid #1a1e26; display: grid; grid-template-columns: 25px 1.2fr 1fr 1fr 1fr 1fr 1fr; gap: 2px; text-align: center; align-items: center; font-size: 10px;">
-                    <span style="color: #444;">{t['rk']}</span>
-                    <span style="color: #00ffad; font-weight: bold;">{t['tkr']}</span>
-                    <span style="color: #ccc;">{t['it']}</span>
-                    <span style="color: #ccc;">{t['ct']}</span>
-                    <span style="color: #ccc;">{t['p']}</span>
-                    <span style="color: #ccc;">{t['c']}</span>
-                    <span style="color: #f23645;">{t['s']}</span>
-                </div>
-            """
+            buzz_items_html += f"""
+            <div style="background-color: #0c0e12; padding: 6px 4px; border-radius: 4px; margin-bottom: 4px; border: 1px solid #1a1e26; display: grid; grid-template-columns: 20px 45px 1fr 1fr 1fr 1fr 1fr; gap: 2px; text-align: center; align-items: center; font-size: 10px;">
+                <span style="color: #444;">{t['rk']}</span>
+                <span style="color: #00ffad; font-weight: bold; text-align: left; padding-left: 5px;">{t['tkr']}</span>
+                <span style="color: #ccc;">{t['it']}</span>
+                <span style="color: #ccc;">{t['ct']}</span>
+                <span style="color: #ccc;">{t['p']}</span>
+                <span style="color: #ccc;">{t['c']}</span>
+                <span style="color: #f23645;">{t['s']}</span>
+            </div>"""
 
+        # Metemos todo el bloque (cabecera + items) dentro del group-content
         st.markdown(f"""
             <div class="group-container">
                 <div class="group-header"><p class="group-title">BuzzTickr Reddit Top 10</p></div>
                 <div class="group-content" style="background-color: #11141a; padding: 15px;">
-                    {buzz_html}
+                    <div style="display: grid; grid-template-columns: 20px 45px 1fr 1fr 1fr 1fr 1fr; gap: 2px; font-size: 9px; color: #555; font-weight: bold; margin-bottom: 10px; text-align: center;">
+                        <span>RK</span><span>TKR</span><span>IT</span><span>CT</span><span>P</span><span>C</span><span>S</span>
+                    </div>
+                    {buzz_items_html}
                 </div>
             </div>
         """, unsafe_allow_html=True)

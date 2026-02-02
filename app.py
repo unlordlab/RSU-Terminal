@@ -36,6 +36,8 @@ if not auth.login():
 # Inicializamos el motor del algoritmo RS/RW en la sesión
 if 'rsrw_engine' not in st.session_state:
     st.session_state.rsrw_engine = rsrw.RSRWEngine()
+if 'algoritmo_engine' not in st.session_state:
+    st.session_state.algoritmo_engine = rsu_algoritmo.RSUAlgoritmo()
 
 # --- SIDEBAR UNIFICADO ---
 with st.sidebar:
@@ -186,6 +188,7 @@ elif menu == "👥 COMUNIDAD":
     comunidad.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
+
 
 
 

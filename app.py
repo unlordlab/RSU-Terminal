@@ -9,11 +9,11 @@ import math
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios
 import modules.auth as auth
 import modules.market as market
-import modules.manifest as manifest        # Nuevo
-import modules.rsu_club as rsu_club        # Nuevo
+import modules.manifest as manifest        
+import modules.rsu_club as rsu_club        
 import modules.rsrw as rsrw
-import modules.algoritmo_rsu as algoritmo_rsu # Nuevo
-import modules.ema_edge as ema_edge        # Nuevo
+import modules.algoritmo_rsu as algoritmo_rsu 
+import modules.ema_edge as ema_edge        
 import modules.earnings as earnings
 import modules.cartera as cartera
 import modules.tesis as tesis
@@ -23,8 +23,8 @@ import modules.trade_grader as trade_grader
 import modules.spxl_strategy as spxl_strategy
 import modules.roadmap_2026 as roadmap_2026
 import modules.trump_playbook as trump_playbook
-import modules.comunidad as comunidad        # Nuevo
-import modules.disclaimer as disclaimer      # Nuevo
+import modules.comunidad as comunidad        
+import modules.disclaimer as disclaimer      
 
 # Aplicar estilos definidos en config.py
 set_style()
@@ -53,14 +53,13 @@ with st.sidebar:
     
     st.write("---")
     
-  with st.sidebar:
-    # ...
+    # --- MENÚ DE NAVEGACIÓN ---
     menu = st.radio(
         "NAVIGATION",
         [
             "📊 DASHBOARD", 
             "📜 MANIFEST",
-            "♣️ RSU CLUB",      # <--- Nueva sección aquí
+            "♣️ RSU CLUB",
             "📈 SCANNER RS/RW", 
             "🤖 ALGORITMO RSU",
             "⚡ EMA EDGE",
@@ -84,47 +83,42 @@ with st.sidebar:
     st.subheader("CNN Fear & Greed")
     fng = get_cnn_fear_greed()
     
-    # Gauge Chart
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = fng,
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        gauge = {
-            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': "#2962ff"},
-            'steps': [
-                {'range': [0, 25], 'color': "#d32f2f"},
-                {'range': [25, 45], 'color': "#f57c00"},
-                {'range': [45, 55], 'color': "#ff9800"},
-                {'range': [55, 75], 'color': "#4caf50"},
-                {'range': [75, 100], 'color': "#00ffad"}
-            ],
-            'threshold': {
-                'line': {'color': "white", 'width': 4},
-                'thickness': 0.75,
-                'value': fng
+    if fng is not None:
+        fig = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = fng,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            gauge = {
+                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
+                'bar': {'color': "#2962ff"},
+                'steps': [
+                    {'range': [0, 25], 'color': "#d32f2f"},
+                    {'range': [25, 45], 'color': "#f57c00"},
+                    {'range': [45, 55], 'color': "#ff9800"},
+                    {'range': [55, 75], 'color': "#4caf50"},
+                    {'range': [75, 100], 'color': "#00ffad"}
+                ]
             }
-        }
-    ))
-    fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font={'color': "white", 'family': "Arial"},
-        height=150,
-        margin=dict(l=10, r=10, t=10, b=10)
-    )
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        ))
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font={'color': "white", 'family': "Arial"},
+            height=150,
+            margin=dict(l=10, r=10, t=10, b=10)
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # Estado y Leyenda
-    if fng < 25: estado, color = "🟥 Extreme Fear", "#d32f2f"
-    elif fng < 45: estado, color = "🟧 Fear", "#f57c00"
-    elif fng < 55: estado, color = "🟨 Neutral", "#ff9800"
-    elif fng < 75: estado, color = "🟩 Greed", "#4caf50"
-    else: estado, color = "🟩 Extreme Greed", "#00ffad"
+        # Estado y Leyenda
+        if fng < 25: estado, color = "🟥 Extreme Fear", "#d32f2f"
+        elif fng < 45: estado, color = "🟧 Fear", "#f57c00"
+        elif fng < 55: estado, color = "🟨 Neutral", "#ff9800"
+        elif fng < 75: estado, color = "🟩 Greed", "#4caf50"
+        else: estado, color = "🟩 Extreme Greed", "#00ffad"
 
-    st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
 
-    st.markdown("**Sentimiento:**")
+    st.markdown("**Leyenda:**")
     legend_items = [
         ("#d32f2f", "Extreme Fear (0-25)"),
         ("#f57c00", "Fear (25-45)"),
@@ -140,58 +134,40 @@ with st.sidebar:
             </div>
         ''', unsafe_allow_html=True)
 
-# --- NAVEGACIÓN ---
+# --- LÓGICA DE NAVEGACIÓN ---
 if menu == "📊 DASHBOARD":
     market.render()
-
 elif menu == "📜 MANIFEST":
     manifest.render()
-
 elif menu == "♣️ RSU CLUB":
     rsu_club.render()
-
 elif menu == "📈 SCANNER RS/RW":
     rsrw.render()
-
 elif menu == "🤖 ALGORITMO RSU":
     algoritmo_rsu.render()
-
 elif menu == "⚡ EMA EDGE":
     ema_edge.render()
-
 elif menu == "📅 EARNINGS":
     earnings.render()
-
 elif menu == "💼 CARTERA":
     cartera.render()
-
 elif menu == "📝 TESIS":
     tesis.render()
-
 elif menu == "🤖 AI REPORT":
     ia_report.render()
-
 elif menu == "🎓 ACADEMY":
     academy.render()
-
 elif menu == "🏆 TRADE GRADER":
     trade_grader.render()
-
 elif menu == "🚀 SPXL STRATEGY":
     spxl_strategy.render()
-
 elif menu == "🗺️ ROADMAP 2026":
     roadmap_2026.render()
-
 elif menu == "🇺🇸 TRUMP PLAYBOOK":
     trump_playbook.render()
-
 elif menu == "👥 COMUNIDAD":
     comunidad.render()
-
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
-
-
 
 

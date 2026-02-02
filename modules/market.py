@@ -35,7 +35,7 @@ def get_overall_top_10():
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # Altura común para todas las cajas de la primera fila
+    # Altura común para la primera fila
     BOX_HEIGHT = "380px"
 
     # --- FILA 1 ---
@@ -63,20 +63,20 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # 2. US HIGH YIELD SPREADS (Widget TV dentro de la caja)
+    # 2. CALENDARIO ECONÓMICO (Investing.com)
     with col2:
-        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">US High Yield Spreads (D)</p></div><div class="group-content" style="background-color: #11141a; padding: 5px; height: {BOX_HEIGHT}; overflow: hidden;">''', unsafe_allow_html=True)
+        st.markdown(f'''
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">Economic Calendar</p></div>
+                <div class="group-content" style="background-color: #11141a; padding: 5px; height: {BOX_HEIGHT}; overflow: hidden;">
+        ''', unsafe_allow_html=True)
+        
+        # Widget de calendario económico de Investing.com filtrado a modo oscuro
         components.html('''
-            <div style="height:100%; width:100%; border-radius:4px; overflow:hidden;">
-              <div id="tv_chart_main" style="height:100%;"></div>
-              <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-              <script type="text/javascript">
-              new TradingView.widget({
-                "autosize": true, "symbol": "FRED:BAMLH0A0HYM2", "interval": "D", "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "en",
-                "hide_top_toolbar": true, "hide_legend": true, "container_id": "tv_chart_main", "backgroundColor": "#11141a", "gridColor": "rgba(42, 46, 57, 0.05)"
-              });
-              </script>
-            </div>''', height=365)
+            <iframe src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&category=_unemployment,central_banks,inflation,economic_activity&importance=2,3&features=datepicker,timezone&countries=5&calType=day&timeZone=58&lang=1" 
+            width="100%" height="360" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0" style="filter: invert(0.9) hue-rotate(180deg) brightness(0.9);"></iframe>
+        ''', height=365)
+        
         st.markdown('</div></div>', unsafe_allow_html=True)
 
     # 3. BUZZTICKR TOP 10
@@ -91,17 +91,18 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">{buzz_items}</div></div>''', unsafe_allow_html=True)
 
-    # --- HILERAS FUTURAS (2, 3, 4) ---
+    # --- HILERAS ADICIONALES (2, 3, 4) ---
+    # Usamos una altura un poco menor para las cajas de expansión futura
     for row_idx in range(2, 5):
-        st.write("") # Espaciador
+        st.write("") 
         cols = st.columns(3)
         for i, c in enumerate(cols):
             with c:
                 st.markdown(f'''
                     <div class="group-container">
                         <div class="group-header"><p class="group-title">Modulo {row_idx}.{i+1}</p></div>
-                        <div class="group-content" style="background-color: #11141a; height: 200px; display: flex; align-items: center; justify-content: center;">
-                            <p style="color: #333; font-size: 0.8rem;">DISPONIBLE</p>
+                        <div class="group-content" style="background-color: #11141a; height: 250px; display: flex; align-items: center; justify-content: center;">
+                            <p style="color: #333; font-size: 0.8rem; font-weight: bold; letter-spacing: 2px;">DISPONIBLE</p>
                         </div>
                     </div>
                 ''', unsafe_allow_html=True)

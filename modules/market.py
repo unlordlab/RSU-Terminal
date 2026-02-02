@@ -9,7 +9,7 @@ def get_overall_top_10():
     """Extrae los tickers del Top 10 de Reddit Buzz."""
     try:
         url = "https://www.buzztickr.com/reddit-buzz/"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         r = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')
         
@@ -63,19 +63,22 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # 2. CALENDARIO ECONÓMICO (Investing.com)
+    # 2. CALENDARIO ECONÓMICO (Versión Widget Directo)
     with col2:
         st.markdown(f'''
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Economic Calendar</p></div>
-                <div class="group-content" style="background-color: #11141a; padding: 5px; height: {BOX_HEIGHT}; overflow: hidden;">
+                <div class="group-content" style="background-color: #11141a; padding: 0px; height: {BOX_HEIGHT}; overflow: hidden;">
         ''', unsafe_allow_html=True)
         
-        # Widget de calendario económico de Investing.com filtrado a modo oscuro
+        # Widget embebido de Investing con configuración de colores manual para integrarse
         components.html('''
-            <iframe src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&category=_unemployment,central_banks,inflation,economic_activity&importance=2,3&features=datepicker,timezone&countries=5&calType=day&timeZone=58&lang=1" 
-            width="100%" height="360" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0" style="filter: invert(0.9) hue-rotate(180deg) brightness(0.9);"></iframe>
-        ''', height=365)
+            <iframe src="https://ec.forex-pro.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&category=_unemployment,central_banks,inflation,economic_activity&importance=2,3&features=datepicker,timezone&countries=5&calType=day&timeZone=58&lang=1" 
+            width="100%" height="380" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0"></iframe>
+            <style>
+                iframe { background: #11141a; filter: invert(0.88) hue-rotate(180deg); }
+            </style>
+        ''', height=375)
         
         st.markdown('</div></div>', unsafe_allow_html=True)
 
@@ -91,8 +94,7 @@ def render():
 
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">{buzz_items}</div></div>''', unsafe_allow_html=True)
 
-    # --- HILERAS ADICIONALES (2, 3, 4) ---
-    # Usamos una altura un poco menor para las cajas de expansión futura
+    # --- HILERAS ADICIONALES ---
     for row_idx in range(2, 5):
         st.write("") 
         cols = st.columns(3)

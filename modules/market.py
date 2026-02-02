@@ -24,25 +24,24 @@ def get_overall_top_10():
                     if tkr: tickers.append(tkr)
         
         if not tickers:
-            # Fallback: Búsqueda por patrón si la tabla falla
             raw_text = soup.get_text()
             found = re.findall(r'\b[A-Z]{2,5}\b', raw_text)
             tickers = list(dict.fromkeys(found))[:10]
 
-        return tickers if tickers else ["SLV", "MSFT", "SPY", "GLD", "VOO", "SNDK", "NVDA", "DVLT", "PLTR", "SLS"]
+        return tickers if tickers else ["SPY", "TSLA", "NVDA", "AAPL", "AMD", "MSFT", "QQQ", "GME", "PLTR", "AMZN"]
     except:
-        return ["SLV", "MSFT", "SPY", "GLD", "VOO", "SNDK", "NVDA", "DVLT", "PLTR", "SLS"]
+        return ["SPY", "TSLA", "NVDA", "AAPL", "AMD", "MSFT", "QQQ", "GME", "PLTR", "AMZN"]
 
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # Definimos columnas de igual ancho para simetría
-    col1, col2, col3 = st.columns(3)
-    
-    # Altura fija para las cajas oscuras (ajustada para que coincidan)
+    # Altura común para todas las cajas de la primera fila
     BOX_HEIGHT = "380px"
 
-    # --- COLUMNA 1: MARKET INDICES ---
+    # --- FILA 1 ---
+    col1, col2, col3 = st.columns(3)
+    
+    # 1. MARKET INDICES
     with col1:
         indices_list = [
             {"label": "S&P 500", "full": "US 500 INDEX", "t": "^GSPC"},
@@ -50,85 +49,59 @@ def render():
             {"label": "DOW JONES", "full": "INDUSTRIAL AVG", "t": "^DJI"},
             {"label": "RUSSELL 2000", "full": "SMALL CAP", "t": "^RUT"}
         ]
-        
-        indices_html = ""
-        for idx in indices_list:
-            p, c = get_market_index(idx['t']) #
-            color = "#00ffad" if c >= 0 else "#f23645"
-            indices_html += f'''
+        indices_html = "".join([f'''
             <div style="background-color: #0c0e12; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border: 1px solid #1a1e26;">
                 <div>
                     <div style="font-weight: bold; color: white; font-size: 13px;">{idx['label']}</div>
                     <div style="color: #555; font-size: 10px;">{idx['full']}</div>
                 </div>
                 <div style="text-align: right;">
-                    <div style="font-weight: bold; color: white;">{p:,.2f}</div>
-                    <div style="color: {color}; font-size: 11px; font-weight: bold;">{c:+.2f}%</div>
+                    <div style="font-weight: bold; color: white;">{get_market_index(idx['t'])[0]:,.2f}</div>
+                    <div style="color: {"#00ffad" if get_market_index(idx['t'])[1] >= 0 else "#f23645"}; font-size: 11px; font-weight: bold;">{get_market_index(idx['t'])[1]:+.2f}%</div>
                 </div>
-            </div>'''
+            </div>''' for idx in indices_list])
 
-        st.markdown(f'''
-            <div class="group-container">
-                <div class="group-header"><p class="group-title">Market Indices</p></div>
-                <div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">
-                    {indices_html}
-                </div>
-            </div>
-        ''', unsafe_allow_html=True)
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # --- COLUMNA 2: US HIGH YIELD SPREADS (Widget TradingView) ---
+    # 2. US HIGH YIELD SPREADS (Widget TV dentro de la caja)
     with col2:
-        st.markdown(f'''
-            <div class="group-container">
-                <div class="group-header"><p class="group-title">US High Yield Spreads (OAS)</p></div>
-                <div class="group-content" style="background-color: #11141a; padding: 10px; height: {BOX_HEIGHT}; overflow: hidden;">
-        ''', unsafe_allow_html=True)
-        
-        # Widget configurado con velas diarias (D) y ticker FRED
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">US High Yield Spreads (D)</p></div><div class="group-content" style="background-color: #11141a; padding: 5px; height: {BOX_HEIGHT}; overflow: hidden;">''', unsafe_allow_html=True)
         components.html('''
-            <div style="height:100%; width:100%; border-radius:8px; overflow:hidden;">
-              <div id="tv_spread_chart" style="height:100%;"></div>
+            <div style="height:100%; width:100%; border-radius:4px; overflow:hidden;">
+              <div id="tv_chart_main" style="height:100%;"></div>
               <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
               <script type="text/javascript">
               new TradingView.widget({
-                "autosize": true,
-                "symbol": "FRED:BAMLH0A0HYM2",
-                "interval": "D",
-                "timezone": "Etc/UTC",
-                "theme": "dark",
-                "style": "1",
-                "locale": "en",
-                "toolbar_bg": "#f1f3f6",
-                "enable_publishing": false,
-                "hide_top_toolbar": true,
-                "hide_legend": true,
-                "save_image": false,
-                "container_id": "tv_spread_chart",
-                "backgroundColor": "#11141a",
-                "gridColor": "rgba(42, 46, 57, 0.06)"
+                "autosize": true, "symbol": "FRED:BAMLH0A0HYM2", "interval": "D", "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "en",
+                "hide_top_toolbar": true, "hide_legend": true, "container_id": "tv_chart_main", "backgroundColor": "#11141a", "gridColor": "rgba(42, 46, 57, 0.05)"
               });
               </script>
-            </div>
-        ''', height=360)
+            </div>''', height=365)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
-    # --- COLUMNA 3: BUZZTICKR OVERALL TOP 10 ---
+    # 3. BUZZTICKR TOP 10
     with col3:
         top_10 = get_overall_top_10()
-        buzz_items_html = ""
-        for i, tkr in enumerate(top_10, 1):
-            buzz_items_html += f'''
+        buzz_items = "".join([f'''
             <div style="background-color: #0c0e12; padding: 8px 12px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #444; font-weight: bold; font-size: 11px;">{i:02d}</span>
+                <span style="color: #444; font-weight: bold; font-size: 11px;">{i+1:02d}</span>
                 <span style="color: #00ffad; font-weight: bold; font-size: 13px;">{tkr}</span>
                 <span style="color: #f23645; font-size: 9px; font-weight: bold;">HOT 🔥</span>
-            </div>'''
+            </div>''' for i, tkr in enumerate(top_10)])
 
-        st.markdown(f'''
-            <div class="group-container">
-                <div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div>
-                <div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">
-                    {buzz_items_html}
-                </div>
-            </div>
-        ''', unsafe_allow_html=True)
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">{buzz_items}</div></div>''', unsafe_allow_html=True)
+
+    # --- HILERAS FUTURAS (2, 3, 4) ---
+    for row_idx in range(2, 5):
+        st.write("") # Espaciador
+        cols = st.columns(3)
+        for i, c in enumerate(cols):
+            with c:
+                st.markdown(f'''
+                    <div class="group-container">
+                        <div class="group-header"><p class="group-title">Modulo {row_idx}.{i+1}</p></div>
+                        <div class="group-content" style="background-color: #11141a; height: 200px; display: flex; align-items: center; justify-content: center;">
+                            <p style="color: #333; font-size: 0.8rem;">DISPONIBLE</p>
+                        </div>
+                    </div>
+                ''', unsafe_allow_html=True)

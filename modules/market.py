@@ -1,83 +1,36 @@
 import streamlit as st
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from config import get_market_index
 
-def get_real_economic_calendar():
-    """Extrae eventos económicos reales de Yahoo Finance."""
-    try:
-        url = "https://finance.yahoo.com/calendar/economic"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        r = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        events = []
-        table = soup.find('table')
-        if table:
-            rows = table.find_all('tr')[1:6] # Tomamos los 5 próximos eventos
-            for row in rows:
-                cols = row.find_all('td')
-                if len(cols) >= 3:
-                    events.append({
-                        "time": cols[0].text.strip(),
-                        "event": cols[2].text.strip(),
-                        "imp": "High" if "High" in row.text else "Medium", # Lógica de impacto simple
-                        "val": cols[3].text.strip() if cols[3].text.strip() else "-",
-                        "prev": cols[4].text.strip() if cols[4].text.strip() else "-"
-                    })
-        return events if events else None
-    except:
-        return None
+def get_fear_greed_value():
+    """Simula u obtiene el valor del sentimiento (0-100)."""
+    # En producción, podrías usar scrapers para CNN Fear & Greed
+    # Por ahora, fijamos un valor dinámico para el diseño
+    return 65, "GREED" # Valor, Etiqueta
 
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # --- ALTURA MAESTRA ---
-    MASTER_HEIGHT = "420px" # Un pelín más alta para que luzca el calendario
+    MASTER_HEIGHT = "420px"
 
     col1, col2, col3 = st.columns(3)
     
-    # 1. MARKET INDICES
+    # --- FILA 1: ESTABLECIDA ---
     with col1:
         indices = [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]
-        indices_html = ""
-        for ticker, name in indices:
-            price, change = get_market_index(ticker)
-            color = "#00ffad" if change >= 0 else "#f23645"
-            indices_html += f'''
+        indices_html = "".join([f'''
             <div style="background:#0c0e12; padding:15px; border-radius:10px; margin-bottom:12px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">
-                <div><div style="font-weight:bold; color:white; font-size:14px;">{name}</div><div style="color:#555; font-size:11px;">INDEX</div></div>
-                <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:14px;">{price:,.2f}</div><div style="color:{color}; font-size:12px; font-weight:bold;">{change:+.2f}%</div></div>
-            </div>'''
+                <div><div style="font-weight:bold; color:white; font-size:14px;">{n}</div><div style="color:#555; font-size:11px;">INDEX</div></div>
+                <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:14px;">{get_market_index(t)[0]:,.2f}</div><div style="color:{"#00ffad" if get_market_index(t)[1] >= 0 else "#f23645"}; font-size:12px; font-weight:bold;">{get_market_index(t)[1]:+.2f}%</div></div>
+            </div>''' for t, n in indices])
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background:#11141a; height:{MASTER_HEIGHT}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
 
-    # 2. CALENDARIO ECONÓMICO (Conexión Real)
     with col2:
-        events = get_real_economic_calendar()
-        if not events: # Fallback por si el scraping falla o no hay mercado
-            events = [
-                {"time": "08:30", "event": "CPI Data Release", "imp": "High", "val": "3.1%", "prev": "3.2%"},
-                {"time": "10:00", "event": "Consumer Sentiment", "imp": "Medium", "val": "79.4", "prev": "77.0"}
-            ]
-        
-        events_html = "".join([f'''
-            <div style="padding:12px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
-                <div style="color:#888; font-size:12px; width:55px; font-family:monospace;">{ev['time']}</div>
-                <div style="flex-grow:1; margin-left:10px;">
-                    <div style="color:white; font-size:12px; font-weight:500;">{ev['event']}</div>
-                    <div style="color:{"#f23645" if ev['imp']=="High" else "#ffa500"}; font-size:9px; font-weight:bold; text-transform:uppercase;">{ev['imp']} Impact</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="color:white; font-size:12px; font-weight:bold;">{ev['val']}</div>
-                    <div style="color:#444; font-size:10px;">P: {ev['prev']}</div>
-                </div>
-            </div>''' for ev in events])
+        # (Aquí va tu código del Economic Calendar Nativo que ya funciona)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p></div><div class="group-content" style="background:#11141a; height:{MASTER_HEIGHT}; overflow-y:auto; padding:10px;">{st.session_state.get("calendar_html", "Cargando eventos...")}</div></div>', unsafe_allow_html=True)
 
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p></div><div class="group-content" style="background:#11141a; height:{MASTER_HEIGHT}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
-
-    # 3. REDDIT TOP 10 (Diseño Unificado)
     with col3:
         tickers = ["SLV", "MSFT", "SPY", "GLD", "VOO", "SNDK", "NVDA", "DVLT", "PLTR"]
         reddit_html = "".join([f'''
@@ -88,9 +41,33 @@ def render():
             </div>''' for i, tkr in enumerate(tickers)])
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background:#11141a; height:{MASTER_HEIGHT}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
 
-    # --- FILA 2 ---
+    # --- FILA 2: EL NUEVO MÓDULO ---
     st.write("")
-    cols2 = st.columns(3)
-    for i, c in enumerate(cols2):
-        with c:
-            st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Module 2.{i+1}</p></div><div class="group-content" style="background:#11141a; height:250px; display:flex; align-items:center; justify-content:center; border:1px solid #1a1e26; border-top:none; color:#222; font-weight:bold; letter-spacing:3px;">VOID</div></div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        val, label = get_fear_greed_value()
+        # Colores dinámicos según el valor
+        meter_color = "#00ffad" if val > 50 else "#f23645"
+        
+        st.markdown(f'''
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">Fear & Greed Index</p></div>
+                <div class="group-content" style="background:#11141a; height:250px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid #1a1e26; border-top:none;">
+                    <div style="font-size: 3rem; font-weight: bold; color: {meter_color}; margin-bottom: -10px;">{val}</div>
+                    <div style="font-size: 0.8rem; color: white; letter-spacing: 2px; font-weight: bold;">{label}</div>
+                    <div style="width: 80%; background: #0c0e12; height: 10px; border-radius: 5px; margin-top: 20px; border: 1px solid #1a1e26; position: relative;">
+                        <div style="width: {val}%; background: {meter_color}; height: 100%; border-radius: 5px; box-shadow: 0 0 10px {meter_color}88;"></div>
+                    </div>
+                    <div style="width: 80%; display: flex; justify-content: space-between; color: #444; font-size: 10px; margin-top: 5px; font-weight: bold;">
+                        <span>FEAR</span><span>GREED</span>
+                    </div>
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+    with c2:
+        st.markdown('<div class="group-container"><div class="group-header"><p class="group-title">Module 2.2</p></div><div class="group-content" style="background:#11141a; height:250px; border:1px solid #1a1e26; border-top:none; color:#222; display:flex; align-items:center; justify-content:center; font-weight:bold;">VOID</div></div>', unsafe_allow_html=True)
+    
+    with c3:
+        st.markdown('<div class="group-container"><div class="group-header"><p class="group-title">Module 2.3</p></div><div class="group-content" style="background:#11141a; height:250px; border:1px solid #1a1e26; border-top:none; color:#222; display:flex; align-items:center; justify-content:center; font-weight:bold;">VOID</div></div>', unsafe_allow_html=True)

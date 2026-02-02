@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 
 def get_buzztickr_data():
-    """Extrae el Top 10 con todas las métricas solicitadas."""
+    """Extrae el Top 10 con todas las métricas solicitadas de BuzzTickr."""
     try:
         url = "https://www.buzztickr.com/reddit-buzz/"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -18,106 +18,107 @@ def get_buzztickr_data():
             rows = table.find_all('tr')[1:11] 
             for row in rows:
                 cols = row.find_all('td')
-                if len(cols) >= 8: # Verificamos que existan las columnas
+                if len(cols) >= 8:
                     data.append({
-                        "rank": cols[0].text.strip(),
-                        "ticker": cols[1].text.strip().replace('$', ''),
+                        "rk": cols[0].text.strip(),
+                        "tkr": cols[1].text.strip().replace('$', ''),
                         "it": cols[2].text.strip(),
                         "ct": cols[3].text.strip(),
-                        "posts": cols[4].text.strip(),
-                        "comments": cols[5].text.strip(),
-                        "spam": cols[7].text.strip()
+                        "p": cols[4].text.strip(),
+                        "c": cols[5].text.strip(),
+                        "s": cols[7].text.strip()
                     })
         return data
     except:
         return []
 
 def render():
-    # Estilo CSS extra para forzar el contenido al fondo oscuro y ajustar la mini-tabla
-    st.markdown("""
-        <style>
-        .inner-dark-box { background-color: #0c0e12; border-radius: 4px; padding: 10px; margin-bottom: 5px; }
-        .ticker-grid { 
-            display: grid; 
-            grid-template-columns: 30px 1fr 1fr 1fr 1fr 1fr 1fr; 
-            gap: 5px; 
-            font-size: 10px; 
-            text-align: center;
-            align-items: center;
-        }
-        .grid-header { color: #555; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     
-    # --- COLUMNA 1: MARKET INDICES ---
+    # --- COLUMNA 1: MARKET INDICES (DENTRO DE LA CAJA OSCURA) ---
     with col1:
-        st.markdown('<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content">', unsafe_allow_html=True)
-        indices = [
+        indices_html = ""
+        indices_list = [
             {"label": "S&P 500", "full": "US 500 INDEX", "t": "^GSPC"},
             {"label": "NASDAQ 100", "full": "NASDAQ COMP", "t": "^IXIC"},
             {"label": "DOW JONES", "full": "INDUSTRIAL AVG", "t": "^DJI"},
             {"label": "RUSSELL 2000", "full": "SMALL CAP", "t": "^RUT"}
         ]
-        for idx in indices:
+        
+        for idx in indices_list:
             p, c = get_market_index(idx['t'])
-            color_class = "pos" if c >= 0 else "neg"
-            st.markdown(f"""
-                <div class="inner-dark-box">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div><p class="index-ticker" style="margin:0;">{idx['label']}</p><p class="index-fullname" style="margin:0;">{idx['full']}</p></div>
-                        <div style="text-align:right;"><p class="index-price" style="margin:0; font-size:14px;">{p:,.2f}</p><span class="index-delta {color_class}">{c:+.2f}%</span></div>
+            color_style = "color: #00ffad;" if c >= 0 else "color: #f23645;"
+            indices_html += f"""
+                <div style="background-color: #0c0e12; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border: 1px solid #1a1e26;">
+                    <div>
+                        <div style="font-weight: bold; color: white; font-size: 13px;">{idx['label']}</div>
+                        <div style="color: #555; font-size: 10px;">{idx['full']}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold; color: white;">{p:,.2f}</div>
+                        <div style="{color_style} font-size: 11px; font-weight: bold;">{c:+.2f}%</div>
                     </div>
                 </div>
-            """, unsafe_allow_html=True)
-        st.markdown('</div></div>', unsafe_allow_html=True)
+            """
+        
+        st.markdown(f"""
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">Market Indices</p></div>
+                <div class="group-content" style="background-color: #11141a; padding: 15px;">
+                    {indices_html}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
     # --- COLUMNA 2: CREDIT SPREADS ---
     with col2:
-        st.markdown('<div class="group-container"><div class="group-header"><p class="group-title">US High Yield Credit Spreads</p></div><div class="group-content">', unsafe_allow_html=True)
+        st.markdown("""
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">US High Yield Credit Spreads</p></div>
+                <div class="group-content" style="background-color: #11141a; padding: 10px;">
+        """, unsafe_allow_html=True)
+        
         components.html("""
-            <div style="height:270px; width:100%; border-radius:4px; overflow:hidden;">
+            <div style="height:280px; width:100%; border-radius:8px; overflow:hidden;">
               <div id="tv_spread" style="height:100%;"></div>
               <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
               <script type="text/javascript">
               new TradingView.MediumWidget({"symbols": [["FRED:BAMLH0A0HYM2|1M"]], "chartOnly": true, "width": "100%", "height": "100%", "locale": "en", "colorTheme": "dark", "gridLineColor": "transparent", "trendLineColor": "#2962ff", "container_id": "tv_spread"});
               </script>
             </div>
-        """, height=275)
-        st.markdown('</div></div>', unsafe_allow_html=True)
-
-    # --- COLUMNA 3: BUZZTICKR (CON TODAS LAS MÉTRICAS) ---
-    with col3:
-        st.markdown('<div class="group-container"><div class="group-header"><p class="group-title">BuzzTickr Reddit Top 10</p></div><div class="group-content">', unsafe_allow_html=True)
+        """, height=285)
         
-        # Cabecera de la mini-tabla
-        st.markdown("""
-            <div class="ticker-grid grid-header">
+        st.markdown("</div></div>", unsafe_allow_html=True)
+
+    # --- COLUMNA 3: BUZZTICKR (RANK, TKR, IT, CT, P, C, S) ---
+    with col3:
+        tickers = get_buzztickr_data()
+        buzz_html = """
+            <div style="display: grid; grid-template-columns: 25px 1.2fr 1fr 1fr 1fr 1fr 1fr; gap: 2px; font-size: 9px; color: #555; font-weight: bold; margin-bottom: 10px; text-align: center; padding: 0 5px;">
                 <span>RK</span><span>TKR</span><span>IT</span><span>CT</span><span>P</span><span>C</span><span>S</span>
             </div>
-        """, unsafe_allow_html=True)
+        """
         
-        tickers = get_buzztickr_data()
         for t in tickers:
-            st.markdown(f"""
-                <div class="inner-dark-box" style="padding: 5px 8px;">
-                    <div class="ticker-grid">
-                        <span style="color:#555;">{t['rank']}</span>
-                        <span style="color:#00ffad; font-weight:bold;">{t['ticker']}</span>
-                        <span>{t['it']}</span>
-                        <span>{t['ct']}</span>
-                        <span>{t['posts']}</span>
-                        <span>{t['comments']}</span>
-                        <span style="color:#f23645;">{t['spam']}</span>
-                    </div>
+            buzz_html += f"""
+                <div style="background-color: #0c0e12; padding: 6px 4px; border-radius: 4px; margin-bottom: 4px; border: 1px solid #1a1e26; display: grid; grid-template-columns: 25px 1.2fr 1fr 1fr 1fr 1fr 1fr; gap: 2px; text-align: center; align-items: center; font-size: 10px;">
+                    <span style="color: #444;">{t['rk']}</span>
+                    <span style="color: #00ffad; font-weight: bold;">{t['tkr']}</span>
+                    <span style="color: #ccc;">{t['it']}</span>
+                    <span style="color: #ccc;">{t['ct']}</span>
+                    <span style="color: #ccc;">{t['p']}</span>
+                    <span style="color: #ccc;">{t['c']}</span>
+                    <span style="color: #f23645;">{t['s']}</span>
                 </div>
-            """, unsafe_allow_html=True)
-        st.markdown('</div></div>', unsafe_allow_html=True)
+            """
 
-    # Filas vacías para estructura
-    for row in range(2, 5):
-        st.write("---")
-        st.columns(3)
+        st.markdown(f"""
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">BuzzTickr Reddit Top 10</p></div>
+                <div class="group-content" style="background-color: #11141a; padding: 15px;">
+                    {buzz_html}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)

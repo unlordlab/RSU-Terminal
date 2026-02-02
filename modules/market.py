@@ -27,11 +27,12 @@ def get_overall_top_10():
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    BOX_HEIGHT = "380px"
+    # Altura fija para que todo cuadre
+    BOX_HEIGHT = "420px"
 
-    # --- FILA 1 ---
     col1, col2, col3 = st.columns(3)
     
+    # 1. MARKET INDICES
     with col1:
         indices_list = [
             {"label": "S&P 500", "full": "US 500 INDEX", "t": "^GSPC"},
@@ -39,47 +40,30 @@ def render():
             {"label": "DOW JONES", "full": "INDUSTRIAL AVG", "t": "^DJI"},
             {"label": "RUSSELL 2000", "full": "SMALL CAP", "t": "^RUT"}
         ]
-        indices_html = ""
-        for idx in indices_list:
-            p, c = get_market_index(idx['t'])
-            color = "#00ffad" if c >= 0 else "#f23645"
-            indices_html += f'''
+        indices_html = "".join([f'''
             <div style="background-color: #0c0e12; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border: 1px solid #1a1e26;">
                 <div><div style="font-weight: bold; color: white; font-size: 13px;">{idx['label']}</div><div style="color: #555; font-size: 10px;">{idx['full']}</div></div>
-                <div style="text-align: right;"><div style="font-weight: bold; color: white;">{p:,.2f}</div><div style="color: {color}; font-size: 11px; font-weight: bold;">{c:+.2f}%</div></div>
-            </div>'''
+                <div style="text-align: right;"><div style="font-weight: bold; color: white;">{get_market_index(idx['t'])[0]:,.2f}</div><div style="color: {"#00ffad" if get_market_index(idx['t'])[1] >= 0 else "#f23645"}; font-size: 11px; font-weight: bold;">{get_market_index(idx['t'])[1]:+.2f}%</div></div>
+            </div>''' for idx in indices_list])
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT};">{indices_html}</div></div>''', unsafe_allow_html=True)
 
-    # 2. CALENDARIO ECONÓMICO (Encapsulado para que no se escape)
+    # 2. CALENDARIO ECONÓMICO (Todo en un solo bloque HTML para que no se mueva)
     with col2:
-        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p></div><div id="calendar-box" class="group-content" style="background-color: #11141a; padding: 0px; height: {BOX_HEIGHT}; overflow: hidden; position: relative;">''', unsafe_allow_html=True)
-        
-        # El componente se renderiza con un iframe interno. Le damos altura completa.
-        components.html('''
-            <div style="background-color: #11141a; height: 100%; width: 100%;">
-                <div class="tradingview-widget-container">
-                  <div class="tradingview-widget-container__widget"></div>
-                  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
-                  {
-                  "colorTheme": "dark",
-                  "isMaximized": true,
-                  "width": "100%",
-                  "height": "380",
-                  "locale": "en",
-                  "importanceFilter": "0,1",
-                  "currencyFilter": "USD,EUR"
-                  }
-                  </script>
+        components.html(f'''
+            <div style="font-family: sans-serif; border: 1px solid #1a1e26; border-radius: 8px; overflow: hidden; height: {BOX_HEIGHT}; background-color: #11141a;">
+                <div style="background-color: #1a1e26; padding: 10px; border-bottom: 1px solid #1a1e26;">
+                    <p style="margin: 0; color: #888; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Economic Calendar</p>
+                </div>
+                <div style="height: 380px; width: 100%;">
+                    <iframe scrolling="no" allowtransparency="true" frameborder="0" 
+                        src="https://www.tradingview-widget.com/embed-widget/events/?locale=en#%7B%22colorTheme%22%3A%22dark%22%2C%22isMaximized%22%3Atrue%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22importanceFilter%22%3A%220%2C1%22%2C%22currencyFilter%22%3A%22USD%2CEUR%22%7D" 
+                        style="box-sizing: border-box; height: 100%; width: 100%;"></iframe>
                 </div>
             </div>
-            <style>
-                body { margin: 0; background-color: #11141a; }
-                ::-webkit-scrollbar { display: none; }
-            </style>
-        ''', height=375)
-        
-        st.markdown('</div></div>', unsafe_allow_html=True)
+            <style>body {{ margin: 0; background-color: transparent; }}</style>
+        ''', height=430)
 
+    # 3. BUZZTICKR TOP 10
     with col3:
         top_10 = get_overall_top_10()
         buzz_items = "".join([f'''
@@ -88,8 +72,8 @@ def render():
             </div>''' for i, tkr in enumerate(top_10)])
         st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Reddit Top 10 Pulse</p></div><div class="group-content" style="background-color: #11141a; padding: 15px; height: {BOX_HEIGHT}; overflow-y: auto;">{buzz_items}</div></div>''', unsafe_allow_html=True)
 
-    # --- HILERAS VACÍAS ---
-    for row_idx in range(2, 5):
+    # Filas de abajo (VOID)
+    for row_idx in range(2, 4):
         st.write("") 
         cols = st.columns(3)
         for i, c in enumerate(cols):

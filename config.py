@@ -90,22 +90,38 @@ def get_market_index(ticker_symbol):
         return 0.0, 0.0
     except: return 0.0, 0.0
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600) # Reducimos el tiempo a 10 min para datos más frescos
 def get_cnn_fear_greed():
-    """Obtiene el valor real del Fear & Greed Index de CNN Business."""
+    """Obtiene el valor real del Fear & Greed Index con selectores actualizados."""
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        # User-Agent para evitar ser bloqueado como bot
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        }
         r = requests.get("https://edition.cnn.com/markets/fear-and-greed", headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Selectores actualizados (CNN cambia clases a menudo)
+        # Intentar varios selectores conocidos (CNN los alterna)
+        val = None
+        # Opción 1: Clase principal del valor actual
         val = soup.select_one(".fng-header__indicator-value")
+        
+        # Opción 2: Selector alternativo si el primero falla
         if not val:
             val = soup.select_one(".market-fng-gauge__dial-number-value")
             
-        return int(val.text.strip()) if val else 50
+        # Opción 3: Buscar por texto dentro de las etiquetas de la cabecera
+        if not val:
+            container = soup.find("span", string="Fear & Greed Index")
+            if container:
+                val = container.find_next("span")
+
+        if val and val.text.strip().isdigit():
+            return int(val.text.strip())
+        
+        return 50 # Valor neutral si no se encuentra
     except Exception:
-        return 50 # Retorno seguro en caso de error de conexión o scraping
+        return 50
         
 def actualizar_contador_usuarios():
     if not os.path.exists("sessions"):
@@ -169,3 +185,4 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
+

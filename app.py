@@ -10,11 +10,11 @@ import math
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios
 import modules.auth as auth
 import modules.market as market
-import modules.manifest as manifest         
-import modules.rsu_club as rsu_club         
+import modules.manifest as manifest          
+import modules.rsu_club as rsu_club          
 import modules.rsrw as rsrw
 import modules.rsu_algoritmo as rsu_algoritmo 
-import modules.ema_edge as ema_edge         
+import modules.ema_edge as ema_edge          
 import modules.earnings as earnings
 import modules.cartera as cartera
 import modules.tesis as tesis
@@ -24,7 +24,7 @@ import modules.trade_grader as trade_grader
 import modules.spxl_strategy as spxl_strategy
 import modules.roadmap_2026 as roadmap_2026
 import modules.trump_playbook as trump_playbook
-import modules.comunidad as comunidad         
+import modules.comunidad as comunidad          
 import modules.disclaimer as disclaimer      
 
 # Aplicar estilos definidos en config.py
@@ -82,30 +82,33 @@ with st.sidebar:
 
     st.write("---")
     
-    # 3. FEAR & GREED INDEX (CON AGUJA)
+    # 3. FEAR & GREED INDEX (CON AGUJA REAL)
     st.subheader("CNN Fear & Greed")
+    
+    # Intentamos obtener datos reales (get_cnn_fear_greed debe estar bien configurado en config.py)
     fng = get_cnn_fear_greed()
     
     if fng is not None:
+        # Configuración de la "Aguja" mediante Threshold y Bar transparente
         fig = go.Figure(go.Indicator(
-            mode = "gauge+number", # La aguja aparece al configurar el threshold
+            mode = "gauge+number",
             value = fng,
             domain = {'x': [0, 1], 'y': [0, 1]},
             gauge = {
-                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-                'bar': {'color': "rgba(0,0,0,0)"}, # Barra invisible para destacar la aguja
+                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white", 'nticks': 5},
+                'bar': {'color': "rgba(0,0,0,0)"}, # Barra transparente para que no tape los colores
                 'bgcolor': "rgba(0,0,0,0)",
                 'borderwidth': 0,
                 'steps': [
-                    {'range': [0, 25], 'color': "#d32f2f"},
-                    {'range': [25, 45], 'color': "#f57c00"},
-                    {'range': [45, 55], 'color': "#ff9800"},
-                    {'range': [55, 75], 'color': "#4caf50"},
-                    {'range': [75, 100], 'color': "#00ffad"}
+                    {'range': [0, 25], 'color': "#d32f2f"},   # Extreme Fear
+                    {'range': [25, 45], 'color': "#f57c00"},  # Fear
+                    {'range': [45, 55], 'color': "#ff9800"},  # Neutral
+                    {'range': [55, 75], 'color': "#4caf50"},  # Greed
+                    {'range': [75, 100], 'color': "#00ffad"}  # Extreme Greed
                 ],
                 'threshold': {
-                    'line': {'color': "white", 'width': 4}, # Esta es la aguja
-                    'thickness': 0.8,
+                    'line': {'color': "white", 'width': 4}, # ESTA ES LA AGUJA
+                    'thickness': 0.75,
                     'value': fng
                 }
             }
@@ -115,11 +118,11 @@ with st.sidebar:
             plot_bgcolor='rgba(0,0,0,0)',
             font={'color': "white", 'family': "Arial"},
             height=140,
-            margin=dict(l=15, r=15, t=10, b=10)
+            margin=dict(l=20, r=20, t=10, b=10)
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        # Estado dinámico
+        # Estado dinámico basado en el valor real
         if fng < 25: estado, color = "🟥 Extreme Fear", "#d32f2f"
         elif fng < 45: estado, color = "🟧 Fear", "#f57c00"
         elif fng < 55: estado, color = "🟨 Neutral", "#ff9800"
@@ -127,6 +130,8 @@ with st.sidebar:
         else: estado, color = "🟩 Extreme Greed", "#00ffad"
 
         st.markdown(f'<div style="text-align:center;"><h4 style="color:{color};margin:0;font-size:1rem;">{estado}</h4></div>', unsafe_allow_html=True)
+    else:
+        st.error("Error cargando datos reales de CNN")
 
     st.markdown("**Sentimiento:**")
     legend_items = [
@@ -137,7 +142,6 @@ with st.sidebar:
         ("#00ffad", "Extreme Greed")
     ]
     
-    # Leyenda compacta en dos columnas para ahorrar espacio
     cols_leg = st.columns(2)
     for i, (col, txt) in enumerate(legend_items):
         target_col = cols_leg[i % 2]
@@ -183,7 +187,6 @@ elif menu == "👥 COMUNIDAD":
     comunidad.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
-
 
 
 

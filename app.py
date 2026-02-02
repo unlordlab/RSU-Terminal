@@ -65,61 +65,64 @@ with st.sidebar:
     st.write("---")
     
     # 3. FEAR & GREED CON AGUJA REAL DE VELOCÍMETRO
-    st.subheader("CNN Fear & Greed")
-    fng = get_cnn_fear_greed()
+   # 3. FEAR & GREED CON AGUJA DE VELOCÍMETRO
+st.subheader("CNN Fear & Greed")
+fng = get_cnn_fear_greed()
+
+if fng is not None:
+    # Cálculo para la rotación de la aguja (de 180° a 0°)
+    # 0 en el índice = 180 grados (Izquierda - Rojo)
+    # 100 en el índice = 0 grados (Derecha - Verde)
+    posicion_grados = 180 - (fng * 1.8)
+    radio = 0.35
+    x_punta = 0.5 + radio * math.cos(math.radians(posicion_grados))
+    y_punta = 0.3 + radio * math.sin(math.radians(posicion_grados))
+
+    fig = go.Figure()
+
+    # El arco de colores (Gauge)
+    fig.add_trace(go.Indicator(
+        mode = "gauge+number",
+        value = fng,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        gauge = {
+            'axis': {'range': [0, 100], 'visible': False},
+            'bar': {'color': "rgba(0,0,0,0)"}, # Barra invisible
+            'steps': [
+                {'range': [0, 25], 'color': "#d32f2f"},
+                {'range': [25, 45], 'color': "#f57c00"},
+                {'range': [45, 55], 'color': "#ff9800"},
+                {'range': [55, 75], 'color': "#4caf50"},
+                {'range': [75, 100], 'color': "#00ffad"}
+            ]
+        }
+    ))
+
+    # Dibujar la aguja física
+    fig.update_layout(
+        shapes=[dict(
+            type='line',
+            x0=0.5, y0=0.3, # Centro del velocímetro
+            x1=x_punta, y1=y_punta, # Punta rotando según fng
+            line=dict(color='white', width=5)
+        )],
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font={'color': "white", 'family': "Arial"},
+        height=160,
+        margin=dict(l=25, r=25, t=10, b=10)
+    )
     
-    if fng is not None:
-        # Cálculo matemático para la posición de la aguja (trigonometría)
-        degree = 180 - (fng * 1.8) # Convierte 0-100 a grados de un semicírculo
-        radius = 0.5
-        x_head = radius * math.cos(math.radians(degree))
-        y_head = radius * math.sin(math.radians(degree))
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        fig = go.Figure()
+    # Estado y color dinámico
+    if fng < 25: estado, color = "🟥 Extreme Fear", "#d32f2f"
+    elif fng < 45: estado, color = "🟧 Fear", "#f57c00"
+    elif fng < 55: estado, color = "🟨 Neutral", "#ff9800"
+    elif fng < 75: estado, color = "🟩 Greed", "#4caf50"
+    else: estado, color = "🟩 Extreme Greed", "#00ffad"
 
-        # El fondo del indicador (los colores)
-        fig.add_trace(go.Indicator(
-            mode = "gauge+number",
-            value = fng,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            gauge = {
-                'axis': {'range': [0, 100], 'visible': False},
-                'bar': {'color': "rgba(0,0,0,0)"},
-                'steps': [
-                    {'range': [0, 25], 'color': "#d32f2f"},
-                    {'range': [25, 45], 'color': "#f57c00"},
-                    {'range': [45, 55], 'color': "#ff9800"},
-                    {'range': [55, 75], 'color': "#4caf50"},
-                    {'range': [75, 100], 'color': "#00ffad"}
-                ]
-            }
-        ))
-
-        # Añadir la AGUJA como una forma (Shape)
-        fig.update_layout(
-            shapes=[dict(
-                type='line',
-                x0=0.5, y0=0.28, # Origen de la aguja
-                x1=0.5 + x_head, y1=0.28 + y_head, # Punta de la aguja
-                line=dict(color='white', width=4)
-            )],
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font={'color': "white", 'family': "Arial"},
-            height=160,
-            margin=dict(l=25, r=25, t=10, b=10)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-        # Estado dinámico
-        if fng < 25: estado, color = "🟥 Extreme Fear", "#d32f2f"
-        elif fng < 45: estado, color = "🟧 Fear", "#f57c00"
-        elif fng < 55: estado, color = "🟨 Neutral", "#ff9800"
-        elif fng < 75: estado, color = "🟩 Greed", "#4caf50"
-        else: estado, color = "🟩 Extreme Greed", "#00ffad"
-
-        st.markdown(f'<p style="text-align:center; color:{color}; font-weight:bold; margin-top:-20px;">{estado}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="text-align:center; color:{color}; font-weight:bold; margin-top:-20px; font-size:1.1rem;">{estado}</p>', unsafe_allow_html=True)
 
     # Leyenda compacta
     legend_items = [("#d32f2f", "Ex. Fear"), ("#f57c00", "Fear"), ("#ff9800", "Neutral"), ("#4caf50", "Greed"), ("#00ffad", "Ex. Greed")]
@@ -145,4 +148,5 @@ elif menu == "🗺️ ROADMAP 2026": roadmap_2026.render()
 elif menu == "🇺🇸 TRUMP PLAYBOOK": trump_playbook.render()
 elif menu == "👥 COMUNIDAD": comunidad.render()
 elif menu == "⚠️ DISCLAIMER": disclaimer.render()
+
 

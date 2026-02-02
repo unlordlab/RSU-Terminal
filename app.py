@@ -1,3 +1,4 @@
+
 # app.py
 import os
 import streamlit as st
@@ -9,11 +10,11 @@ import math
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios
 import modules.auth as auth
 import modules.market as market
-import modules.manifest as manifest        
-import modules.rsu_club as rsu_club        
+import modules.manifest as manifest         
+import modules.rsu_club as rsu_club         
 import modules.rsrw as rsrw
 import modules.rsu_algoritmo as rsu_algoritmo 
-import modules.ema_edge as ema_edge        
+import modules.ema_edge as ema_edge         
 import modules.earnings as earnings
 import modules.cartera as cartera
 import modules.tesis as tesis
@@ -23,7 +24,7 @@ import modules.trade_grader as trade_grader
 import modules.spxl_strategy as spxl_strategy
 import modules.roadmap_2026 as roadmap_2026
 import modules.trump_playbook as trump_playbook
-import modules.comunidad as comunidad        
+import modules.comunidad as comunidad         
 import modules.disclaimer as disclaimer      
 
 # Aplicar estilos definidos en config.py
@@ -39,15 +40,17 @@ if 'rsrw_engine' not in st.session_state:
 
 # --- SIDEBAR UNIFICADO ---
 with st.sidebar:
+    # 1. LOGO CENTRADO
     if os.path.exists("assets/logo.png"):
-        st.image("assets/logo.png", width=150)
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            st.image("assets/logo.png", use_container_width=True)
     
-    # --- CONTADOR DE USUARIOS ---
+    # 2. CONTADOR DE USUARIOS (MÁS PEQUEÑO)
     usuarios_activos = actualizar_contador_usuarios()
     st.markdown(f"""
-        <div style="background-color: #1e222d; padding: 10px; border-radius: 5px; border: 1px solid #2962ff; text-align: center;">
-            <p style="margin: 0; font-size: 0.8rem; color: #ccc;">USUARIOS CONECTADOS</p>
-            <h2 style="margin: 0; color: #00ffad;">{usuarios_activos}</h2>
+        <div style="background-color: #1e222d; padding: 5px; border-radius: 5px; border: 0.5px solid #2962ff; text-align: center; margin-top: 10px;">
+            <p style="margin: 0; font-size: 0.7rem; color: #ccc; letter-spacing: 1px;">LIVE USERS: <span style="color: #00ffad; font-weight: bold;">{usuarios_activos}</span></p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -79,58 +82,69 @@ with st.sidebar:
 
     st.write("---")
     
-    # --- FEAR & GREED INDEX ---
+    # 3. FEAR & GREED INDEX (CON AGUJA)
     st.subheader("CNN Fear & Greed")
     fng = get_cnn_fear_greed()
     
     if fng is not None:
         fig = go.Figure(go.Indicator(
-            mode = "gauge+number",
+            mode = "gauge+number", # La aguja aparece al configurar el threshold
             value = fng,
             domain = {'x': [0, 1], 'y': [0, 1]},
             gauge = {
                 'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-                'bar': {'color': "#2962ff"},
+                'bar': {'color': "rgba(0,0,0,0)"}, # Barra invisible para destacar la aguja
+                'bgcolor': "rgba(0,0,0,0)",
+                'borderwidth': 0,
                 'steps': [
                     {'range': [0, 25], 'color': "#d32f2f"},
                     {'range': [25, 45], 'color': "#f57c00"},
                     {'range': [45, 55], 'color': "#ff9800"},
                     {'range': [55, 75], 'color': "#4caf50"},
                     {'range': [75, 100], 'color': "#00ffad"}
-                ]
+                ],
+                'threshold': {
+                    'line': {'color': "white", 'width': 4}, # Esta es la aguja
+                    'thickness': 0.8,
+                    'value': fng
+                }
             }
         ))
         fig.update_layout(
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             font={'color': "white", 'family': "Arial"},
-            height=150,
-            margin=dict(l=10, r=10, t=10, b=10)
+            height=140,
+            margin=dict(l=15, r=15, t=10, b=10)
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        # Estado y Leyenda
+        # Estado dinámico
         if fng < 25: estado, color = "🟥 Extreme Fear", "#d32f2f"
         elif fng < 45: estado, color = "🟧 Fear", "#f57c00"
         elif fng < 55: estado, color = "🟨 Neutral", "#ff9800"
         elif fng < 75: estado, color = "🟩 Greed", "#4caf50"
         else: estado, color = "🟩 Extreme Greed", "#00ffad"
 
-        st.markdown(f'<div style="text-align:center;padding:8px;"><h4 style="color:{color};margin:0;">{estado}</h4></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center;"><h4 style="color:{color};margin:0;font-size:1rem;">{estado}</h4></div>', unsafe_allow_html=True)
 
-    st.markdown("**Leyenda:**")
+    st.markdown("**Sentimiento:**")
     legend_items = [
-        ("#d32f2f", "Extreme Fear (0-25)"),
-        ("#f57c00", "Fear (25-45)"),
-        ("#ff9800", "Neutral (45-55)"),
-        ("#4caf50", "Greed (55-75)"),
-        ("#00ffad", "Extreme Greed (75-100)")
+        ("#d32f2f", "Extreme Fear"),
+        ("#f57c00", "Fear"),
+        ("#ff9800", "Neutral"),
+        ("#4caf50", "Greed"),
+        ("#00ffad", "Extreme Greed")
     ]
-    for col, txt in legend_items:
-        st.markdown(f'''
-            <div style="display:flex; align-items:center; margin-bottom:3px;">
-                <div style="width:12px; height:12px; background-color:{col}; border-radius:2px; margin-right:8px;"></div>
-                <span style="font-size:0.8rem; color:#ccc;">{txt}</span>
+    
+    # Leyenda compacta en dos columnas para ahorrar espacio
+    cols_leg = st.columns(2)
+    for i, (col, txt) in enumerate(legend_items):
+        target_col = cols_leg[i % 2]
+        target_col.markdown(f'''
+            <div style="display:flex; align-items:center; margin-bottom:2px;">
+                <div style="width:8px; height:8px; background-color:{col}; border-radius:1px; margin-right:5px;"></div>
+                <span style="font-size:0.65rem; color:#ccc;">{txt}</span>
             </div>
         ''', unsafe_allow_html=True)
 
@@ -169,7 +183,6 @@ elif menu == "👥 COMUNIDAD":
     comunidad.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
-
 
 
 

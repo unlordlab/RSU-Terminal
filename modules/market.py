@@ -11,16 +11,19 @@ FRED_API_KEY = "1455ec63d36773c0e47770e312063789"
 # --- FUNCIONES DE OBTENCIÓN DE DATOS ---
 
 def get_market_index(ticker):
-    """Obtiene datos reales de índices usando yfinance."""
+    """Obtiene datos reales asegurando valores escalares para evitar errores de Pandas."""
     try:
-        data = yf.download(ticker, period="2d", interval="1d", progress=False)
-        if not data.empty:
-            current = data['Close'].iloc[-1]
-            prev = data['Close'].iloc[-2]
-            change = ((current - prev) / prev) * 100
+        # download con auto_adjust y sin hilos para mayor estabilidad
+        data = yf.download(ticker, period="2d", interval="1d", progress=False, multi_level_download=False)
+        
+        if not data.empty and len(data) >= 2:
+            # Extraemos los valores como floats puros usando .item() o .iloc
+            current = float(data['Close'].iloc[-1])
+            prev = float(data['Close'].iloc[-2])
+            change = float(((current - prev) / prev) * 100)
             return current, change
-    except:
-        pass
+    except Exception as e:
+        print(f"Error en {ticker}: {e}")
     return 0.0, 0.0
 
 def get_fed_status_real():
@@ -185,3 +188,4 @@ def render():
 # Ejecución
 if __name__ == "__main__":
     render()
+

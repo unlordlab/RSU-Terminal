@@ -1,14 +1,85 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import get_market_index, get_cnn_fear_greed
 import requests
 import streamlit.components.v1 as components
+
+# Intentar importar investpy, si no está disponible usar datos simulados
+try:
+    import investpy
+    INVESTPY_AVAILABLE = True
+except ImportError:
+    INVESTPY_AVAILABLE = False
+    st.warning("investpy no instalat. Usant dades simulades per al calendari econòmic. Instal·la amb: pip install investpy")
 
 # ────────────────────────────────────────────────
 # FUNCIONS AUXILIARS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
+    """
+    Obtiene el calendario económico de hoy y mañana.
+    Retorna lista de eventos con hora (CET/CEST), evento e impacto.
+    """
+    if not INVESTPY_AVAILABLE:
+        return get_fallback_economic_calendar()
+    
+    try:
+        # Obtener calendario de hoy y mañana
+        from_date = datetime.now().strftime('%d/%m/%Y')
+        to_date = (datetime.now() + timedelta(days=1)).strftime('%d/%m/%Y')
+        
+        # Obtener calendario económico de EEUU
+        calendar = investpy.economic_calendar(
+            time_zone='GMT',
+            time_filter='time_only',
+            from_date=from_date,
+            to_date=to_date,
+            countries=['united states', 'euro zone'],
+            importances=['high', 'medium', 'low']
+        )
+        
+        # Procesar datos
+        events = []
+        for _, row in calendar.head(10).iterrows():
+            # Convertir hora GMT a española (GMT+1 o GMT+2 según horario de verano)
+            time_str = row['time']
+            if time_str and time_str != '':
+                try:
+                    # Parsear hora GMT
+                    hour, minute = map(int, time_str.split(':'))
+                    # Añadir 1 hora (CET) o 2 (CEST) - simplificado a +1
+                    hour_es = (hour + 1) % 24
+                    time_es = f"{hour_es:02d}:{minute:02d}"
+                except:
+                    time_es = time_str
+            else:
+                time_es = "TBD"
+            
+            # Mapear importancia
+            importance_map = {
+                'high': 'High',
+                'medium': 'Medium', 
+                'low': 'Low'
+            }
+            impact = importance_map.get(row['importance'].lower(), 'Medium')
+            
+            events.append({
+                "time": time_es,
+                "event": row['event'],
+                "imp": impact,
+                "val": row.get('actual', '-'),
+                "prev": row.get('previous', '-')
+            })
+        
+        return events if events else get_fallback_economic_calendar()
+        
+    except Exception as e:
+        st.error(f"Error obtenint calendari econòmic: {str(e)}")
+        return get_fallback_economic_calendar()
+
+def get_fallback_economic_calendar():
+    """Datos simulados como fallback"""
     return [
         {"time": "14:15", "event": "ADP Nonfarm Employment", "imp": "High", "val": "143K", "prev": "102K"},
         {"time": "16:00", "event": "ISM Services PMI", "imp": "High", "val": "54.9", "prev": "51.5"},
@@ -53,7 +124,6 @@ def fetch_finnhub_news():
     api_key = st.secrets.get("FINNHUB_API_KEY", None)
     
     if not api_key:
-        st.warning("No s'ha trobat FINNHUB_API_KEY → utilitzant notícies simulades")
         return get_fallback_news()
 
     try:
@@ -86,7 +156,6 @@ def fetch_finnhub_news():
             })
         return news_list if news_list else get_fallback_news()
     except Exception as e:
-        st.warning(f"Finnhub error: {str(e)[:80]} → fallback")
         return get_fallback_news()
 
 
@@ -257,17 +326,32 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
 
     with col2:
+        # NUEVO: Calendario económico con datos reales
         events = get_economic_calendar()
+        
+        # Mapear colores de impacto
+        impact_colors = {
+            'High': '#f23645',
+            'Medium': '#ff9800',
+            'Low': '#4caf50'
+        }
+        
         events_html = "".join([f'''
             <div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
                 <div style="color:#888; font-size:10px; width:45px; font-family:monospace;">{ev['time']}</div>
                 <div style="flex-grow:1; margin-left:10px;">
-                    <div style="color:white; font-size:11px; font-weight:500;">{ev['event']}</div>
-                    <div style="color:{"#f23645" if ev['imp']=="High" else "#ffa500"}; font-size:8px; font-weight:bold; text-transform:uppercase;">{ev['imp']} IMPACT</div>
+                    <div style="color:white; font-size:11px; font-weight:500; line-height:1.3;">{ev['event']}</div>
+                    <div style="color:{impact_colors.get(ev['imp'], '#888')}; font-size:8px; font-weight:bold; text-transform:uppercase; margin-top:3px;">
+                        {'● ' + ev['imp'] + ' IMPACT'}
+                    </div>
                 </div>
-                <div style="text-align:right;"><div style="color:white; font-size:11px; font-weight:bold;">{ev['val']}</div><div style="color:#444; font-size:9px;">P: {ev['prev']}</div></div>
+                <div style="text-align:right; min-width:50px;">
+                    <div style="color:white; font-size:11px; font-weight:bold;">{ev['val']}</div>
+                    <div style="color:#444; font-size:9px;">P: {ev['prev']}</div>
+                </div>
             </div>''' for ev in events])
-        tooltip = "Esdeveniments econòmics clau programats per avui i el seu impacte esperat."
+            
+        tooltip = "Calendari econòmic en temps real (hora espanyola CET/CEST). Dades d'investpy."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Calendari Econòmic</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
 

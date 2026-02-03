@@ -484,43 +484,151 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
 
     with c3:
-        # Cargar datos de cripto con manejo de errores silencioso
+        # Cargar datos de cripto
         try:
             cryptos = get_crypto_prices()
         except:
             cryptos = get_fallback_crypto_prices()
         
-        # Construir HTML para cada cripto usando concatenación segura
-        crypto_html_parts = []
-        for crypto in cryptos:
-            symbol = crypto['symbol']
-            name = crypto['name']
-            price = crypto['price']
-            change = crypto['change']
-            is_positive = crypto.get('is_positive', True)
-            
-            color = "#00ffad" if is_positive else "#f23645"
-            
-            # Usar concatenación de strings en lugar de f-strings complejos
-            part = (
-                '<div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">'
-                '<div style="display:flex; align-items:center; gap:10px;">'
-                '<div style="color:white; font-weight:bold; font-size:13px;">' + symbol + '</div>'
-                '<div style="color:#555; font-size:9px;">' + name + '</div>'
-                '</div>'
-                '<div style="text-align:right;">'
-                '<div style="color:white; font-size:13px; font-weight:bold;">$' + price + '</div>'
-                '<div style="color:' + color + '; font-size:11px; font-weight:bold;">' + change + '</div>'
-                '</div>'
-                '</div>'
-            )
-            crypto_html_parts.append(part)
+        # Verificar que tenemos datos válidos
+        if not cryptos:
+            cryptos = get_fallback_crypto_prices()
         
-        crypto_html = "".join(crypto_html_parts)
+        # Construir HTML usando components.html (más robusto)
+        tooltip_text = "Preus en temps real de les 5 principals criptomonedes per market cap (CoinGecko)."
         
-        tooltip = "Preus en temps real de les 5 principals criptomonedes per market cap (CoinGecko)."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
+        crypto_items_html = []
+        for crypto in cryptos[:5]:
+            try:
+                symbol = str(crypto.get('symbol', 'N/A'))
+                name = str(crypto.get('name', 'Unknown'))
+                price = str(crypto.get('price', '0.00'))
+                change = str(crypto.get('change', '0%'))
+                is_positive = crypto.get('is_positive', True)
+                
+                color = "#00ffad" if is_positive else "#f23645"
+                
+                # Escapar comillas
+                name = name.replace('"', '&quot;')
+                
+                item_html = (
+                    '<div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">'
+                    '<div style="display:flex; align-items:center; gap:10px;">'
+                    '<div style="color:white; font-weight:bold; font-size:13px;">' + symbol + '</div>'
+                    '<div style="color:#555; font-size:9px;">' + name + '</div>'
+                    '</div>'
+                    '<div style="text-align:right;">'
+                    '<div style="color:white; font-size:13px; font-weight:bold;">$' + price + '</div>'
+                    '<div style="color:' + color + '; font-size:11px; font-weight:bold;">' + change + '</div>'
+                    '</div>'
+                    '</div>'
+                )
+                crypto_items_html.append(item_html)
+            except Exception as e:
+                print(f"Error en crypto: {e}")
+                continue
+        
+        crypto_content = "".join(crypto_items_html)
+        
+        # HTML completo del módulo
+        crypto_html_full = '''<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+.container {
+    border: 1px solid #1a1e26;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #11141a;
+    width: 100%;
+}
+
+.header {
+    background: #0c0e12;
+    padding: 12px 15px;
+    border-bottom: 1px solid #1a1e26;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.tooltip-container {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1a1e26;
+    border: 2px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 260px;
+    background-color: #1e222d;
+    color: #eee;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 6px;
+    position: absolute;
+    z-index: 999;
+    top: 35px;
+    right: -10px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+    border: 1px solid #444;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+.content {
+    background: #11141a;
+    height: 340px;
+    overflow-y: auto;
+    padding: 15px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">Crypto Pulse</div>
+        <div class="tooltip-container">
+            <div class="tooltip-icon">?</div>
+            <div class="tooltip-text">''' + tooltip_text + '''</div>
+        </div>
+    </div>
+    <div class="content">
+        ''' + crypto_content + '''
+    </div>
+</div>
+</body>
+</html>'''
+        
+        components.html(crypto_html_full, height=400, scrolling=False)
 
     # FILA 3
     st.write("")

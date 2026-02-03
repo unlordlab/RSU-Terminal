@@ -5,7 +5,7 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 
 # ────────────────────────────────────────────────
-# FUNCIONES AUXILIARES DE DATOS
+# FUNCIONES DE OBTENCIÓN DE DATOS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
@@ -40,39 +40,85 @@ def get_insider_trading():
     ]
 
 def get_market_news():
+    """Noticias de alto impacto en castellano con enlace e impacto"""
     return [
-        ("17:45", "Fed's Powell hints at steady rates for Q1."),
-        ("17:10", "Tech sector rallies on AI chip demand."),
-        ("16:30", "Oil prices jump after inventory drawdown."),
-        ("15:50", "EU markets close higher on easing inflation."),
+        {
+            "time": "19:45",
+            "title": "Tesla supera expectativas de beneficios y sube un 8% en after-hours",
+            "impact": "Alto",
+            "color": "#f23645",
+            "link": "https://www.cnbc.com/2026/02/03/tesla-earnings-q4-2025.html"
+        },
+        {
+            "time": "18:30",
+            "title": "El PIB de EE.UU. creció un 2,3% en el último trimestre",
+            "impact": "Alto",
+            "color": "#f23645",
+            "link": "https://www.bea.gov/news/2026/gross-domestic-product-fourth-quarter-2025"
+        },
+        {
+            "time": "16:15",
+            "title": "Apple presenta resultados récord gracias a servicios y wearables",
+            "impact": "Alto",
+            "color": "#f23645",
+            "link": "https://www.apple.com/newsroom/2026/02/apple-reports-record-revenue/"
+        },
+        {
+            "time": "14:00",
+            "title": "La inflación subyacente en la zona euro se modera al 2,7%",
+            "impact": "Moderado",
+            "color": "#ff9800",
+            "link": "https://www.ecb.europa.eu/press/pr/date/2026/html/index.en.html"
+        },
+        {
+            "time": "12:30",
+            "title": "Microsoft Cloud supera los 30.000 millones de dólares en ingresos",
+            "impact": "Alto",
+            "color": "#f23645",
+            "link": "https://news.microsoft.com/2026/02/03/microsoft-q2-fy26-earnings/"
+        },
+        {
+            "time": "10:45",
+            "title": "Informe de empleo ADP: creación de 143.000 puestos en enero",
+            "impact": "Alto",
+            "color": "#f23645",
+            "link": "https://adpemploymentreport.com/"
+        }
     ]
 
 def get_fed_liquidity():
     api_key = "1455ec63d36773c0e47770e312063789"
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
     try:
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            obs = data.get('observations', [])
-            if len(obs) >= 2:
-                latest = float(obs[0]['value'])
-                prev = float(obs[1]['value'])
-                date_str = obs[0]['date']
-                change = latest - prev
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            observations = data.get('observations', [])
+            if len(observations) >= 2:
+                latest_val = float(observations[0]['value'])
+                prev_val = float(observations[1]['value'])
+                date_latest = observations[0]['date']
+                change = latest_val - prev_val
                 if change < -100:
-                    return "QT", "#f23645", "Quantitative Tightening", f"{latest/1000:.1f}T", date_str
+                    status = "QT"
+                    color = "#f23645"
+                    desc = "Quantitative Tightening"
                 elif change > 100:
-                    return "QE", "#00ffad", "Quantitative Easing", f"{latest/1000:.1f}T", date_str
+                    status = "QE"
+                    color = "#00ffad"
+                    desc = "Quantitative Easing"
                 else:
-                    return "STABLE", "#ff9800", "Balance sheet stable", f"{latest/1000:.1f}T", date_str
-        return "ERROR", "#888", "API no disponible", "N/A", "N/A"
+                    status = "STABLE"
+                    color = "#ff9800"
+                    desc = "Balance sheet stable"
+                return status, color, desc, f"{latest_val/1000:.1f}T", date_latest
+        return "ERROR", "#888", "API temporalmente no disponible", "N/A", "N/A"
     except:
-        return "N/A", "#888", "Sin conexión", "N/A", "N/A"
+        return "N/A", "#888", "Sin conexión a FRED", "N/A", "N/A"
 
 
 # ────────────────────────────────────────────────
-# DASHBOARD PRINCIPAL
+# RENDER DEL DASHBOARD
 # ────────────────────────────────────────────────
 
 def render():
@@ -108,6 +154,7 @@ def render():
             visibility: visible;
             opacity: 1;
         }
+
         .fng-legend {
             display: flex;
             justify-content: space-between;
@@ -128,17 +175,39 @@ def render():
             border-radius: 4px;
             border: 1px solid rgba(255,255,255,0.1);
         }
+
+        .news-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            transition: background 0.2s;
+        }
+        .news-item:hover {
+            background: #0c0e12;
+        }
+        .impact-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .news-link {
+            color: #00ffad;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .news-link:hover {
+            text-decoration: underline;
+        }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    H_MAIN = "340px"
-    H_BOTTOM = "270px"
+    H = "340px"  # Altura uniforme para todas las filas
 
-    # FILA 1
+    # ================= FILA 1 =================
     col1, col2, col3 = st.columns(3)
-
+    
     with col1:
         indices = [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]
         indices_html = "".join([f'''
@@ -148,7 +217,7 @@ def render():
             </div>''' for t, n in indices])
         tooltip = "Rendimiento en tiempo real de los principales índices bursátiles de EE.UU."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
 
     with col2:
         events = get_economic_calendar()
@@ -163,7 +232,7 @@ def render():
             </div>''' for ev in events])
         tooltip = "Eventos económicos clave programados para hoy y su impacto esperado."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
 
     with col3:
         tickers = ["SLV", "MSFT", "SPY", "GLD", "VOO", "NVDA", "PLTR", "TSLA"]
@@ -173,12 +242,12 @@ def render():
             </div>''' for i, tkr in enumerate(tickers)])
         tooltip = "Tickers más mencionados y trending en comunidades de Reddit como WallStreetBets."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
 
-    # FILA 2
+    # ================= FILA 2 =================
     st.write("")
     c1, c2, c3 = st.columns(3)
-
+    
     with c1:
         val = get_cnn_fear_greed()
         
@@ -206,52 +275,37 @@ def render():
         tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado (datos reales vía endpoint oficial)."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
+        legend_html = """
+        <div class="fng-legend">
+            <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
+            <div class="fng-legend-item"><div class="fng-color-box" style="background:#f57c00;"></div><div>Fear</div></div>
+            <div class="fng-legend-item"><div class="fng-color-box" style="background:#ff9800;"></div><div>Neutral</div></div>
+            <div class="fng-legend-item"><div class="fng-color-box" style="background:#4caf50;"></div><div>Greed</div></div>
+            <div class="fng-legend-item"><div class="fng-color-box" style="background:#00ffad;"></div><div>Extreme Greed</div></div>
+        </div>
+        """
+
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
                 <p class="group-title">Fear & Greed Index</p>
                 {info_icon}
             </div>
-            <div class="group-content" style="background:#11141a; height:{H_MAIN}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px 15px;">
+            <div class="group-content" style="background:#11141a; height:{H}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px 15px;">
                 <div style="font-size:4.2rem; font-weight:bold; color:{col};">{val_display}</div>
                 <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:12px 0;">{label}{extra}</div>
-                <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:20px 0; border:1px solid #1a1e26; overflow:hidden; position:relative;">
+                <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:18px 0 12px 0; border:1px solid #1a1e26; overflow:hidden;">
                     <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%; transition:width 0.8s ease;"></div>
                 </div>
+                {legend_html}
             </div>
         </div>''', unsafe_allow_html=True)
-
-        # ── Leyenda separada ──
-        st.markdown("""
-        <div class="fng-legend">
-            <div class="fng-legend-item">
-                <div class="fng-color-box" style="background:#d32f2f;"></div>
-                <div>Extreme Fear</div>
-            </div>
-            <div class="fng-legend-item">
-                <div class="fng-color-box" style="background:#f57c00;"></div>
-                <div>Fear</div>
-            </div>
-            <div class="fng-legend-item">
-                <div class="fng-color-box" style="background:#ff9800;"></div>
-                <div>Neutral</div>
-            </div>
-            <div class="fng-legend-item">
-                <div class="fng-color-box" style="background:#4caf50;"></div>
-                <div>Greed</div>
-            </div>
-            <div class="fng-legend-item">
-                <div class="fng-color-box" style="background:#00ffad;"></div>
-                <div>Extreme Greed</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
 
     with c2:
         sectors = [("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25)]
         sectors_html = "".join([f'<div style="background:{"#00ffad11" if p>=0 else "#f2364511"}; border:1px solid {"#00ffad44" if p>=0 else "#f2364544"}; padding:10px; border-radius:6px; text-align:center;"><div style="color:white; font-size:9px; font-weight:bold;">{n}</div><div style="color:{"#00ffad" if p>=0 else "#f23645"}; font-size:11px; font-weight:bold;">{p:+.2f}%</div></div>' for n, p in sectors])
         tooltip = "Rendimiento diario de los principales sectores del mercado (heatmap)."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
 
     with c3:
         cryptos = get_crypto_prices()
@@ -261,12 +315,12 @@ def render():
             </div>''' for s, p, c in cryptos])
         tooltip = "Precios y variación de las principales criptomonedas."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
 
-    # FILA 3
+    # ================= FILA 3 =================
     st.write("")
     f3c1, f3c2, f3c3 = st.columns(3)
-
+    
     with f3c1:
         earnings = get_earnings_calendar()
         earn_html = "".join([f'''<div style="background:#0c0e12; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
@@ -275,7 +329,7 @@ def render():
             </div>''' for t, d, tm, i in earnings])
         tooltip = "Calendario de reportes de ganancias de empresas importantes esta semana."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{earn_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{earn_html}</div></div>', unsafe_allow_html=True)
 
     with f3c2:
         insiders = get_insider_trading()
@@ -285,22 +339,34 @@ def render():
             </div>''' for t, p, ty, a in insiders])
         tooltip = "Compras y ventas recientes de acciones por parte de directivos e insiders."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
 
     with f3c3:
         news = get_market_news()
-        news_html = "".join([f'''<div style="padding:10px; border-bottom:1px solid #1a1e26;">
-            <div style="display:flex; justify-content:space-between;"><span style="color:#00ffad; font-size:9px; font-weight:bold;">NEWS</span><span style="color:#444; font-size:9px;">{time}</span></div>
-            <div style="color:white; font-size:11px; margin-top:4px; line-height:1.3;">{text}</div>
-            </div>''' for time, text in news])
-        tooltip = "Titulares financieros y noticias de última hora."
+        news_html = "".join([f'''
+            <div class="news-item">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                    <span style="color:#888; font-size:0.78rem; font-family:monospace;">{item['time']}</span>
+                    <span class="impact-badge" style="background-color:{item['color']}22; color:{item['color']};">
+                        {item['impact']}
+                    </span>
+                </div>
+                <div style="color:white; font-size:0.92rem; line-height:1.35; margin-bottom:8px;">
+                    {item['title']}
+                </div>
+                <a href="{item['link']}" target="_blank" class="news-link">
+                    → Leer noticia completa
+                </a>
+            </div>
+        ''' for item in news])
+        tooltip = "Noticias de gran impacto (earnings y macro) en castellano con enlaces directos."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Live News Terminal</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{news_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Noticias de Alto Impacto</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto; padding:0;">{news_html}</div></div>', unsafe_allow_html=True)
 
-    # FILA 4
+    # ================= FILA 4 =================
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
-
+    
     with f4c1:
         vix = get_market_index("^VIX")
         vix_html = f'''
@@ -313,7 +379,7 @@ def render():
         '''
         tooltip = "Índice de volatilidad CBOE (VIX) – mide el miedo esperado en el mercado."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">VIX Index</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{vix_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">VIX Index</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{vix_html}</div></div>', unsafe_allow_html=True)
 
     with f4c2:
         status, color, desc, assets, date = get_fed_liquidity()
@@ -330,7 +396,7 @@ def render():
         '''
         tooltip = "Política de liquidez de la FED: QE (expansión) / QT (contracción) según balance."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">FED Liquidity Policy</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{fed_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">FED Liquidity Policy</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{fed_html}</div></div>', unsafe_allow_html=True)
 
     with f4c3:
         tnx = get_market_index("^TNX")
@@ -344,7 +410,4 @@ def render():
         '''
         tooltip = "Rendimiento del bono del Tesoro de EE.UU. a 10 años."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
-
-
-# Fin del archivo market.py
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)

@@ -55,23 +55,24 @@ def get_unusual_volume():
         ("AMD", "2.1x", "-1.2%"),
         ("PLTR", "1.9x", "+4.5%"),
         ("SOFI", "1.7x", "+2.1%"),
+        ("VALE", "1.5x", "-0.8%")
     ]
 
 def get_global_markets():
     """Estado de índices globales fuera de USA."""
     return [
-        ("DAX", "Germany", "+0.45%"),
-        ("FTSE", "UK", "-0.12%"),
-        ("NKY", "Japan", "+1.20%"),
-        ("HSI", "HK", "+0.88%"),
+        ("DAX 40", "Germany", "+0.45%"),
+        ("FTSE 100", "UK", "-0.12%"),
+        ("NIKKEI 225", "Japan", "+1.20%"),
+        ("HSI", "Hong Kong", "+0.88%"),
+        ("IBEX 35", "Spain", "+0.32%")
     ]
 
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # --- CONFIGURACIÓN DE ALTURAS ---
-    H_MAIN = "340px"   # Filas 1 y 2
-    H_BOTTOM = "270px" # Filas 3 y 4 (Simétricas)
+    # --- CONFIGURACIÓN DE ALTURA UNIFICADA ---
+    H_MODULE = "340px" # Todos los módulos ahora miden exactamente lo mismo
 
     # ================= FILA 1 =================
     col1, col2, col3 = st.columns(3)
@@ -83,7 +84,7 @@ def render():
                 <div><div style="font-weight:bold; color:white; font-size:13px;">{n}</div><div style="color:#555; font-size:10px;">INDEX</div></div>
                 <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:13px;">{get_market_index(t)[0]:,.2f}</div><div style="color:{"#00ffad" if get_market_index(t)[1] >= 0 else "#f23645"}; font-size:11px; font-weight:bold;">{get_market_index(t)[1]:+.2f}%</div></div>
             </div>''' for t, n in indices])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
 
     with col2:
         events = get_economic_calendar()
@@ -96,7 +97,7 @@ def render():
                 </div>
                 <div style="text-align:right;"><div style="color:white; font-size:11px; font-weight:bold;">{ev['val']}</div><div style="color:#444; font-size:9px;">P: {ev['prev']}</div></div>
             </div>''' for ev in events])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p></div><div class="group-content" style="background:#11141a; height:{H_MAIN}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Economic Calendar</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
 
     with col3:
         tickers = ["SLV", "MSFT", "SPY", "GLD", "VOO", "NVDA", "PLTR", "TSLA"]
@@ -104,7 +105,7 @@ def render():
             <div style="background:#0c0e12; padding:8px 15px; border-radius:8px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
                 <span style="color:#333; font-weight:bold; font-size:10px;">{i+1:02d}</span><span style="color:#00ffad; font-weight:bold; font-size:12px;">{tkr}</span><span style="color:#f23645; font-size:8px; font-weight:bold; background:rgba(242,54,69,0.1); padding:2px 5px; border-radius:4px;">HOT 🔥</span>
             </div>''' for i, tkr in enumerate(tickers)])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p></div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
 
     # ================= FILA 2 =================
     st.write("")
@@ -112,7 +113,7 @@ def render():
     
     with c1:
         val = 65
-        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Fear & Greed Index</p></div><div class="group-content" style="background:#11141a; height:{H_MAIN}; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Fear & Greed Index</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; display:flex; flex-direction:column; align-items:center; justify-content:center;">
             <div style="font-size:3.5rem; font-weight:bold; color:#00ffad;">{val}</div><div style="color:white; font-size:0.8rem; letter-spacing:2px; font-weight:bold;">GREED</div>
             <div style="width:80%; background:#0c0e12; height:10px; border-radius:5px; margin-top:20px; border:1px solid #1a1e26; position:relative;">
                 <div style="width:{val}%; background:#00ffad; height:100%; border-radius:5px; box-shadow:0 0 15px #00ffad66;"></div>
@@ -121,7 +122,7 @@ def render():
     with c2:
         sectors = [("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25)]
         sectors_html = "".join([f'<div style="background:{"#00ffad11" if p>=0 else "#f2364511"}; border:1px solid {"#00ffad44" if p>=0 else "#f2364544"}; padding:10px; border-radius:6px; text-align:center;"><div style="color:white; font-size:9px; font-weight:bold;">{n}</div><div style="color:{"#00ffad" if p>=0 else "#f23645"}; font-size:11px; font-weight:bold;">{p:+.2f}%</div></div>' for n, p in sectors])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p></div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
 
     with c3:
         cryptos = get_crypto_prices()
@@ -129,7 +130,7 @@ def render():
             <div><div style="color:white; font-weight:bold; font-size:13px;">{s}</div><div style="color:#555; font-size:9px;">TOKEN</div></div>
             <div style="text-align:right;"><div style="color:white; font-size:13px; font-weight:bold;">${p}</div><div style="color:{"#00ffad" if "+" in c else "#f23645"}; font-size:11px; font-weight:bold;">{c}</div></div>
             </div>''' for s, p, c in cryptos])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p></div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
 
     # ================= FILA 3 =================
     st.write("")
@@ -141,7 +142,7 @@ def render():
             <div><div style="color:#00ffad; font-weight:bold; font-size:12px;">{t}</div><div style="color:#444; font-size:9px; font-weight:bold;">{d}</div></div>
             <div style="text-align:right;"><div style="color:#888; font-size:9px;">{tm}</div><span style="color:{"#f23645" if i=="High" else "#888"}; font-size:8px; font-weight:bold;">● {i}</span></div>
             </div>''' for t, d, tm, i in earnings])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{earn_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px; overflow-y:auto;">{earn_html}</div></div>', unsafe_allow_html=True)
 
     with f3c2:
         insiders = get_insider_trading()
@@ -149,7 +150,7 @@ def render():
             <div><div style="color:white; font-weight:bold; font-size:11px;">{t}</div><div style="color:#555; font-size:9px;">{p}</div></div>
             <div style="text-align:right;"><div style="color:{"#00ffad" if ty=="BUY" else "#f23645"}; font-weight:bold; font-size:10px;">{ty}</div><div style="color:#888; font-size:9px;">{a}</div></div>
             </div>''' for t, p, ty, a in insiders])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
 
     with f3c3:
         news = get_market_news()
@@ -157,9 +158,9 @@ def render():
             <div style="display:flex; justify-content:space-between;"><span style="color:#00ffad; font-size:9px; font-weight:bold;">NEWS</span><span style="color:#444; font-size:9px;">{time}</span></div>
             <div style="color:white; font-size:11px; margin-top:4px; line-height:1.3;">{text}</div>
             </div>''' for time, text in news])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Live News Terminal</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{news_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Live News Terminal</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; overflow-y:auto;">{news_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 4 (NUEVA HILERA) =================
+    # ================= FILA 4 (NUEVA) =================
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
 
@@ -170,15 +171,15 @@ def render():
         st.markdown(f'''
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Breadth (A/D)</p></div>
-                <div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:25px; text-align:center;">
-                    <div style="color:#888; font-size:10px; margin-bottom:15px; letter-spacing:1px;">S&P 500 SENTIMENT</div>
-                    <div style="font-size:2.2rem; font-weight:bold; color:#00ffad;">{per:.1f}%</div>
-                    <div style="width:100%; background:#f2364533; height:12px; border-radius:6px; margin:20px 0; overflow:hidden; display:flex; border:1px solid #1a1e26;">
-                        <div style="width:{per}%; background:#00ffad; height:100%; box-shadow:0 0 10px #00ffad44;"></div>
+                <div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:40px 25px; text-align:center;">
+                    <div style="color:#888; font-size:10px; margin-bottom:15px; letter-spacing:1px;">S&P 500 BREADTH</div>
+                    <div style="font-size:2.8rem; font-weight:bold; color:#00ffad;">{per:.1f}%</div>
+                    <div style="width:100%; background:#f2364533; height:12px; border-radius:6px; margin:25px 0; overflow:hidden; display:flex; border:1px solid #1a1e26;">
+                        <div style="width:{per}%; background:#00ffad; height:100%; box-shadow:0 0 15px #00ffad44;"></div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold; font-family:monospace;">
-                        <span style="color:#00ffad;">{adv} ADV</span>
-                        <span style="color:#f23645;">{dec} DEC</span>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; font-family:monospace;">
+                        <span style="color:#00ffad;">{adv} BULLISH</span>
+                        <span style="color:#f23645;">{dec} BEARISH</span>
                     </div>
                 </div>
             </div>
@@ -188,19 +189,19 @@ def render():
         # Unusual Volume Radar
         u_vol = get_unusual_volume()
         u_vol_html = "".join([f'''
-            <div style="background:#0c0e12; padding:8px 12px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#00ffad; font-weight:bold; font-size:11px;">{t}</span>
-                <span style="color:#ffa500; font-weight:bold; font-size:10px; background:rgba(255,165,0,0.1); padding:2px 6px; border-radius:4px;">{v} VOL</span>
-                <span style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:10px; font-weight:bold;">{p}</span>
+            <div style="background:#0c0e12; padding:12px 15px; border-radius:8px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#00ffad; font-weight:bold; font-size:13px;">{t}</span>
+                <span style="color:#ffa500; font-weight:bold; font-size:10px; background:rgba(255,165,0,0.1); padding:4px 8px; border-radius:4px;">{v} VOL</span>
+                <span style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:11px; font-weight:bold;">{p}</span>
             </div>''' for t, v, p in u_vol])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Unusual Volume Radar</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{u_vol_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Unusual Volume Radar</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px; overflow-y:auto;">{u_vol_html}</div></div>', unsafe_allow_html=True)
 
     with f4c3:
         # Global Markets Health
         global_m = get_global_markets()
         global_html = "".join([f'''
-            <div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-                <div><div style="color:white; font-size:11px; font-weight:bold;">{n}</div><div style="color:#555; font-size:9px;">{c}</div></div>
-                <div style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:11px; font-weight:bold;">{p}</div>
+            <div style="padding:12px 10px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <div><div style="color:white; font-size:12px; font-weight:bold;">{n}</div><div style="color:#555; font-size:10px;">{c}</div></div>
+                <div style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:12px; font-weight:bold;">{p}</div>
             </div>''' for n, c, p in global_m])
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Global Markets Health</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{global_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Global Markets Health</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; overflow-y:auto;">{global_html}</div></div>', unsafe_allow_html=True)

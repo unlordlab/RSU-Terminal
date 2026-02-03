@@ -380,26 +380,33 @@ def render():
         tooltip = "Notícies d'alt impacte obtingudes via Finnhub API."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         
-        # Header del módulo
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Notícies d\'Alt Impacte</p>{info_icon}</div><div class="group-content" style="background:#11141a;height:{H};overflow-y:auto;padding:0;">', unsafe_allow_html=True)
-        
-        # Renderizar cada noticia individualmente
+        # Construir todo el HTML de noticias con estilos inline
+        news_html = ""
         for item in news:
-            # Escapar comillas en el título para evitar romper el HTML
             safe_title = item['title'].replace('"', '&quot;')
-            st.markdown(f"""
-            <div class="news-item">
+            news_html += f'''
+            <div style="padding: 12px 15px; border-bottom: 1px solid #1a1e26; transition: background 0.2s;">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
                     <span style="color:#888;font-size:0.78rem;font-family:monospace;">{item['time']}</span>
-                    <span class="impact-badge" style="background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
+                    <span style="padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
                 </div>
                 <div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">{safe_title}</div>
-                <a href="{item['link']}" target="_blank" class="news-link">→ Llig la notícia completa</a>
+                <a href="{item['link']}" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.85rem;">→ Llig la notícia completa</a>
             </div>
-            """, unsafe_allow_html=True)
+            '''
         
-        # Cerrar el contenedor
-        st.markdown('</div></div>', unsafe_allow_html=True)
+        # Renderizar todo junto en un único bloque
+        st.markdown(f'''
+        <div style="border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a;">
+            <div style="background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; position: relative; display: flex; justify-content: space-between; align-items: center;">
+                <p style="margin: 0; color: white; font-size: 14px; font-weight: bold;">Notícies d'Alt Impacte</p>
+                {info_icon}
+            </div>
+            <div style="background: #11141a; height: {H}; overflow-y: auto; padding: 0;">
+                {news_html}
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
     # FILA 4
     st.write("")
@@ -452,4 +459,3 @@ def render():
 
 
 # Final del fitxer market.py
-

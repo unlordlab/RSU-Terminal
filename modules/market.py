@@ -5,11 +5,10 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 
 # ────────────────────────────────────────────────
-# FUNCIONES DE OBTENCIÓN DE DATOS
+# FUNCIONES AUXILIARES DE DATOS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
-    """Eventos económicos clave del día."""
     return [
         {"time": "14:15", "event": "ADP Nonfarm Employment", "imp": "High", "val": "143K", "prev": "102K"},
         {"time": "16:00", "event": "ISM Services PMI", "imp": "High", "val": "54.9", "prev": "51.5"},
@@ -18,7 +17,6 @@ def get_economic_calendar():
     ]
 
 def get_crypto_prices():
-    """Precios de referencia de criptoactivos."""
     return [
         ("BTC", "104,231.50", "+2.4%"),
         ("ETH", "3,120.12", "-1.1%"),
@@ -26,7 +24,6 @@ def get_crypto_prices():
     ]
 
 def get_earnings_calendar():
-    """Empresas que reportan beneficios próximamente."""
     return [
         ("AAPL", "Feb 05", "After Market", "High"),
         ("AMZN", "Feb 05", "After Market", "High"),
@@ -35,7 +32,6 @@ def get_earnings_calendar():
     ]
 
 def get_insider_trading():
-    """Rastreador de movimientos de directivos."""
     return [
         ("NVDA", "CEO", "SELL", "$12.5M"),
         ("MSFT", "CFO", "BUY", "$1.2M"),
@@ -44,7 +40,6 @@ def get_insider_trading():
     ]
 
 def get_market_news():
-    """Titulares de última hora para el Terminal."""
     return [
         ("17:45", "Fed's Powell hints at steady rates for Q1."),
         ("17:10", "Tech sector rallies on AI chip demand."),
@@ -56,39 +51,31 @@ def get_fed_liquidity():
     api_key = "1455ec63d36773c0e47770e312063789"
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
     try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            observations = data.get('observations', [])
-            if len(observations) >= 2:
-                latest_val = float(observations[0]['value'])
-                prev_val = float(observations[1]['value'])
-                date_latest = observations[0]['date']
-                change = latest_val - prev_val
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            obs = data.get('observations', [])
+            if len(obs) >= 2:
+                latest = float(obs[0]['value'])
+                prev = float(obs[1]['value'])
+                date_str = obs[0]['date']
+                change = latest - prev
                 if change < -100:
-                    status = "QT"
-                    color = "#f23645"
-                    desc = "Quantitative Tightening"
+                    return "QT", "#f23645", "Quantitative Tightening", f"{latest/1000:.1f}T", date_str
                 elif change > 100:
-                    status = "QE"
-                    color = "#00ffad"
-                    desc = "Quantitative Easing"
+                    return "QE", "#00ffad", "Quantitative Easing", f"{latest/1000:.1f}T", date_str
                 else:
-                    status = "STABLE"
-                    color = "#ff9800"
-                    desc = "Balance sheet stable"
-                return status, color, desc, f"{latest_val/1000:.1f}T", date_latest
-        return "ERROR", "#888", "API temporalmente no disponible", "N/A", "N/A"
+                    return "STABLE", "#ff9800", "Balance sheet stable", f"{latest/1000:.1f}T", date_str
+        return "ERROR", "#888", "API no disponible", "N/A", "N/A"
     except:
-        return "N/A", "#888", "Sin conexión a FRED", "N/A", "N/A"
+        return "N/A", "#888", "Sin conexión", "N/A", "N/A"
 
 
 # ────────────────────────────────────────────────
-# RENDER PRINCIPAL DEL DASHBOARD
+# DASHBOARD PRINCIPAL
 # ────────────────────────────────────────────────
 
 def render():
-    # Estilos CSS globales (tooltips + leyenda Fear & Greed)
     st.markdown("""
     <style>
         .tooltip-container {
@@ -121,7 +108,6 @@ def render():
             visibility: visible;
             opacity: 1;
         }
-        /* Leyenda Fear & Greed */
         .fng-legend {
             display: flex;
             justify-content: space-between;
@@ -147,12 +133,12 @@ def render():
 
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    H_MAIN = "340px" 
+    H_MAIN = "340px"
     H_BOTTOM = "270px"
 
-    # ================= FILA 1 =================
+    # FILA 1
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         indices = [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]
         indices_html = "".join([f'''
@@ -189,10 +175,10 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 2 =================
+    # FILA 2
     st.write("")
     c1, c2, c3 = st.columns(3)
-    
+
     with c1:
         val = get_cnn_fear_greed()
         
@@ -220,8 +206,22 @@ def render():
         tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado (datos reales vía endpoint oficial)."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
-        # Leyenda Fear & Greed
-        legend_html = """
+        st.markdown(f'''<div class="group-container">
+            <div class="group-header">
+                <p class="group-title">Fear & Greed Index</p>
+                {info_icon}
+            </div>
+            <div class="group-content" style="background:#11141a; height:{H_MAIN}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px 15px;">
+                <div style="font-size:4.2rem; font-weight:bold; color:{col};">{val_display}</div>
+                <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:12px 0;">{label}{extra}</div>
+                <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:20px 0; border:1px solid #1a1e26; overflow:hidden; position:relative;">
+                    <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%; transition:width 0.8s ease;"></div>
+                </div>
+            </div>
+        </div>''', unsafe_allow_html=True)
+
+        # ── Leyenda separada ──
+        st.markdown("""
         <div class="fng-legend">
             <div class="fng-legend-item">
                 <div class="fng-color-box" style="background:#d32f2f;"></div>
@@ -244,22 +244,7 @@ def render():
                 <div>Extreme Greed</div>
             </div>
         </div>
-        """
-
-        st.markdown(f'''<div class="group-container">
-            <div class="group-header">
-                <p class="group-title">Fear & Greed Index</p>
-                {info_icon}
-            </div>
-            <div class="group-content" style="background:#11141a; height:{H_MAIN}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px 15px;">
-                <div style="font-size:4.2rem; font-weight:bold; color:{col};">{val_display}</div>
-                <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:12px 0;">{label}{extra}</div>
-                <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:20px 0; border:1px solid #1a1e26; overflow:hidden; position:relative;">
-                    <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%; transition:width 0.8s ease;"></div>
-                </div>
-                {legend_html}
-            </div>
-        </div>''', unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
     with c2:
         sectors = [("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25)]
@@ -278,10 +263,10 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 3 =================
+    # FILA 3
     st.write("")
     f3c1, f3c2, f3c3 = st.columns(3)
-    
+
     with f3c1:
         earnings = get_earnings_calendar()
         earn_html = "".join([f'''<div style="background:#0c0e12; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
@@ -312,10 +297,10 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Live News Terminal</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{news_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 4 =================
+    # FILA 4
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
-    
+
     with f4c1:
         vix = get_market_index("^VIX")
         vix_html = f'''
@@ -360,3 +345,6 @@ def render():
         tooltip = "Rendimiento del bono del Tesoro de EE.UU. a 10 años."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H_MAIN}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
+
+
+# Fin del archivo market.py

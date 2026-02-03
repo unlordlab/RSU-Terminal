@@ -4,32 +4,26 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 import streamlit.components.v1 as components
 
-# Intentar importar investpy, si no está disponible usar datos simulados
+# Intentar importar investpy
 try:
     import investpy
     INVESTPY_AVAILABLE = True
 except ImportError:
     INVESTPY_AVAILABLE = False
-    st.warning("investpy no instalat. Usant dades simulades per al calendari econòmic. Instal·la amb: pip install investpy")
 
 # ────────────────────────────────────────────────
 # FUNCIONS AUXILIARS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
-    """
-    Obtiene el calendario económico de hoy y mañana.
-    Retorna lista de eventos con hora (CET/CEST), evento e impacto.
-    """
+    """Obtiene el calendario económico de hoy y mañana."""
     if not INVESTPY_AVAILABLE:
         return get_fallback_economic_calendar()
     
     try:
-        # Obtener calendario de hoy y mañana
         from_date = datetime.now().strftime('%d/%m/%Y')
         to_date = (datetime.now() + timedelta(days=1)).strftime('%d/%m/%Y')
         
-        # Obtener calendario económico de EEUU
         calendar = investpy.economic_calendar(
             time_zone='GMT',
             time_filter='time_only',
@@ -39,16 +33,12 @@ def get_economic_calendar():
             importances=['high', 'medium', 'low']
         )
         
-        # Procesar datos
         events = []
         for _, row in calendar.head(10).iterrows():
-            # Convertir hora GMT a española (GMT+1 o GMT+2 según horario de verano)
             time_str = row['time']
             if time_str and time_str != '':
                 try:
-                    # Parsear hora GMT
                     hour, minute = map(int, time_str.split(':'))
-                    # Añadir 1 hora (CET) o 2 (CEST) - simplificado a +1
                     hour_es = (hour + 1) % 24
                     time_es = f"{hour_es:02d}:{minute:02d}"
                 except:
@@ -56,7 +46,6 @@ def get_economic_calendar():
             else:
                 time_es = "TBD"
             
-            # Mapear importancia
             importance_map = {
                 'high': 'High',
                 'medium': 'Medium', 
@@ -75,11 +64,9 @@ def get_economic_calendar():
         return events if events else get_fallback_economic_calendar()
         
     except Exception as e:
-        st.error(f"Error obtenint calendari econòmic: {str(e)}")
         return get_fallback_economic_calendar()
 
 def get_fallback_economic_calendar():
-    """Datos simulados como fallback"""
     return [
         {"time": "14:15", "event": "ADP Nonfarm Employment", "imp": "High", "val": "143K", "prev": "102K"},
         {"time": "16:00", "event": "ISM Services PMI", "imp": "High", "val": "54.9", "prev": "51.5"},
@@ -87,11 +74,74 @@ def get_fallback_economic_calendar():
         {"time": "20:00", "event": "FOMC Meeting Minutes", "imp": "High", "val": "-", "prev": "-"},
     ]
 
+@st.cache_data(ttl=300)
 def get_crypto_prices():
+    """
+    Obtiene los precios de las 5 principales criptomonedas por market cap.
+    Usa CoinGecko API (gratuita, no requiere API key).
+    """
+    try:
+        # CoinGecko API - top 5 criptos por market cap
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {
+            'vs_currency': 'usd',
+            'order': 'market_cap_desc',
+            'per_page': 5,
+            'page': 1,
+            'sparkline': False,
+            'price_change_percentage': '24h'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        cryptos = []
+        for coin in data:
+            symbol = coin['symbol'].upper()
+            price = coin['current_price']
+            change_24h = coin['price_change_percentage_24h']
+            
+            # Formatear precio según su magnitud
+            if price >= 1000:
+                price_str = f"{price:,.2f}"
+            elif price >= 1:
+                price_str = f"{price:,.2f}"
+            else:
+                price_str = f"{price:.4f}"
+            
+            # Formatear cambio porcentual
+            if change_24h is not None:
+                change_str = f"{change_24h:+.2f}%"
+                change_color = "positive" if change_24h >= 0 else "negative"
+            else:
+                change_str = "N/A"
+                change_color = "neutral"
+            
+            cryptos.append({
+                'symbol': symbol,
+                'name': coin['name'],
+                'price': price_str,
+                'change': change_str,
+                'change_color': change_color,
+                'market_cap': coin['market_cap'],
+                'image': coin['image']
+            })
+        
+        return cryptos
+        
+    except Exception as e:
+        st.warning(f"Error obtenint preus de cripto: {str(e)[:50]}")
+        return get_fallback_crypto_prices()
+
+def get_fallback_crypto_prices():
+    """Datos simulados como fallback"""
     return [
-        ("BTC", "104,231.50", "+2.4%"),
-        ("ETH", "3,120.12", "-1.1%"),
-        ("SOL", "245.88", "+5.7%"),
+        {"symbol": "BTC", "name": "Bitcoin", "price": "104,231.50", "change": "+2.4%", "change_color": "positive"},
+        {"symbol": "ETH", "name": "Ethereum", "price": "3,120.12", "change": "-1.1%", "change_color": "negative"},
+        {"symbol": "BNB", "name": "BNB", "price": "685.45", "change": "+0.8%", "change_color": "positive"},
+        {"symbol": "SOL", "name": "Solana", "price": "245.88", "change": "+5.7%", "change_color": "positive"},
+        {"symbol": "XRP", "name": "XRP", "price": "3.15", "change": "-2.3%", "change_color": "negative"},
     ]
 
 def get_earnings_calendar():
@@ -326,10 +376,8 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
 
     with col2:
-        # NUEVO: Calendario económico con datos reales
         events = get_economic_calendar()
         
-        # Mapear colores de impacto
         impact_colors = {
             'High': '#f23645',
             'Medium': '#ff9800',
@@ -426,12 +474,40 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
 
     with c3:
+        # NUEVO: Precios reales de criptomonedas
         cryptos = get_crypto_prices()
-        crypto_html = "".join([f'''<div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-            <div><div style="color:white; font-weight:bold; font-size:13px;">{s}</div><div style="color:#555; font-size:9px;">TOKEN</div></div>
-            <div style="text-align:right;"><div style="color:white; font-size:13px; font-weight:bold;">${p}</div><div style="color:{"#00ffad" if "+" in c else "#f23645"}; font-size:11px; font-weight:bold;">{c}</div></div>
-            </div>''' for s, p, c in cryptos])
-        tooltip = "Preus i variació de les principals criptomonedes."
+        
+        # Construir HTML para cada cripto
+        crypto_html_parts = []
+        for crypto in cryptos:
+            symbol = crypto['symbol']
+            name = crypto['name']
+            price = crypto['price']
+            change = crypto['change']
+            
+            # Determinar color del cambio
+            if 'change_color' in crypto:
+                color = "#00ffad" if crypto['change_color'] == 'positive' else "#f23645"
+            else:
+                color = "#00ffad" if "+" in change else "#f23645"
+            
+            # HTML para esta cripto
+            crypto_html_parts.append(f'''
+                <div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div style="color:white; font-weight:bold; font-size:13px;">{symbol}</div>
+                        <div style="color:#555; font-size:9px;">{name}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="color:white; font-size:13px; font-weight:bold;">${price}</div>
+                        <div style="color:{color}; font-size:11px; font-weight:bold;">{change}</div>
+                    </div>
+                </div>
+            ''')
+        
+        crypto_html = "".join(crypto_html_parts)
+        
+        tooltip = "Preus en temps real de les 5 principals criptomonedes per market cap (CoinGecko)."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
 

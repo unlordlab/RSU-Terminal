@@ -5,7 +5,7 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 
 # ────────────────────────────────────────────────
-# FUNCIONES DE OBTENCIÓN DE DATOS
+# FUNCIONES DE DATOS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
@@ -91,7 +91,6 @@ def fetch_finnhub_news():
         st.warning(f"Finnhub falló: {str(e)[:100]} → usando fallback")
         return get_fallback_news()
 
-
 def get_fed_liquidity():
     api_key = "1455ec63d36773c0e47770e312063789"
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
@@ -124,86 +123,25 @@ def get_fed_liquidity():
 
 
 # ────────────────────────────────────────────────
-# DASHBOARD PRINCIPAL
+# DASHBOARD
 # ────────────────────────────────────────────────
 
 def render():
     st.markdown("""
     <style>
-        .tooltip-container {
-            position: absolute;
-            top: 50%;
-            right: 12px;
-            transform: translateY(-50%);
-            cursor: help;
-        }
-        .tooltip-container .tooltip-text {
-            visibility: hidden;
-            width: 260px;
-            background-color: #1e222d;
-            color: #eee;
-            text-align: left;
-            padding: 10px 12px;
-            border-radius: 6px;
-            position: absolute;
-            z-index: 999;
-            top: 140%;
-            right: -10px;
-            opacity: 0;
-            transition: opacity 0.3s, visibility 0.3s;
-            font-size: 12px;
-            border: 1px solid #444;
-            pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-        }
-        .tooltip-container:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
+        .tooltip-container {position:absolute;top:50%;right:12px;transform:translateY(-50%);cursor:help;}
+        .tooltip-container .tooltip-text {visibility:hidden;width:260px;background:#1e222d;color:#eee;text-align:left;padding:10px 12px;border-radius:6px;position:absolute;z-index:999;top:140%;right:-10px;opacity:0;transition:opacity 0.3s,visibility 0.3s;font-size:12px;border:1px solid #444;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);}
+        .tooltip-container:hover .tooltip-text {visibility:visible;opacity:1;}
 
-        .fng-legend {
-            display: flex;
-            justify-content: space-between;
-            width: 95%;
-            margin-top: 16px;
-            font-size: 0.70rem;
-            color: #ccc;
-            text-align: center;
-        }
-        .fng-legend-item {
-            flex: 1;
-            padding: 0 6px;
-        }
-        .fng-color-box {
-            width: 100%;
-            height: 8px;
-            margin-bottom: 4px;
-            border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
+        .fng-legend {display:flex;justify-content:space-between;width:95%;margin-top:16px;font-size:0.70rem;color:#ccc;text-align:center;}
+        .fng-legend-item {flex:1;padding:0 6px;}
+        .fng-color-box {width:100%;height:8px;margin-bottom:4px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);}
 
-        .news-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #1a1e26;
-            transition: background 0.2s;
-        }
-        .news-item:hover {
-            background: #0c0e12;
-        }
-        .impact-badge {
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
-        .news-link {
-            color: #00ffad;
-            text-decoration: none;
-            font-size: 0.85rem;
-        }
-        .news-link:hover {
-            text-decoration: underline;
-        }
+        .news-item {padding:12px 15px;border-bottom:1px solid #1a1e26;transition:background 0.2s;}
+        .news-item:hover {background:#0c0e12;}
+        .impact-badge {padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:bold;}
+        .news-link {color:#00ffad;text-decoration:none;font-size:0.85rem;}
+        .news-link:hover {text-decoration:underline;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -265,16 +203,22 @@ def render():
         else:
             val_display = val
             bar_width = val
-            if val <= 24: label, col = "EXTREME FEAR", "#d32f2f"
-            elif val <= 44: label, col = "FEAR", "#f57c00"
-            elif val <= 55: label, col = "NEUTRAL", "#ff9800"
-            elif val <= 75: label, col = "GREED", "#4caf50"
-            else: label, col = "EXTREME GREED", "#00ffad"
+            if val <= 24:
+                label, col = "EXTREME FEAR", "#d32f2f"
+            elif val <= 44:
+                label, col = "FEAR", "#f57c00"
+            elif val <= 55:
+                label, col = "NEUTRAL", "#ff9800"
+            elif val <= 75:
+                label, col = "GREED", "#4caf50"
+            else:
+                label, col = "EXTREME GREED", "#00ffad"
             extra = ""
 
         tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
+        # Contenedor principal SIN HTML de leyenda dentro del f-string
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
                 <p class="group-title">Fear & Greed Index</p>
@@ -289,7 +233,7 @@ def render():
             </div>
         </div>''', unsafe_allow_html=True)
 
-        # Leyenda en bloque separado
+        # Leyenda en markdown independiente (esto SIEMPRE funciona)
         st.markdown("""
         <div class="fng-legend">
             <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
@@ -344,6 +288,7 @@ def render():
     with f3c3:
         news = fetch_finnhub_news()
 
+        # Construimos el HTML de noticias sin f-string grande alrededor
         news_items = []
         for item in news:
             news_items.append(f'''
@@ -362,9 +307,14 @@ def render():
         tooltip = "Noticias de gran impacto obtenidas vía Finnhub API."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
+        # Contenedor principal
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Noticias de Alto Impacto</p>{info_icon}</div>', unsafe_allow_html=True)
+
+        # Contenido de noticias en markdown separado
         st.markdown(f'<div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto; padding:0;">{news_html}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)  # cierre del container
+
+        # Cierre del container
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # FILA 4
     st.write("")

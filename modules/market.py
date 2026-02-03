@@ -56,7 +56,7 @@ def fetch_finnhub_news():
         return get_fallback_news()
 
     try:
-        url = f"https://finnhub.io/api/v1/news?category=general&token={api_key}"  # ← CORREGIDO: sin espacio
+        url = f"https://finnhub.io/api/v1/news?category=general&token={api_key}"
         r = requests.get(url, timeout=12)
         r.raise_for_status()
         data = r.json()
@@ -90,12 +90,12 @@ def fetch_finnhub_news():
 
 
 def get_fed_liquidity():
-    api_key = st.secrets.get("FRED_API_KEY", None)  # ← CORREGIDO: usar secrets, no hardcodear
+    api_key = st.secrets.get("FRED_API_KEY", None)
     
     if not api_key:
         return "ERROR", "#888", "API Key no configurada", "N/A", "N/A"
     
-    url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"  # ← CORREGIDO: sin espacio
+    url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
@@ -210,7 +210,6 @@ def render():
             text-decoration: underline;
         }
         
-        /* Mejoras para el contenedor de noticias */
         .group-container {
             border: 1px solid #1a1e26;
             border-radius: 10px;
@@ -283,7 +282,7 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
 
-    # FILA 2 ────────────────────────────────────────────────
+    # FILA 2
     st.write("")
     c1, c2, c3 = st.columns(3)
 
@@ -313,7 +312,6 @@ def render():
         tooltip = "Índex CNN Fear & Greed – mesura el sentiment del mercat."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
-        # ← CORREGIDO: Leyenda DENTRO del group-container
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
                 <p class="group-title">Fear & Greed Index</p>
@@ -378,38 +376,30 @@ def render():
 
     with f3c3:
         news = fetch_finnhub_news()
-
-        # ← CORREGIDO: Todo en un solo bloque HTML
-        news_blocks = []
-        for item in news:
-            news_blocks.append(f'''
-                <div class="news-item">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                        <span style="color:#888;font-size:0.78rem;font-family:monospace;">{item['time']}</span>
-                        <span class="impact-badge" style="background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
-                    </div>
-                    <div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">{item['title']}</div>
-                    <a href="{item['link']}" target="_blank" class="news-link">→ Llig la notícia completa</a>
-                </div>
-            ''')
-
-        news_content = "".join(news_blocks)
-
+        
         tooltip = "Notícies d'alt impacte obtingudes via Finnhub API."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-
-        # ← CORREGIDO: Estructura HTML completa en una sola llamada
-        st.markdown(f'''
-        <div class="group-container">
-            <div class="group-header">
-                <p class="group-title">Notícies d'Alt Impacte</p>
-                {info_icon}
+        
+        # Header del módulo
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Notícies d\'Alt Impacte</p>{info_icon}</div><div class="group-content" style="background:#11141a;height:{H};overflow-y:auto;padding:0;">', unsafe_allow_html=True)
+        
+        # Renderizar cada noticia individualmente
+        for item in news:
+            # Escapar comillas en el título para evitar romper el HTML
+            safe_title = item['title'].replace('"', '&quot;')
+            st.markdown(f"""
+            <div class="news-item">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                    <span style="color:#888;font-size:0.78rem;font-family:monospace;">{item['time']}</span>
+                    <span class="impact-badge" style="background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
+                </div>
+                <div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">{safe_title}</div>
+                <a href="{item['link']}" target="_blank" class="news-link">→ Llig la notícia completa</a>
             </div>
-            <div class="group-content" style="background:#11141a;height:{H};overflow-y:auto;padding:0;">
-                {news_content}
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+        
+        # Cerrar el contenedor
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     # FILA 4
     st.write("")
@@ -462,5 +452,4 @@ def render():
 
 
 # Final del fitxer market.py
-   
-   
+

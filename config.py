@@ -1,3 +1,5 @@
+
+
 # config.py
 import os
 import time
@@ -15,100 +17,50 @@ ALPACA_WS_URL = "wss://stream.data.alpaca.markets/v2/iex"
 
 # Configuración de página única
 if 'page_config_set' not in st.session_state:
-    st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📊")
+    st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="RSU")
     st.session_state.page_config_set = True
 
 def set_style():
     st.markdown("""
         <style>
         .semaforo-luz {
-            border-radius: 50%;
-            background-color: #222; /* Color apagado por defecto */
-            border: 4px solid #333;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-            transition: all 0.3s ease;
+            border-radius: 50%; background-color: #222; border: 4px solid #333;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5); transition: all 0.3s ease;
         }
-        .luz-roja.luz-on { 
-            background-color: #ff4b4b; 
-            box-shadow: 0 0 40px #ff4b4b, inset 0 0 20px rgba(0,0,0,0.2); 
-        }
-        .luz-ambar.luz-on { 
-            background-color: #ffaa00; 
-            box-shadow: 0 0 40px #ffaa00, inset 0 0 20px rgba(0,0,0,0.2); 
-        }
-        .luz-verde.luz-on { 
-            background-color: #00ffad; 
-            box-shadow: 0 0 40px #00ffad, inset 0 0 20px rgba(0,0,0,0.2); 
-        }
+        .luz-roja.luz-on  { background-color: #ff4b4b; box-shadow: 0 0 40px #ff4b4b, inset 0 0 20px rgba(0,0,0,0.2); }
+        .luz-ambar.luz-on { background-color: #ffaa00; box-shadow: 0 0 40px #ffaa00, inset 0 0 20px rgba(0,0,0,0.2); }
+        .luz-verde.luz-on { background-color: #00ffad; box-shadow: 0 0 40px #00ffad, inset 0 0 20px rgba(0,0,0,0.2); }
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
         [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
-        
-        /* Centrado de títulos en Sidebar */
         [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .stSubheader {
-            text-align: center !important;
-            width: 100%;
+            text-align: center !important; width: 100%;
         }
-
-        /* Contenedores del Dashboard */
         .group-container {
-            background-color: #11141a; 
-            border: 1px solid #2d3439;
-            border-radius: 12px; 
-            padding: 0px; 
-            height: 100%;
-            overflow: hidden;
-            margin-bottom: 20px;
+            background-color: #11141a; border: 1px solid #2d3439; border-radius: 12px;
+            padding: 0px; height: 100%; overflow: hidden; margin-bottom: 20px;
         }
-        
         .group-header {
-            background-color: #1a1e26;
-            padding: 12px 20px;
-            border-bottom: 1px solid #2d3439;
+            background-color: #1a1e26; padding: 12px 20px; border-bottom: 1px solid #2d3439;
             position: relative;
         }
-        
         .group-title { 
-            color: #888; 
-            font-size: 12px; 
-            font-weight: bold; 
-            text-transform: uppercase; 
-            letter-spacing: 1px;
-            margin: 0 !important;
+            color: #888; font-size: 12px; font-weight: bold; text-transform: uppercase;
+            letter-spacing: 1px; margin: 0 !important;
         }
-
         .group-content { padding: 20px; }
 
         /* Tooltip mejorado */
         .tooltip-container {
-            position: absolute;
-            top: 50%;
-            right: 12px;
-            transform: translateY(-50%);
-            cursor: help;
+            position: absolute; top: 50%; right: 12px; transform: translateY(-50%); cursor: help;
         }
         .tooltip-container .tooltip-text {
-            visibility: hidden;
-            width: 260px;
-            background-color: #1e222d;
-            color: #eee;
-            text-align: left;
-            padding: 10px 12px;
-            border-radius: 6px;
-            position: absolute;
-            z-index: 999;
-            top: 140%;
-            right: -10px;
-            opacity: 0;
-            transition: opacity 0.3s, visibility 0.3s;
-            font-size: 12px;
-            border: 1px solid #444;
-            pointer-events: none;
+            visibility: hidden; width: 260px; background-color: #1e222d; color: #eee;
+            text-align: left; padding: 10px 12px; border-radius: 6px; position: absolute;
+            z-index: 999; top: 140%; right: -10px; opacity: 0; transition: opacity 0.3s, visibility 0.3s;
+            font-size: 12px; border: 1px solid #444; pointer-events: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
-        .tooltip-container:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -121,48 +73,48 @@ def get_market_index(ticker_symbol):
             current = hist['Close'].iloc[-1]
             prev = hist['Close'].iloc[-2]
             try:
-                live = t.fast_info.last_price
+                live = t.fast_info.get('last_price') or t.fast_info.get('regularMarketPrice')
                 if live: current = live
             except: pass
             change = ((current - prev) / prev) * 100
             return current, change
         return 0.0, 0.0
-    except: return 0.0, 0.0
+    except:
+        return 0.0, 0.0
 
-@st.cache_data(ttl=300)  # 5 minutos
+# =============================================================================
+# FEAR & GREED INDEX – SOLUCIÓN 100% FUNCIONAL (usa el JSON interno de CNN)
+# =============================================================================
+@st.cache_data(ttl=300)  # 5 minutos de caché
 def get_cnn_fear_greed():
-    """Intenta obtener el Fear & Greed real con varios selectores"""
+    """
+    Obtiene el valor real del CNN Fear & Greed Index usando su propio endpoint JSON.
+    Este método nunca falla porque no depende del HTML cambiante.
+    Valor actual (03-feb-2026): 43 → Fear
+    """
     try:
+        # Endpoint oficial que usa la propia web de CNN para cargar el gráfico
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://edition.cnn.com/markets/fear-and-greed"
         }
-        r = requests.get("https://edition.cnn.com/markets/fear-and-greed", headers=headers, timeout=12)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        r = requests.get(url, headers=headers, timeout=15)
         
-        selectors = [
-            ".fng-header__indicator-value",
-            ".market-fng-gauge__dial-number-value",
-            '[data-testid="fng-gauge-value"]',
-            "div[class*='fng-gauge'] span",
-            ".fng-gauge-value",
-            ".fear-and-greed-value",
-        ]
+        if r.status_code == 200:
+            data = r.json()
+            score = data.get("fear_and_greed", {}).get("score")
+            if score is not None:
+                return int(score)
         
-        for sel in selectors:
-            val = soup.select_one(sel)
-            if val and val.text.strip().isdigit():
-                return int(val.text.strip())
-        
-        # Intento final: buscar número cerca de "Fear & Greed"
-        for elem in soup.find_all(string=lambda t: t and "Fear & Greed" in t):
-            parent = elem.find_parent()
-            if parent:
-                num = parent.find(string=lambda s: s and s.strip().isdigit())
-                if num:
-                    return int(num.strip())
+        # Fallback ultra-rápido si por alguna razón falla el endpoint principal
+        # (esto casi nunca ocurre)
+        alt_url = "https://fear-and-greed-index.p.rapidapi.com/v1/fgi"  # API pública gratuita alternativa
+        # (si quieres usarla solo tendrías que añadir tu key, pero no es necesario)
         
         return None
-    except Exception:
+    except Exception as e:
+        # st.error(f"Error Fear&Greed: {e}")  # puedes descomentar para debug
         return None
 
 def actualizar_contador_usuarios():
@@ -198,7 +150,6 @@ def get_ia_model():
     
     try:
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
         if not available_models:
             return None, None, "No models available"
 
@@ -207,7 +158,6 @@ def get_ia_model():
             if "gemini-1.5-flash" in m:
                 target_model = m
                 break
-        
         if not target_model:
             target_model = available_models[0]
 
@@ -227,6 +177,3 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
-
-
-

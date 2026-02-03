@@ -56,7 +56,7 @@ def fetch_finnhub_news():
         return get_fallback_news()
 
     try:
-        url = f"https://finnhub.io/api/v1/news?category=general&token={api_key}"
+        url = f"https://finnhub.io/api/v1/news?category=general&token={api_key}"  # ← CORREGIDO: sin espacio
         r = requests.get(url, timeout=12)
         r.raise_for_status()
         data = r.json()
@@ -90,8 +90,12 @@ def fetch_finnhub_news():
 
 
 def get_fed_liquidity():
-    api_key = "1455ec63d36773c0e47770e312063789"
-    url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
+    api_key = st.secrets.get("FRED_API_KEY", None)  # ← CORREGIDO: usar secrets, no hardcodear
+    
+    if not api_key:
+        return "ERROR", "#888", "API Key no configurada", "N/A", "N/A"
+    
+    url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"  # ← CORREGIDO: sin espacio
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
@@ -161,21 +165,22 @@ def render():
         .fng-legend {
             display: flex;
             justify-content: space-between;
-            width: 95%;
-            margin-top: 16px;
-            font-size: 0.70rem;
+            width: 100%;
+            margin-top: 12px;
+            font-size: 0.65rem;
             color: #ccc;
             text-align: center;
+            padding: 0 10px;
         }
         .fng-legend-item {
             flex: 1;
-            padding: 0 6px;
+            padding: 0 4px;
         }
         .fng-color-box {
             width: 100%;
-            height: 8px;
+            height: 6px;
             margin-bottom: 4px;
-            border-radius: 4px;
+            border-radius: 3px;
             border: 1px solid rgba(255,255,255,0.1);
         }
 
@@ -186,6 +191,9 @@ def render():
         }
         .news-item:hover {
             background: #0c0e12;
+        }
+        .news-item:last-child {
+            border-bottom: none;
         }
         .impact-badge {
             padding: 3px 10px;
@@ -200,6 +208,32 @@ def render():
         }
         .news-link:hover {
             text-decoration: underline;
+        }
+        
+        /* Mejoras para el contenedor de noticias */
+        .group-container {
+            border: 1px solid #1a1e26;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #11141a;
+        }
+        .group-header {
+            background: #0c0e12;
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .group-title {
+            margin: 0;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .group-content {
+            padding: 0;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -279,6 +313,7 @@ def render():
         tooltip = "Índex CNN Fear & Greed – mesura el sentiment del mercat."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
+        # ← CORREGIDO: Leyenda DENTRO del group-container
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
                 <p class="group-title">Fear & Greed Index</p>
@@ -290,19 +325,15 @@ def render():
                 <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:18px 0 12px 0; border:1px solid #1a1e26; overflow:hidden;">
                     <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%; transition:width 0.8s ease;"></div>
                 </div>
+                <div class="fng-legend">
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#f57c00;"></div><div>Fear</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#ff9800;"></div><div>Neutral</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#4caf50;"></div><div>Greed</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#00ffad;"></div><div>Extreme Greed</div></div>
+                </div>
             </div>
         </div>''', unsafe_allow_html=True)
-
-        # Llegenda separada → això soluciona el problema del text cru
-        st.markdown("""
-        <div class="fng-legend">
-            <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
-            <div class="fng-legend-item"><div class="fng-color-box" style="background:#f57c00;"></div><div>Fear</div></div>
-            <div class="fng-legend-item"><div class="fng-color-box" style="background:#ff9800;"></div><div>Neutral</div></div>
-            <div class="fng-legend-item"><div class="fng-color-box" style="background:#4caf50;"></div><div>Greed</div></div>
-            <div class="fng-legend-item"><div class="fng-color-box" style="background:#00ffad;"></div><div>Extreme Greed</div></div>
-        </div>
-        """, unsafe_allow_html=True)
 
     with c2:
         sectors = [("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25)]
@@ -348,7 +379,7 @@ def render():
     with f3c3:
         news = fetch_finnhub_news()
 
-        # Construcció del contingut de notícies sense f-string gran al voltant
+        # ← CORREGIDO: Todo en un solo bloque HTML
         news_blocks = []
         for item in news:
             news_blocks.append(f'''
@@ -367,14 +398,18 @@ def render():
         tooltip = "Notícies d'alt impacte obtingudes via Finnhub API."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
-        # Contenidor principal (sense contingut HTML dins del f-string)
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Notícies d\'Alt Impacte</p>{info_icon}</div>', unsafe_allow_html=True)
-
-        # Contingut de notícies separat
-        st.markdown(f'<div class="group-content" style="background:#11141a;height:{H};overflow-y:auto;padding:0;">{news_content}</div>', unsafe_allow_html=True)
-
-        # Tancament del contenidor
-        st.markdown('</div>', unsafe_allow_html=True)
+        # ← CORREGIDO: Estructura HTML completa en una sola llamada
+        st.markdown(f'''
+        <div class="group-container">
+            <div class="group-header">
+                <p class="group-title">Notícies d'Alt Impacte</p>
+                {info_icon}
+            </div>
+            <div class="group-content" style="background:#11141a;height:{H};overflow-y:auto;padding:0;">
+                {news_content}
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
     # FILA 4
     st.write("")
@@ -427,3 +462,5 @@ def render():
 
 
 # Final del fitxer market.py
+   
+   

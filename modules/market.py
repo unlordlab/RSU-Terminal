@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from config import get_market_index, get_cnn_fear_greed
 import requests
 import streamlit.components.v1 as components
+import time
 
 # Intentar importar investpy
 try:
@@ -74,14 +75,17 @@ def get_fallback_economic_calendar():
         {"time": "20:00", "event": "FOMC Meeting Minutes", "imp": "High", "val": "-", "prev": "-"},
     ]
 
-@st.cache_data(ttl=300)
+# Cache más largo para evitar rate limits de CoinGecko (10 minutos)
+@st.cache_data(ttl=600)
 def get_crypto_prices():
     """
     Obtiene los precios de las 5 principales criptomonedas por market cap.
     Usa CoinGecko API (gratuita, no requiere API key).
     """
     try:
-        # CoinGecko API - top 5 criptos por market cap
+        # Esperar un poco para no saturar en el arranque
+        time.sleep(1)
+        
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {
             'vs_currency': 'usd',
@@ -92,13 +96,20 @@ def get_crypto_prices():
             'price_change_percentage': '24h'
         }
         
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=15)
+        
+        # Si hay rate limit, esperar y reintentar una vez
+        if response.status_code == 429:
+            time.sleep(2)
+            response = requests.get(url, params=params, timeout=15)
+        
         response.raise_for_status()
         data = response.json()
         
         cryptos = []
         for coin in data:
             symbol = coin['symbol'].upper()
+            name = coin['name']
             price = coin['current_price']
             change_24h = coin['price_change_percentage_24h']
             
@@ -113,35 +124,34 @@ def get_crypto_prices():
             # Formatear cambio porcentual
             if change_24h is not None:
                 change_str = f"{change_24h:+.2f}%"
-                change_color = "positive" if change_24h >= 0 else "negative"
+                is_positive = change_24h >= 0
             else:
                 change_str = "N/A"
-                change_color = "neutral"
+                is_positive = True
             
             cryptos.append({
                 'symbol': symbol,
-                'name': coin['name'],
+                'name': name,
                 'price': price_str,
                 'change': change_str,
-                'change_color': change_color,
-                'market_cap': coin['market_cap'],
-                'image': coin['image']
+                'is_positive': is_positive
             })
         
         return cryptos
         
     except Exception as e:
-        st.warning(f"Error obtenint preus de cripto: {str(e)[:50]}")
+        # No mostrar error en UI, solo usar fallback silenciosamente
+        print(f"Error CoinGecko: {e}")
         return get_fallback_crypto_prices()
 
 def get_fallback_crypto_prices():
     """Datos simulados como fallback"""
     return [
-        {"symbol": "BTC", "name": "Bitcoin", "price": "104,231.50", "change": "+2.4%", "change_color": "positive"},
-        {"symbol": "ETH", "name": "Ethereum", "price": "3,120.12", "change": "-1.1%", "change_color": "negative"},
-        {"symbol": "BNB", "name": "BNB", "price": "685.45", "change": "+0.8%", "change_color": "positive"},
-        {"symbol": "SOL", "name": "Solana", "price": "245.88", "change": "+5.7%", "change_color": "positive"},
-        {"symbol": "XRP", "name": "XRP", "price": "3.15", "change": "-2.3%", "change_color": "negative"},
+        {"symbol": "BTC", "name": "Bitcoin", "price": "104,231.50", "change": "+2.4%", "is_positive": True},
+        {"symbol": "ETH", "name": "Ethereum", "price": "3,120.12", "change": "-1.1%", "is_positive": False},
+        {"symbol": "BNB", "name": "BNB", "price": "685.45", "change": "+0.8%", "is_positive": True},
+        {"symbol": "SOL", "name": "Solana", "price": "245.88", "change": "+5.7%", "is_positive": True},
+        {"symbol": "XRP", "name": "XRP", "price": "3.15", "change": "-2.3%", "is_positive": False},
     ]
 
 def get_earnings_calendar():
@@ -474,36 +484,37 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
 
     with c3:
-        # NUEVO: Precios reales de criptomonedas
-        cryptos = get_crypto_prices()
+        # Cargar datos de cripto con manejo de errores silencioso
+        try:
+            cryptos = get_crypto_prices()
+        except:
+            cryptos = get_fallback_crypto_prices()
         
-        # Construir HTML para cada cripto
+        # Construir HTML para cada cripto usando concatenación segura
         crypto_html_parts = []
         for crypto in cryptos:
             symbol = crypto['symbol']
             name = crypto['name']
             price = crypto['price']
             change = crypto['change']
+            is_positive = crypto.get('is_positive', True)
             
-            # Determinar color del cambio
-            if 'change_color' in crypto:
-                color = "#00ffad" if crypto['change_color'] == 'positive' else "#f23645"
-            else:
-                color = "#00ffad" if "+" in change else "#f23645"
+            color = "#00ffad" if is_positive else "#f23645"
             
-            # HTML para esta cripto
-            crypto_html_parts.append(f'''
-                <div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <div style="color:white; font-weight:bold; font-size:13px;">{symbol}</div>
-                        <div style="color:#555; font-size:9px;">{name}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="color:white; font-size:13px; font-weight:bold;">${price}</div>
-                        <div style="color:{color}; font-size:11px; font-weight:bold;">{change}</div>
-                    </div>
-                </div>
-            ''')
+            # Usar concatenación de strings en lugar de f-strings complejos
+            part = (
+                '<div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">'
+                '<div style="display:flex; align-items:center; gap:10px;">'
+                '<div style="color:white; font-weight:bold; font-size:13px;">' + symbol + '</div>'
+                '<div style="color:#555; font-size:9px;">' + name + '</div>'
+                '</div>'
+                '<div style="text-align:right;">'
+                '<div style="color:white; font-size:13px; font-weight:bold;">$' + price + '</div>'
+                '<div style="color:' + color + '; font-size:11px; font-weight:bold;">' + change + '</div>'
+                '</div>'
+                '</div>'
+            )
+            crypto_html_parts.append(part)
         
         crypto_html = "".join(crypto_html_parts)
         

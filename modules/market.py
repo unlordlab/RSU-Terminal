@@ -91,6 +91,7 @@ def fetch_finnhub_news():
         st.warning(f"Finnhub falló: {str(e)[:100]} → usando fallback")
         return get_fallback_news()
 
+
 def get_fed_liquidity():
     api_key = "1455ec63d36773c0e47770e312063789"
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
@@ -123,7 +124,7 @@ def get_fed_liquidity():
 
 
 # ────────────────────────────────────────────────
-# DASHBOARD
+# DASHBOARD PRINCIPAL
 # ────────────────────────────────────────────────
 
 def render():
@@ -288,7 +289,7 @@ def render():
             </div>
         </div>''', unsafe_allow_html=True)
 
-        # Leyenda separada pero dentro del flujo visual del módulo
+        # Leyenda en bloque separado
         st.markdown("""
         <div class="fng-legend">
             <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
@@ -342,21 +343,28 @@ def render():
 
     with f3c3:
         news = fetch_finnhub_news()
-        news_html = "".join([f'''
-            <div class="news-item">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                    <span style="color:#888;font-size:0.78rem;font-family:monospace;">{item['time']}</span>
-                    <span class="impact-badge" style="background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
+
+        news_items = []
+        for item in news:
+            news_items.append(f'''
+                <div class="news-item">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                        <span style="color:#888;font-size:0.78rem;font-family:monospace;">{item['time']}</span>
+                        <span class="impact-badge" style="background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
+                    </div>
+                    <div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">{item['title']}</div>
+                    <a href="{item['link']}" target="_blank" class="news-link">→ Leer noticia completa</a>
                 </div>
-                <div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">{item['title']}</div>
-                <a href="{item['link']}" target="_blank" class="news-link">→ Leer noticia completa</a>
-            </div>
-        ''' for item in news])
+            ''')
+
+        news_html = "".join(news_items)
 
         tooltip = "Noticias de gran impacto obtenidas vía Finnhub API."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Noticias de Alto Impacto</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto; padding:0;">{news_html}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Noticias de Alto Impacto</p>{info_icon}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto; padding:0;">{news_html}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)  # cierre del container
 
     # FILA 4
     st.write("")
@@ -408,4 +416,4 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
 
 
-# Fin del archivo market.py
+# Fin del archivo

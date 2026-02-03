@@ -5,7 +5,7 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 
 # ────────────────────────────────────────────────
-# FUNCIONES DE DATOS
+# FUNCIONES DE OBTENCIÓN DE DATOS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
@@ -90,6 +90,7 @@ def fetch_finnhub_news():
     except Exception as e:
         st.warning(f"Finnhub falló: {str(e)[:100]} → usando fallback")
         return get_fallback_news()
+
 
 def get_fed_liquidity():
     api_key = "1455ec63d36773c0e47770e312063789"
@@ -218,7 +219,6 @@ def render():
         tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
-        # Contenedor principal SIN HTML de leyenda dentro del f-string
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
                 <p class="group-title">Fear & Greed Index</p>
@@ -233,7 +233,7 @@ def render():
             </div>
         </div>''', unsafe_allow_html=True)
 
-        # Leyenda en markdown independiente (esto SIEMPRE funciona)
+        # Leyenda separada (esto soluciona el texto crudo)
         st.markdown("""
         <div class="fng-legend">
             <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
@@ -288,7 +288,7 @@ def render():
     with f3c3:
         news = fetch_finnhub_news()
 
-        # Construimos el HTML de noticias sin f-string grande alrededor
+        # HTML de noticias en lista separada
         news_items = []
         for item in news:
             news_items.append(f'''
@@ -307,13 +307,13 @@ def render():
         tooltip = "Noticias de gran impacto obtenidas vía Finnhub API."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
-        # Contenedor principal
+        # Contenedor principal sin HTML dentro del f-string
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Noticias de Alto Impacto</p>{info_icon}</div>', unsafe_allow_html=True)
 
-        # Contenido de noticias en markdown separado
+        # Contenido de noticias separado
         st.markdown(f'<div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto; padding:0;">{news_html}</div>', unsafe_allow_html=True)
 
-        # Cierre del container
+        # Cierre
         st.markdown('</div>', unsafe_allow_html=True)
 
     # FILA 4
@@ -364,6 +364,3 @@ def render():
         tooltip = "Rendimiento del bono del Tesoro de EE.UU. a 10 años."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
-
-
-# Fin del archivo

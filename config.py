@@ -64,6 +64,7 @@ def set_style():
             background-color: #1a1e26;
             padding: 12px 20px;
             border-bottom: 1px solid #2d3439;
+            position: relative;
         }
         
         .group-title { 
@@ -77,18 +78,37 @@ def set_style():
 
         .group-content { padding: 20px; }
 
-        .index-card {
-            background-color: #1a1e26; border: 1px solid #2d3439; border-radius: 8px;
-            padding: 12px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+        /* Tooltip mejorado */
+        .tooltip-container {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            transform: translateY(-50%);
+            cursor: help;
         }
-        .index-ticker { color: white; font-weight: bold; font-size: 14px; margin: 0; }
-        .index-fullname { color: #555; font-size: 10px; margin: 0; text-transform: uppercase; }
-        .index-price { font-weight: bold; font-size: 16px; color: white; margin: 0; }
-        .index-delta { font-size: 11px; border-radius: 4px; padding: 2px 6px; font-weight: bold; }
-        .pos { background-color: rgba(0, 255, 173, 0.1); color: #00ffad; }
-        .neg { background-color: rgba(242, 54, 69, 0.1); color: #f23645; }
-        
-        .prompt-container { background-color: #1a1e26; border-left: 5px solid #2962ff; padding: 20px; border-radius: 5px; white-space: pre-wrap; }
+        .tooltip-container .tooltip-text {
+            visibility: hidden;
+            width: 260px;
+            background-color: #1e222d;
+            color: #eee;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 999;
+            top: 140%;
+            right: -10px;
+            opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
+            font-size: 12px;
+            border: 1px solid #444;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -109,39 +129,42 @@ def get_market_index(ticker_symbol):
         return 0.0, 0.0
     except: return 0.0, 0.0
 
-@st.cache_data(ttl=600) # Reducimos el tiempo a 10 min para datos más frescos
+@st.cache_data(ttl=300)  # 5 minutos
 def get_cnn_fear_greed():
-    """Obtiene el valor real del Fear & Greed Index con selectores actualizados."""
+    """Intenta obtener el Fear & Greed real con varios selectores"""
     try:
-        # User-Agent para evitar ser bloqueado como bot
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         }
-        r = requests.get("https://edition.cnn.com/markets/fear-and-greed", headers=headers, timeout=10)
+        r = requests.get("https://edition.cnn.com/markets/fear-and-greed", headers=headers, timeout=12)
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Intentar varios selectores conocidos (CNN los alterna)
-        val = None
-        # Opción 1: Clase principal del valor actual
-        val = soup.select_one(".fng-header__indicator-value")
+        selectors = [
+            ".fng-header__indicator-value",
+            ".market-fng-gauge__dial-number-value",
+            '[data-testid="fng-gauge-value"]',
+            "div[class*='fng-gauge'] span",
+            ".fng-gauge-value",
+            ".fear-and-greed-value",
+        ]
         
-        # Opción 2: Selector alternativo si el primero falla
-        if not val:
-            val = soup.select_one(".market-fng-gauge__dial-number-value")
-            
-        # Opción 3: Buscar por texto dentro de las etiquetas de la cabecera
-        if not val:
-            container = soup.find("span", string="Fear & Greed Index")
-            if container:
-                val = container.find_next("span")
-
-        if val and val.text.strip().isdigit():
-            return int(val.text.strip())
+        for sel in selectors:
+            val = soup.select_one(sel)
+            if val and val.text.strip().isdigit():
+                return int(val.text.strip())
         
-        return 50 # Valor neutral si no se encuentra
+        # Intento final: buscar número cerca de "Fear & Greed"
+        for elem in soup.find_all(string=lambda t: t and "Fear & Greed" in t):
+            parent = elem.find_parent()
+            if parent:
+                num = parent.find(string=lambda s: s and s.strip().isdigit())
+                if num:
+                    return int(num.strip())
+        
+        return None
     except Exception:
-        return 50
-        
+        return None
+
 def actualizar_contador_usuarios():
     if not os.path.exists("sessions"):
         os.makedirs("sessions")
@@ -204,5 +227,6 @@ def obtener_prompt_github():
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
     except: return ""
+
 
 

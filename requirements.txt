@@ -9,6 +9,7 @@ pyyaml
 pandas_ta
 alpaca-py
 matplotlib
+fredapi
 
 
 

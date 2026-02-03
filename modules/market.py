@@ -48,11 +48,28 @@ def get_market_news():
         ("15:50", "EU markets close higher on easing inflation."),
     ]
 
+def get_unusual_volume():
+    """Stocks con volumen anormal respecto a su media."""
+    return [
+        ("BABA", "3.2x", "+8.4%"),
+        ("AMD", "2.1x", "-1.2%"),
+        ("PLTR", "1.9x", "+4.5%"),
+        ("SOFI", "1.7x", "+2.1%"),
+    ]
+
+def get_global_markets():
+    """Estado de índices globales."""
+    return [
+        ("DAX", "Germany", "+0.45%"),
+        ("FTSE", "UK", "-0.12%"),
+        ("NKY", "Japan", "+1.20%"),
+        ("HSI", "HK", "+0.88%"),
+    ]
+
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
     # --- CONFIGURACIÓN DE ALTURAS MAESTRAS ---
-    # Usamos la misma altura para las filas 1 y 2 para máxima simetría
     H_MAIN = "340px" 
     H_BOTTOM = "270px"
 
@@ -141,3 +158,49 @@ def render():
             <div style="color:white; font-size:11px; margin-top:4px; line-height:1.3;">{text}</div>
             </div>''' for time, text in news])
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Live News Terminal</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{news_html}</div></div>', unsafe_allow_html=True)
+
+    # ================= FILA 4 (NUEVA) =================
+    st.write("")
+    f4c1, f4c2, f4c3 = st.columns(3)
+
+    with f4c1:
+        # Market Breadth: S&P 500 Advance/Decline
+        adv, dec = 342, 158
+        per = (adv / (adv + dec)) * 100
+        st.markdown(f'''
+            <div class="group-container">
+                <div class="group-header"><p class="group-title">Market Breadth (A/D)</p></div>
+                <div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:20px; text-align:center;">
+                    <div style="color:#888; font-size:10px; margin-bottom:10px; letter-spacing:1px;">S&P 500 ADVANCE/DECLINE</div>
+                    <div style="font-size:2rem; font-weight:bold; color:#00ffad;">{per:.1f}%</div>
+                    <div style="width:100%; background:#f2364533; height:8px; border-radius:4px; margin:15px 0; overflow:hidden; display:flex;">
+                        <div style="width:{per}%; background:#00ffad; height:100%;"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold;">
+                        <span style="color:#00ffad;">{adv} BULLS</span>
+                        <span style="color:#f23645;">{dec} BEARS</span>
+                    </div>
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+    with f4c2:
+        # Unusual Volume Radar
+        u_vol = get_unusual_volume()
+        u_vol_html = "".join([f'''
+            <div style="background:#0c0e12; padding:8px 12px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">
+                <div><span style="color:#00ffad; font-weight:bold; font-size:11px;">{t}</span></div>
+                <div style="color:#ffa500; font-weight:bold; font-size:10px;">{v} VOL</div>
+                <div style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:10px;">{p}</div>
+            </div>''' for t, v, p in u_vol])
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Unusual Volume Radar</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{u_vol_html}</div></div>', unsafe_allow_html=True)
+
+    with f4c3:
+        # Global Markets Ticker
+        global_m = get_global_markets()
+        global_html = "".join([f'''
+            <div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <div><div style="color:white; font-size:11px; font-weight:bold;">{n}</div><div style="color:#555; font-size:9px;">{c}</div></div>
+                <div style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:11px; font-weight:bold;">{p}</div>
+            </div>''' for n, c, p in global_m])
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Global Markets Health</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{global_html}</div></div>', unsafe_allow_html=True)

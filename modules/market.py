@@ -5,7 +5,7 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 
 # ────────────────────────────────────────────────
-# FUNCIONES AUXILIARES
+# FUNCIONES DE DATOS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
@@ -40,52 +40,20 @@ def get_insider_trading():
     ]
 
 def get_fallback_news():
-    """Noticias simuladas como fallback"""
     return [
-        {
-            "time": "19:45",
-            "title": "Tesla supera expectativas de beneficios y sube un 8% en after-hours",
-            "impact": "Alto",
-            "color": "#f23645",
-            "link": "https://www.cnbc.com/2026/02/03/tesla-earnings-q4-2025.html"
-        },
-        {
-            "time": "18:30",
-            "title": "El PIB de EE.UU. creció un 2,3% en el último trimestre",
-            "impact": "Alto",
-            "color": "#f23645",
-            "link": "https://www.bea.gov/news/2026/gross-domestic-product-fourth-quarter-2025"
-        },
-        {
-            "time": "16:15",
-            "title": "Apple presenta resultados récord gracias a servicios y wearables",
-            "impact": "Alto",
-            "color": "#f23645",
-            "link": "https://www.apple.com/newsroom/2026/02/apple-reports-record-revenue/"
-        },
-        {
-            "time": "14:00",
-            "title": "La inflación subyacente en la zona euro se modera al 2,7%",
-            "impact": "Moderado",
-            "color": "#ff9800",
-            "link": "https://www.ecb.europa.eu/press/pr/date/2026/html/index.en.html"
-        },
-        {
-            "time": "12:30",
-            "title": "Microsoft Cloud supera los 30.000 millones de dólares en ingresos",
-            "impact": "Alto",
-            "color": "#f23645",
-            "link": "https://news.microsoft.com/2026/02/03/microsoft-q2-fy26-earnings/"
-        }
+        {"time": "19:45", "title": "Tesla supera expectativas de beneficios y sube un 8% en after-hours", "impact": "Alto", "color": "#f23645", "link": "https://www.cnbc.com/2026/02/03/tesla-earnings-q4-2025.html"},
+        {"time": "18:30", "title": "El PIB de EE.UU. creció un 2,3% en el último trimestre", "impact": "Alto", "color": "#f23645", "link": "https://www.bea.gov/news/2026/gross-domestic-product-fourth-quarter-2025"},
+        {"time": "16:15", "title": "Apple presenta resultados récord gracias a servicios y wearables", "impact": "Alto", "color": "#f23645", "link": "https://www.apple.com/newsroom/2026/02/apple-reports-record-revenue/"},
+        {"time": "14:00", "title": "La inflación subyacente en la zona euro se modera al 2,7%", "impact": "Moderado", "color": "#ff9800", "link": "https://www.ecb.europa.eu/press/pr/date/2026/html/index.en.html"},
+        {"time": "12:30", "title": "Microsoft Cloud supera los 30.000 millones de dólares en ingresos", "impact": "Alto", "color": "#f23645", "link": "https://news.microsoft.com/2026/02/03/microsoft-q2-fy26-earnings/"},
     ]
 
-@st.cache_data(ttl=300)  # 5 minutos
+@st.cache_data(ttl=300)
 def fetch_finnhub_news():
-    """Intenta obtener noticias reales de Finnhub"""
     api_key = st.secrets.get("FINNHUB_API_KEY", None)
     
     if not api_key:
-        st.warning("⚠️ No se encontró FINNHUB_API_KEY en secrets.toml → usando noticias simuladas")
+        st.warning("⚠️ No se encontró FINNHUB_API_KEY en secrets → usando fallback")
         return get_fallback_news()
 
     try:
@@ -95,7 +63,7 @@ def fetch_finnhub_news():
         data = r.json()
 
         news_list = []
-        for item in data[:8]:  # Limitamos a 8 para no saturar
+        for item in data[:8]:
             title = item.get("headline", "Sin título")
             link = item.get("url", "#")
             timestamp = item.get("datetime", 0)
@@ -120,91 +88,30 @@ def fetch_finnhub_news():
         return news_list if news_list else get_fallback_news()
 
     except Exception as e:
-        st.warning(f"Finnhub error: {str(e)[:100]} → usando fallback")
+        st.warning(f"Finnhub falló: {str(e)[:100]} → usando fallback")
         return get_fallback_news()
 
 
 # ────────────────────────────────────────────────
-# DASHBOARD PRINCIPAL
+# DASHBOARD
 # ────────────────────────────────────────────────
 
 def render():
     st.markdown("""
     <style>
-        .tooltip-container {
-            position: absolute;
-            top: 50%;
-            right: 12px;
-            transform: translateY(-50%);
-            cursor: help;
-        }
-        .tooltip-container .tooltip-text {
-            visibility: hidden;
-            width: 260px;
-            background-color: #1e222d;
-            color: #eee;
-            text-align: left;
-            padding: 10px 12px;
-            border-radius: 6px;
-            position: absolute;
-            z-index: 999;
-            top: 140%;
-            right: -10px;
-            opacity: 0;
-            transition: opacity 0.3s, visibility 0.3s;
-            font-size: 12px;
-            border: 1px solid #444;
-            pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-        }
-        .tooltip-container:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
+        .tooltip-container {position:absolute;top:50%;right:12px;transform:translateY(-50%);cursor:help;}
+        .tooltip-container .tooltip-text {visibility:hidden;width:260px;background:#1e222d;color:#eee;text-align:left;padding:10px 12px;border-radius:6px;position:absolute;z-index:999;top:140%;right:-10px;opacity:0;transition:opacity 0.3s,visibility 0.3s;font-size:12px;border:1px solid #444;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);}
+        .tooltip-container:hover .tooltip-text {visibility:visible;opacity:1;}
 
-        .fng-legend {
-            display: flex;
-            justify-content: space-between;
-            width: 95%;
-            margin-top: 16px;
-            font-size: 0.70rem;
-            color: #ccc;
-            text-align: center;
-        }
-        .fng-legend-item {
-            flex: 1;
-            padding: 0 6px;
-        }
-        .fng-color-box {
-            width: 100%;
-            height: 8px;
-            margin-bottom: 4px;
-            border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
+        .fng-legend {display:flex;justify-content:space-between;width:95%;margin-top:16px;font-size:0.70rem;color:#ccc;text-align:center;}
+        .fng-legend-item {flex:1;padding:0 6px;}
+        .fng-color-box {width:100%;height:8px;margin-bottom:4px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);}
 
-        .news-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #1a1e26;
-            transition: background 0.2s;
-        }
-        .news-item:hover {
-            background: #0c0e12;
-        }
-        .impact-badge {
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
-        .news-link {
-            color: #00ffad;
-            text-decoration: none;
-            font-size: 0.85rem;
-        }
-        .news-link:hover {
-            text-decoration: underline;
-        }
+        .news-item {padding:12px 15px;border-bottom:1px solid #1a1e26;transition:background 0.2s;}
+        .news-item:hover {background:#0c0e12;}
+        .impact-badge {padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:bold;}
+        .news-link {color:#00ffad;text-decoration:none;font-size:0.85rem;}
+        .news-link:hover {text-decoration:underline;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -212,7 +119,7 @@ def render():
     
     H = "340px"
 
-    # ================= FILA 1 =================
+    # FILA 1
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -251,7 +158,7 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{reddit_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 2 =================
+    # FILA 2
     st.write("")
     c1, c2, c3 = st.columns(3)
 
@@ -266,19 +173,14 @@ def render():
         else:
             val_display = val
             bar_width = val
-            if val <= 24:
-                label, col = "EXTREME FEAR", "#d32f2f"
-            elif val <= 44:
-                label, col = "FEAR", "#f57c00"
-            elif val <= 55:
-                label, col = "NEUTRAL", "#ff9800"
-            elif val <= 75:
-                label, col = "GREED", "#4caf50"
-            else:
-                label, col = "EXTREME GREED", "#00ffad"
+            if val <= 24: label, col = "EXTREME FEAR", "#d32f2f"
+            elif val <= 44: label, col = "FEAR", "#f57c00"
+            elif val <= 55: label, col = "NEUTRAL", "#ff9800"
+            elif val <= 75: label, col = "GREED", "#4caf50"
+            else: label, col = "EXTREME GREED", "#00ffad"
             extra = ""
 
-        tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado (datos reales)."
+        tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
 
         st.markdown(f'''<div class="group-container">
@@ -295,7 +197,6 @@ def render():
             </div>
         </div>''', unsafe_allow_html=True)
 
-        # Leyenda separada (esto soluciona el texto crudo)
         st.markdown("""
         <div class="fng-legend">
             <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
@@ -323,7 +224,7 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Crypto Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{crypto_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 3 =================
+    # FILA 3
     st.write("")
     f3c1, f3c2, f3c3 = st.columns(3)
 
@@ -365,7 +266,7 @@ def render():
 
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Noticias de Alto Impacto</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto; padding:0;">{news_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 4 =================
+    # FILA 4
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
 
@@ -413,5 +314,3 @@ def render():
         tooltip = "Rendimiento del bono del Tesoro de EE.UU. a 10 años."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
-
-# Fin del archivo

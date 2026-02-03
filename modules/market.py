@@ -76,13 +76,6 @@ def get_market_news():
             "impact": "Alto",
             "color": "#f23645",
             "link": "https://news.microsoft.com/2026/02/03/microsoft-q2-fy26-earnings/"
-        },
-        {
-            "time": "10:45",
-            "title": "Informe de empleo ADP: creación de 143.000 puestos en enero",
-            "impact": "Alto",
-            "color": "#f23645",
-            "link": "https://adpemploymentreport.com/"
         }
     ]
 
@@ -203,7 +196,7 @@ def render():
 
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    H = "340px"  # Altura uniforme para todas las filas
+    H = "340px"  # Altura uniforme para TODAS las filas
 
     # ================= FILA 1 =================
     col1, col2, col3 = st.columns(3)
@@ -290,7 +283,7 @@ def render():
                 <p class="group-title">Fear & Greed Index</p>
                 {info_icon}
             </div>
-            <div class="group-content" style="background:#11141a; height:{H}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px 15px;">
+            <div class="group-content" style="background:#11141a; height:{H}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 15px;">
                 <div style="font-size:4.2rem; font-weight:bold; color:{col};">{val_display}</div>
                 <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:12px 0;">{label}{extra}</div>
                 <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:18px 0 12px 0; border:1px solid #1a1e26; overflow:hidden;">

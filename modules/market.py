@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 from config import get_market_index, get_cnn_fear_greed
 import requests
+import streamlit.components.v1 as components
 
 # ────────────────────────────────────────────────
 # FUNCIONS AUXILIARS
@@ -374,13 +375,13 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
 
-        with f3c3:
+    with f3c3:
         news = fetch_finnhub_news()
         
         tooltip = "Notícies d'alt impacte obtingudes via Finnhub API."
         info_icon_html = '<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">' + tooltip + '</div></div>'
         
-        # Construir HTML de noticias de forma segura
+        # Construir HTML de noticias de forma segura usando concatenación de strings
         news_items_html = []
         for item in news:
             # Escapar comillas dobles en el título
@@ -404,7 +405,7 @@ def render():
         
         news_content = "".join(news_items_html)
         
-        # HTML completo del módulo
+        # HTML completo del módulo usando components.html
         full_html = (
             '<div style="border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a;">'
             '<div style="background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; position: relative; display: flex; justify-content: space-between; align-items: center;">'
@@ -417,8 +418,6 @@ def render():
             '</div>'
         )
         
-        # Usar components.html para renderizar correctamente
-        import streamlit.components.v1 as components
         components.html(full_html, height=400, scrolling=False)
 
     # FILA 4

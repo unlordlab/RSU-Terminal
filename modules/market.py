@@ -5,7 +5,7 @@ from config import get_market_index, get_cnn_fear_greed
 import requests
 
 # ────────────────────────────────────────────────
-# FUNCIONES DE DATOS
+# FUNCIONES DE OBTENCIÓN DE DATOS
 # ────────────────────────────────────────────────
 
 def get_economic_calendar():
@@ -53,7 +53,7 @@ def fetch_finnhub_news():
     api_key = st.secrets.get("FINNHUB_API_KEY", None)
     
     if not api_key:
-        st.warning("⚠️ No se encontró FINNHUB_API_KEY en secrets → usando fallback")
+        st.warning("No se encontró FINNHUB_API_KEY en secrets.toml → usando noticias simuladas")
         return get_fallback_news()
 
     try:
@@ -91,6 +91,36 @@ def fetch_finnhub_news():
         st.warning(f"Finnhub falló: {str(e)[:100]} → usando fallback")
         return get_fallback_news()
 
+def get_fed_liquidity():
+    api_key = "1455ec63d36773c0e47770e312063789"
+    url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            observations = data.get('observations', [])
+            if len(observations) >= 2:
+                latest_val = float(observations[0]['value'])
+                prev_val = float(observations[1]['value'])
+                date_latest = observations[0]['date']
+                change = latest_val - prev_val
+                if change < -100:
+                    status = "QT"
+                    color = "#f23645"
+                    desc = "Quantitative Tightening"
+                elif change > 100:
+                    status = "QE"
+                    color = "#00ffad"
+                    desc = "Quantitative Easing"
+                else:
+                    status = "STABLE"
+                    color = "#ff9800"
+                    desc = "Balance sheet stable"
+                return status, color, desc, f"{latest_val/1000:.1f}T", date_latest
+        return "ERROR", "#888", "API temporalmente no disponible", "N/A", "N/A"
+    except:
+        return "N/A", "#888", "Sin conexión a FRED", "N/A", "N/A"
+
 
 # ────────────────────────────────────────────────
 # DASHBOARD
@@ -99,19 +129,80 @@ def fetch_finnhub_news():
 def render():
     st.markdown("""
     <style>
-        .tooltip-container {position:absolute;top:50%;right:12px;transform:translateY(-50%);cursor:help;}
-        .tooltip-container .tooltip-text {visibility:hidden;width:260px;background:#1e222d;color:#eee;text-align:left;padding:10px 12px;border-radius:6px;position:absolute;z-index:999;top:140%;right:-10px;opacity:0;transition:opacity 0.3s,visibility 0.3s;font-size:12px;border:1px solid #444;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);}
-        .tooltip-container:hover .tooltip-text {visibility:visible;opacity:1;}
+        .tooltip-container {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            transform: translateY(-50%);
+            cursor: help;
+        }
+        .tooltip-container .tooltip-text {
+            visibility: hidden;
+            width: 260px;
+            background-color: #1e222d;
+            color: #eee;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 999;
+            top: 140%;
+            right: -10px;
+            opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
+            font-size: 12px;
+            border: 1px solid #444;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
 
-        .fng-legend {display:flex;justify-content:space-between;width:95%;margin-top:16px;font-size:0.70rem;color:#ccc;text-align:center;}
-        .fng-legend-item {flex:1;padding:0 6px;}
-        .fng-color-box {width:100%;height:8px;margin-bottom:4px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);}
+        .fng-legend {
+            display: flex;
+            justify-content: space-between;
+            width: 95%;
+            margin-top: 16px;
+            font-size: 0.70rem;
+            color: #ccc;
+            text-align: center;
+        }
+        .fng-legend-item {
+            flex: 1;
+            padding: 0 6px;
+        }
+        .fng-color-box {
+            width: 100%;
+            height: 8px;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
 
-        .news-item {padding:12px 15px;border-bottom:1px solid #1a1e26;transition:background 0.2s;}
-        .news-item:hover {background:#0c0e12;}
-        .impact-badge {padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:bold;}
-        .news-link {color:#00ffad;text-decoration:none;font-size:0.85rem;}
-        .news-link:hover {text-decoration:underline;}
+        .news-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            transition: background 0.2s;
+        }
+        .news-item:hover {
+            background: #0c0e12;
+        }
+        .impact-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .news-link {
+            color: #00ffad;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .news-link:hover {
+            text-decoration: underline;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -197,6 +288,7 @@ def render():
             </div>
         </div>''', unsafe_allow_html=True)
 
+        # Leyenda separada pero dentro del flujo visual del módulo
         st.markdown("""
         <div class="fng-legend">
             <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
@@ -314,3 +406,6 @@ def render():
         tooltip = "Rendimiento del bono del Tesoro de EE.UU. a 10 años."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
+
+
+# Fin del archivo market.py

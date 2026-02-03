@@ -49,30 +49,28 @@ def get_market_news():
     ]
 
 def get_unusual_volume():
-    """Stocks con volumen anormal hoy."""
+    """Acciones con picos de volumen atípicos."""
     return [
         ("BABA", "3.2x", "+8.4%"),
         ("AMD", "2.1x", "-1.2%"),
         ("PLTR", "1.9x", "+4.5%"),
         ("SOFI", "1.7x", "+2.1%"),
-        ("VALE", "1.5x", "-0.8%")
     ]
 
 def get_global_markets():
-    """Estado de índices globales fuera de USA."""
+    """Estado de índices globales."""
     return [
         ("DAX 40", "Germany", "+0.45%"),
         ("FTSE 100", "UK", "-0.12%"),
         ("NIKKEI 225", "Japan", "+1.20%"),
         ("HSI", "Hong Kong", "+0.88%"),
-        ("IBEX 35", "Spain", "+0.32%")
     ]
 
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # --- CONFIGURACIÓN DE ALTURA UNIFICADA ---
-    H_MODULE = "340px" # Todos los módulos ahora miden exactamente lo mismo
+    # --- ALTURA ÚNICA PARA TODOS LOS MÓDULOS ---
+    H_MODULE = "340px" 
 
     # ================= FILA 1 =================
     col1, col2, col3 = st.columns(3)
@@ -172,21 +170,20 @@ def render():
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Breadth (A/D)</p></div>
                 <div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:40px 25px; text-align:center;">
-                    <div style="color:#888; font-size:10px; margin-bottom:15px; letter-spacing:1px;">S&P 500 BREADTH</div>
+                    <div style="color:#888; font-size:10px; margin-bottom:15px; letter-spacing:1px;">S&P 500 SENTIMENT</div>
                     <div style="font-size:2.8rem; font-weight:bold; color:#00ffad;">{per:.1f}%</div>
                     <div style="width:100%; background:#f2364533; height:12px; border-radius:6px; margin:25px 0; overflow:hidden; display:flex; border:1px solid #1a1e26;">
                         <div style="width:{per}%; background:#00ffad; height:100%; box-shadow:0 0 15px #00ffad44;"></div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; font-family:monospace;">
-                        <span style="color:#00ffad;">{adv} BULLISH</span>
-                        <span style="color:#f23645;">{dec} BEARISH</span>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold;">
+                        <span style="color:#00ffad;">{adv} ADVANCING</span>
+                        <span style="color:#f23645;">{dec} DECLINING</span>
                     </div>
                 </div>
             </div>
         ''', unsafe_allow_html=True)
 
     with f4c2:
-        # Unusual Volume Radar
         u_vol = get_unusual_volume()
         u_vol_html = "".join([f'''
             <div style="background:#0c0e12; padding:12px 15px; border-radius:8px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
@@ -197,7 +194,6 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Unusual Volume Radar</p></div><div class="group-content" style="background:#11141a; height:{H_MODULE}; padding:15px; overflow-y:auto;">{u_vol_html}</div></div>', unsafe_allow_html=True)
 
     with f4c3:
-        # Global Markets Health
         global_m = get_global_markets()
         global_html = "".join([f'''
             <div style="padding:12px 10px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">

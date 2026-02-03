@@ -378,13 +378,11 @@ def render():
     with f3c3:
         news = fetch_finnhub_news()
         
-        tooltip = "Notícies d'alt impacte obtingudes via Finnhub API."
-        info_icon_html = '<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">' + tooltip + '</div></div>'
+        tooltip_text = "Notícies d'alt impacte obtingudes via Finnhub API."
         
-        # Construir HTML de noticias de forma segura usando concatenación de strings
+        # Construir HTML de noticias
         news_items_html = []
         for item in news:
-            # Escapar comillas dobles en el título
             safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
             time_val = item['time']
             impact_val = item['impact']
@@ -405,18 +403,102 @@ def render():
         
         news_content = "".join(news_items_html)
         
-        # HTML completo del módulo usando components.html
-        full_html = (
-            '<div style="border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a;">'
-            '<div style="background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; position: relative; display: flex; justify-content: space-between; align-items: center;">'
-            '<p style="margin: 0; color: white; font-size: 14px; font-weight: bold;">Notícies d\'Alt Impacte</p>'
-            + info_icon_html +
-            '</div>'
-            '<div style="background: #11141a; height: 340px; overflow-y: auto; padding: 0;">'
-            + news_content +
-            '</div>'
-            '</div>'
-        )
+        # HTML completo con CSS inline para el tooltip
+        full_html = '''<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+.container {
+    border: 1px solid #1a1e26;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #11141a;
+    width: 100%;
+}
+
+.header {
+    background: #0c0e12;
+    padding: 12px 15px;
+    border-bottom: 1px solid #1a1e26;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.tooltip-container {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1a1e26;
+    border: 2px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 260px;
+    background-color: #1e222d;
+    color: #eee;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 6px;
+    position: absolute;
+    z-index: 999;
+    top: 35px;
+    right: -10px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+    border: 1px solid #444;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+.content {
+    background: #11141a;
+    height: 340px;
+    overflow-y: auto;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">Notícies d'Alt Impacte</div>
+        <div class="tooltip-container">
+            <div class="tooltip-icon">?</div>
+            <div class="tooltip-text">''' + tooltip_text + '''</div>
+        </div>
+    </div>
+    <div class="content">
+        ''' + news_content + '''
+    </div>
+</div>
+</body>
+</html>'''
         
         components.html(full_html, height=400, scrolling=False)
 
@@ -471,4 +553,3 @@ def render():
 
 
 # Final del fitxer market.py
-

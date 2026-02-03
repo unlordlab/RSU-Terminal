@@ -4,7 +4,9 @@ from datetime import datetime
 from config import get_market_index, get_cnn_fear_greed
 import requests
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS ---
+# ────────────────────────────────────────────────
+# FUNCIONES DE OBTENCIÓN DE DATOS
+# ────────────────────────────────────────────────
 
 def get_economic_calendar():
     """Eventos económicos clave del día."""
@@ -80,9 +82,13 @@ def get_fed_liquidity():
     except:
         return "N/A", "#888", "Sin conexión a FRED", "N/A", "N/A"
 
-# ================= RENDER PRINCIPAL =================
+
+# ────────────────────────────────────────────────
+# RENDER PRINCIPAL DEL DASHBOARD
+# ────────────────────────────────────────────────
+
 def render():
-    # CSS necesario para tooltips y leyenda del F&G
+    # Estilos CSS globales (tooltips + leyenda Fear & Greed)
     st.markdown("""
     <style>
         .tooltip-container {
@@ -119,25 +125,22 @@ def render():
         .fng-legend {
             display: flex;
             justify-content: space-between;
-            width: 90%;
-            margin-top: 12px;
-            font-size: 0.72rem;
-            color: #bbb;
+            width: 95%;
+            margin-top: 16px;
+            font-size: 0.70rem;
+            color: #ccc;
             text-align: center;
         }
         .fng-legend-item {
             flex: 1;
-            padding: 0 4px;
+            padding: 0 6px;
         }
         .fng-color-box {
             width: 100%;
             height: 8px;
             margin-bottom: 4px;
             border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-        .fng-value {
-            font-weight: 500;
+            border: 1px solid rgba(255,255,255,0.1);
         }
     </style>
     """, unsafe_allow_html=True)
@@ -192,6 +195,7 @@ def render():
     
     with c1:
         val = get_cnn_fear_greed()
+        
         if val is None:
             val_display = "N/D"
             label = "ERROR DE CONEXIÓN"
@@ -215,9 +219,9 @@ def render():
 
         tooltip = "Índice CNN Fear & Greed – mide el sentimiento del mercado (datos reales vía endpoint oficial)."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        
-        # Leyenda del Fear & Greed
-        legend_html = '''
+
+        # Leyenda Fear & Greed
+        legend_html = """
         <div class="fng-legend">
             <div class="fng-legend-item">
                 <div class="fng-color-box" style="background:#d32f2f;"></div>
@@ -240,18 +244,18 @@ def render():
                 <div>Extreme Greed</div>
             </div>
         </div>
-        '''
-        
+        """
+
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
                 <p class="group-title">Fear & Greed Index</p>
                 {info_icon}
             </div>
-            <div class="group-content" style="background:#11141a; height:{H_MAIN}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 15px;">
-                <div style="font-size:4rem; font-weight:bold; color:{col};">{val_display}</div>
-                <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:10px 0;">{label}{extra}</div>
-                <div style="width:85%; background:#0c0e12; height:14px; border-radius:7px; margin:18px 0; border:1px solid #1a1e26; overflow:hidden; position:relative;">
-                    <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}88); height:100%; transition:width 0.8s ease;"></div>
+            <div class="group-content" style="background:#11141a; height:{H_MAIN}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px 15px;">
+                <div style="font-size:4.2rem; font-weight:bold; color:{col};">{val_display}</div>
+                <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:12px 0;">{label}{extra}</div>
+                <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:20px 0; border:1px solid #1a1e26; overflow:hidden; position:relative;">
+                    <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%; transition:width 0.8s ease;"></div>
                 </div>
                 {legend_html}
             </div>

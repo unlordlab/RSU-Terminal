@@ -374,39 +374,52 @@ def render():
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
 
-    with f3c3:
+        with f3c3:
         news = fetch_finnhub_news()
         
         tooltip = "Notícies d'alt impacte obtingudes via Finnhub API."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        info_icon_html = '<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">' + tooltip + '</div></div>'
         
-        # Construir todo el HTML de noticias con estilos inline
-        news_html = ""
+        # Construir HTML de noticias de forma segura
+        news_items_html = []
         for item in news:
-            safe_title = item['title'].replace('"', '&quot;')
-            news_html += f'''
-            <div style="padding: 12px 15px; border-bottom: 1px solid #1a1e26; transition: background 0.2s;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                    <span style="color:#888;font-size:0.78rem;font-family:monospace;">{item['time']}</span>
-                    <span style="padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; background-color:{item['color']}22;color:{item['color']};">{item['impact']}</span>
-                </div>
-                <div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">{safe_title}</div>
-                <a href="{item['link']}" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.85rem;">→ Llig la notícia completa</a>
-            </div>
-            '''
+            # Escapar comillas dobles en el título
+            safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
+            time_val = item['time']
+            impact_val = item['impact']
+            color_val = item['color']
+            link_val = item['link']
+            
+            news_item = (
+                '<div style="padding: 12px 15px; border-bottom: 1px solid #1a1e26;">'
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
+                '<span style="color:#888;font-size:0.78rem;font-family:monospace;">' + time_val + '</span>'
+                '<span style="padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; background-color:' + color_val + '22;color:' + color_val + ';">' + impact_val + '</span>'
+                '</div>'
+                '<div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">' + safe_title + '</div>'
+                '<a href="' + link_val + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.85rem;">→ Llig la notícia completa</a>'
+                '</div>'
+            )
+            news_items_html.append(news_item)
         
-        # Renderizar todo junto en un único bloque
-        st.markdown(f'''
-        <div style="border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a;">
-            <div style="background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; position: relative; display: flex; justify-content: space-between; align-items: center;">
-                <p style="margin: 0; color: white; font-size: 14px; font-weight: bold;">Notícies d'Alt Impacte</p>
-                {info_icon}
-            </div>
-            <div style="background: #11141a; height: {H}; overflow-y: auto; padding: 0;">
-                {news_html}
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
+        news_content = "".join(news_items_html)
+        
+        # HTML completo del módulo
+        full_html = (
+            '<div style="border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a;">'
+            '<div style="background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; position: relative; display: flex; justify-content: space-between; align-items: center;">'
+            '<p style="margin: 0; color: white; font-size: 14px; font-weight: bold;">Notícies d\'Alt Impacte</p>'
+            + info_icon_html +
+            '</div>'
+            '<div style="background: #11141a; height: 340px; overflow-y: auto; padding: 0;">'
+            + news_content +
+            '</div>'
+            '</div>'
+        )
+        
+        # Usar components.html para renderizar correctamente
+        import streamlit.components.v1 as components
+        components.html(full_html, height=400, scrolling=False)
 
     # FILA 4
     st.write("")
@@ -459,3 +472,4 @@ def render():
 
 
 # Final del fitxer market.py
+

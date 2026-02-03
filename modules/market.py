@@ -49,7 +49,7 @@ def get_market_news():
     ]
 
 def get_unusual_volume():
-    """Stocks con volumen anormal respecto a su media."""
+    """Stocks con volumen anormal hoy."""
     return [
         ("BABA", "3.2x", "+8.4%"),
         ("AMD", "2.1x", "-1.2%"),
@@ -58,7 +58,7 @@ def get_unusual_volume():
     ]
 
 def get_global_markets():
-    """Estado de índices globales."""
+    """Estado de índices globales fuera de USA."""
     return [
         ("DAX", "Germany", "+0.45%"),
         ("FTSE", "UK", "-0.12%"),
@@ -69,9 +69,9 @@ def get_global_markets():
 def render():
     st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
     
-    # --- CONFIGURACIÓN DE ALTURAS MAESTRAS ---
-    H_MAIN = "340px" 
-    H_BOTTOM = "270px"
+    # --- CONFIGURACIÓN DE ALTURAS ---
+    H_MAIN = "340px"   # Filas 1 y 2
+    H_BOTTOM = "270px" # Filas 3 y 4 (Simétricas)
 
     # ================= FILA 1 =================
     col1, col2, col3 = st.columns(3)
@@ -159,7 +159,7 @@ def render():
             </div>''' for time, text in news])
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Live News Terminal</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; overflow-y:auto;">{news_html}</div></div>', unsafe_allow_html=True)
 
-    # ================= FILA 4 (NUEVA) =================
+    # ================= FILA 4 (NUEVA HILERA) =================
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
 
@@ -170,15 +170,15 @@ def render():
         st.markdown(f'''
             <div class="group-container">
                 <div class="group-header"><p class="group-title">Market Breadth (A/D)</p></div>
-                <div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:20px; text-align:center;">
-                    <div style="color:#888; font-size:10px; margin-bottom:10px; letter-spacing:1px;">S&P 500 ADVANCE/DECLINE</div>
-                    <div style="font-size:2rem; font-weight:bold; color:#00ffad;">{per:.1f}%</div>
-                    <div style="width:100%; background:#f2364533; height:8px; border-radius:4px; margin:15px 0; overflow:hidden; display:flex;">
-                        <div style="width:{per}%; background:#00ffad; height:100%;"></div>
+                <div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:25px; text-align:center;">
+                    <div style="color:#888; font-size:10px; margin-bottom:15px; letter-spacing:1px;">S&P 500 SENTIMENT</div>
+                    <div style="font-size:2.2rem; font-weight:bold; color:#00ffad;">{per:.1f}%</div>
+                    <div style="width:100%; background:#f2364533; height:12px; border-radius:6px; margin:20px 0; overflow:hidden; display:flex; border:1px solid #1a1e26;">
+                        <div style="width:{per}%; background:#00ffad; height:100%; box-shadow:0 0 10px #00ffad44;"></div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold;">
-                        <span style="color:#00ffad;">{adv} BULLS</span>
-                        <span style="color:#f23645;">{dec} BEARS</span>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold; font-family:monospace;">
+                        <span style="color:#00ffad;">{adv} ADV</span>
+                        <span style="color:#f23645;">{dec} DEC</span>
                     </div>
                 </div>
             </div>
@@ -188,15 +188,15 @@ def render():
         # Unusual Volume Radar
         u_vol = get_unusual_volume()
         u_vol_html = "".join([f'''
-            <div style="background:#0c0e12; padding:8px 12px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">
-                <div><span style="color:#00ffad; font-weight:bold; font-size:11px;">{t}</span></div>
-                <div style="color:#ffa500; font-weight:bold; font-size:10px;">{v} VOL</div>
-                <div style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:10px;">{p}</div>
+            <div style="background:#0c0e12; padding:8px 12px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#00ffad; font-weight:bold; font-size:11px;">{t}</span>
+                <span style="color:#ffa500; font-weight:bold; font-size:10px; background:rgba(255,165,0,0.1); padding:2px 6px; border-radius:4px;">{v} VOL</span>
+                <span style="color:{"#00ffad" if "+" in p else "#f23645"}; font-size:10px; font-weight:bold;">{p}</span>
             </div>''' for t, v, p in u_vol])
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Unusual Volume Radar</p></div><div class="group-content" style="background:#11141a; height:{H_BOTTOM}; padding:15px; overflow-y:auto;">{u_vol_html}</div></div>', unsafe_allow_html=True)
 
     with f4c3:
-        # Global Markets Ticker
+        # Global Markets Health
         global_m = get_global_markets()
         global_html = "".join([f'''
             <div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">

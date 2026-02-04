@@ -14,8 +14,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios, get_market_index
 
-# Importar desde modules/ (tu estructura real)
+# Importar TODOS los módulos desde modules/
 from modules import market as market_module
+from modules import manifest as manifest_module
+from modules import rsu_club as rsu_club_module
+from modules import rsrw as rsrw_module
+from modules import rsu_algoritmo as rsu_algoritmo_module
+from modules import ema_edge as ema_edge_module
+from modules import earnings as earnings_module
+from modules import cartera as cartera_module
+from modules import tesis as tesis_module
+from modules import ia_report as ia_report_module
+from modules import academy as academy_module
+from modules import trade_grader as trade_grader_module
+from modules import spxl_strategy as spxl_strategy_module
+from modules import roadmap_2026 as roadmap_2026_module
+from modules import trump_playbook as trump_playbook_module
+from modules import comunidad as comunidad_module
+from modules import disclaimer as disclaimer_module
 
 # Aplicar estilos definidos en config.py
 set_style()
@@ -779,42 +795,38 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-# --- LOGICA DE NAVEGACION ---
+# --- LOGICA DE NAVEGACION CON TODOS LOS MODULOS REALES ---
 if menu == "📊 DASHBOARD":
     market_module.render()
 elif menu == "📜 MANIFEST":
-    st.markdown("## Manifest Module - Placeholder")
+    manifest_module.render()
 elif menu == "♣️ RSU CLUB":
-    st.markdown("## RSU Club Module - Placeholder")
+    rsu_club_module.render()
 elif menu == "📈 SCANNER RS/RW":
-    st.markdown("## Scanner RS/RW Module - Placeholder")
+    rsrw_module.render()
 elif menu == "🤖 ALGORITMO RSU":
-    st.markdown("## Algoritmo RSU Module - Placeholder")
+    rsu_algoritmo_module.render()
 elif menu == "⚡ EMA EDGE":
-    st.markdown("## EMA Edge Module - Placeholder")
+    ema_edge_module.render()
 elif menu == "📅 EARNINGS":
-    st.markdown("## Earnings Module - Placeholder")
+    earnings_module.render()
 elif menu == "💼 CARTERA":
-    st.markdown("## Cartera Module - Placeholder")
+    cartera_module.render()
 elif menu == "📝 TESIS":
-    st.markdown("## Tesis Module - Placeholder")
+    tesis_module.render()
 elif menu == "🤖 AI REPORT":
-    st.markdown("## AI Report Module - Placeholder")
+    ia_report_module.render()
 elif menu == "🎓 ACADEMY":
-    st.markdown("## Academy Module - Placeholder")
+    academy_module.render()
 elif menu == "🏆 TRADE GRADER":
-    st.markdown("## Trade Grader Module - Placeholder")
+    trade_grader_module.render()
 elif menu == "🚀 SPXL STRATEGY":
-    st.markdown("## SPXL Strategy Module - Placeholder")
+    spxl_strategy_module.render()
 elif menu == "🗺️ ROADMAP 2026":
-    st.markdown("## Roadmap 2026 Module - Placeholder")
+    roadmap_2026_module.render()
 elif menu == "🇺🇸 TRUMP PLAYBOOK":
-    st.markdown("## Trump Playbook Module - Placeholder")
+    trump_playbook_module.render()
 elif menu == "👥 COMUNIDAD":
-    st.markdown("## Comunidad Module - Placeholder")
+    comunidad_module.render()
 elif menu == "⚠️ DISCLAIMER":
-    st.markdown("## Disclaimer Module - Placeholder")
-
-
-
-
+    disclaimer_module.render()

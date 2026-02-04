@@ -21,9 +21,15 @@ def get_sp500_tickers_cached():
         df = pd.read_html(url)[0]
         tickers = df['Symbol'].str.replace('.', '-', regex=False).tolist()
         if len(tickers) >= 490:  # Validar que tenemos ~500
+            # Guardar en cache local
+            try:
+                with open("sp500_cache.json", "w") as f:
+                    json.dump(tickers, f)
+            except:
+                pass
             return tickers
     except Exception as e:
-        st.warning(f"Wikipedia falló: {e}")
+        print(f"Wikipedia falló: {e}")
     
     # Intento 2: Archivo local cache
     try:
@@ -35,7 +41,7 @@ def get_sp500_tickers_cached():
     except:
         pass
     
-    # Fallback: Lista hardcodeada actualizada (top 100 + diversidad sectorial)
+    # Fallback: Lista hardcodeada actualizada
     fallback_tickers = [
         "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "BRK-B", "AVGO", "WMT",
         "JPM", "V", "UNH", "MA", "HD", "PG", "LLY", "MRK", "COST", "CVX",
@@ -65,44 +71,81 @@ def get_sp500_tickers_cached():
 class RSRWEngine:
     def __init__(self):
         self.benchmark = "SPY"
-        self.tickers = get_sp500_tickers_cached()
+        # Cargar tickers inmediatamente
+        try:
+            self.tickers = get_sp500_tickers_cached()
+        except Exception as e:
+            print(f"Error cargando tickers: {e}")
+            self.tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]  # Fallback mínimo
     
-    def get_multi_timeframe_rs(self, tickers, periods=[5, 20, 60]):
+    def get_multi_timeframe_rs(self, tickers=None, periods=[5, 20, 60]):
         """Calcula RS en múltiples timeframes para contexto"""
-        all_symbols = tickers + [self.benchmark]
+        if tickers is None:
+            tickers = self.tickers
+            
+        all_symbols = list(tickers) + [self.benchmark]
         max_days = max(periods) + 10
         
         try:
-            data = yf.download(all_symbols, period=f"{max_days}d", interval="1d", progress=False)
-            if data.empty or 'Close' not in data:
+            # Descargar datos
+            data = yf.download(
+                all_symbols, 
+                period=f"{max_days}d", 
+                interval="1d", 
+                progress=False,
+                threads=True  # Paralelizar
+            )
+            
+            if data.empty:
                 return pd.DataFrame(), 0.0
             
-            close = data['Close']
-            volume = data['Volume'] if 'Volume' in data else None
+            # Manejar diferentes estructuras de datos
+            if len(all_symbols) == 1:
+                close = data['Close'].to_frame(name=self.benchmark)
+                volume = data['Volume'].to_frame(name=self.benchmark) if 'Volume' in data else None
+            else:
+                if 'Close' in data.columns:
+                    close = data['Close']
+                    volume = data['Volume'] if 'Volume' in data else None
+                else:
+                    return pd.DataFrame(), 0.0
+            
+            # Verificar que tenemos datos suficientes
+            if close.empty or len(close) < 5:
+                return pd.DataFrame(), 0.0
             
             # Calcular RS para cada timeframe
             rs_data = {}
             for period in periods:
                 if len(close) >= period:
-                    returns = (close.iloc[-1] / close.iloc[-period]) - 1
-                    spy_ret = returns[self.benchmark]
-                    rs_data[f'RS_{period}d'] = returns - spy_ret
+                    try:
+                        returns = (close.iloc[-1] / close.iloc[-period]) - 1
+                        spy_ret = returns[self.benchmark] if self.benchmark in returns else 0
+                        rs_data[f'RS_{period}d'] = returns - spy_ret
+                    except:
+                        continue
             
-            # RVOL solo si tenemos volumen
-            rvol = None
+            # Si no hay datos RS, retornar vacío
+            if not rs_data:
+                return pd.DataFrame(), 0.0
+            
+            # RVOL
+            rvol = pd.Series(1.0, index=close.columns)
             if volume is not None and not volume.empty:
                 try:
-                    rvol = volume.iloc[-1] / volume.rolling(20).mean().iloc[-1]
+                    vol_mean = volume.rolling(20).mean()
+                    if not vol_mean.empty:
+                        rvol = volume.iloc[-1] / vol_mean.iloc[-1]
                 except:
-                    rvol = pd.Series([1.0] * len(tickers), index=tickers)
+                    pass
             
             # Crear DataFrame
             df = pd.DataFrame(rs_data)
             df['Precio'] = close.iloc[-1]
-            df['RVOL'] = rvol if rvol is not None else 1.0
+            df['RVOL'] = rvol
             
-            # Score compuesto (ponderado)
-            weights = {5: 0.5, 20: 0.3, 60: 0.2}  # Más peso al corto plazo
+            # Score compuesto
+            weights = {5: 0.5, 20: 0.3, 60: 0.2}
             available_periods = [p for p in periods if f'RS_{p}d' in df.columns]
             if available_periods:
                 df['RS_Score'] = sum(df[f'RS_{p}d'] * weights.get(p, 0.2) for p in available_periods)
@@ -113,14 +156,19 @@ class RSRWEngine:
             if self.benchmark in df.index:
                 df = df.drop(self.benchmark)
             
-            # Filtrar solo los tickers solicitados que existen en datos
+            # Filtrar solo tickers válidos
             df = df[df.index.isin(tickers)]
+            df = df.dropna()
             
-            spy_perf = ((close[self.benchmark].iloc[-1] / close[self.benchmark].iloc[-20]) - 1) if len(close) >= 20 else 0
+            # SPY performance
+            spy_perf = 0
+            if self.benchmark in close.columns and len(close) >= 20:
+                spy_perf = (close[self.benchmark].iloc[-1] / close[self.benchmark].iloc[-20]) - 1
+            
             return df, spy_perf
             
         except Exception as e:
-            st.error(f"Error en cálculo RS: {e}")
+            st.error(f"Error en cálculo: {str(e)}")
             return pd.DataFrame(), 0.0
 
 def render():
@@ -264,321 +312,226 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # Info Educativa Expandible
-    with st.expander("📚 ¿Qué es la Fuerza Relativa (RS) y por qué importa?", expanded=False):
+    # Info Educativa
+    with st.expander("📚 ¿Qué es la Fuerza Relativa (RS)?", expanded=False):
         st.markdown("""
         ### Conceptos Clave
         
         **🔥 Relative Strength (RS)**  
-        Mide cuánto outperforma o underperforma un activo vs el benchmark (SPY).  
-        - **RS > 0**: El activo sube más (o cae menos) que el mercado  
+        Mide cuánto outperforma un activo vs el benchmark (SPY).  
+        - **RS > 0**: El activo sube más que el mercado  
         - **RS < 0**: El activo muestra debilidad relativa  
         
         **📊 Relative Volume (RVOL)**  
-        Volumen actual / Volumen promedio (20 días).  
         - **RVOL > 1.5**: Interés institucional confirmado  
-        - **RVOL > 2.0**: Movimiento significativo, posible catalizador  
-        - **RVOL < 1.0**: Falta de convicción, evitar
+        - **RVOL > 2.0**: Movimiento significativo  
         
-        **🎯 Estrategia de Uso**  
-        1. **Mercado alcista (SPY > 20EMA)**: Buscar RS > 2% + RVOL > 1.5 para largos  
-        2. **Mercado bajista**: Buscar RW (RS negativo) para shorts o evitar  
-        3. **Divergencias**: RS positivo pero precio plano = acumulación institucional
-        
-        **⚠️ Limitaciones**  
-        - RS es *lagging* en corto plazo (5d)  
-        - Sin contexto de sector puede dar falsos positivos  
-        - Requiere confirmación de precio (breakouts, soportes)
+        **🎯 Estrategia**  
+        1. Mercado alcista: RS > 2% + RVOL > 1.5 para largos  
+        2. Mercado bajista: Buscar RS negativo para shorts
         """)
-        
-        # Métricas de contexto
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("S&P 500 Tickers", "~503", help="Actualizado diariamente")
-        with col2:
-            st.metric("Datos Históricos", "20+ años", help="Vía Yahoo Finance")
-        with col3:
-            st.metric("Actualización", "Tiempo real", help="Delay 15 min (datos gratis)")
 
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
-    # Inicializar engine
+    # Inicializar engine con manejo de errores
     if 'rsrw_engine' not in st.session_state:
-        with st.spinner("Cargando universo S&P 500..."):
-            st.session_state.rsrw_engine = RSRWEngine()
+        try:
+            with st.spinner("Inicializando scanner..."):
+                engine = RSRWEngine()
+                st.session_state.rsrw_engine = engine
+                st.session_state.engine_initialized = True
+        except Exception as e:
+            st.error(f"Error inicializando scanner: {e}")
+            st.stop()
     
     engine = st.session_state.rsrw_engine
     
+    # Verificar que el engine tiene tickers
+    if not hasattr(engine, 'tickers') or not engine.tickers:
+        st.error("Error: No se pudieron cargar los tickers. Recargando...")
+        try:
+            engine = RSRWEngine()
+            st.session_state.rsrw_engine = engine
+        except:
+            st.error("Error crítico. Por favor recarga la página.")
+            st.stop()
+
     # Panel de Control
-    st.markdown('<div style="margin-bottom: 10px; color: #00ffad; font-size: 14px; font-weight: bold;">⚙️ CONFIGURACIÓN DEL SCAN</div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-bottom: 10px; color: #00ffad; font-size: 14px; font-weight: bold;">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        min_rvol = st.slider("RVOL Mínimo", 1.0, 3.0, 1.2, 0.1, 
-                            help="Volumen relativo mínimo para filtrar stocks sin interés institucional")
+        min_rvol = st.slider("RVOL Mínimo", 1.0, 3.0, 1.2, 0.1)
     with col2:
-        top_n = st.slider("Top N Resultados", 10, 50, 20, 5,
-                         help="Número de stocks a mostrar por categoría")
+        top_n = st.slider("Top N", 10, 50, 20, 5)
     with col3:
         st.markdown("<br>", unsafe_allow_html=True)
         scan_button = st.button("🔥 ESCANEAR", use_container_width=True, type="primary")
 
     if scan_button:
-        with st.spinner(f"Analizando {len(engine.tickers)} tickers en múltiples timeframes..."):
-            results, spy_perf = engine.get_multi_timeframe_rs(engine.tickers)
-            
-            if not results.empty:
-                # Dashboard de Métricas
-                st.markdown('<div style="margin: 20px 0;">', unsafe_allow_html=True)
-                metric_cols = st.columns(4)
+        # Verificar tickers antes de escanear
+        num_tickers = len(engine.tickers) if hasattr(engine, 'tickers') else 0
+        
+        if num_tickers == 0:
+            st.error("No hay tickers disponibles para escanear.")
+            st.stop()
+        
+        with st.spinner(f"Analizando {num_tickers} tickers..."):
+            try:
+                results, spy_perf = engine.get_multi_timeframe_rs()
                 
-                with metric_cols[0]:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-value" style="color: {'#00ffad' if spy_perf >= 0 else '#f23645'};">{spy_perf:+.1%}</div>
-                        <div class="metric-label">SPY 20D Change</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with metric_cols[1]:
-                    strong_rs = len(results[results['RS_Score'] > 0.05])
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-value" style="color: #00ffad;">{strong_rs}</div>
-                        <div class="metric-label">Strong RS (>5%)</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with metric_cols[2]:
-                    high_rvol = len(results[results['RVOL'] > 1.5])
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-value" style="color: #ffaa00;">{high_rvol}</div>
-                        <div class="metric-label">High RVOL (>1.5x)</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with metric_cols[3]:
-                    setups = len(results[(results['RS_Score'] > 0.03) & (results['RVOL'] > 1.2)])
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-value" style="color: #2962ff;">{setups}</div>
-                        <div class="metric-label">Setups Activos</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # Gráfico de dispersión RS vs RVOL
-                st.markdown('<div style="margin-bottom: 10px; color: #00ffad; font-size: 14px; font-weight: bold;">📊 MAPA RS vs RVOL</div>', unsafe_allow_html=True)
-                
-                fig = px.scatter(
-                    results.reset_index(),
-                    x='RS_Score',
-                    y='RVOL',
-                    hover_data=['index', 'Precio'],
-                    color='RS_Score',
-                    color_continuous_scale=['#f23645', '#ff9800', '#00ffad'],
-                    size='RVOL',
-                    size_max=20,
-                    labels={'RS_Score': 'Fuerza Relativa (Score)', 'RVOL': 'Volumen Relativo', 'index': 'Ticker'}
-                )
-                fig.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor='#11141a',
-                    plot_bgcolor='#0c0e12',
-                    font_color='white',
-                    height=400,
-                    margin=dict(l=0, r=0, b=0, t=10)
-                )
-                fig.add_hline(y=1.5, line_dash="dash", line_color="#ffaa00", opacity=0.5, annotation_text="RVOL 1.5")
-                fig.add_vline(x=0, line_dash="dash", line_color="white", opacity=0.3)
-                st.plotly_chart(fig, use_container_width=True)
-
-                st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-                # Tablas de Resultados
-                col_rs, col_rw = st.columns(2)
-                
-                with col_rs:
-                    st.markdown("""
-                    <div class="group-container">
-                        <div class="group-header">
-                            <span class="group-title">🚀 FUERZA RELATIVA (RS)</span>
-                            <span class="badge badge-strong">LONG SETUPS</span>
+                if results.empty:
+                    st.warning("No se obtuvieron resultados. Intenta de nuevo.")
+                else:
+                    # Dashboard de Métricas
+                    st.markdown('<div style="margin: 20px 0;">', unsafe_allow_html=True)
+                    metric_cols = st.columns(4)
+                    
+                    with metric_cols[0]:
+                        color = "#00ffad" if spy_perf >= 0 else "#f23645"
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value" style="color: {color};">{spy_perf:+.1%}</div>
+                            <div class="metric-label">SPY 20D</div>
                         </div>
-                        <div class="group-content">
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
                     
-                    df_rs = results[results['RS_Score'] > 0].nlargest(top_n, 'RS_Score')
-                    df_rs = df_rs[df_rs['RVOL'] >= min_rvol]
-                    
-                    if not df_rs.empty:
-                        # Añadir badges
-                        df_rs_display = df_rs.copy()
-                        df_rs_display['Setup'] = df_rs_display.apply(
-                            lambda x: '🔥 HOT' if x['RVOL'] > 2 and x['RS_Score'] > 0.05 else ('✅ Strong' if x['RS_Score'] > 0.03 else 'Neutral'), 
-                            axis=1
-                        )
-                        
-                        st.dataframe(
-                            df_rs_display[['RS_Score', 'RVOL', 'Setup']].style
-                            .format({'RS_Score': '{:+.2%}', 'RVOL': '{:.2f}x'})
-                            .background_gradient(subset=['RS_Score'], cmap='Greens')
-                            .background_gradient(subset=['RVOL'], cmap='YlGn', vmin=1, vmax=3),
-                            use_container_width=True,
-                            height=400
-                        )
-                    else:
-                        st.info("No hay setups de RS con los filtros actuales")
-                    
-                    st.markdown("</div></div>", unsafe_allow_html=True)
-                
-                with col_rw:
-                    st.markdown("""
-                    <div class="group-container">
-                        <div class="group-header">
-                            <span class="group-title">📉 DEBILIDAD RELATIVA (RW)</span>
-                            <span class="badge badge-hot">AVOID/SHORT</span>
+                    with metric_cols[1]:
+                        strong_rs = len(results[results['RS_Score'] > 0.05])
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value" style="color: #00ffad;">{strong_rs}</div>
+                            <div class="metric-label">Strong RS</div>
                         </div>
-                        <div class="group-content">
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
                     
-                    df_rw = results[results['RS_Score'] < 0].nsmallest(top_n, 'RS_Score')
+                    with metric_cols[2]:
+                        high_rvol = len(results[results['RVOL'] > 1.5])
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value" style="color: #ffaa00;">{high_rvol}</div>
+                            <div class="metric-label">High RVOL</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
-                    if not df_rw.empty:
-                        df_rw_display = df_rw.copy()
-                        df_rw_display['Alerta'] = df_rw_display['RS_Score'].apply(
-                            lambda x: '⚠️ Weak' if x < -0.05 else 'Fading'
-                        )
+                    with metric_cols[3]:
+                        setups = len(results[(results['RS_Score'] > 0.03) & (results['RVOL'] > 1.2)])
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-value" style="color: #2962ff;">{setups}</div>
+                            <div class="metric-label">Setups</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                    # Tablas
+                    col_rs, col_rw = st.columns(2)
+                    
+                    with col_rs:
+                        st.markdown("""
+                        <div class="group-container">
+                            <div class="group-header">
+                                <span class="group-title">🚀 RS LEADERS</span>
+                                <span class="badge badge-strong">LONG</span>
+                            </div>
+                            <div class="group-content">
+                        """, unsafe_allow_html=True)
                         
-                        st.dataframe(
-                            df_rw_display[['RS_Score', 'RVOL', 'Alerta']].style
-                            .format({'RS_Score': '{:+.2%}', 'RVOL': '{:.2f}x'})
-                            .background_gradient(subset=['RS_Score'], cmap='Reds_r')
-                            .background_gradient(subset=['RVOL'], cmap='OrRd', vmin=1, vmax=3),
-                            use_container_width=True,
-                            height=400
-                        )
-                    else:
-                        st.info("Mercado alcista general - poca debilidad relativa")
+                        df_rs = results[results['RS_Score'] > 0].nlargest(top_n, 'RS_Score')
+                        df_rs = df_rs[df_rs['RVOL'] >= min_rvol]
+                        
+                        if not df_rs.empty:
+                            st.dataframe(
+                                df_rs[['RS_Score', 'RVOL', 'Precio']].style
+                                .format({'RS_Score': '{:+.2%}', 'RVOL': '{:.2f}x', 'Precio': '${:.2f}'})
+                                .background_gradient(subset=['RS_Score'], cmap='Greens')
+                                .background_gradient(subset=['RVOL'], cmap='YlGn'),
+                                use_container_width=True,
+                                height=300
+                            )
+                        else:
+                            st.info("No hay setups")
+                        
+                        st.markdown("</div></div>", unsafe_allow_html=True)
                     
-                    st.markdown("</div></div>", unsafe_allow_html=True)
-
-                # Exportar resultados
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_exp1, col_exp2 = st.columns([6, 1])
-                with col_exp2:
-                    csv = results.to_csv().encode('utf-8')
-                    st.download_button(
-                        "📥 CSV",
-                        csv,
-                        f"rs_scan_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                        "text/csv",
-                        use_container_width=True
-                    )
-
-            else:
-                st.error("❌ No se pudieron obtener datos. Posibles causas:\n"
-                        "- Límite de rate de Yahoo Finance\n"
-                        "- Problemas de conectividad\n"
-                        "- Mercado cerrado sin datos recientes")
+                    with col_rw:
+                        st.markdown("""
+                        <div class="group-container">
+                            <div class="group-header">
+                                <span class="group-title">📉 RS LAGGARDS</span>
+                                <span class="badge badge-hot">AVOID</span>
+                            </div>
+                            <div class="group-content">
+                        """, unsafe_allow_html=True)
+                        
+                        df_rw = results[results['RS_Score'] < 0].nsmallest(top_n, 'RS_Score')
+                        
+                        if not df_rw.empty:
+                            st.dataframe(
+                                df_rw[['RS_Score', 'RVOL', 'Precio']].style
+                                .format({'RS_Score': '{:+.2%}', 'RVOL': '{:.2f}x', 'Precio': '${:.2f}'})
+                                .background_gradient(subset=['RS_Score'], cmap='Reds_r')
+                                .background_gradient(subset=['RVOL'], cmap='OrRd'),
+                                use_container_width=True,
+                                height=300
+                            )
+                        else:
+                            st.info("Mercado alcista general")
+                        
+                        st.markdown("</div></div>", unsafe_allow_html=True)
+                        
+            except Exception as e:
+                st.error(f"Error durante el scan: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
 
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
-    # Sección VWAP Intradía
-    st.markdown('<div style="margin-bottom: 10px; color: #00ffad; font-size: 14px; font-weight: bold;">🎯 VALIDACIÓN INTRADÍA (VWAP)</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-        <p style="color: #888; font-size: 13px; margin: 0;">
-            💡 <strong>Uso:</strong> Valida setups del scanner en tiempo real. Precio sobre VWAP = sesgo alcista. 
-            Cruce bajo VWAP = stop loss o toma de ganancias parcial.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # VWAP Section
+    st.markdown('<div style="margin-bottom: 10px; color: #00ffad; font-size: 14px; font-weight: bold;">🎯 VWAP INTRADÍA</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 1])
     with col1:
-        symbol = st.text_input("Ticker a validar:", "NVDA", key="vwap_symbol").upper()
+        symbol = st.text_input("Ticker:", "NVDA").upper()
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
-        vwap_button = st.button("📈 Analizar", use_container_width=True)
-
-    if vwap_button and symbol:
-        with st.spinner(f"Cargando datos intradía de {symbol}..."):
+        if st.button("📈 Analizar", use_container_width=True):
             try:
-                df_i = yf.download(symbol, period="1d", interval="5m", progress=False)
-                
-                if not df_i.empty and len(df_i) > 5:
-                    # Limpiar columnas multi-index si existen
-                    if isinstance(df_i.columns, pd.MultiIndex):
-                        df_i.columns = df_i.columns.get_level_values(0)
+                df = yf.download(symbol, period="1d", interval="5m", progress=False)
+                if not df.empty:
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
                     
-                    # Calcular VWAP
-                    tp = (df_i['High'] + df_i['Low'] + df_i['Close']) / 3
-                    df_i['VWAP'] = (tp * df_i['Volume']).cumsum() / df_i['Volume'].cumsum()
+                    tp = (df['High'] + df['Low'] + df['Close']) / 3
+                    df['VWAP'] = (tp * df['Volume']).cumsum() / df['Volume'].cumsum()
                     
-                    # Calcular desviación
-                    current_price = df_i['Close'].iloc[-1]
-                    vwap = df_i['VWAP'].iloc[-1]
-                    deviation = ((current_price - vwap) / vwap) * 100
-                    
-                    # Métricas
-                    cols = st.columns(3)
-                    with cols[0]:
-                        st.metric("Precio Actual", f"${current_price:.2f}")
-                    with cols[1]:
-                        st.metric("VWAP", f"${vwap:.2f}")
-                    with cols[2]:
-                        st.metric("Desviación", f"{deviation:+.2f}%", 
-                                 delta="Sobre VWAP" if deviation > 0 else "Bajo VWAP")
-                    
-                    # Gráfico
                     fig = go.Figure()
                     fig.add_trace(go.Candlestick(
-                        x=df_i.index,
-                        open=df_i['Open'],
-                        high=df_i['High'],
-                        low=df_i['Low'],
-                        close=df_i['Close'],
-                        name=symbol
+                        x=df.index, open=df['Open'], high=df['High'],
+                        low=df['Low'], close=df['Close'], name=symbol
                     ))
                     fig.add_trace(go.Scatter(
-                        x=df_i.index,
-                        y=df_i['VWAP'],
+                        x=df.index, y=df['VWAP'],
                         line=dict(color='#ffaa00', width=2, dash='dash'),
                         name="VWAP"
                     ))
-                    
-                    # Zonas
-                    fig.add_hrect(y0=vwap*0.99, y1=vwap*1.01, 
-                                 fillcolor="rgba(255,170,0,0.1)", line_width=0,
-                                 annotation_text="Zona VWAP")
-                    
                     fig.update_layout(
                         template="plotly_dark",
                         paper_bgcolor='#11141a',
                         plot_bgcolor='#0c0e12',
-                        font_color='white',
-                        height=450,
-                        xaxis_rangeslider_visible=False,
-                        margin=dict(l=0, r=0, b=0, t=30),
-                        title=f"{symbol} - Análisis Intradía"
+                        height=400,
+                        margin=dict(l=0, r=0, b=0, t=30)
                     )
-                    
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Señal
-                    if deviation > 1:
-                        st.success(f"✅ **{symbol}** muestra fuerza sobre VWAP (+{deviation:.1f}%). Sesgo alcista confirmado.")
-                    elif deviation < -1:
-                        st.error(f"⚠️ **{symbol}** bajo VWAP ({deviation:.1f}%). Debilidad intradía o pullback saludable.")
+                    price = df['Close'].iloc[-1]
+                    vwap = df['VWAP'].iloc[-1]
+                    if price > vwap:
+                        st.success(f"✅ Sobre VWAP")
                     else:
-                        st.info(f"➖ **{symbol}** en equilibrio respecto a VWAP ({deviation:.1f}%). Esperar breakout.")
-                        
+                        st.error(f"⚠️ Bajo VWAP")
                 else:
-                    st.warning(f"No hay datos suficientes para {symbol}. Mercado puede estar cerrado.")
-                    
+                    st.warning("Sin datos")
             except Exception as e:
-                st.error(f"Error al cargar {symbol}: {e}")
+                st.error(f"Error: {e}")

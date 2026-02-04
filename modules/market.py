@@ -11,7 +11,7 @@ import pandas as pd
 import re
 from collections import Counter
 
-# Intentar importar investpy
+# Intentar importar investpy (opcional)
 try:
     import investpy
     INVESTPY_AVAILABLE = True

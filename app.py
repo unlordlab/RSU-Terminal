@@ -1,4 +1,3 @@
-
 # app.py
 import os
 import sys
@@ -15,13 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios, get_market_index
 
-# Importar market directamente ya que está en el mismo directorio
-import market as market_module
+# Importar desde modules/ (tu estructura real)
+from modules import market as market_module
 
 # Aplicar estilos definidos en config.py
 set_style()
 
-# CSS Profesional mejorado
+# CSS Profesional mejorado (igual que antes)
 st.markdown("""
 <style>
     /* Sidebar base */
@@ -815,5 +814,7 @@ elif menu == "👥 COMUNIDAD":
     st.markdown("## Comunidad Module - Placeholder")
 elif menu == "⚠️ DISCLAIMER":
     st.markdown("## Disclaimer Module - Placeholder")
+
+
 
 

@@ -1,34 +1,78 @@
 # modules/rsu_algoritmo.py
 import streamlit as st
 import pandas as pd
-import pandas_ta as ta
 import yfinance as yf
 import sys
 import os
 
 # Agregar el directorio padre al path para importar config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import set_style  # Ahora sí lo encuentra
+from config import set_style
 
 class RSUAlgoritmo:
     def __init__(self):
         self.estado_actual = "CALIBRANDO"
 
+    def calcular_rsi_manual(self, prices, period=14):
+        """
+        Calcula RSI manualmente sin pandas_ta
+        RSI = 100 - (100 / (1 + RS))
+        RS = Media Ganancias / Media Pérdidas
+        """
+        try:
+            # Calcular diferencias
+            delta = prices.diff()
+            
+            # Separar ganancias y pérdidas
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+            
+            # Calcular media móvil exponencial
+            avg_gain = gain.ewm(com=period-1, min_periods=period).mean()
+            avg_loss = loss.ewm(com=period-1, min_periods=period).mean()
+            
+            # Calcular RS y RSI
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            
+            return rsi
+        except Exception as e:
+            st.error(f"Error en cálculo RSI manual: {e}")
+            return None
+
     def obtener_rsi_semanal(self):
         try:
+            st.info("Descargando datos de SPY...")
             ticker = yf.Ticker("SPY")
-            df = ticker.history(interval="1wk", period="2y")
+            df = ticker.history(interval="1wk", period="1y")
             
-            if df.empty or len(df) < 14:
+            if df.empty:
+                st.error("DataFrame vacío")
                 return None, None
             
-            df['rsi'] = ta.rsi(df['Close'], length=14)
+            if len(df) < 14:
+                st.error(f"Datos insuficientes: {len(df)} semanas (necesita 14+)")
+                return None, None
+            
+            # Calcular RSI manualmente
+            df['rsi'] = self.calcular_rsi_manual(df['Close'], length=14)
+            
+            if df['rsi'].isna().all():
+                st.error("RSI calculado es todo NaN")
+                return None, None
+            
             rsi_actual = df['rsi'].iloc[-1]
             precio_actual = df['Close'].iloc[-1]
             
-            return rsi_actual, precio_actual
+            # Verificar que no sean NaN
+            if pd.isna(rsi_actual) or pd.isna(precio_actual):
+                st.error("RSI o Precio es NaN")
+                return None, None
+            
+            return float(rsi_actual), float(precio_actual)
+            
         except Exception as e:
-            st.error(f"Error calculando RSI: {e}")
+            st.error(f"Error en obtener_rsi_semanal: {str(e)}")
             return None, None
 
     def calcular_color(self, rsi):
@@ -40,7 +84,7 @@ class RSUAlgoritmo:
             return "AMBAR"
 
 def render():
-    set_style() # <--- FORZAMOS LA CARGA DE LOS ESTILOS AL RENDERIZAR
+    set_style()
     
     st.title("🤖 RSU ALGORITMO - SEMÁFORO")
     st.info("Estrategia basada exclusivamente en el RSI Semanal del S&P 500 (SPY).")
@@ -54,7 +98,7 @@ def render():
     with st.spinner('Calculando RSI Semanal...'):
         rsi_semanal, precio = engine.obtener_rsi_semanal()
         
-    if rsi_semanal is not None:
+    if rsi_semanal is not None and precio is not None:
         estado = engine.calcular_color(rsi_semanal)
         
         # Estas clases coinciden con tu config.py
@@ -86,7 +130,14 @@ def render():
         col3.success("🟢 RSI < 30: Oportunidad")
         
     else:
-        st.error("No se pudieron recuperar los datos. Reintenta en unos instantes.")
+        st.error("No se pudieron recuperar los datos. Posibles causas:")
+        st.markdown("""
+        - Problema de conexión con Yahoo Finance
+        - Datos insuficientes (menos de 14 semanas)
+        - Error en el cálculo del RSI
+        
+        **Intenta recargar la página o verifica tu conexión a internet.**
+        """)
 
     if st.button("🔄 Forzar Recálculo"):
         st.rerun()

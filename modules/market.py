@@ -7,6 +7,8 @@ import time
 import yfinance as yf
 from bs4 import BeautifulSoup
 import pandas as pd
+import re
+from collections import Counter
 
 # Intentar importar investpy
 try:
@@ -153,17 +155,19 @@ def get_fallback_crypto_prices():
         {"symbol": "XRP", "name": "XRP", "price": "3.15", "change": "-2.3%", "is_positive": False},
     ]
 
-# ─── REDDIT REAL - SCRAPING DESDE BUZZTICKR ───
+# ─── REDDIT REAL - SCRAPING DESDE BUZZTICKR (TABLA OVERALL TOP 10) ───
 @st.cache_data(ttl=300)
-def get_reddit_buzz(ticker="MSFT"):
+def get_reddit_buzz():
     """
-    Scrapea posts reales de Reddit desde BuzzTickr.
-    Extrae los tickers más mencionados y posts recientes.
+    Scrapea la tabla 'Overall Top 10' de tickers más mencionados en Reddit
+    desde https://www.buzztickr.com/reddit-buzz/
     """
     try:
-        url = f"https://www.buzztickr.com/reddit-buzz/?ticker={ticker}"
+        url = "https://www.buzztickr.com/reddit-buzz/"
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
         }
         
         response = requests.get(url, headers=headers, timeout=15)
@@ -171,54 +175,72 @@ def get_reddit_buzz(ticker="MSFT"):
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Extraer posts del HTML
-        posts = []
+        # Buscar la tabla "Overall Top 10"
+        # Normalmente tiene un header específico o clase particular
+        top_10_tickers = []
         
-        # Buscar elementos que contengan la estructura de posts
-        # El sitio tiene posts con formato: r/subreddit by u/usuario Fecha\nContenido
-        text_content = soup.get_text()
+        # Estrategia 1: Buscar por texto "Overall Top 10" o similar
+        headers = soup.find_all(['h2', 'h3', 'h4', 'div', 'span'])
+        for header in headers:
+            header_text = header.get_text(strip=True).lower()
+            if 'overall' in header_text and 'top' in header_text:
+                # El siguiente elemento hermano o padre cercano debería contener la tabla/lista
+                parent = header.find_parent()
+                if parent:
+                    # Buscar enlaces o elementos con tickers en el contenedor
+                    links = parent.find_all('a', href=re.compile(r'/reddit-buzz/\?ticker='))
+                    for link in links[:10]:
+                        ticker = link.get_text(strip=True).upper()
+                        if ticker and ticker not in top_10_tickers and len(ticker) <= 5:
+                            top_10_tickers.append(ticker)
         
-        # Patrón regex para extraer posts
-        pattern = r'r/(\w+)\s+by\s+u/(\w+)\s+([A-Za-z]{3}\s+\d{1,2},\s+\d{4}\s+\d{2}:\d{2})\s+(.*?)(?=r/\w+\s+by\s+u/|\Z)'
-        matches = re.findall(pattern, text_content, re.DOTALL)
+        # Estrategia 2: Si no encontramos por header, buscar todos los enlaces de ticker
+        if not top_10_tickers:
+            all_links = soup.find_all('a', href=re.compile(r'/reddit-buzz/\?ticker=[A-Z]+'))
+            seen = set()
+            for link in all_links:
+                ticker = link.get_text(strip=True).upper()
+                # Filtrar solo tickers válidos (1-5 caracteres, solo letras)
+                if (ticker and ticker not in seen and len(ticker) <= 5 
+                    and ticker.isalpha() and len(ticker) >= 1):
+                    top_10_tickers.append(ticker)
+                    seen.add(ticker)
+                    if len(top_10_tickers) >= 10:
+                        break
         
-        for match in matches[:10]:  # Limitar a 10 posts
-            subreddit, username, date_str, content = match
-            posts.append({
-                'subreddit': subreddit,
-                'username': username,
-                'date': date_str.strip(),
-                'content': content.strip().replace('\n', ' ')[:150] + "..." if len(content) > 150 else content.strip(),
-                'ticker': ticker
-            })
+        # Estrategia 3: Extraer tickers del texto completo (patrón $TICKER o menciones)
+        if not top_10_tickers:
+            text = soup.get_text()
+            # Buscar patrón $TICKER
+            ticker_matches = re.findall(r'\$([A-Z]{1,5})\b', text)
+            # Contar frecuencia
+            ticker_counts = Counter(ticker_matches)
+            # Filtrar tickers comunes que no son stocks
+            exclude = {'A', 'I', 'EL', 'LA', 'DE', 'EN', 'ES', 'SE', 'AL', 'DEL', 'LAS', 'LOS', 'USD', 'CEO', 'CFO', 'CTO', 'AI', 'IPO', 'ETF', 'EPS', 'GDP', 'FED', 'SPY', 'QQQ'}
+            filtered = [(t, c) for t, c in ticker_counts.most_common(20) if t not in exclude and len(t) >= 1]
+            top_10_tickers = [t for t, c in filtered[:10]]
         
-        # Si no encontramos posts con el ticker específico, obtener tickers trending
-        if not posts:
-            # Intentar obtener lista de tickers trending
-            trending_tickers = scrape_trending_tickers(soup)
-            return {'posts': [], 'trending': trending_tickers, 'ticker': ticker}
+        # Si aún no tenemos nada, usar fallback
+        if not top_10_tickers:
+            return get_fallback_reddit_tickers()
         
-        return {'posts': posts, 'trending': [], 'ticker': ticker}
+        return {
+            'tickers': top_10_tickers[:10],
+            'source': 'BuzzTickr',
+            'timestamp': datetime.now().strftime('%H:%M:%S')
+        }
         
     except Exception as e:
-        print(f"Error scraping Reddit: {e}")
-        return {'posts': [], 'trending': [], 'error': str(e), 'ticker': ticker}
+        print(f"Error scraping Reddit Buzz: {e}")
+        return get_fallback_reddit_tickers()
 
-def scrape_trending_tickers(soup):
-    """Extrae tickers trending de la página de BuzzTickr"""
-    try:
-        # Buscar secciones de trending tickers
-        text = soup.get_text()
-        # Buscar menciones de tickers en mayúsculas (formato típico $TICKER o TICKER)
-        import re
-        tickers = re.findall(r'\$([A-Z]{1,5})\b', text)
-        # Contar frecuencia
-        from collections import Counter
-        ticker_counts = Counter(tickers)
-        # Devolver los más comunes
-        return [ticker for ticker, count in ticker_counts.most_common(8)]
-    except:
-        return ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD"]
+def get_fallback_reddit_tickers():
+    """Tickers fallback cuando falla el scraping"""
+    return {
+        'tickers': ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD", "PLTR", "GME"],
+        'source': 'Fallback',
+        'timestamp': datetime.now().strftime('%H:%M:%S')
+    }
 
 # ─── SECTORES REALES CON YFINANCE ───
 @st.cache_data(ttl=600)
@@ -288,6 +310,7 @@ def get_earnings_calendar():
             try:
                 stock = yf.Ticker(ticker)
                 # Intentar obtener fecha de próximo earnings
+                calendar
                 calendar = stock.calendar
                 if calendar is not None and not calendar.empty:
                     earnings_date = calendar.index[0] if hasattr(calendar, 'index') else None
@@ -559,6 +582,59 @@ def render():
             font-weight: bold;
             margin-top: 6px;
         }
+        
+        /* Estilos para ranking de tickers */
+        .ticker-rank {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid #1a1e26;
+            transition: background 0.2s;
+        }
+        .ticker-rank:hover {
+            background: #0c0e12;
+        }
+        .ticker-rank:last-child {
+            border-bottom: none;
+        }
+        .rank-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #1a1e26;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 12px;
+        }
+        .rank-number.top {
+            background: #f23645;
+            color: white;
+        }
+        .ticker-info {
+            flex: 1;
+        }
+        .ticker-symbol {
+            color: #00ffad;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .ticker-mentions {
+            color: #666;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+        .ticker-trend {
+            color: #f23645;
+            font-size: 11px;
+            font-weight: bold;
+            background: rgba(242, 54, 69, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -609,38 +685,34 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Calendari Econòmic</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
 
     with col3:
-        # REDDIT REAL - Scrapeado desde BuzzTickr
-        reddit_data = get_reddit_buzz("MSFT")
+        # REDDIT REAL - Overall Top 10 desde BuzzTickr
+        reddit_data = get_reddit_buzz()
+        tickers = reddit_data.get('tickers', [])
         
-        if reddit_data.get('posts'):
-            # Mostrar posts reales
-            posts_html = "".join([f'''
-                <div class="reddit-post">
-                    <div class="post-header">
-                        <span class="post-subreddit">r/{post["subreddit"]}</span>
-                        <span class="post-author">u/{post["username"]}</span>
-                        <span class="post-date">{post["date"]}</span>
-                    </div>
-                    <div class="post-content">{post["content"]}</div>
-                    <span class="post-ticker">${post["ticker"]}</span>
-                </div>''' for post in reddit_data['posts'][:8]])
+        # Construir HTML del ranking
+        reddit_html_items = []
+        for i, ticker in enumerate(tickers[:10], 1):
+            rank_class = "top" if i <= 3 else ""
+            mentions = "HOT" if i <= 3 else "Trending"
             
-            reddit_content = posts_html
-            badge_text = f"{len(reddit_data['posts'])} posts"
-        else:
-            # Mostrar tickers trending si no hay posts específicos
-            trending = reddit_data.get('trending', ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD"])
-            reddit_content = "".join([f'''
-                <div style="background:#0c0e12; padding:8px 15px; border-radius:8px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="color:#333; font-weight:bold; font-size:10px;">{i+1:02d}</span>
-                    <span style="color:#00ffad; font-weight:bold; font-size:12px;">{tkr}</span>
-                    <span style="color:#f23645; font-size:8px; font-weight:bold; background:rgba(242,54,69,0.1); padding:2px 5px; border-radius:4px;">HOT 🔥</span>
-                </div>''' for i, tkr in enumerate(trending[:8])])
-            badge_text = "LIVE"
+            item_html = f'''
+            <div class="ticker-rank">
+                <div class="rank-number {rank_class}">{i}</div>
+                <div class="ticker-info">
+                    <div class="ticker-symbol">${ticker}</div>
+                    <div class="ticker-mentions">Buzzing on Reddit</div>
+                </div>
+                <div class="ticker-trend">{mentions} 🔥</div>
+            </div>
+            '''
+            reddit_html_items.append(item_html)
         
-        tooltip = "Dades reals de Reddit scrapejades des de BuzzTickr. Mostra posts recents i tickers trending."
+        reddit_content = "".join(reddit_html_items)
+        badge_text = f"Top {len(tickers)}"
+        
+        tooltip = f"Top 10 tickers més mencionats a Reddit (scraping de BuzzTickr). Actualitzat: {reddit_data.get('timestamp', 'now')}"
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{reddit_content}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{reddit_content}</div></div>', unsafe_allow_html=True)
 
     # FILA 2
     st.write("")

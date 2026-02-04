@@ -36,6 +36,7 @@ class RSUAlgoritmo:
             rsi = 100 - (100 / (1 + rs))
             
             return rsi
+            
         except Exception as e:
             st.error(f"Error en cálculo RSI manual: {e}")
             return None
@@ -55,7 +56,11 @@ class RSUAlgoritmo:
                 return None, None
             
             # Calcular RSI manualmente
-            df['rsi'] = self.calcular_rsi_manual(df['Close'], length=14)
+            df['rsi'] = self.calcular_rsi_manual(df['Close'], 14)
+            
+            if df['rsi'] is None:
+                st.error("RSI es None")
+                return None, None
             
             if df['rsi'].isna().all():
                 st.error("RSI calculado es todo NaN")
@@ -73,6 +78,8 @@ class RSUAlgoritmo:
             
         except Exception as e:
             st.error(f"Error en obtener_rsi_semanal: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
             return None, None
 
     def calcular_color(self, rsi):
@@ -82,6 +89,7 @@ class RSUAlgoritmo:
             return "ROJO"
         else:
             return "AMBAR"
+
 
 def render():
     set_style()
@@ -95,8 +103,16 @@ def render():
         
     engine = st.session_state.algoritmo_engine
     
+    rsi_semanal = None
+    precio = None
+    
     with st.spinner('Calculando RSI Semanal...'):
-        rsi_semanal, precio = engine.obtener_rsi_semanal()
+        try:
+            rsi_semanal, precio = engine.obtener_rsi_semanal()
+        except Exception as e:
+            st.error(f"Error al obtener RSI: {e}")
+            import traceback
+            st.code(traceback.format_exc())
         
     if rsi_semanal is not None and precio is not None:
         estado = engine.calcular_color(rsi_semanal)

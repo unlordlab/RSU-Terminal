@@ -3,7 +3,12 @@ import streamlit as st
 import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
-from config import set_style  # <--- IMPORTAMOS LA FUNCIÓN
+import sys
+import os
+
+# Agregar el directorio padre al path para importar config
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import set_style  # Ahora sí lo encuentra
 
 class RSUAlgoritmo:
     def __init__(self):
@@ -22,7 +27,8 @@ class RSUAlgoritmo:
             precio_actual = df['Close'].iloc[-1]
             
             return rsi_actual, precio_actual
-        except:
+        except Exception as e:
+            st.error(f"Error calculando RSI: {e}")
             return None, None
 
     def calcular_color(self, rsi):

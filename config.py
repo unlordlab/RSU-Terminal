@@ -1,21 +1,22 @@
+
 # config.py
 import os
 import time
 import streamlit as st
-import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# --- CREDENCIALES DE ALPACA ---
-ALPACA_API_KEY = "PK5F3ZYQ5V5OMMN2XWUB64GB4Q"
-ALPACA_SECRET_KEY = "5BsiRC9kqEoi3wWahzKJrLdgGWPvP5vy3gSySSBbitWC"
+# --- CREDENCIALES DE ALPACA (MOVER A SECRETS) ---
+# Estas deben configurarse en .streamlit/secrets.toml
+ALPACA_API_KEY = st.secrets.get("ALPACA_API_KEY", "PK5F3ZYQ5V5OMMN2XWUB64GB4Q")
+ALPACA_SECRET_KEY = st.secrets.get("ALPACA_SECRET_KEY", "5BsiRC9kqEoi3wWahzKJrLdgGWPvP5vy3gSySSBbitWC")
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets/v2"
 ALPACA_WS_URL = "wss://stream.data.alpaca.markets/v2/iex"
 
 # Configuración de página única
 if 'page_config_set' not in st.session_state:
-    st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="RSU")
+    st.set_page_config(page_title="RSU Terminal", layout="wide", page_icon="📈")
     st.session_state.page_config_set = True
 
 def set_style():
@@ -72,12 +73,14 @@ def get_market_index(ticker_symbol):
             prev = hist['Close'].iloc[-2]
             try:
                 live = t.fast_info.get('last_price') or t.fast_info.get('regularMarketPrice')
-                if live: current = live
-            except: pass
+                if live: 
+                    current = live
+            except: 
+                pass
             change = ((current - prev) / prev) * 100
             return current, change
         return 0.0, 0.0
-    except:
+    except Exception as e:
         return 0.0, 0.0
 
 # =============================================================================
@@ -88,7 +91,6 @@ def get_cnn_fear_greed():
     """
     Obtiene el valor real del CNN Fear & Greed Index usando su propio endpoint JSON.
     Este método nunca falla porque no depende del HTML cambiante.
-    Valor actual (03-feb-2026): 43 → Fear
     """
     try:
         # Endpoint oficial que usa la propia web de CNN para cargar el gráfico
@@ -110,25 +112,41 @@ def get_cnn_fear_greed():
         return None
 
 def actualizar_contador_usuarios():
+    """Contador simple de sesiones activas"""
     if not os.path.exists("sessions"):
-        os.makedirs("sessions")
+        try:
+            os.makedirs("sessions")
+        except:
+            return 1
+    
     try:
-        session_id = st.runtime.scriptrunner.add_script_run_ctx().streamlit_script_run_ctx.session_id
+        # Usar un identificador simple basado en tiempo
+        session_id = str(int(time.time() * 1000))
         session_file = f"sessions/{session_id}"
         with open(session_file, "w") as f:
             f.write(str(time.time()))
-    except: pass
+    except: 
+        pass
     
     count = 0
     ahora = time.time()
-    for f in os.listdir("sessions"):
-        f_path = os.path.join("sessions", f)
-        if ahora - os.path.getmtime(f_path) > 30:
-            try: os.remove(f_path)
-            except: pass
-        else:
-            count += 1
-    return count
+    try:
+        for f in os.listdir("sessions"):
+            f_path = os.path.join("sessions", f)
+            try:
+                if ahora - os.path.getmtime(f_path) > 30:
+                    try: 
+                        os.remove(f_path)
+                    except: 
+                        pass
+                else:
+                    count += 1
+            except:
+                pass
+    except:
+        count = 1
+    
+    return max(count, 1)
     
 # --- CONFIGURACIÓN DE IA (GEMINI) ---
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
@@ -138,9 +156,10 @@ def get_ia_model():
     if not API_KEY: 
         return None, None, "API Key missing"
     
-    genai.configure(api_key=API_KEY)
-    
     try:
+        import google.generativeai as genai
+        genai.configure(api_key=API_KEY)
+        
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         if not available_models:
             return None, None, "No models available"
@@ -158,6 +177,7 @@ def get_ia_model():
 
     except Exception as e:
         try:
+            import google.generativeai as genai
             model = genai.GenerativeModel('gemini-pro')
             return model, "gemini-pro", None
         except:
@@ -168,4 +188,5 @@ def obtener_prompt_github():
     try:
         r = requests.get("https://raw.githubusercontent.com/unlordlab/RSU-Terminal/main/prompt_report.txt")
         return r.text if r.status_code == 200 else ""
-    except: return ""
+    except: 
+        return ""

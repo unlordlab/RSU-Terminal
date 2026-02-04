@@ -32,6 +32,7 @@ from modules import roadmap_2026 as roadmap_2026_module
 from modules import trump_playbook as trump_playbook_module
 from modules import comunidad as comunidad_module
 from modules import disclaimer as disclaimer_module
+from modules import auth as auth_module  # <-- IMPORTAMOS AUTH REAL
 
 # Aplicar estilos definidos en config.py
 set_style()
@@ -471,14 +472,8 @@ def get_clock_times():
     
     return times
 
-# Control de acceso simplificado (sin auth.py)
-def check_auth():
-    """Autenticación básica"""
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = True  # Por defecto permitir acceso
-    return st.session_state.authenticated
-
-if not check_auth():
+# Control de acceso REAL usando auth.py de modules
+if not auth_module.login():
     st.stop()
 
 # Inicializamos el motor del algoritmo RS/RW en la sesion (solo si existen los módulos)

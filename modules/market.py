@@ -28,7 +28,7 @@ def get_economic_calendar():
     
     try:
         from_date = datetime.now().strftime('%d/%m/%Y')
-        to_date = (datetime.now() + timedelta(days=1)).strftime('%d/%m/%Y')
+        to_date = (datetime.now() + timedelta(days= + timedelta + timedelta(days=1)).strftime('%d/%m/%Y')
         
         calendar = investpy.economic_calendar(
             time_zone='GMT',
@@ -176,12 +176,11 @@ def get_reddit_buzz():
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Buscar la tabla "Overall Top 10"
-        # Normalmente tiene un header específico o clase particular
         top_10_tickers = []
         
         # Estrategia 1: Buscar por texto "Overall Top 10" o similar
-        headers = soup.find_all(['h2', 'h3', 'h4', 'div', 'span'])
-        for header in headers:
+        headers_elements = soup.find_all(['h2', 'h3', 'h4', 'div', 'span'])
+        for header in headers_elements:
             header_text = header.get_text(strip=True).lower()
             if 'overall' in header_text and 'top' in header_text:
                 # El siguiente elemento hermano o padre cercano debería contener la tabla/lista
@@ -310,7 +309,6 @@ def get_earnings_calendar():
             try:
                 stock = yf.Ticker(ticker)
                 # Intentar obtener fecha de próximo earnings
-                calendar
                 calendar = stock.calendar
                 if calendar is not None and not calendar.empty:
                     earnings_date = calendar.index[0] if hasattr(calendar, 'index') else None
@@ -431,6 +429,7 @@ def get_fed_liquidity():
 # ────────────────────────────────────────────────
 
 def render():
+    # CSS global
     st.markdown("""
     <style>
         .tooltip-container {
@@ -536,105 +535,6 @@ def render():
         .group-content {
             padding: 0;
         }
-        
-        /* Estilos para posts de Reddit */
-        .reddit-post {
-            padding: 12px 15px;
-            border-bottom: 1px solid #1a1e26;
-            transition: background 0.2s;
-        }
-        .reddit-post:hover {
-            background: #0c0e12;
-        }
-        .reddit-post:last-child {
-            border-bottom: none;
-        }
-        .post-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-            font-size: 11px;
-            color: #718096;
-        }
-        .post-subreddit {
-            color: #00ffad;
-            font-weight: bold;
-        }
-        .post-author {
-            color: #a0aec0;
-        }
-        .post-date {
-            color: #4a5568;
-        }
-        .post-content {
-            color: #e0e0e0;
-            font-size: 12px;
-            line-height: 1.4;
-        }
-        .post-ticker {
-            display: inline-block;
-            background: #2a3f5f;
-            color: #00ffad;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: bold;
-            margin-top: 6px;
-        }
-        
-        /* Estilos para ranking de tickers */
-        .ticker-rank {
-            display: flex;
-            align-items: center;
-            padding: 10px 15px;
-            border-bottom: 1px solid #1a1e26;
-            transition: background 0.2s;
-        }
-        .ticker-rank:hover {
-            background: #0c0e12;
-        }
-        .ticker-rank:last-child {
-            border-bottom: none;
-        }
-        .rank-number {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: #1a1e26;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #888;
-            font-weight: bold;
-            font-size: 12px;
-            margin-right: 12px;
-        }
-        .rank-number.top {
-            background: #f23645;
-            color: white;
-        }
-        .ticker-info {
-            flex: 1;
-        }
-        .ticker-symbol {
-            color: #00ffad;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        .ticker-mentions {
-            color: #666;
-            font-size: 10px;
-            margin-top: 2px;
-        }
-        .ticker-trend {
-            color: #f23645;
-            font-size: 11px;
-            font-weight: bold;
-            background: rgba(242, 54, 69, 0.1);
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -685,34 +585,145 @@ def render():
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Calendari Econòmic</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
 
     with col3:
-        # REDDIT REAL - Overall Top 10 desde BuzzTickr
+        # REDDIT REAL - Overall Top 10 desde BuzzTickr usando components.html
         reddit_data = get_reddit_buzz()
         tickers = reddit_data.get('tickers', [])
         
-        # Construir HTML del ranking
+        # Construir HTML del ranking de tickers
         reddit_html_items = []
         for i, ticker in enumerate(tickers[:10], 1):
-            rank_class = "top" if i <= 3 else ""
-            mentions = "HOT" if i <= 3 else "Trending"
+            rank_bg = "#f23645" if i <= 3 else "#1a1e26"
+            rank_color = "white" if i <= 3 else "#888"
+            trend_text = "HOT 🔥" if i <= 3 else "Trending"
+            trend_bg = "rgba(242, 54, 69, 0.2)" if i <= 3 else "rgba(0, 255, 173, 0.1)"
+            trend_color = "#f23645" if i <= 3 else "#00ffad"
             
             item_html = f'''
-            <div class="ticker-rank">
-                <div class="rank-number {rank_class}">{i}</div>
-                <div class="ticker-info">
-                    <div class="ticker-symbol">${ticker}</div>
-                    <div class="ticker-mentions">Buzzing on Reddit</div>
+            <div style="display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #1a1e26; transition: background 0.2s;">
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: {rank_bg}; display: flex; align-items: center; justify-content: center; color: {rank_color}; font-weight: bold; font-size: 12px; margin-right: 12px;">{i}</div>
+                <div style="flex: 1;">
+                    <div style="color: #00ffad; font-weight: bold; font-size: 14px;">${ticker}</div>
+                    <div style="color: #666; font-size: 10px; margin-top: 2px;">Buzzing on Reddit</div>
                 </div>
-                <div class="ticker-trend">{mentions} 🔥</div>
+                <div style="color: {trend_color}; font-size: 11px; font-weight: bold; background: {trend_bg}; padding: 4px 8px; border-radius: 4px;">{trend_text}</div>
             </div>
             '''
             reddit_html_items.append(item_html)
         
         reddit_content = "".join(reddit_html_items)
         badge_text = f"Top {len(tickers)}"
+        tooltip_text = f"Top 10 tickers més mencionats a Reddit (scraping de BuzzTickr). Actualitzat: {reddit_data.get('timestamp', 'now')}"
         
-        tooltip = f"Top 10 tickers més mencionats a Reddit (scraping de BuzzTickr). Actualitzat: {reddit_data.get('timestamp', 'now')}"
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{reddit_content}</div></div>', unsafe_allow_html=True)
+        # HTML completo para el módulo de Reddit usando components.html
+        reddit_html_full = f'''<!DOCTYPE html>
+<html>
+<head>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+
+.container {{
+    border: 1px solid #1a1e26;
+    border-radius: 10px10px;
+    overflow: hidden;
+    background: #11141a;
+    width: 100%;
+}}
+
+.header {{
+    background: #0c0e12;
+    padding: 12px 15px;
+    border-bottom: 1px solid #1a1e26;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}}
+
+.title {{
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}}
+
+.badge {{
+    background: #2a3f5f;
+    color: #00ffad;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+}}
+
+.tooltip-container {{
+    position: relative;
+    cursor: help;
+}}
+
+.tooltip-icon {{
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1a1e26;
+    border: 2px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 16px;
+    font-weight: bold;
+}}
+
+.tooltip-text {{
+    visibility: hidden;
+    width: 260px;
+    background-color: #1e222d;
+    color: #eee;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 6px;
+    position: absolute;
+    z-index: 999;
+    top: 35px;
+    right: -10px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+    border: 1px solid #444;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}}
+
+.tooltip-container:hover .tooltip-text {{
+    visibility: visible;
+    opacity: 1;
+}}
+
+.content {{
+    background: #11141a;
+    height: 340px;
+    overflow-y: auto;
+}}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">Reddit Social Pulse</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="badge">{badge_text}</span>
+            <div class="tooltip-container">
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-text">{tooltip_text}</div>
+            </div>
+        </div>
+    </div>
+    <div class="content">
+        {reddit_content}
+    </div>
+</div>
+</body>
+</html>'''
+        
+        components.html(reddit_html_full, height=400, scrolling=False)
 
     # FILA 2
     st.write("")
@@ -770,6 +781,7 @@ def render():
         sectors = get_sector_performance()
         sectors_html = "".join([f'<div style="background:{"#00ffad11" if p>=0 else "#f2364511"}; border:1px solid {"#00ffad44" if p>=0 else "#f2364544"}; padding:10px; border-radius:6px; text-align:center;"><div style="color:white; font-size:9px; font-weight:bold;">{n}</div><div style="color:{"#00ffad" if p>=0 else "#f23645"}; font-size:11px; font-weight:bold;">{p:+.2f}%</div></div>' for n, p in sectors])
         tooltip = "Rendiment diari dels principals sectors del mercat (ETFs) via yfinance."
+        info_icon."
         info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
 
@@ -1074,7 +1086,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             </div>
         '''
         tooltip = "Índex de volatilitat CBOE (VIX) – mesura la por esperada al mercat."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;heightpx;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="px;height:26px;border-radius:50%;background:#1px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
         st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">VIX Index</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{vix_html}</div></div>', unsafe_allow_html=True)
 
     with f4c2:

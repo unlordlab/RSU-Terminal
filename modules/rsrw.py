@@ -1,4 +1,3 @@
-
 # modules/rsrw.py
 import streamlit as st
 import yfinance as yf
@@ -12,10 +11,9 @@ import os
 import time
 
 # =============================================================================
-# 1. SISTEMA DE DATOS CON SECTORES
+# CONSTANTES GLOBALES
 # =============================================================================
 
-# Mapeo de sectores para análisis de rotación
 SECTOR_ETFS = {
     "Tecnología": "XLK",
     "Salud": "XLV", 
@@ -30,26 +28,23 @@ SECTOR_ETFS = {
     "Comunicaciones": "XLC"
 }
 
-# Tickers por sector para clasificación
 SECTOR_TICKERS = {
     "Tecnología": ["AAPL", "MSFT", "NVDA", "AVGO", "CSCO", "ADBE", "CRM", "ACN", "ORCL", "IBM",
                   "INTC", "QCOM", "TXN", "AMD", "AMAT", "ADI", "MU", "KLAC", "LRCX", "SNPS",
-                  "CDNS", "PANW", "CRWD", "SNOW", "PLTR", "UBER", "ABNB", "SQ", "SHOP", "NET",
-                  "FTNT", "ZS", "DDOG", "OKTA", "MDB", "NOW", "TWLO", "ROKU", "ZM", "DOCU"],
+                  "CDNS", "PANW", "CRWD", "SNOW", "PLTR", "UBER", "ABNB", "SQ", "SHOP", "NET"],
     "Salud": ["LLY", "UNH", "JNJ", "MRK", "ABBV", "PFE", "TMO", "ABT", "DHR", "BMY",
              "AMGN", "GILD", "VRTX", "REGN", "BIIB", "ZTS", "IQV", "DXCM", "EW", "ISRG",
-             "BSX", "SYK", "BDX", "CI", "HUM", "ELV", "CNC", "MOH", "UNH", "ANTM"],
+             "BSX", "SYK", "BDX", "CI", "HUM"],
     "Financieros": ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "BLK", "C",
                    "AXP", "PNC", "USB", "TFC", "COF", "SCHW", "SPGI", "MCO", "ICE", "CME",
-                   "CB", "MMC", "PGR", "AIG", "MET", "PRU", "AFL", "ALL", "TRV", "HIG"],
+                   "CB", "MMC", "PGR", "AIG", "MET"],
     "Consumo Discrecional": ["AMZN", "TSLA", "HD", "PG", "COST", "WMT", "KO", "PEP", "MCD", "NKE",
                             "DIS", "CMCSA", "LOW", "TJX", "SBUX", "BKNG", "MAR", "YUM", "DLTR", "DG",
-                            "TGT", "NCLH", "RCL", "CCL", "LVS", "MGM", "WYNN", "CZR", "LYV", "ETSY"],
+                            "TGT", "NCLH", "RCL", "CCL", "LVS"],
     "Consumo Básico": ["PG", "KO", "PEP", "WMT", "COST", "PM", "MO", "MDLZ", "KHC", "GIS",
                       "K", "HSY", "MKC", "CPB", "CAG", "SJM", "LW", "HRL", "TSN", "BG"],
     "Industriales": ["CAT", "HON", "UNP", "UPS", "RTX", "BA", "GE", "LMT", "DE", "MMM",
-                    "CSX", "NSC", "FDX", "ITW", "GD", "NOC", "EMR", "ETN", "PH", "CMI",
-                    "PCAR", "WAB", "GWW", "FAST", "VRSK", "RSG", "WM", "CEG", "EXC", "AEP"],
+                    "CSX", "NSC", "FDX", "ITW", "GD", "NOC", "EMR", "ETN", "PH", "CMI"],
     "Energía": ["XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "WMB",
                "KMI", "OKE", "MPLX", "EPD", "ET", "ENB", "TRP", "SU", "IMO", "CVE"],
     "Materiales": ["LIN", "APD", "SHW", "FCX", "NEM", "DOW", "ECL", "NUE", "VMC", "PPG",
@@ -63,11 +58,15 @@ SECTOR_TICKERS = {
                       "WBD", "PARA", "NWSA", "FOXA", "GOOG"]
 }
 
+
+# =============================================================================
+# FUNCIONES DE DATOS
+# =============================================================================
+
 @st.cache_data(ttl=3600)
 def get_sp500_comprehensive():
     """Obtiene S&P 500 con clasificación por sectores."""
     
-    # Intentar Wikipedia primero
     try:
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         df = pd.read_html(url, match="Symbol")[0]
@@ -83,7 +82,6 @@ def get_sp500_comprehensive():
     except:
         pass
     
-    # Cache local
     try:
         if os.path.exists(".sp500_cache.json"):
             with open(".sp500_cache.json", "r") as f:
@@ -94,7 +92,6 @@ def get_sp500_comprehensive():
     except:
         pass
     
-    # Fallback sectorial
     all_tickers = []
     for sector, ticks in SECTOR_TICKERS.items():
         all_tickers.extend(ticks)
@@ -114,13 +111,13 @@ def get_sector_for_ticker(ticker):
 
 
 # =============================================================================
-# 2. MOTOR DE ANÁLISIS MEJORADO
+# MOTOR DE ANÁLISIS
 # =============================================================================
 
 class RSRWEngine:
     def __init__(self):
         self.benchmark = "SPY"
-        self.sector_etfs = SECTOR_ETFs
+        self.sector_etfs = SECTOR_ETFS
         try:
             self.tickers, self.source = get_sp500_comprehensive()
         except:
@@ -134,7 +131,6 @@ class RSRWEngine:
         all_data = []
         symbols = list(dict.fromkeys(symbols))
         
-        # Añadir ETFs de sector para análisis de rotación
         download_symbols = symbols + list(self.sector_etfs.values())
         
         batch_size = 50
@@ -193,7 +189,6 @@ class RSRWEngine:
             return pd.DataFrame(), pd.DataFrame(), 0.0
         
         try:
-            # Preparar datos
             if isinstance(data.columns, pd.MultiIndex):
                 close = data['Close'].copy()
                 volume = data['Volume'].copy() if 'Volume' in data else None
@@ -210,7 +205,6 @@ class RSRWEngine:
             
             close = close.loc[:, ~close.columns.duplicated()]
             
-            # Calcular RS de sectores primero
             sector_rs = {}
             if self.sector_etfs:
                 for sector, etf in self.sector_etfs.items():
@@ -228,7 +222,6 @@ class RSRWEngine:
             
             sector_df = pd.DataFrame(sector_rs).T if sector_rs else pd.DataFrame()
             
-            # Calcular RS individual
             if self.benchmark not in close.columns:
                 return pd.DataFrame(), sector_df, 0.0
             
@@ -253,10 +246,8 @@ class RSRWEngine:
             df = pd.DataFrame(rs_data)
             common_index = df.index
             
-            # Añadir sector a cada ticker
             df['Sector'] = [get_sector_for_ticker(t) for t in common_index]
             
-            # Calcular RS vs Sector (fuerza relativa al sector, no solo al mercado)
             df['RS_vs_Sector'] = 0.0
             for ticker in common_index:
                 sector = df.loc[ticker, 'Sector']
@@ -265,7 +256,6 @@ class RSRWEngine:
                     sector_val = sector_rs[sector]['RS']
                     df.loc[ticker, 'RS_vs_Sector'] = ticker_rs - sector_val
             
-            # RVOL
             if volume is not None:
                 try:
                     volume = volume.loc[:, ~volume.columns.duplicated()]
@@ -280,14 +270,12 @@ class RSRWEngine:
             else:
                 df['RVOL'] = 1.0
             
-            # Precio
             try:
                 price = close.iloc[-1].reindex(common_index)
                 df['Precio'] = price
             except:
                 df['Precio'] = 0
             
-            # Score compuesto
             weights = {5: 0.5, 20: 0.3, 60: 0.2}
             weight_sum = sum(weights.get(p, 0.2) for p in valid_periods)
             
@@ -301,15 +289,12 @@ class RSRWEngine:
             else:
                 df['RS_Score'] = 0
             
-            # Eliminar benchmark y ETFs de sectores
             to_drop = [self.benchmark] + list(self.sector_etfs.values())
             df = df[~df.index.isin(to_drop)]
             
-            # Limpiar
             df = df.replace([float('inf'), float('-inf')], float('nan'))
             df = df.dropna()
             
-            # SPY performance
             spy_perf = 0
             try:
                 spy_col = close[self.benchmark]
@@ -326,7 +311,7 @@ class RSRWEngine:
 
 
 # =============================================================================
-# 3. UI COMPLETA CON EXPLICACIONES AMPLIADAS
+# UI COMPLETA
 # =============================================================================
 
 def render():
@@ -356,13 +341,12 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # Header
     st.markdown("""
     <div class="main-header">
         <h1 class="main-title"><span style="color: #00ffad;">🔍</span> Scanner RS/RW Pro</h1>
         <p class="main-subtitle">
             Análisis institucional de Fuerza Relativa con contexto sectorial. 
-            Identifica flujo de capital y rotación entre sectores antes del movimiento mayoritario.
+            Identifica flujo de capital y rotación entre sectores.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -384,19 +368,19 @@ def render():
         engine.source = "Unknown"
     if not hasattr(engine, 'tickers'):
         engine.tickers = []
+    if not hasattr(engine, 'sector_etfs'):
+        engine.sector_etfs = SECTOR_ETFS
     
     num_tickers = len(engine.tickers) if engine.tickers else 0
+    num_sectors = len(engine.sector_etfs) if hasattr(engine, 'sector_etfs') else len(SECTOR_ETFS)
     
     st.markdown(f"""
     <div style="text-align: center; margin-bottom: 20px;">
-        <span class="badge badge-info">📊 {num_tickers} tickers | {engine.source}</span>
+        <span class="badge badge-info">📊 {num_tickers} tickers | {num_sectors} sectores | {engine.source}</span>
     </div>
     """, unsafe_allow_html=True)
 
-    # =============================================================================
-    # GUÍA EDUCATIVA AMPLIADA
-    # =============================================================================
-    
+    # Guía educativa
     with st.expander("📚 Guía Completa: Dominando el Análisis RS/RW", expanded=False):
         
         tab1, tab2, tab3 = st.tabs(["🎯 Conceptos", "📊 Estrategias", "⚠️ Riesgos"])
@@ -536,13 +520,9 @@ def render():
                 - Mejor buscar consistencia (RS 3-5% sostenido)
             """)
 
-    # =============================================================================
-    # CONFIGURACIÓN CON EXPLICACIONES DETALLADAS
-    # =============================================================================
-    
+    # Configuración
     st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">⚙️ Configuración del Scanner</div>', unsafe_allow_html=True)
     
-    # Explicación general de la configuración
     with st.expander("💡 ¿Cómo configurar el scanner? Guía rápida", expanded=False):
         st.markdown("""
         **Para diferentes estilos de trading:**
@@ -608,7 +588,7 @@ def render():
             st.error("❌ No hay tickers disponibles.")
             st.stop()
         
-        with st.spinner(f"Analizando {num_tickers} tickers y {len(SECTOR_ETFs)} sectores..."):
+        with st.spinner(f"Analizando {num_tickers} tickers y {num_sectors} sectores..."):
             raw_data = engine.download_batch(engine.tickers)
             
             if raw_data is None:
@@ -623,13 +603,9 @@ def render():
                 st.session_state.last_results = results
                 st.session_state.last_sector_data = sector_data
                 
-                # =============================================================================
-                # DASHBOARD DE MÉTRICAS Y SECTORES
-                # =============================================================================
-                
+                # Dashboard de métricas
                 st.markdown('<div style="margin: 25px 0;">', unsafe_allow_html=True)
                 
-                # Métricas principales
                 mc = st.columns(5)
                 
                 with mc[0]:
@@ -674,7 +650,6 @@ def render():
                     """, unsafe_allow_html=True)
                 
                 with mc[4]:
-                    # Sector más fuerte
                     if not sector_data.empty and 'RS' in sector_data.columns:
                         top_sector = sector_data['RS'].idxmax()
                         top_sector_rs = sector_data.loc[top_sector, 'RS']
@@ -695,10 +670,7 @@ def render():
                 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # =============================================================================
-                # ANÁLISIS DE ROTACIÓN SECTORIAL
-                # =============================================================================
-                
+                # Análisis de rotación sectorial
                 if not sector_data.empty:
                     st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🔄 Rotación Sectorial</div>', unsafe_allow_html=True)
                     
@@ -767,10 +739,7 @@ def render():
                         height=200
                     )
 
-                # =============================================================================
-                # GRÁFICO DE DISPERSIÓN
-                # =============================================================================
-                
+                # Gráfico de dispersión
                 st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
                 st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">📊 Mapa de Oportunidades</div>', unsafe_allow_html=True)
                 
@@ -838,13 +807,9 @@ def render():
                 
                 st.plotly_chart(fig, use_container_width=True)
 
-                # =============================================================================
-                # TABLAS DE RESULTADOS POR SECTOR
-                # =============================================================================
-                
+                # Tablas de resultados por sector
                 st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
                 
-                # Filtro por sector
                 st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🎯 Resultados Detallados</div>', unsafe_allow_html=True)
                 
                 available_sectors = ['Todos'] + sorted(results['Sector'].unique().tolist())
@@ -875,7 +840,6 @@ def render():
                     df_rs = df_rs[df_rs['RVOL'] >= min_rvol]
                     
                     if not df_rs.empty:
-                        # Añadir indicador de fuerza vs sector
                         df_rs['Setup'] = df_rs.apply(
                             lambda x: '🔥 HOT' if x['RVOL'] > 2.0 and x['RS_Score'] > 0.05 and x['RS_vs_Sector'] > 0
                             else ('✅ Strong' if x['RS_vs_Sector'] > 0 else '⚠️ Sector Weak'), 
@@ -957,10 +921,7 @@ def render():
                         "text/csv"
                     )
 
-    # =============================================================================
-    # VWAP CON EXPLICACIONES
-    # =============================================================================
-    
+    # VWAP
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
     st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🎯 Validación Intradía con VWAP</div>', unsafe_allow_html=True)
     
@@ -1000,7 +961,6 @@ def render():
                     vwap = df['VWAP'].iloc[-1]
                     dev = ((price - vwap) / vwap) * 100
                     
-                    # Gráfico
                     fig = go.Figure()
                     fig.add_trace(go.Candlestick(
                         x=df.index, open=df['Open'], high=df['High'],
@@ -1014,7 +974,6 @@ def render():
                         name="VWAP"
                     ))
                     
-                    # Zonas
                     fig.add_hrect(y0=vwap*0.995, y1=vwap*1.005, 
                                  fillcolor="rgba(255,170,0,0.1)", line_width=0,
                                  annotation_text="Zona VWAP")
@@ -1029,7 +988,6 @@ def render():
                     )
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Análisis contextual
                     if dev > 2:
                         st.success(f"""
                         ✅ **{symbol} FUERTE sobre VWAP (+{dev:.1f}%)**

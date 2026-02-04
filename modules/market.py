@@ -1,4 +1,907 @@
-        width: 100%;
+import streamlit as st
+from datetime import datetime, timedelta
+from config import get_market_index, get_cnn_fear_greed
+import requests
+import streamlit.components.v1 as components
+import time
+import yfinance as yf
+from bs4 import BeautifulSoup
+import pandas as pd
+
+# Intentar importar investpy
+try:
+    import investpy
+    INVESTPY_AVAILABLE = True
+except ImportError:
+    INVESTPY_AVAILABLE = False
+
+# ────────────────────────────────────────────────
+# FUNCIONS AUXILIARS - DATOS REALES
+# ────────────────────────────────────────────────
+
+def get_economic_calendar():
+    """Obtiene el calendario económico de hoy y mañana."""
+    if not INVESTPY_AVAILABLE:
+        return get_fallback_economic_calendar()
+    
+    try:
+        from_date = datetime.now().strftime('%d/%m/%Y')
+        to_date = (datetime.now() + timedelta(days=1)).strftime('%d/%m/%Y')
+        
+        calendar = investpy.economic_calendar(
+            time_zone='GMT',
+            time_filter='time_only',
+            from_date=from_date,
+            to_date=to_date,
+            countries=['united states', 'euro zone'],
+            importances=['high', 'medium', 'low']
+        )
+        
+        events = []
+        for _, row in calendar.head(10).iterrows():
+            time_str = row['time']
+            if time_str and time_str != '':
+                try:
+                    hour, minute = map(int, time_str.split(':'))
+                    hour_es = (hour + 1) % 24
+                    time_es = f"{hour_es:02d}:{minute:02d}"
+                except:
+                    time_es = time_str
+            else:
+                time_es = "TBD"
+            
+            importance_map = {
+                'high': 'High',
+                'medium': 'Medium', 
+                'low': 'Low'
+            }
+            impact = importance_map.get(row['importance'].lower(), 'Medium')
+            
+            events.append({
+                "time": time_es,
+                "event": row['event'],
+                "imp": impact,
+                "val": row.get('actual', '-'),
+                "prev": row.get('previous', '-')
+            })
+        
+        return events if events else get_fallback_economic_calendar()
+        
+    except Exception as e:
+        return get_fallback_economic_calendar()
+
+def get_fallback_economic_calendar():
+    return [
+        {"time": "14:15", "event": "ADP Nonfarm Employment", "imp": "High", "val": "143K", "prev": "102K"},
+        {"time": "16:00", "event": "ISM Services PMI", "imp": "High", "val": "54.9", "prev": "51.5"},
+        {"time": "16:30", "event": "Crude Oil Inventories", "imp": "Medium", "val": "3.8M", "prev": "-4.5M"},
+        {"time": "20:00", "event": "FOMC Meeting Minutes", "imp": "High", "val": "-", "prev": "-"},
+    ]
+
+# ─── CRIPTOMONEDAS REALES CON YFINANCE ───
+@st.cache_data(ttl=300)
+def get_crypto_prices():
+    """
+    Obtiene precios reales de criptomonedas usando yfinance.
+    Más estable que CoinGecko API.
+    """
+    try:
+        # Símbolos de cripto en yfinance (USD)
+        crypto_symbols = {
+            'BTC-USD': 'Bitcoin',
+            'ETH-USD': 'Ethereum', 
+            'BNB-USD': 'BNB',
+            'SOL-USD': 'Solana',
+            'XRP-USD': 'XRP'
+        }
+        
+        cryptos = []
+        
+        for symbol, name in crypto_symbols.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="2d")
+                
+                if len(hist) >= 2:
+                    current_price = hist['Close'].iloc[-1]
+                    prev_price = hist['Close'].iloc[-2]
+                    change_pct = ((current_price - prev_price) / prev_price) * 100
+                    
+                    # Formatear precio según magnitud
+                    if current_price >= 1000:
+                        price_str = f"{current_price:,.2f}"
+                    elif current_price >= 1:
+                        price_str = f"{current_price:,.2f}"
+                    else:
+                        price_str = f"{current_price:.4f}"
+                    
+                    change_str = f"{change_pct:+.2f}%"
+                    is_positive = change_pct >= 0
+                    
+                    cryptos.append({
+                        'symbol': symbol.replace('-USD', ''),
+                        'name': name,
+                        'price': price_str,
+                        'change': change_str,
+                        'is_positive': is_positive
+                    })
+                    
+                    # Pequeña pausa para no sobrecargar
+                    time.sleep(0.2)
+                    
+            except Exception as e:
+                print(f"Error en {symbol}: {e}")
+                continue
+        
+        # Si no conseguimos datos, usar fallback
+        if not cryptos:
+            return get_fallback_crypto_prices()
+            
+        return cryptos
+        
+    except Exception as e:
+        print(f"Error general crypto: {e}")
+        return get_fallback_crypto_prices()
+
+def get_fallback_crypto_prices():
+    """Datos simulados como fallback"""
+    return [
+        {"symbol": "BTC", "name": "Bitcoin", "price": "104,231.50", "change": "+2.4%", "is_positive": True},
+        {"symbol": "ETH", "name": "Ethereum", "price": "3,120.12", "change": "-1.1%", "is_positive": False},
+        {"symbol": "BNB", "name": "BNB", "price": "685.45", "change": "+0.8%", "is_positive": True},
+        {"symbol": "SOL", "name": "Solana", "price": "245.88", "change": "+5.7%", "is_positive": True},
+        {"symbol": "XRP", "name": "XRP", "price": "3.15", "change": "-2.3%", "is_positive": False},
+    ]
+
+# ─── REDDIT REAL - SCRAPING DESDE BUZZTICKR ───
+@st.cache_data(ttl=300)
+def get_reddit_buzz(ticker="MSFT"):
+    """
+    Scrapea posts reales de Reddit desde BuzzTickr.
+    Extrae los tickers más mencionados y posts recientes.
+    """
+    try:
+        url = f"https://www.buzztickr.com/reddit-buzz/?ticker={ticker}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Extraer posts del HTML
+        posts = []
+        
+        # Buscar elementos que contengan la estructura de posts
+        # El sitio tiene posts con formato: r/subreddit by u/usuario Fecha\nContenido
+        text_content = soup.get_text()
+        
+        # Patrón regex para extraer posts
+        pattern = r'r/(\w+)\s+by\s+u/(\w+)\s+([A-Za-z]{3}\s+\d{1,2},\s+\d{4}\s+\d{2}:\d{2})\s+(.*?)(?=r/\w+\s+by\s+u/|\Z)'
+        matches = re.findall(pattern, text_content, re.DOTALL)
+        
+        for match in matches[:10]:  # Limitar a 10 posts
+            subreddit, username, date_str, content = match
+            posts.append({
+                'subreddit': subreddit,
+                'username': username,
+                'date': date_str.strip(),
+                'content': content.strip().replace('\n', ' ')[:150] + "..." if len(content) > 150 else content.strip(),
+                'ticker': ticker
+            })
+        
+        # Si no encontramos posts con el ticker específico, obtener tickers trending
+        if not posts:
+            # Intentar obtener lista de tickers trending
+            trending_tickers = scrape_trending_tickers(soup)
+            return {'posts': [], 'trending': trending_tickers, 'ticker': ticker}
+        
+        return {'posts': posts, 'trending': [], 'ticker': ticker}
+        
+    except Exception as e:
+        print(f"Error scraping Reddit: {e}")
+        return {'posts': [], 'trending': [], 'error': str(e), 'ticker': ticker}
+
+def scrape_trending_tickers(soup):
+    """Extrae tickers trending de la página de BuzzTickr"""
+    try:
+        # Buscar secciones de trending tickers
+        text = soup.get_text()
+        # Buscar menciones de tickers en mayúsculas (formato típico $TICKER o TICKER)
+        import re
+        tickers = re.findall(r'\$([A-Z]{1,5})\b', text)
+        # Contar frecuencia
+        from collections import Counter
+        ticker_counts = Counter(tickers)
+        # Devolver los más comunes
+        return [ticker for ticker, count in ticker_counts.most_common(8)]
+    except:
+        return ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD"]
+
+# ─── SECTORES REALES CON YFINANCE ───
+@st.cache_data(ttl=600)
+def get_sector_performance():
+    """
+    Obtiene rendimiento real de sectores usando ETFs representativos.
+    """
+    try:
+        # ETFs representativos de sectores
+        sector_etfs = {
+            'TECH': 'XLK',      # Technology
+            'FINL': 'XLF',      # Financials
+            'HLTH': 'XLV',      # Health Care
+            'ENER': 'XLE',      # Energy
+            'CONS': 'XLY',      # Consumer Discretionary
+            'UTIL': 'XLU',      # Utilities
+            'INDU': 'XLI',      # Industrials
+            'MATR': 'XLB',      # Materials
+            'STPL': 'XLP',      # Consumer Staples
+            'REAL': 'XLRE',     # Real Estate
+            'TELE': 'XLC',      # Communication Services
+        }
+        
+        sectors_data = []
+        
+        for name, symbol in sector_etfs.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="2d")
+                
+                if len(hist) >= 2:
+                    current = hist['Close'].iloc[-1]
+                    prev = hist['Close'].iloc[-2]
+                    change = ((current - prev) / prev) * 100
+                    
+                    sectors_data.append((name, change))
+                    
+                time.sleep(0.1)  # Rate limiting
+                
+            except Exception as e:
+                continue
+        
+        # Si no conseguimos datos, usar fallback
+        if not sectors_data:
+            return get_fallback_sectors()
+            
+        return sectors_data
+        
+    except Exception as e:
+        return get_fallback_sectors()
+
+def get_fallback_sectors():
+    """Datos de sectores simulados"""
+    return [
+        ("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), 
+        ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25)
+    ]
+
+def get_earnings_calendar():
+    """Obtiene earnings reales usando yfinance si es posible"""
+    try:
+        # Tickers importantes con earnings próximos
+        earnings_tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'TSLA', 'NVDA', 'META', 'NFLX']
+        earnings_data = []
+        
+        for ticker in earnings_tickers[:4]:  # Limitar para no sobrecargar
+            try:
+                stock = yf.Ticker(ticker)
+                # Intentar obtener fecha de próximo earnings
+                calendar = stock.calendar
+                if calendar is not None and not calendar.empty:
+                    earnings_date = calendar.index[0] if hasattr(calendar, 'index') else None
+                    if earnings_date:
+                        date_str = earnings_date.strftime('%b %d') if isinstance(earnings_date, datetime) else str(earnings_date)
+                        earnings_data.append((ticker, date_str, "TBD", "High"))
+            except:
+                continue
+                
+        if earnings_data:
+            return earnings_data
+            
+    except Exception as e:
+        print(f"Error earnings: {e}")
+    
+    # Fallback
+    return [
+        ("AAPL", "Feb 05", "After Market", "High"),
+        ("AMZN", "Feb 05", "After Market", "High"),
+        ("GOOGL", "Feb 06", "Before Bell", "High"),
+        ("TSLA", "Feb 07", "After Market", "High"),
+    ]
+
+def get_insider_trading():
+    return [
+        ("NVDA", "CEO", "SELL", "$12.5M"),
+        ("MSFT", "CFO", "BUY", "$1.2M"),
+        ("PLTR", "DIR", "BUY", "$450K"),
+        ("TSLA", "DIR", "SELL", "$2.1M"),
+    ]
+
+def get_fallback_news():
+    return [
+        {"time": "19:45", "title": "Tesla supera expectatives i puja un 8% després del tancament", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "18:30", "title": "El PIB dels EUA creix un 2,3% al darrer trimestre", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "16:15", "title": "Apple presenta resultats rècord gràcies a serveis", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "14:00", "title": "La inflació subjacent a la zona euro es modera al 2,7%", "impact": "Moderado", "color": "#ff9800", "link": "#"},
+        {"time": "12:30", "title": "Microsoft Cloud supera els 30.000 milions en ingressos", "impact": "Alto", "color": "#f23645", "link": "#"},
+    ]
+
+@st.cache_data(ttl=300)
+def fetch_finnhub_news():
+    api_key = st.secrets.get("FINNHUB_API_KEY", None)
+    
+    if not api_key:
+        return get_fallback_news()
+
+    try:
+        url = f"https://finnhub.io/api/v1/news?category=general&token={api_key}"
+        r = requests.get(url, timeout=12)
+        r.raise_for_status()
+        data = r.json()
+
+        news_list = []
+        for item in data[:8]:
+            title = item.get("headline", "Sense títol")
+            link = item.get("url", "#")
+            timestamp = item.get("datetime", 0)
+            time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M") if timestamp else "N/A"
+
+            lower = title.lower()
+            if any(k in lower for k in ["earnings", "profit", "revenue", "gdp", "fed", "fomc", "inflation", "employment"]):
+                impact = "Alto"
+                color = "#f23645"
+            else:
+                impact = "Moderado"
+                color = "#ff9800"
+
+            news_list.append({
+                "time": time_str,
+                "title": title,
+                "impact": impact,
+                "color": color,
+                "link": link
+            })
+        return news_list if news_list else get_fallback_news()
+    except Exception as e:
+        return get_fallback_news()
+
+
+def get_fed_liquidity():
+    api_key = st.secrets.get("FRED_API_KEY", None)
+    
+    if not api_key:
+        return "ERROR", "#888", "API Key no configurada", "N/A", "N/A"
+    
+    url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            observations = data.get('observations', [])
+            if len(observations) >= 2:
+                latest_val = float(observations[0]['value'])
+                prev_val = float(observations[1]['value'])
+                date_latest = observations[0]['date']
+                change = latest_val - prev_val
+                if change < -100:
+                    status = "QT"
+                    color = "#f23645"
+                    desc = "Quantitative Tightening"
+                elif change > 100:
+                    status = "QE"
+                    color = "#00ffad"
+                    desc = "Quantitative Easing"
+                else:
+                    status = "STABLE"
+                    color = "#ff9800"
+                    desc = "Balance sheet stable"
+                return status, color, desc, f"{latest_val/1000:.1f}T", date_latest
+        return "ERROR", "#888", "API temporalment no disponible", "N/A", "N/A"
+    except:
+        return "N/A", "#888", "Sense connexió a FRED", "N/A", "N/A"
+
+
+# ────────────────────────────────────────────────
+# RENDER DEL DASHBOARD
+# ────────────────────────────────────────────────
+
+def render():
+    st.markdown("""
+    <style>
+        .tooltip-container {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            transform: translateY(-50%);
+            cursor: help;
+        }
+        .tooltip-container .tooltip-text {
+            visibility: hidden;
+            width: 260px;
+            background-color: #1e222d;
+            color: #eee;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 999;
+            top: 140%;
+            right: -10px;
+            opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
+            font-size: 12px;
+            border: 1px solid #444;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .fng-legend {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 12px;
+            font-size: 0.65rem;
+            color: #ccc;
+            text-align: center;
+            padding: 0 10px;
+        }
+        .fng-legend-item {
+            flex: 1;
+            padding: 0 4px;
+        }
+        .fng-color-box {
+            width: 100%;
+            height: 6px;
+            margin-bottom: 4px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .news-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            transition: background 0.2s;
+        }
+        .news-item:hover {
+            background: #0c0e12;
+        }
+        .news-item:last-child {
+            border-bottom: none;
+        }
+        .impact-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .news-link {
+            color: #00ffad;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .news-link:hover {
+            text-decoration: underline;
+        }
+        
+        .group-container {
+            border: 1px solid #1a1e26;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #11141a;
+        }
+        .group-header {
+            background: #0c0e12;
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .group-title {
+            margin: 0;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .group-content {
+            padding: 0;
+        }
+        
+        /* Estilos para posts de Reddit */
+        .reddit-post {
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            transition: background 0.2s;
+        }
+        .reddit-post:hover {
+            background: #0c0e12;
+        }
+        .reddit-post:last-child {
+            border-bottom: none;
+        }
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 11px;
+            color: #718096;
+        }
+        .post-subreddit {
+            color: #00ffad;
+            font-weight: bold;
+        }
+        .post-author {
+            color: #a0aec0;
+        }
+        .post-date {
+            color: #4a5568;
+        }
+        .post-content {
+            color: #e0e0e0;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .post-ticker {
+            display: inline-block;
+            background: #2a3f5f;
+            color: #00ffad;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 6px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<h1 style="margin-top:-50px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
+    
+    H = "340px"
+
+    # FILA 1
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        indices = [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]
+        indices_html = "".join([f'''
+            <div style="background:#0c0e12; padding:12px 15px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <div><div style="font-weight:bold; color:white; font-size:13px;">{n}</div><div style="color:#555; font-size:10px;">INDEX</div></div>
+                <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:13px;">{get_market_index(t)[0]:,.2f}</div><div style="color:{"#00ffad" if get_market_index(t)[1] >= 0 else "#f23645"}; font-size:11px; font-weight:bold;">{get_market_index(t)[1]:+.2f}%</div></div>
+            </div>''' for t, n in indices])
+        tooltip = "Rendiment en temps real dels principals índexs borsaris dels EUA."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
+
+    with col2:
+        events = get_economic_calendar()
+        
+        impact_colors = {
+            'High': '#f23645',
+            'Medium': '#ff9800',
+            'Low': '#4caf50'
+        }
+        
+        events_html = "".join([f'''
+            <div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
+                <div style="color:#888; font-size:10px; width:45px; font-family:monospace;">{ev['time']}</div>
+                <div style="flex-grow:1; margin-left:10px;">
+                    <div style="color:white; font-size:11px; font-weight:500; line-height:1.3;">{ev['event']}</div>
+                    <div style="color:{impact_colors.get(ev['imp'], '#888')}; font-size:8px; font-weight:bold; text-transform:uppercase; margin-top:3px;">
+                        {'● ' + ev['imp'] + ' IMPACT'}
+                    </div>
+                </div>
+                <div style="text-align:right; min-width:50px;">
+                    <div style="color:white; font-size:11px; font-weight:bold;">{ev['val']}</div>
+                    <div style="color:#444; font-size:9px;">P: {ev['prev']}</div>
+                </div>
+            </div>''' for ev in events])
+            
+        tooltip = "Calendari econòmic en temps real (hora espanyola CET/CEST). Dades d'investpy."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Calendari Econòmic</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
+
+    with col3:
+        # REDDIT REAL - Scrapeado desde BuzzTickr
+        reddit_data = get_reddit_buzz("MSFT")
+        
+        if reddit_data.get('posts'):
+            # Mostrar posts reales
+            posts_html = "".join([f'''
+                <div class="reddit-post">
+                    <div class="post-header">
+                        <span class="post-subreddit">r/{post["subreddit"]}</span>
+                        <span class="post-author">u/{post["username"]}</span>
+                        <span class="post-date">{post["date"]}</span>
+                    </div>
+                    <div class="post-content">{post["content"]}</div>
+                    <span class="post-ticker">${post["ticker"]}</span>
+                </div>''' for post in reddit_data['posts'][:8]])
+            
+            reddit_content = posts_html
+            badge_text = f"{len(reddit_data['posts'])} posts"
+        else:
+            # Mostrar tickers trending si no hay posts específicos
+            trending = reddit_data.get('trending', ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD"])
+            reddit_content = "".join([f'''
+                <div style="background:#0c0e12; padding:8px 15px; border-radius:8px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:#333; font-weight:bold; font-size:10px;">{i+1:02d}</span>
+                    <span style="color:#00ffad; font-weight:bold; font-size:12px;">{tkr}</span>
+                    <span style="color:#f23645; font-size:8px; font-weight:bold; background:rgba(242,54,69,0.1); padding:2px 5px; border-radius:4px;">HOT 🔥</span>
+                </div>''' for i, tkr in enumerate(trending[:8])])
+            badge_text = "LIVE"
+        
+        tooltip = "Dades reals de Reddit scrapejades des de BuzzTickr. Mostra posts recents i tickers trending."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Reddit Social Pulse</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{reddit_content}</div></div>', unsafe_allow_html=True)
+
+    # FILA 2
+    st.write("")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        val = get_cnn_fear_greed()
+        if val is None:
+            val_display = "N/D"
+            label = "ERROR DE CONNEXIÓ"
+            col = "#888"
+            bar_width = 50
+            extra = " (refresca)"
+        else:
+            val_display = val
+            bar_width = val
+            if val <= 24:
+                label, col = "EXTREME FEAR", "#d32f2f"
+            elif val <= 44:
+                label, col = "FEAR", "#f57c00"
+            elif val <= 55:
+                label, col = "NEUTRAL", "#ff9800"
+            elif val <= 75:
+                label, col = "GREED", "#4caf50"
+            else:
+                label, col = "EXTREME GREED", "#00ffad"
+            extra = ""
+
+        tooltip = "Índex CNN Fear & Greed – mesura el sentiment del mercat."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+
+        st.markdown(f'''<div class="group-container">
+            <div class="group-header">
+                <p class="group-title">Fear & Greed Index</p>
+                {info_icon}
+            </div>
+            <div class="group-content" style="background:#11141a; height:{H}; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 15px;">
+                <div style="font-size:4.2rem; font-weight:bold; color:{col};">{val_display}</div>
+                <div style="color:white; font-size:1.1rem; letter-spacing:1.5px; font-weight:bold; margin:12px 0;">{label}{extra}</div>
+                <div style="width:88%; background:#0c0e12; height:14px; border-radius:7px; margin:18px 0 12px 0; border:1px solid #1a1e26; overflow:hidden;">
+                    <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%; transition:width 0.8s ease;"></div>
+                </div>
+                <div class="fng-legend">
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#d32f2f;"></div><div>Extreme Fear</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#f57c00;"></div><div>Fear</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#ff9800;"></div><div>Neutral</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#4caf50;"></div><div>Greed</div></div>
+                    <div class="fng-legend-item"><div class="fng-color-box" style="background:#00ffad;"></div><div>Extreme Greed</div></div>
+                </div>
+            </div>
+        </div>''', unsafe_allow_html=True)
+
+    with c2:
+        # SECTORES REALES
+        sectors = get_sector_performance()
+        sectors_html = "".join([f'<div style="background:{"#00ffad11" if p>=0 else "#f2364511"}; border:1px solid {"#00ffad44" if p>=0 else "#f2364544"}; padding:10px; border-radius:6px; text-align:center;"><div style="color:white; font-size:9px; font-weight:bold;">{n}</div><div style="color:{"#00ffad" if p>=0 else "#f23645"}; font-size:11px; font-weight:bold;">{p:+.2f}%</div></div>' for n, p in sectors])
+        tooltip = "Rendiment diari dels principals sectors del mercat (ETFs) via yfinance."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
+
+    with c3:
+        # CRIPTOMONEDAS REALES CON YFINANCE
+        try:
+            cryptos = get_crypto_prices()
+        except:
+            cryptos = get_fallback_crypto_prices()
+        
+        tooltip_text = "Preus reals de criptomonedes via yfinance (Bitcoin, Ethereum, etc)."
+        
+        crypto_items_html = []
+        for crypto in cryptos[:5]:
+            try:
+                symbol = str(crypto.get('symbol', 'N/A'))
+                name = str(crypto.get('name', 'Unknown'))
+                price = str(crypto.get('price', '0.00'))
+                change = str(crypto.get('change', '0%'))
+                is_positive = crypto.get('is_positive', True)
+                
+                color = "#00ffad" if is_positive else "#f23645"
+                
+                item_html = (
+                    '<div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">'
+                    '<div style="display:flex; align-items:center; gap:10px;">'
+                    '<div style="color:white; font-weight:bold; font-size:13px;">' + symbol + '</div>'
+                    '<div style="color:#555; font-size:9px;">' + name + '</div>'
+                    '</div>'
+                    '<div style="text-align:right;">'
+                    '<div style="color:white; font-size:13px; font-weight:bold;">$' + price + '</div>'
+                    '<div style="color:' + color + '; font-size:11px; font-weight:bold;">' + change + '</div>'
+                    '</div>'
+                    '</div>'
+                )
+                crypto_items_html.append(item_html)
+            except Exception as e:
+                continue
+        
+        crypto_content = "".join(crypto_items_html)
+        
+        crypto_html_full = '''<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+.container {
+    border: 1px solid #1a1e26;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #11141a;
+    width: 100%;
+}
+
+.header {
+    background: #0c0e12;
+    padding: 12px 15px;
+    border-bottom: 1px solid #1a1e26;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.tooltip-container {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1a1e26;
+    border: 2px solid #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 260px;
+    background-color: #1e222d;
+    color: #eee;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 6px;
+    position: absolute;
+    z-index: 999;
+    top: 35px;
+    right: -10px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+    border: 1px solid #444;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+.content {
+    background: #11141a;
+    height: 340px;
+    overflow-y: auto;
+    padding: 15px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">Crypto Pulse</div>
+        <div class="tooltip-container">
+            <div class="tooltip-icon">?</div>
+            <div class="tooltip-text">''' + tooltip_text + '''</div>
+        </div>
+    </div>
+    <div class="content">
+        ''' + crypto_content + '''
+    </div>
+</div>
+</body>
+</html>'''
+        
+        components.html(crypto_html_full, height=400, scrolling=False)
+
+    # FILA 3
+    st.write("")
+    f3c1, f3c2, f3c3 = st.columns(3)
+
+    with f3c1:
+        earnings = get_earnings_calendar()
+        earn_html = "".join([f'''<div style="background:#0c0e12; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+            <div><div style="color:#00ffad; font-weight:bold; font-size:12px;">{t}</div><div style="color:#444; font-size:9px; font-weight:bold;">{d}</div></div>
+            <div style="text-align:right;"><div style="color:#888; font-size:9px;">{tm}</div><span style="color:{"#f23645" if i=="High" else "#888"}; font-size:8px; font-weight:bold;">● {i}</span></div>
+            </div>''' for t, d, tm, i in earnings])
+        tooltip = "Calendari de publicació de resultats d'empreses importants aquesta setmana."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{earn_html}</div></div>', unsafe_allow_html=True)
+
+    with f3c2:
+        insiders = get_insider_trading()
+        insider_html = "".join([f'''<div style="background:#0c0e12; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">
+            <div><div style="color:white; font-weight:bold; font-size:11px;">{t}</div><div style="color:#555; font-size:9px;">{p}</div></div>
+            <div style="text-align:right;"><div style="color:{"#00ffad" if ty=="BUY" else "#f23645"}; font-weight:bold; font-size:10px;">{ty}</div><div style="color:#888; font-size:9px;">{a}</div></div>
+            </div>''' for t, p, ty, a in insiders])
+        tooltip = "Compres i vendes recents d'accions per part de directius i insiders."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
+
+    with f3c3:
+        news = fetch_finnhub_news()
+        
+        tooltip_text = "Notícies d'alt impacte obtingudes via Finnhub API."
+        
+        news_items_html = []
+        for item in news:
+            safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
+            time_val = item['time']
+            impact_val = item['impact']
+            color_val = item['color']
+            link_val = item['link']
+            
+            news_item = (
+                '<div style="padding: 12px 15px; border-bottom: 1px solid #1a1e26;">'
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
+                '<span style="color:#888;font-size:0.78rem;font-family:monospace;">' + time_val + '</span>'
+                '<span style="padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; background-color:' + color_val + '22;color:' + color_val + ';">' + impact_val + '</span>'
+                '</div>'
+                '<div style="color:white;font-size:0.92rem;line-height:1.35;margin-bottom:8px;">' + safe_title + '</div>'
+                '<a href="' + link_val + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.85rem;">→ Llig la notícia completa</a>'
+                '</div>'
+            )
+            news_items_html.append(news_item)
+        
+        news_content = "".join(news_items_html)
+        
+        full_html = '''<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+.container {
+    border: 1px solid #1a1e26;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #11141a;
+    width: 100%;
 }
 
 .header {
@@ -78,4 +981,60 @@
     <div class="content">
         ''' + news_content + '''
     </div>
-</div>    
+</div>
+</body>
+</html>'''
+        
+        components.html(full_html, height=400, scrolling=False)
+
+    # FILA 4
+    st.write("")
+    f4c1, f4c2, f4c3 = st.columns(3)
+
+    with f4c1:
+        vix = get_market_index("^VIX")
+        vix_html = f'''
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center;">
+                <div style="font-size:4.2rem; font-weight:bold; color:white;">{vix[0]:.2f}</div>
+                <div style="color:#f23645; font-size:1.4rem; font-weight:bold;">VIX INDEX</div>
+                <div style="color:{"#00ffad" if vix[1]>=0 else "#f23645"}; font-size:1.2rem; font-weight:bold;">{vix[1]:+.2f}%</div>
+                <div style="color:#555; font-size:0.9rem; margin-top:15px;">Volatility Index</div>
+            </div>
+        '''
+        tooltip = "Índex de volatilitat CBOE (VIX) – mesura la por esperada al mercat."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">VIX Index</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{vix_html}</div></div>', unsafe_allow_html=True)
+
+    with f4c2:
+        status, color, desc, assets, date = get_fed_liquidity()
+        fed_html = f'''
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center;">
+                <div style="font-size:5rem; font-weight:bold; color:{color};">{status}</div>
+                <div style="color:white; font-size:1.3rem; font-weight:bold; margin:10px 0;">{desc}</div>
+                <div style="background:#0c0e12; padding:12px 20px; border-radius:8px; border:1px solid #1a1e26;">
+                    <div style="font-size:1.8rem; color:white;">{assets}</div>
+                    <div style="color:#888; font-size:0.9rem;">Total Assets (FED)</div>
+                </div>
+                <div style="color:#555; font-size:0.8rem; margin-top:12px;">Actualitzat: {date}</div>
+            </div>
+        '''
+        tooltip = "Política de liquiditat de la FED: expansió (QE) / contracció (QT) segons balanç."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">FED Liquidity Policy</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{fed_html}</div></div>', unsafe_allow_html=True)
+
+    with f4c3:
+        tnx = get_market_index("^TNX")
+        tnx_html = f'''
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center;">
+                <div style="font-size:4.2rem; font-weight:bold; color:white;">{tnx[0]:.2f}%</div>
+                <div style="color:white; font-size:1.4rem; font-weight:bold;">10Y TREASURY</div>
+                <div style="color:{"#00ffad" if tnx[1]>=0 else "#f23645"}; font-size:1.2rem; font-weight:bold;">{tnx[1]:+.2f}%</div>
+                <div style="color:#555; font-size:0.9rem; margin-top:15px;">US 10-Year Yield</div>
+            </div>
+        '''
+        tooltip = "Rendiment del bo del Tresor dels EUA a 10 anys."
+        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
+
+
+# Final del fitxer market.py

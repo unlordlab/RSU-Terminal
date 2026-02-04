@@ -315,7 +315,7 @@ class RSRWEngine:
 # =============================================================================
 
 def render():
-    """Interfaz completa con explicaciones exhaustivas."""
+    """Interfaz completa."""
     
     st.markdown("""
     <style>
@@ -603,12 +603,17 @@ def render():
                 st.session_state.last_results = results
                 st.session_state.last_sector_data = sector_data
                 
-                # Dashboard de métricas
+                # Dashboard de métricas - CORREGIDO
                 st.markdown('<div style="margin: 25px 0;">', unsafe_allow_html=True)
                 
-                mc = st.columns(5)
+                # Crear columnas de forma segura
+                try:
+                    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+                except Exception as e:
+                    st.error(f"Error creando columnas: {e}")
+                    st.stop()
                 
-                with mc[0]:
+                with mc1:
                     color = "#00ffad" if spy_perf >= 0 else "#f23645"
                     icon = "▲" if spy_perf >= 0 else "▼"
                     st.markdown(f"""
@@ -619,7 +624,7 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                with mc[1]:
+                with mc2:
                     strong = len(results[results['RS_Score'] > rs_threshold])
                     st.markdown(f"""
                     <div class="metric-card">
@@ -629,7 +634,7 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                with mc[2]:
+                with mc3:
                     high_rvol = len(results[results['RVOL'] > 1.5])
                     st.markdown(f"""
                     <div class="metric-card">
@@ -639,7 +644,7 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                with mc[3]:
+                with mc4:
                     setups = len(results[(results['RS_Score'] > rs_threshold) & (results['RVOL'] > min_rvol)])
                     st.markdown(f"""
                     <div class="metric-card">
@@ -649,7 +654,7 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                with mc[4]:
+                with mc5:
                     if not sector_data.empty and 'RS' in sector_data.columns:
                         top_sector = sector_data['RS'].idxmax()
                         top_sector_rs = sector_data.loc[top_sector, 'RS']
@@ -824,7 +829,12 @@ def render():
                 else:
                     results_filtered = results
                 
-                rc1, rc2 = st.columns(2)
+                # Crear columnas de forma segura
+                try:
+                    rc1, rc2 = st.columns(2)
+                except Exception as e:
+                    st.error(f"Error creando columnas de resultados: {e}")
+                    st.stop()
                 
                 with rc1:
                     st.markdown(f"""

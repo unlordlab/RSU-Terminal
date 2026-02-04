@@ -6,10 +6,9 @@ import pandas as pd
 import math
 from datetime import datetime
 import pytz
-import yfinance as yf
 
 # --- IMPORTACION DE CONFIGURACION Y MODULOS ---
-from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios
+from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios, get_market_index
 import modules.auth as auth
 import modules.market as market
 import modules.manifest as manifest          
@@ -436,52 +435,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Funciones auxiliares
-def get_market_index_local(ticker):
-    """Funcion local para obtener datos de mercado sin circular import"""
-    try:
-        data = yf.Ticker(ticker).history(period="2d")
-        if len(data) >= 2:
-            current = data['Close'].iloc[-1]
-            prev = data['Close'].iloc[-2]
-            change = ((current - prev) / prev) * 100
-            return current, change
-    except:
-        pass
-    return 0, 0
-
 def get_market_status():
     """Determina si el mercado esta abierto"""
-    try:
-        ny_time = datetime.now(pytz.timezone('America/New_York'))
-        hour = ny_time.hour
-        minute = ny_time.minute
-        weekday = ny_time.weekday()
-        
-        if weekday < 5:
-            if (hour == 9 and minute >= 30) or (10 <= hour < 16):
-                return True, "OPEN"
-    except:
-        pass
+    ny_time = datetime.now(pytz.timezone('America/New_York'))
+    hour = ny_time.hour
+    minute = ny_time.minute
+    weekday = ny_time.weekday()
+    
+    # Mercado abierto 9:30 - 16:00 NY time, Lunes-Viernes
+    if weekday < 5:  # Lunes a Viernes
+        if (hour == 9 and minute >= 30) or (10 <= hour < 16):
+            return True, "OPEN"
     return False, "CLOSED"
 
 def get_clock_times():
     """Obtiene horas de diferentes mercados"""
     times = {}
-    try:
-        now = datetime.now(pytz.UTC)
-        
-        markets = {
-            'NY': 'America/New_York',
-            'LON': 'Europe/London',
-            'TKY': 'Asia/Tokyo',
-            'SYD': 'Australia/Sydney'
-        }
-        
-        for city, tz in markets.items():
-            local_time = now.astimezone(pytz.timezone(tz))
-            times[city] = local_time.strftime('%H:%M')
-    except:
-        times = {'NY': '--:--', 'LON': '--:--', 'TKY': '--:--', 'SYD': '--:--'}
+    now = datetime.now(pytz.UTC)
+    
+    markets = {
+        'NY': 'America/New_York',
+        'LON': 'Europe/London',
+        'TKY': 'Asia/Tokyo',
+        'SYD': 'Australia/Sydney'
+    }
+    
+    for city, tz in markets.items():
+        local_time = now.astimezone(pytz.timezone(tz))
+        times[city] = local_time.strftime('%H:%M')
     
     return times
 
@@ -511,11 +492,7 @@ with st.sidebar:
         """, unsafe_allow_html=True)
     
     # Live users badge premium
-    try:
-        usuarios_activos = actualizar_contador_usuarios()
-    except:
-        usuarios_activos = 1
-    
+    usuarios_activos = actualizar_contador_usuarios()
     st.markdown(f"""
         <div style="text-align: center;">
             <div class="live-badge">
@@ -532,50 +509,51 @@ with st.sidebar:
     
     # Obtener datos rapidos para el mini ticker
     try:
-        spx_val, spx_chg = get_market_index_local("^GSPC")
-        ndx_val, ndx_chg = get_market_index_local("^IXIC")
-        vix_val, vix_chg = get_market_index_local("^VIX")
+        spx = get_market_index("^GSPC")
+        ndx = get_market_index("^IXIC")
+        vix = get_market_index("^VIX")
         
-        spx_color = "#00ffad" if spx_chg >= 0 else "#f23645"
-        ndx_color = "#00ffad" if ndx_chg >= 0 else "#f23645"
+        spx_color = "#00ffad" if spx[1] >= 0 else "#f23645"
+        ndx_color = "#00ffad" if ndx[1] >= 0 else "#f23645"
         
         ticker_content = f"""
             <div class="mini-ticker">
                 <div class="mini-ticker-content">
                     <span class="ticker-item">
                         <span style="color: #888;">S&P 500</span>
-                        <span style="color: white; font-weight: bold;">{spx_val:,.0f}</span>
-                        <span style="color: {spx_color};">{spx_chg:+.2f}%</span>
+                        <span style="color: white; font-weight: bold;">{spx[0]:,.0f}</span>
+                        <span style="color: {spx_color};">{spx[1]:+.2f}%</span>
                     </span>
                     <span class="ticker-item">
                         <span style="color: #888;">NASDAQ</span>
-                        <span style="color: white; font-weight: bold;">{ndx_val:,.0f}</span>
-                        <span style="color: {ndx_color};">{ndx_chg:+.2f}%</span>
+                        <span style="color: white; font-weight: bold;">{ndx[0]:,.0f}</span>
+                        <span style="color: {ndx_color};">{ndx[1]:+.2f}%</span>
                     </span>
                     <span class="ticker-item">
                         <span style="color: #888;">VIX</span>
-                        <span style="color: white; font-weight: bold;">{vix_val:.2f}</span>
-                        <span style="color: #f23645;">{vix_chg:+.2f}%</span>
+                        <span style="color: white; font-weight: bold;">{vix[0]:.2f}</span>
+                        <span style="color: #f23645;">{vix[1]:+.2f}%</span>
                     </span>
                     <span class="ticker-item">
                         <span style="color: #888;">BTC</span>
                         <span style="color: white; font-weight: bold;">$104K</span>
                         <span style="color: #00ffad;">+2.4%</span>
                     </span>
+                    <!-- Duplicado para loop infinito -->
                     <span class="ticker-item">
                         <span style="color: #888;">S&P 500</span>
-                        <span style="color: white; font-weight: bold;">{spx_val:,.0f}</span>
-                        <span style="color: {spx_color};">{spx_chg:+.2f}%</span>
+                        <span style="color: white; font-weight: bold;">{spx[0]:,.0f}</span>
+                        <span style="color: {spx_color};">{spx[1]:+.2f}%</span>
                     </span>
                     <span class="ticker-item">
                         <span style="color: #888;">NASDAQ</span>
-                        <span style="color: white; font-weight: bold;">{ndx_val:,.0f}</span>
-                        <span style="color: {ndx_color};">{ndx_chg:+.2f}%</span>
+                        <span style="color: white; font-weight: bold;">{ndx[0]:,.0f}</span>
+                        <span style="color: {ndx_color};">{ndx[1]:+.2f}%</span>
                     </span>
                     <span class="ticker-item">
                         <span style="color: #888;">VIX</span>
-                        <span style="color: white; font-weight: bold;">{vix_val:.2f}</span>
-                        <span style="color: #f23645;">{vix_chg:+.2f}%</span>
+                        <span style="color: white; font-weight: bold;">{vix[0]:.2f}</span>
+                        <span style="color: #f23645;">{vix[1]:+.2f}%</span>
                     </span>
                     <span class="ticker-item">
                         <span style="color: #888;">BTC</span>
@@ -637,29 +615,27 @@ with st.sidebar:
     # Obtener datos para stats
     try:
         fng = get_cnn_fear_greed()
+        spx = get_market_index("^GSPC")
         
         col1_stat, col2_stat = st.columns(2)
         with col1_stat:
-            spx_color = "#00ffad" if spx_chg >= 0 else "#f23645"
             st.markdown(f"""
                 <div class="stat-box">
                     <div class="stat-label">S&P 500</div>
-                    <div class="stat-value">{spx_val:,.0f}</div>
-                    <div class="stat-change" style="color: {spx_color};">
-                        {'▲' if spx_chg >= 0 else '▼'} {abs(spx_chg):.2f}%
+                    <div class="stat-value">{spx[0]:,.0f}</div>
+                    <div class="stat-change" style="color: {'#00ffad' if spx[1] >= 0 else '#f23645'};">
+                        {'▲' if spx[1] >= 0 else '▼'} {abs(spx[1]):.2f}%
                     </div>
                 </div>
             """, unsafe_allow_html=True)
         
         with col2_stat:
-            fng_val = fng if fng else 50
-            fng_color = "#00ffad" if fng_val > 50 else "#f23645"
             st.markdown(f"""
                 <div class="stat-box">
                     <div class="stat-label">Fear & Greed</div>
-                    <div class="stat-value">{fng_val}</div>
-                    <div class="stat-change" style="color: {fng_color};">
-                        {'Greed' if fng_val > 50 else 'Fear'}
+                    <div class="stat-value">{fng if fng else 'N/A'}</div>
+                    <div class="stat-change" style="color: {'#00ffad' if fng and fng > 50 else '#f23645'};">
+                        {'Greed' if fng and fng > 50 else 'Fear'}
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -704,11 +680,6 @@ with st.sidebar:
     st.markdown('<div class="sidebar-separator"></div>', unsafe_allow_html=True)
     
     # 6. FEAR & GREED DETALLADO (Al final, mas compacto)
-    try:
-        fng = get_cnn_fear_greed()
-    except:
-        fng = None
-    
     if fng is not None:
         # Determinar color y estado
         if fng < 25: 
@@ -838,3 +809,5 @@ elif menu == "👥 COMUNIDAD":
     comunidad.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer.render()
+
+

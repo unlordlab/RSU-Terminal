@@ -1,4 +1,3 @@
-
 # config.py
 import os
 import time
@@ -190,3 +189,5 @@ def obtener_prompt_github():
         return r.text if r.status_code == 200 else ""
     except: 
         return ""
+
+         

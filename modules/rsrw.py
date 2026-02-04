@@ -77,10 +77,10 @@ def get_sp500_comprehensive():
         "ES", "AWK", "D", "CNP", "NI",
         # Real Estate (15)
         "PLD", "AMT", "CCI", "EQIX", "PSA", "O", "WELL", "DLR", "SPG", "VICI",
-        "AVB", "EQR", "EXR", "UDR", "MAA",
+        "AVB", "EQR", "EXR", "UDR", "MAA", "BXP", "ARE", "HST", "VTR", "PEAK",
         # Communications (15)
         "GOOGL", "META", "NFLX", "VZ", "T", "TMUS", "CHTR", "CMCSA", "EA", "TTWO",
-        "MTCH", "IAC", "FOXA", "NWSA", "IPG"
+        "MTCH", "IAC", "FOXA", "NWSA", "IPG", "OMC", "LYV", "TTWO", "NFLX", "DIS"
     ]
     
     # Eliminar duplicados manteniendo orden
@@ -117,7 +117,6 @@ class RSRWEngine:
         
         # ELIMINAR DUPLICADOS antes de procesar
         symbols = list(dict.fromkeys(symbols))
-        total_symbols = len(symbols)
         
         batch_size = 50  # Lotes más pequeños = menos problemas
         batches = [symbols[i:i+batch_size] for i in range(0, len(symbols), batch_size)]
@@ -148,7 +147,6 @@ class RSRWEngine:
                     if not data.empty and 'Close' in data.columns:
                         # VERIFICAR que no haya duplicados en columnas
                         if isinstance(data.columns, pd.MultiIndex):
-                            # Si es multiindex, aplanar y verificar
                             data = data.loc[:, ~data.columns.duplicated()]
                         
                         all_data.append(data)
@@ -170,7 +168,6 @@ class RSRWEngine:
         # COMBINAR con manejo de duplicados
         try:
             combined = pd.concat(all_data, axis=1)
-            # Eliminar columnas duplicadas
             combined = combined.loc[:, ~combined.columns.duplicated()]
             return combined
         except Exception as e:
@@ -186,11 +183,9 @@ class RSRWEngine:
         try:
             # APLANAR columnas si es multiindex
             if isinstance(data.columns, pd.MultiIndex):
-                # Tomar solo el primer nivel (precios) y aplanar
                 close = data['Close'].copy()
                 volume = data['Volume'].copy() if 'Volume' in data else None
                 
-                # Si después de aplanar sigue siendo multiindex, tomer primer nivel
                 if isinstance(close.columns, pd.MultiIndex):
                     close.columns = close.columns.get_level_values(0)
                 if volume is not None and isinstance(volume.columns, pd.MultiIndex):
@@ -202,7 +197,7 @@ class RSRWEngine:
             if close is None or close.empty:
                 return pd.DataFrame(), 0.0
             
-            # Eliminar columnas duplicadas (tickers repetidos)
+            # Eliminar columnas duplicadas
             close = close.loc[:, ~close.columns.duplicated()]
             if volume is not None:
                 volume = volume.loc[:, ~volume.columns.duplicated()]
@@ -219,35 +214,24 @@ class RSRWEngine:
             for period in periods:
                 if len(close) >= period:
                     try:
-                        # Retornos
                         returns = (close.iloc[-1] / close.iloc[-period]) - 1
-                        
-                        # Eliminar duplicados en índice si los hay
                         returns = returns[~returns.index.duplicated(keep='first')]
-                        
                         spy_return = returns.get(self.benchmark, 0)
                         rs_series = returns - spy_return
-                        
-                        # Guardar con nombre único
-                        col_name = f'RS_{period}d'
-                        rs_data[col_name] = rs_series
+                        rs_data[f'RS_{period}d'] = rs_series
                         valid_periods.append(period)
-                    except Exception as e:
+                    except:
                         continue
             
             if not rs_data:
                 return pd.DataFrame(), 0.0
             
-            # Crear DataFrame
             df = pd.DataFrame(rs_data)
-            
-            # Alinear índices antes de añadir más columnas
             common_index = df.index
             
             # RVOL
             if volume is not None:
                 try:
-                    # Alinear volumen con el índice de RS
                     volume_aligned = volume.reindex(columns=common_index, fill_value=0)
                     avg_vol = volume_aligned.rolling(window=20, min_periods=1).mean()
                     current_vol = volume_aligned.iloc[-1]
@@ -276,7 +260,6 @@ class RSRWEngine:
                     col = f'RS_{p}d'
                     if col in df.columns:
                         score_components.append(df[col] * (weights.get(p, 0.2) / weight_sum))
-                
                 if score_components:
                     df['RS_Score'] = sum(score_components)
                 else:
@@ -288,7 +271,7 @@ class RSRWEngine:
             if self.benchmark in df.index:
                 df = df.drop(self.benchmark)
             
-            # Limpiar NaN y infinitos
+            # Limpiar
             df = df.replace([float('inf'), float('-inf')], float('nan'))
             df = df.dropna()
             
@@ -305,17 +288,15 @@ class RSRWEngine:
             
         except Exception as e:
             st.error(f"Error en cálculo: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
             return pd.DataFrame(), 0.0
 
 
 # =============================================================================
-# 3. UI COMPLETA
+# 3. UI COMPLETA CON TODAS LAS MEJORAS
 # =============================================================================
 
 def render():
-    """Interfaz completa con todas las mejoras."""
+    """Interfaz completa con todas las mejoras implementadas."""
     
     st.markdown("""
     <style>
@@ -349,20 +330,59 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # Inicialización
-    if 'rsrw_engine' not in st.session_state:
-        with st.spinner("🚀 Inicializando..."):
-            engine = RSRWEngine()
-            st.session_state.rsrw_engine = engine
-            st.session_state.scan_count = 0
+    # =============================================================================
+    # INICIALIZACIÓN CORREGIDA
+    # =============================================================================
     
+    # Verificar si necesitamos crear nuevo engine
+    need_new_engine = False
+    
+    if 'rsrw_engine' not in st.session_state:
+        need_new_engine = True
+        st.info("🆕 Primera inicialización...")
+    else:
+        # Verificar atributos del engine existente
+        temp_engine = st.session_state.rsrw_engine
+        if temp_engine is None:
+            need_new_engine = True
+            st.info("🔄 Engine es None, recreando...")
+        elif not hasattr(temp_engine, 'tickers') or not hasattr(temp_engine, 'source'):
+            need_new_engine = True
+            st.info("🔄 Actualizando engine...")
+        elif not temp_engine.tickers or len(temp_engine.tickers) == 0:
+            need_new_engine = True
+            st.info("🔄 Tickers vacíos, recreando...")
+    
+    if need_new_engine:
+        with st.spinner("🚀 Inicializando motor..."):
+            try:
+                new_engine = RSRWEngine()
+                st.session_state.rsrw_engine = new_engine
+                st.session_state.scan_count = 0
+                st.success(f"✅ Scanner listo: {len(new_engine.tickers)} tickers")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+                # Crear engine de emergencia
+                emergency_engine = RSRWEngine()
+                emergency_engine.tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"]
+                emergency_engine.source = "Emergency"
+                st.session_state.rsrw_engine = emergency_engine
+    
+    # Recuperar engine de session state
     engine = st.session_state.rsrw_engine
     
-    # Verificar atributos
+    # Verificación final de seguridad
+    if engine is None:
+        st.error("❌ Error crítico: No se pudo inicializar el scanner.")
+        st.stop()
+    
+    # Asegurar atributos
     if not hasattr(engine, 'source'):
         engine.source = "Unknown"
     if not hasattr(engine, 'tickers'):
         engine.tickers = []
+    if not hasattr(engine, 'benchmark'):
+        engine.benchmark = "SPY"
     
     num_tickers = len(engine.tickers) if engine.tickers else 0
     
@@ -385,7 +405,6 @@ def render():
             - **RS = -3%**: Subió 3% menos (o cayó más)
             
             **Relative Volume (RVOL)**  
-            Volumen hoy / Promedio 20 días.
             - **1.5-2.0**: Interés institucional
             - **>2.5**: Evento/catalizador probable
             """)

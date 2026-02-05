@@ -9,6 +9,7 @@ import requests
 import json
 import os
 import time
+import numpy as np
 
 # =============================================================================
 # CONSTANTES GLOBALES
@@ -124,6 +125,7 @@ class RSRWEngine:
             self.tickers = list(set([t for ticks in SECTOR_TICKERS.values() for t in ticks]))[:50]
             self.source = "Emergency"
         
+        # Asegurar que no hay duplicados manteniendo el orden
         self.tickers = list(dict.fromkeys(self.tickers))
         
     def download_batch(self, symbols, max_retries=3):
@@ -131,7 +133,9 @@ class RSRWEngine:
         all_data = []
         symbols = list(dict.fromkeys(symbols))
         
-        download_symbols = symbols + list(self.sector_etfs.values())
+        # IMPORTANTE: Incluir SPY y ETFs de sector en la lista de descarga
+        download_symbols = symbols + [self.benchmark] + list(self.sector_etfs.values())
+        download_symbols = list(dict.fromkeys(download_symbols))  # Eliminar duplicados
         
         batch_size = 50
         batches = [download_symbols[i:i+batch_size] for i in range(0, len(download_symbols), batch_size)]
@@ -145,7 +149,7 @@ class RSRWEngine:
             for attempt in range(max_retries):
                 try:
                     if idx > 0:
-                        time.sleep(0.3)
+                        time.sleep(0.5)
                     
                     data = yf.download(
                         batch,
@@ -156,16 +160,14 @@ class RSRWEngine:
                         timeout=30
                     )
                     
-                    if not data.empty and 'Close' in data.columns:
-                        if isinstance(data.columns, pd.MultiIndex):
-                            data = data.loc[:, ~data.columns.duplicated()]
+                    if not data.empty:
                         all_data.append(data)
                         break
                         
-                except:
+                except Exception as e:
                     if attempt == max_retries - 1:
-                        pass
-                    time.sleep(0.5)
+                        st.warning(f"Error descargando lote {idx+1}: {str(e)}")
+                    time.sleep(1)
             
             progress_bar.progress((idx + 1) / len(batches))
         
@@ -176,78 +178,144 @@ class RSRWEngine:
             return None
         
         try:
+            # Concatenar a lo largo del eje de columnas (axis=1)
             combined = pd.concat(all_data, axis=1)
-            combined = combined.loc[:, ~combined.columns.duplicated()]
+            
+            # Manejar columnas duplicadas - mantener la primera ocurrencia
+            if isinstance(combined.columns, pd.MultiIndex):
+                # Para MultiIndex, verificar duplicados en el primer nivel (los tickers)
+                combined = combined.loc[:, ~combined.columns.get_level_values(0).duplicated()]
+            else:
+                combined = combined.loc[:, ~combined.columns.duplicated()]
+            
+            # Eliminar filas con todos NaN
+            combined = combined.dropna(how='all')
+            
             return combined
-        except:
+            
+        except Exception as e:
+            st.error(f"Error concatenando datos: {str(e)}")
             return None
     
     def calculate_rs_metrics(self, data, periods=[5, 20, 60]):
         """Calcula métricas RS con análisis sectorial."""
         
         if data is None or data.empty:
+            st.error("Datos vacíos recibidos")
             return pd.DataFrame(), pd.DataFrame(), 0.0
         
         try:
+            # Manejar estructura de columnas de yfinance
             if isinstance(data.columns, pd.MultiIndex):
-                close = data['Close'].copy()
-                volume = data['Volume'].copy() if 'Volume' in data else None
-                if isinstance(close.columns, pd.MultiIndex):
-                    close.columns = close.columns.get_level_values(0)
-                if volume is not None and isinstance(volume.columns, pd.MultiIndex):
-                    volume.columns = volume.columns.get_level_values(0)
+                # Extraer nivel de precios de cierre
+                if 'Close' in data.columns.get_level_values(0):
+                    close = data['Close'].copy()
+                else:
+                    st.error("No se encontró columna 'Close' en los datos")
+                    return pd.DataFrame(), pd.DataFrame(), 0.0
+                
+                # Extraer volumen si existe
+                if 'Volume' in data.columns.get_level_values(0):
+                    volume = data['Volume'].copy()
+                else:
+                    volume = None
             else:
                 close = data['Close'] if 'Close' in data else None
                 volume = data['Volume'] if 'Volume' in data else None
             
-            if close is None:
+            if close is None or close.empty:
+                st.error("No hay datos de precios de cierre")
                 return pd.DataFrame(), pd.DataFrame(), 0.0
             
-            close = close.loc[:, ~close.columns.duplicated()]
+            # Asegurar que close es DataFrame
+            if isinstance(close, pd.Series):
+                close = close.to_frame()
             
+            # Eliminar columnas duplicadas manteniendo la primera
+            close = close.loc[:, ~close.columns.duplicated(keep='first')]
+            if volume is not None:
+                volume = volume.loc[:, ~volume.columns.duplicated(keep='first')]
+            
+            # Verificar que tenemos suficientes datos
+            if len(close) < 5:
+                st.error(f"Datos insuficientes: solo {len(close)} filas")
+                return pd.DataFrame(), pd.DataFrame(), 0.0
+            
+            # Calcular RS de sectores primero
             sector_rs = {}
             if self.sector_etfs:
                 for sector, etf in self.sector_etfs.items():
                     if etf in close.columns and self.benchmark in close.columns:
                         try:
-                            sector_ret = (close[etf].iloc[-1] / close[etf].iloc[-20]) - 1
-                            spy_ret = (close[self.benchmark].iloc[-1] / close[self.benchmark].iloc[-20]) - 1
-                            sector_rs[sector] = {
-                                'RS': sector_ret - spy_ret,
-                                'Return': sector_ret,
-                                'ETF': etf
-                            }
-                        except:
-                            pass
+                            # Verificar que tenemos datos suficientes
+                            etf_data = close[etf].dropna()
+                            spy_data = close[self.benchmark].dropna()
+                            
+                            if len(etf_data) >= 20 and len(spy_data) >= 20:
+                                sector_ret = (etf_data.iloc[-1] / etf_data.iloc[-20]) - 1
+                                spy_ret = (spy_data.iloc[-1] / spy_data.iloc[-20]) - 1
+                                sector_rs[sector] = {
+                                    'RS': sector_ret - spy_ret,
+                                    'Return': sector_ret,
+                                    'ETF': etf
+                                }
+                        except Exception as e:
+                            continue
             
             sector_df = pd.DataFrame(sector_rs).T if sector_rs else pd.DataFrame()
             
+            # Verificar que el benchmark existe
             if self.benchmark not in close.columns:
+                st.error(f"Benchmark {self.benchmark} no encontrado en datos descargados")
                 return pd.DataFrame(), sector_df, 0.0
             
+            # Calcular métricas RS para cada período
             rs_data = {}
             valid_periods = []
             
             for period in periods:
                 if len(close) >= period:
                     try:
-                        returns = (close.iloc[-1] / close.iloc[-period]) - 1
+                        # Calcular retornos para este período
+                        start_prices = close.iloc[-period]
+                        end_prices = close.iloc[-1]
+                        
+                        # Calcular retornos evitando división por cero
+                        returns = ((end_prices / start_prices) - 1).replace([np.inf, -np.inf], np.nan)
+                        
+                        # Eliminar duplicados en el índice si los hay
                         returns = returns[~returns.index.duplicated(keep='first')]
+                        
                         spy_return = returns.get(self.benchmark, 0)
                         rs_series = returns - spy_return
+                        
                         rs_data[f'RS_{period}d'] = rs_series
                         valid_periods.append(period)
-                    except:
+                    except Exception as e:
+                        st.warning(f"Error calculando RS para período {period}: {str(e)}")
                         continue
             
             if not rs_data:
+                st.error("No se pudieron calcular métricas RS para ningún período")
                 return pd.DataFrame(), sector_df, 0.0
             
+            # Crear DataFrame principal
             df = pd.DataFrame(rs_data)
-            common_index = df.index
             
+            # Eliminar filas con valores NaN o inf
+            df = df.replace([np.inf, -np.inf], np.nan)
+            df = df.dropna(how='all')  # Eliminar filas donde todos son NaN
+            
+            if df.empty:
+                st.error("DataFrame vacío después de limpiar NaN")
+                return pd.DataFrame(), sector_df, 0.0
+            
+            common_index = df.index.tolist()
+            
+            # Añadir sector para cada ticker
             df['Sector'] = [get_sector_for_ticker(t) for t in common_index]
             
+            # Calcular RS vs Sector
             df['RS_vs_Sector'] = 0.0
             for ticker in common_index:
                 sector = df.loc[ticker, 'Sector']
@@ -256,26 +324,42 @@ class RSRWEngine:
                     sector_val = sector_rs[sector]['RS']
                     df.loc[ticker, 'RS_vs_Sector'] = ticker_rs - sector_val
             
+            # Calcular Relative Volume (RVOL)
             if volume is not None:
                 try:
-                    volume = volume.loc[:, ~volume.columns.duplicated()]
+                    # Asegurar que volume es DataFrame
+                    if isinstance(volume, pd.Series):
+                        volume = volume.to_frame()
+                    
+                    volume = volume.loc[:, ~volume.columns.duplicated(keep='first')]
+                    
+                    # Alinear volumen con los tickers que tenemos
                     vol_aligned = volume.reindex(columns=common_index, fill_value=0)
+                    
+                    # Calcular promedio de volumen de 20 días
                     avg_vol = vol_aligned.rolling(window=20, min_periods=1).mean()
                     current_vol = vol_aligned.iloc[-1]
-                    rvol = current_vol / avg_vol.iloc[-1]
+                    
+                    # Calcular RVOL evitando división por cero
+                    rvol = current_vol / avg_vol.replace(0, np.nan)
                     rvol = rvol.reindex(common_index, fill_value=1.0)
+                    rvol = rvol.replace([np.inf, -np.inf], 1.0).fillna(1.0)
+                    
                     df['RVOL'] = rvol
-                except:
+                except Exception as e:
+                    st.warning(f"Error calculando RVOL: {str(e)}")
                     df['RVOL'] = 1.0
             else:
                 df['RVOL'] = 1.0
             
+            # Añadir precio actual
             try:
                 price = close.iloc[-1].reindex(common_index)
                 df['Precio'] = price
-            except:
+            except Exception as e:
                 df['Precio'] = 0
             
+            # Calcular Score compuesto ponderado
             weights = {5: 0.5, 20: 0.3, 60: 0.2}
             weight_sum = sum(weights.get(p, 0.2) for p in valid_periods)
             
@@ -285,17 +369,28 @@ class RSRWEngine:
                     col = f'RS_{p}d'
                     if col in df.columns:
                         score_components.append(df[col] * (weights.get(p, 0.2) / weight_sum))
-                df['RS_Score'] = sum(score_components) if score_components else 0
+                
+                if score_components:
+                    df['RS_Score'] = sum(score_components)
+                else:
+                    df['RS_Score'] = 0
             else:
                 df['RS_Score'] = 0
             
+            # Eliminar benchmarks y ETFs de los resultados finales
             to_drop = [self.benchmark] + list(self.sector_etfs.values())
             df = df[~df.index.isin(to_drop)]
             
-            df = df.replace([float('inf'), float('-inf')], float('nan'))
-            df = df.dropna()
+            # Limpieza final
+            df = df.replace([np.inf, -np.inf], np.nan)
+            df = df.dropna(subset=['RS_Score', 'RVOL'])  # Eliminar filas sin score o volumen
             
-            spy_perf = 0
+            if df.empty:
+                st.warning("No quedaron datos después de filtrar benchmarks")
+                return pd.DataFrame(), sector_df, 0.0
+            
+            # Calcular rendimiento del SPY
+            spy_perf = 0.0
             try:
                 spy_col = close[self.benchmark]
                 if len(spy_col) >= 20:
@@ -306,7 +401,9 @@ class RSRWEngine:
             return df, sector_df, spy_perf
             
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Error en cálculo de métricas: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
             return pd.DataFrame(), pd.DataFrame(), 0.0
 
 
@@ -595,10 +692,30 @@ def render():
                 st.error("❌ No se pudieron descargar datos.")
                 st.stop()
             
+            # Debug: Mostrar info de datos descargados
+            with st.expander("🔍 Debug: Información de datos descargados", expanded=False):
+                st.write(f"Shape de datos: {raw_data.shape}")
+                st.write(f"Columnas: {list(raw_data.columns)[:10]}...")
+                st.write(f"Índice de fechas: {raw_data.index[0]} a {raw_data.index[-1]}")
+                if isinstance(raw_data.columns, pd.MultiIndex):
+                    st.write("Estructura MultiIndex detectada")
+                    st.write(f"Niveles: {raw_data.columns.names}")
+            
             results, sector_data, spy_perf = engine.calculate_rs_metrics(raw_data)
             
             if results.empty:
                 st.warning("⚠️ No se obtuvieron resultados.")
+                st.error("""
+                **Posibles causas:**
+                1. El mercado está cerrado y no hay datos recientes
+                2. Problemas de conexión con Yahoo Finance
+                3. Los datos descargados no contienen la información necesaria
+                
+                **Intenta:**
+                - Recargar la página
+                - Verificar la conexión a internet
+                - Revisar el panel de debug arriba para ver qué datos se descargaron
+                """)
             else:
                 st.session_state.last_results = results
                 st.session_state.last_sector_data = sector_data

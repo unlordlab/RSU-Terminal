@@ -475,10 +475,16 @@ def get_clock_times():
 # Control de acceso REAL usando auth.py de modules
 if not auth_module.login():
     st.stop()
-
-# Inicializamos el motor del algoritmo RS/RW en la sesion (solo si existen los módulos)
+    
+# Inicializamos el motor del algoritmo RS/RW en la sesion
 if 'rsrw_engine' not in st.session_state:
-    st.session_state.rsrw_engine = None
+    try:
+        from modules.rsrw import RSRWEngine
+        st.session_state.rsrw_engine = RSRWEngine()
+    except Exception as e:
+        st.error(f"Error inicializando RS/RW Engine: {e}")
+        st.session_state.rsrw_engine = None
+
 if 'algoritmo_engine' not in st.session_state:
     st.session_state.algoritmo_engine = None
 
@@ -825,3 +831,4 @@ elif menu == "👥 COMUNIDAD":
     comunidad_module.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer_module.render()
+

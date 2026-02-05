@@ -32,7 +32,5 @@ Si us plau, analitza {t} per a mi i proporciona el següent, de manera concisa i
 
 8. Anota qualsevol canvi en els preus objectiu dels analistes per a aquest ticker durant el període esmentat. Dona-li un format de fàcil revisió. Si és possible, utilitza taules per als esdeveniments i els moviments dels parells del sector. Respon amb un estil clar, concís i fàcil de llegir per utilitzar-lo en decisions d'inversió.
 
+En general, centra't en les raons per les quals l'acció pot fer un gran moviment en el futur: beneficis, vendes, previsions (guidance), llançaments de productes, millores/degradacions d'analistes, compres d'insiders (especialment del CEO/Fundador i de l'equip executiu), associacions i catalitzadors del sector o de notícies. Vull centrar-me en accions amb catalitzadors i temàtiques, ja que els catalitzadors són la causa dels grans moviments al mercat de valors. Formato markdown
 
-
-
-En general, centra't en les raons per les quals l'acció pot fer un gran moviment en el futur: beneficis, vendes, previsions (guidance), llançaments de productes, millores/degradacions d'analistes, compres d'insiders (especialment del CEO/Fundador i de l'equip executiu), associacions i catalitzadors del sector o de notícies. Vull centrar-me en accions amb catalitzadors i temàtiques, ja que els catalitzadors són la causa dels grans moviments al mercat de valors.

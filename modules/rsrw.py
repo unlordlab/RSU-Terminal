@@ -4,86 +4,49 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import os
 import time
 import traceback
 
-# =============================================================================
-# CONSTANTES GLOBALES
-# =============================================================================
-
+# CONSTANTES
 SECTOR_ETFS = {
-    "Tecnología": "XLK",
-    "Salud": "XLV",
-    "Financieros": "XLF",
-    "Consumo Discrecional": "XLY",
-    "Consumo Básico": "XLP",
-    "Industriales": "XLI",
-    "Energía": "XLE",
-    "Materiales": "XLB",
-    "Servicios Públicos": "XLU",
-    "Bienes Raíces": "XLRE",
-    "Comunicaciones": "XLC"
+    "Tecnología": "XLK", "Salud": "XLV", "Financieros": "XLF",
+    "Consumo Discrecional": "XLY", "Consumo Básico": "XLP",
+    "Industriales": "XLI", "Energía": "XLE", "Materiales": "XLB",
+    "Servicios Públicos": "XLU", "Bienes Raíces": "XLRE", "Comunicaciones": "XLC"
 }
 
 SECTOR_TICKERS = {
-    "Tecnología": [
-        "AAPL", "MSFT", "NVDA", "AVGO", "CSCO", "ADBE", "CRM", "ACN", "ORCL", "IBM",
-        "INTC", "QCOM", "TXN", "AMD", "AMAT", "ADI", "MU", "KLAC", "LRCX", "SNPS",
-        "CDNS", "PANW", "CRWD", "SNOW", "PLTR", "UBER", "ABNB", "SQ", "SHOP", "NET"
-    ],
-    "Salud": [
-        "LLY", "UNH", "JNJ", "MRK", "ABBV", "PFE", "TMO", "ABT", "DHR", "BMY",
-        "AMGN", "GILD", "VRTX", "REGN", "BIIB", "ZTS", "IQV", "DXCM", "EW", "ISRG",
-        "BSX", "SYK", "BDX", "CI", "HUM"
-    ],
-    "Financieros": [
-        "BRK-B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "BLK", "C",
-        "AXP", "PNC", "USB", "TFC", "COF", "SCHW", "SPGI", "MCO", "ICE", "CME",
-        "CB", "MMC", "PGR", "AIG", "MET"
-    ],
-    "Consumo Discrecional": [
-        "AMZN", "TSLA", "HD", "PG", "COST", "WMT", "KO", "PEP", "MCD", "NKE",
-        "DIS", "CMCSA", "LOW", "TJX", "SBUX", "BKNG", "MAR", "YUM", "DLTR", "DG",
-        "TGT", "NCLH", "RCL", "CCL", "LVS"
-    ],
-    "Consumo Básico": [
-        "PG", "KO", "PEP", "WMT", "COST", "PM", "MO", "MDLZ", "KHC", "GIS",
-        "K", "HSY", "MKC", "CPB", "CAG", "SJM", "LW", "HRL", "TSN", "BG"
-    ],
-    "Industriales": [
-        "CAT", "HON", "UNP", "UPS", "RTX", "BA", "GE", "LMT", "DE", "MMM",
-        "CSX", "NSC", "FDX", "ITW", "GD", "NOC", "EMR", "ETN", "PH", "CMI"
-    ],
-    "Energía": [
-        "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "WMB",
-        "KMI", "OKE", "MPLX", "EPD", "ET", "ENB", "TRP", "SU", "IMO", "CVE"
-    ],
-    "Materiales": [
-        "LIN", "APD", "SHW", "FCX", "NEM", "DOW", "ECL", "NUE", "VMC", "PPG",
-        "CF", "MOS", "FMC", "ALB", "EMN", "LYB", "PKG", "AVY", "IP", "BLL"
-    ],
-    "Servicios Públicos": [
-        "NEE", "SO", "DUK", "AEP", "SRE", "EXC", "XEL", "ED", "PEG", "WEC",
-        "ES", "AWK", "D", "CNP", "NI", "FE", "AEE", "CMS", "LNT", "ETR"
-    ],
-    "Bienes Raíces": [
-        "PLD", "AMT", "CCI", "EQIX", "PSA", "O", "WELL", "DLR", "SPG", "VICI",
-        "AVB", "EQR", "EXR", "UDR", "MAA", "BXP", "ARE", "HST", "VTR", "PEAK"
-    ],
-    "Comunicaciones": [
-        "GOOGL", "META", "NFLX", "VZ", "T", "TMUS", "CHTR", "CMCSA", "EA", "TTWO",
-        "MTCH", "IAC", "FOXA", "NWSA", "IPG", "OMC", "LYV", "TTWO", "NFLX", "DIS",
-        "WBD", "PARA", "NWSA", "FOXA", "GOOG"
-    ]
+    "Tecnología": ["AAPL", "MSFT", "NVDA", "AVGO", "CSCO", "ADBE", "CRM", "ACN", "ORCL", "IBM",
+                  "INTC", "QCOM", "TXN", "AMD", "AMAT", "ADI", "MU", "KLAC", "LRCX", "SNPS",
+                  "CDNS", "PANW", "CRWD", "SNOW", "PLTR", "UBER", "ABNB", "SQ", "SHOP", "NET"],
+    "Salud": ["LLY", "UNH", "JNJ", "MRK", "ABBV", "PFE", "TMO", "ABT", "DHR", "BMY",
+             "AMGN", "GILD", "VRTX", "REGN", "BIIB", "ZTS", "IQV", "DXCM", "EW", "ISRG",
+             "BSX", "SYK", "BDX", "CI", "HUM"],
+    "Financieros": ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "BLK", "C",
+                   "AXP", "PNC", "USB", "TFC", "COF", "SCHW", "SPGI", "MCO", "ICE", "CME",
+                   "CB", "MMC", "PGR", "AIG", "MET"],
+    "Consumo Discrecional": ["AMZN", "TSLA", "HD", "PG", "COST", "WMT", "KO", "PEP", "MCD", "NKE",
+                            "DIS", "CMCSA", "LOW", "TJX", "SBUX", "BKNG", "MAR", "YUM", "DLTR", "DG",
+                            "TGT", "NCLH", "RCL", "CCL", "LVS"],
+    "Consumo Básico": ["PG", "KO", "PEP", "WMT", "COST", "PM", "MO", "MDLZ", "KHC", "GIS",
+                      "K", "HSY", "MKC", "CPB", "CAG", "SJM", "LW", "HRL", "TSN", "BG"],
+    "Industriales": ["CAT", "HON", "UNP", "UPS", "RTX", "BA", "GE", "LMT", "DE", "MMM",
+                    "CSX", "NSC", "FDX", "ITW", "GD", "NOC", "EMR", "ETN", "PH", "CMI"],
+    "Energía": ["XOM", "CVX", "COP", "EOG", "SLB", "MPC", "VLO", "PSX", "OXY", "WMB",
+               "KMI", "OKE", "MPLX", "EPD", "ET", "ENB", "TRP", "SU", "IMO", "CVE"],
+    "Materiales": ["LIN", "APD", "SHW", "FCX", "NEM", "DOW", "ECL", "NUE", "VMC", "PPG",
+                  "CF", "MOS", "FMC", "ALB", "EMN", "LYB", "PKG", "AVY", "IP", "BLL"],
+    "Servicios Públicos": ["NEE", "SO", "DUK", "AEP", "SRE", "EXC", "XEL", "ED", "PEG", "WEC",
+                          "ES", "AWK", "D", "CNP", "NI", "FE", "AEE", "CMS", "LNT", "ETR"],
+    "Bienes Raíces": ["PLD", "AMT", "CCI", "EQIX", "PSA", "O", "WELL", "DLR", "SPG", "VICI",
+                     "AVB", "EQR", "EXR", "UDR", "MAA", "BXP", "ARE", "HST", "VTR", "PEAK"],
+    "Comunicaciones": ["GOOGL", "META", "NFLX", "VZ", "T", "TMUS", "CHTR", "CMCSA", "EA", "TTWO",
+                      "MTCH", "IAC", "FOXA", "NWSA", "IPG", "OMC", "LYV", "TTWO", "NFLX", "DIS",
+                      "WBD", "PARA", "NWSA", "FOXA", "GOOG"]
 }
-
-
-# =============================================================================
-# FUNCIONES DE DATOS
-# =============================================================================
 
 def get_sp500_comprehensive():
     """Obtiene S&P 500 con clasificación por sectores."""
@@ -98,8 +61,8 @@ def get_sp500_comprehensive():
             except:
                 pass
             return tickers, "Wikipedia"
-    except Exception as e:
-        st.warning(f"Wikipedia error: {e}")
+    except:
+        pass
     
     try:
         if os.path.exists(".sp500_cache.json"):
@@ -108,10 +71,9 @@ def get_sp500_comprehensive():
                 cached = data.get("tickers", [])
                 if len(cached) >= 490:
                     return cached, "Cache"
-    except Exception as e:
-        st.warning(f"Cache error: {e}")
+    except:
+        pass
     
-    # Fallback: usar tickers predefinidos
     all_tickers = []
     for sector, ticks in SECTOR_TICKERS.items():
         all_tickers.extend(ticks)
@@ -119,18 +81,11 @@ def get_sp500_comprehensive():
     unique = [x for x in all_tickers if not (x in seen or seen.add(x))]
     return unique, "Sectorial"
 
-
 def get_sector_for_ticker(ticker):
-    """Determina el sector de un ticker."""
     for sector, tickers in SECTOR_TICKERS.items():
         if ticker in tickers:
             return sector
     return "Otros"
-
-
-# =============================================================================
-# MOTOR DE ANÁLISIS
-# =============================================================================
 
 class RSRWEngine:
     def __init__(self):
@@ -143,6 +98,7 @@ class RSRWEngine:
             self.tickers, self.source = get_sp500_comprehensive()
         except Exception as e:
             st.error(f"Error cargando tickers: {e}")
+            # Fallback de emergencia
             self.tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA", "META", "BRK-B", "UNH", "JNJ"]
             self.source = "Emergency"
         
@@ -152,7 +108,6 @@ class RSRWEngine:
             self.tickers = ["AAPL", "MSFT", "NVDA"]
     
     def download_batch(self, symbols, max_retries=3):
-        """Descarga datos en lotes."""
         if not symbols:
             st.error("No hay símbolos para descargar")
             return None
@@ -172,14 +127,7 @@ class RSRWEngine:
                 try:
                     if idx > 0:
                         time.sleep(0.3)
-                    data = yf.download(
-                        batch,
-                        period="70d",
-                        interval="1d",
-                        progress=False,
-                        threads=True,
-                        timeout=30
-                    )
+                    data = yf.download(batch, period="70d", interval="1d", progress=False, threads=True, timeout=30)
                     if not data.empty:
                         all_data.append(data)
                         break
@@ -196,14 +144,12 @@ class RSRWEngine:
             return None
         
         try:
-            combined = pd.concat(all_data, axis=1)
-            return combined
+            return pd.concat(all_data, axis=1)
         except Exception as e:
             st.error(f"Error combinando datos: {e}")
             return None
     
     def calculate_rs_metrics(self, data, periods=[5, 20, 60]):
-        """Calcula métricas RS con análisis sectorial."""
         if data is None or data.empty:
             st.error("Datos vacíos")
             return pd.DataFrame(), pd.DataFrame(), 0.0
@@ -225,18 +171,13 @@ class RSRWEngine:
             
             close = close.loc[:, ~close.columns.duplicated()]
             
-            # Calcular RS sectorial
             sector_rs = {}
             for sector, etf in self.sector_etfs.items():
                 if etf in close.columns and self.benchmark in close.columns:
                     try:
                         sector_ret = (close[etf].iloc[-1] / close[etf].iloc[-20]) - 1
                         spy_ret = (close[self.benchmark].iloc[-1] / close[self.benchmark].iloc[-20]) - 1
-                        sector_rs[sector] = {
-                            'RS': sector_ret - spy_ret,
-                            'Return': sector_ret,
-                            'ETF': etf
-                        }
+                        sector_rs[sector] = {'RS': sector_ret - spy_ret, 'Return': sector_ret, 'ETF': etf}
                     except:
                         pass
             
@@ -246,7 +187,6 @@ class RSRWEngine:
                 st.error(f"Benchmark {self.benchmark} no encontrado")
                 return pd.DataFrame(), sector_df, 0.0
             
-            # Calcular métricas RS
             rs_data = {}
             valid_periods = []
             for period in periods:
@@ -277,7 +217,6 @@ class RSRWEngine:
                     sector_val = sector_rs[sector]['RS']
                     df.loc[ticker, 'RS_vs_Sector'] = ticker_rs - sector_val
             
-            # Calcular RVOL
             df['RVOL'] = 1.0
             if volume is not None:
                 try:
@@ -298,7 +237,6 @@ class RSRWEngine:
             except:
                 df['Precio'] = 0
             
-            # Calcular Score compuesto
             weights = {5: 0.5, 20: 0.3, 60: 0.2}
             weight_sum = sum(weights.get(p, 0.2) for p in valid_periods)
             
@@ -312,15 +250,10 @@ class RSRWEngine:
             else:
                 df['RS_Score'] = 0
             
-            # Filtrar benchmarks y ETFs
             to_drop = [self.benchmark] + list(self.sector_etfs.values())
             df = df[~df.index.isin(to_drop)]
+            df = df.replace([float('inf'), float('-inf')], float('nan')).dropna()
             
-            # Limpiar datos
-            df = df.replace([float('inf'), float('-inf')], float('nan'))
-            df = df.dropna()
-            
-            # Calcular rendimiento SPY
             spy_perf = 0
             try:
                 spy_col = close[self.benchmark]
@@ -336,13 +269,8 @@ class RSRWEngine:
             st.code(traceback.format_exc())
             return pd.DataFrame(), pd.DataFrame(), 0.0
 
-
-# =============================================================================
-# UI COMPLETA
-# =============================================================================
-
 def render():
-    """Interfaz completa con explicaciones exhaustivas."""
+    """Interfaz completa."""
     
     # CSS
     st.markdown("""
@@ -369,7 +297,6 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # Header
     st.markdown("""
     <div class="main-header">
         <h1 class="main-title"><span style="color: #00ffad;">🔍</span> Scanner RS/RW Pro</h1>
@@ -380,36 +307,48 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # ========== INICIALIZACIÓN SEGURA ==========
+    # ========== INICIALIZACIÓN DEL MOTOR ==========
     engine = None
     
-    # Intentar obtener o crear el motor
+    # Intentar recuperar de session_state o crear nuevo
     try:
         if 'rsrw_engine' not in st.session_state:
             with st.spinner("🚀 Inicializando motor..."):
                 new_engine = RSRWEngine()
-                st.session_state.rsrw_engine = new_engine
+                if new_engine is not None:
+                    st.session_state.rsrw_engine = new_engine
+                    st.success(f"✅ Motor inicializado: {len(new_engine.tickers)} tickers")
+                else:
+                    st.error("❌ El motor se creó como None")
+                    st.stop()
         
         engine = st.session_state.rsrw_engine
         
     except Exception as e:
-        st.error(f"❌ Error al inicializar: {e}")
+        st.error(f"❌ Error en inicialización: {e}")
         st.code(traceback.format_exc())
-        # Crear motor de emergencia
-        engine = RSRWEngine()
-        st.session_state.rsrw_engine = engine
+        
+        # Intentar crear motor de emergencia
+        try:
+            st.warning("🔄 Intentando crear motor de emergencia...")
+            engine = RSRWEngine()
+            st.session_state.rsrw_engine = engine
+        except Exception as e2:
+            st.error(f"❌ Error crítico: No se pudo crear el motor de emergencia: {e2}")
+            st.stop()
     
-    # Verificar que el motor es válido
+    # Verificación final del motor
     if engine is None:
-        st.error("❌ Error crítico: No se pudo crear el motor")
+        st.error("❌ Error crítico: El motor es None después de inicialización")
         st.stop()
     
-    # Verificar atributos con valores por defecto
+    # Verificar atributos esenciales
     if not hasattr(engine, 'tickers') or engine.tickers is None:
         engine.tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"]
+        st.warning("⚠️ Usando tickers de respaldo")
     
     if not hasattr(engine, 'source'):
-        engine.source = "Default"
+        engine.source = "Fallback"
     
     if not hasattr(engine, 'sector_etfs'):
         engine.sector_etfs = SECTOR_ETFS
@@ -422,60 +361,6 @@ def render():
         <span class="badge badge-info">📊 {num_tickers} tickers | {num_sectors} sectores | {engine.source}</span>
     </div>
     """, unsafe_allow_html=True)
-
-    # ========== GUÍA EDUCATIVA ==========
-    with st.expander("📚 Guía Completa: Dominando el Análisis RS/RW", expanded=False):
-        tab1, tab2, tab3 = st.tabs(["🎯 Conceptos", "📊 Estrategias", "⚠️ Riesgos"])
-        
-        with tab1:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("""
-                ### ¿Qué es la Fuerza Relativa (RS)?
-                
-                La Fuerza Relativa **NO es el RSI**. Es una medida de cuánto un activo 
-                está superando (o subperformando) al benchmark del mercado (S&P 500).
-                
-                **Fórmula:**
-                ```
-                RS = Retorno del Stock - Retorno del SPY
-                ```
-                
-                **Interpretación:**
-                - **RS = +5%**: El stock subió 5% más que el mercado
-                - **RS = -3%**: El stock subió 3% menos que el mercado
-                """)
-            with col2:
-                st.markdown("""
-                ### Relative Volume (RVOL)
-                
-                El RVOL mide si el volumen actual es anormal comparado con el promedio.
-                
-                **Umbrales clave:**
-                - **1.0 - 1.3**: Volumen normal
-                - **1.5 - 2.0**: 🔥 **Interés institucional**
-                - **>3.0**: ⚠️ **Parabolic move**
-                """)
-        
-        with tab2:
-            st.markdown("""
-            ### Estrategia de Trading con RS/RW
-            
-            **SETUP LARGO:**
-            1. SPY > 20EMA (tendencia alcista)
-            2. RS_Score > 3% + RVOL > 1.5
-            3. Sector con RS positivo
-            4. Entrada en pullback al VWAP
-            """)
-        
-        with tab3:
-            st.markdown("""
-            ### ⚠️ Falsos Positivos
-            
-            1. **RS alto sin volumen** → Evitar
-            2. **Solo RS 5d positivo** → Rebote técnico
-            3. **Stock fuerte en sector débil** → No es fuerza real
-            """)
 
     # ========== CONFIGURACIÓN ==========
     st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">⚙️ Configuración del Scanner</div>', unsafe_allow_html=True)
@@ -513,7 +398,7 @@ def render():
         st.markdown("<br>", unsafe_allow_html=True)
         scan_btn = st.button("🔥 ESCANEAR", use_container_width=True, type="primary")
 
-    # ========== EJECUCIÓN DEL SCAN ==========
+    # ========== EJECUCIÓN ==========
     if scan_btn:
         if num_tickers == 0:
             st.error("❌ No hay tickers disponibles.")
@@ -626,7 +511,7 @@ def render():
                         
                         st.plotly_chart(sector_fig, use_container_width=True)
 
-                    # Tablas de resultados
+                    # Resultados
                     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
                     st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🎯 Resultados Detallados</div>', unsafe_allow_html=True)
                     

@@ -79,7 +79,7 @@ def get_sp500_comprehensive():
             except:
                 pass
             return tickers, "Wikipedia"
-    except Exception as e:
+    except:
         pass
     
     try:

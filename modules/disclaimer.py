@@ -160,7 +160,7 @@ def render():
         
         .footer-section {
             margin-top: 40px;
-            padding: 30px;
+            padding: 40px 30px;
             background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
             border-radius: 12px;
             border: 1px solid #2a3f5f;
@@ -177,15 +177,38 @@ def render():
             color: white;
             font-size: 1.1rem;
             font-weight: 600;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .footer-text-container {
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
         }
         
         .footer-text {
-            color: #888;
-            font-size: 0.9rem;
-            line-height: 1.7;
-            max-width: 700px;
-            margin: 0 auto;
+            color: #ccc;
+            font-size: 0.95rem;
+            line-height: 1.8;
+            margin: 0;
+            text-align: center;
+        }
+        
+        .footer-highlight {
+            color: #f23645;
+            font-weight: 600;
+        }
+        
+        .footer-divider {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid #2a3f5f;
+        }
+        
+        .footer-copyright {
+            color: #555;
+            font-size: 0.8rem;
+            margin: 0;
         }
         
         .risk-meter {
@@ -440,16 +463,18 @@ def render():
     # Divider
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     
-    # Footer con nota importante
+    # Footer con nota importante - CORREGIDO Y CENTRADO
     st.markdown("""
     <div class="footer-section">
         <div class="footer-icon">📜</div>
         <h3 class="footer-title">Nota Importante</h3>
-        <p class="footer-text">
-            Al permanecer en esta comunidad y utilizar nuestro contenido, declaras comprender y aceptar los riesgos inherentes al trading y <strong style="color: #f23645;">liberas a RSU de cualquier responsabilidad legal o financiera</strong>.
-        </p>
-        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #2a3f5f;">
-            <p style="color: #555; font-size: 0.8rem; margin: 0;">
+        <div class="footer-text-container">
+            <p class="footer-text">
+                Al permanecer en esta comunidad y utilizar nuestro contenido, declaras comprender y aceptar los riesgos inherentes al trading y <span class="footer-highlight">liberas a RSU de cualquier responsabilidad legal o financiera</span>.
+            </p>
+        </div>
+        <div class="footer-divider">
+            <p class="footer-copyright">
                 © 2025 RSU Trading Community • Última actualización: Febrero 2025
             </p>
         </div>

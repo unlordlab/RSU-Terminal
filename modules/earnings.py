@@ -1,4 +1,3 @@
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -547,3 +546,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

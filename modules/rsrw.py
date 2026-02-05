@@ -1,3 +1,4 @@
+
 # modules/rsrw.py
 import streamlit as st
 import yfinance as yf
@@ -129,12 +130,12 @@ class RSRWEngine:
         self.tickers = list(dict.fromkeys(self.tickers))
         
     def download_batch(self, symbols, max_retries=3):
-        """Descarga datos en lotes."""
+        """Descarga datos en lotes con manejo mejorado de MultiIndex."""
         all_data = []
         symbols = list(dict.fromkeys(symbols))
         
-        # IMPORTANTE: Incluir SPY y ETFs de sector en la lista de descarga
-        download_symbols = symbols + [self.benchmark] + list(self.sector_etfs.values())
+        # IMPORTANTE: Incluir SPY y ETFs de sector PRIMERO para asegurar que se descarguen
+        download_symbols = [self.benchmark] + list(self.sector_etfs.values()) + symbols
         download_symbols = list(dict.fromkeys(download_symbols))  # Eliminar duplicados
         
         batch_size = 50
@@ -181,10 +182,12 @@ class RSRWEngine:
             # Concatenar a lo largo del eje de columnas (axis=1)
             combined = pd.concat(all_data, axis=1)
             
-            # Manejar columnas duplicadas - mantener la primera ocurrencia
+            # Manejar columnas duplicadas de forma más robusta
             if isinstance(combined.columns, pd.MultiIndex):
-                # Para MultiIndex, verificar duplicados en el primer nivel (los tickers)
-                combined = combined.loc[:, ~combined.columns.get_level_values(0).duplicated()]
+                # Para MultiIndex, obtener tickers únicos manteniendo el orden
+                tickers = combined.columns.get_level_values(1)
+                unique_mask = ~pd.Series(tickers).duplicated().values
+                combined = combined.loc[:, unique_mask]
             else:
                 combined = combined.loc[:, ~combined.columns.duplicated()]
             
@@ -198,7 +201,7 @@ class RSRWEngine:
             return None
     
     def calculate_rs_metrics(self, data, periods=[5, 20, 60]):
-        """Calcula métricas RS con análisis sectorial."""
+        """Calcula métricas RS con análisis sectorial y manejo robusto de datos."""
         
         if data is None or data.empty:
             st.error("Datos vacíos recibidos")
@@ -230,6 +233,31 @@ class RSRWEngine:
             # Asegurar que close es DataFrame
             if isinstance(close, pd.Series):
                 close = close.to_frame()
+            
+            # Verificar que SPY está en los datos - SI NO, DESCARGARLO POR SEPARADO
+            if self.benchmark not in close.columns:
+                st.warning(f"⚠️ {self.benchmark} no encontrado en datos batch. Descargando por separado...")
+                try:
+                    spy_data = yf.download(self.benchmark, period="70d", interval="1d", progress=False)
+                    if not spy_data.empty and 'Close' in spy_data.columns:
+                        close[self.benchmark] = spy_data['Close']
+                        st.success(f"✅ {self.benchmark} descargado correctamente")
+                    else:
+                        st.error(f"❌ No se pudo descargar {self.benchmark}")
+                        return pd.DataFrame(), pd.DataFrame(), 0.0
+                except Exception as spy_err:
+                    st.error(f"❌ Error descargando {self.benchmark}: {str(spy_err)}")
+                    return pd.DataFrame(), pd.DataFrame(), 0.0
+            
+            # Verificar que los ETFs de sector están presentes, si no, descargarlos
+            for sector, etf in self.sector_etfs.items():
+                if etf not in close.columns:
+                    try:
+                        etf_data = yf.download(etf, period="70d", interval="1d", progress=False)
+                        if not etf_data.empty and 'Close' in etf_data.columns:
+                            close[etf] = etf_data['Close']
+                    except:
+                        pass
             
             # Eliminar columnas duplicadas manteniendo la primera
             close = close.loc[:, ~close.columns.duplicated(keep='first')]
@@ -263,11 +291,6 @@ class RSRWEngine:
                             continue
             
             sector_df = pd.DataFrame(sector_rs).T if sector_rs else pd.DataFrame()
-            
-            # Verificar que el benchmark existe
-            if self.benchmark not in close.columns:
-                st.error(f"Benchmark {self.benchmark} no encontrado en datos descargados")
-                return pd.DataFrame(), sector_df, 0.0
             
             # Calcular métricas RS para cada período
             rs_data = {}
@@ -435,6 +458,21 @@ def render():
         .help-box { background: linear-gradient(135deg, rgba(41,98,255,0.1) 0%, rgba(0,255,173,0.05) 100%); border-left: 3px solid #00ffad; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; }
         .help-title { color: #00ffad; font-weight: bold; font-size: 13px; margin-bottom: 5px; }
         .help-text { color: #aaa; font-size: 12px; line-height: 1.5; }
+        /* Estilo discreto para el botón */
+        .scan-button-container {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #1a1e26;
+        }
+        .stButton > button[kind="secondary"] {
+            background-color: transparent !important;
+            border: 1px solid #00ffad !important;
+            color: #00ffad !important;
+            font-weight: normal !important;
+        }
+        .stButton > button[kind="secondary"]:hover {
+            background-color: rgba(0, 255, 173, 0.1) !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -634,7 +672,7 @@ def render():
         **Recomendación general:** RVOL 1.2-1.5 + RS 3% es el sweet spot para la mayoría de traders.
         """)
     
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
+    c1, c2, c3 = st.columns(3)
     
     with c1:
         st.markdown("""
@@ -675,9 +713,12 @@ def render():
         """, unsafe_allow_html=True)
         top_n = st.slider("Top N", 10, 50, 20, 5, label_visibility="collapsed")
     
-    with c4:
-        st.markdown("<br>", unsafe_allow_html=True)
-        scan_btn = st.button("🔥 ESCANEAR", use_container_width=True, type="primary")
+    # Botón de escanear discreto abajo
+    st.markdown('<div class="scan-button-container">', unsafe_allow_html=True)
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn2:
+        scan_btn = st.button("🔍 Escanear Mercado", use_container_width=True, type="secondary")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Ejecución del scan
     if scan_btn:
@@ -700,6 +741,13 @@ def render():
                 if isinstance(raw_data.columns, pd.MultiIndex):
                     st.write("Estructura MultiIndex detectada")
                     st.write(f"Niveles: {raw_data.columns.names}")
+                # Mostrar si SPY está presente
+                if isinstance(raw_data.columns, pd.MultiIndex):
+                    tickers_in_data = raw_data.columns.get_level_values(1).unique().tolist()
+                else:
+                    tickers_in_data = raw_data.columns.tolist()
+                st.write(f"Tickers descargados: {len(tickers_in_data)}")
+                st.write(f"SPY presente: {'SPY' in tickers_in_data}")
             
             results, sector_data, spy_perf = engine.calculate_rs_metrics(raw_data)
             

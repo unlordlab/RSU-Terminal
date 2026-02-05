@@ -623,7 +623,7 @@ def render():
             
             st.markdown("""
             <div style="text-align: center; color: #444; font-size: 11px; margin-top: 30px;">
-                Datos: Yahoo Finance | Análisis: Capyfin IA
+                Datos: Yahoo Finance 
             </div>
             """, unsafe_allow_html=True)
 

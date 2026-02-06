@@ -4,77 +4,74 @@ import streamlit.components.v1 as components
 from datetime import datetime, timedelta
 
 def render():
-    # CSS Global - Simplificado y específico
+    # CSS CRÍTICO: Aislar completamente de animaciones globales del sidebar
     st.markdown("""
     <style>
-        .stApp {
-            background-color: #0c0e12;
+        /* FORZAR reset de transformaciones en el contenido principal */
+        .main [data-testid="stVerticalBlock"] > div[class*="element-container"] {
+            transform: none !important;
+            transition: none !important;
+            animation: none !important;
         }
         
-        /* Estilos específicos para elementos, no containers */
-        .badge-buy {
-            background-color: rgba(0, 255, 173, 0.15);
-            color: #00ffad;
-            border: 1px solid #00ffad44;
+        /* Asegurar que las imágenes no tengan transformaciones */
+        .main img {
+            transform: none !important;
+            transition: opacity 0.2s ease !important;
+        }
+        
+        /* Badges estáticos sin animaciones */
+        .badge-buy, .badge-hold, .badge-sell, .badge-new {
+            display: inline-block;
             padding: 4px 10px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: bold;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transform: none !important;
+            animation: none !important;
+        }
+        
+        .badge-buy {
+            background-color: rgba(0, 255, 173, 0.15);
+            color: #00ffad;
+            border: 1px solid #00ffad44;
         }
         
         .badge-hold {
             background-color: rgba(255, 152, 0, 0.15);
             color: #ff9800;
             border: 1px solid #ff980044;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
         }
         
         .badge-sell {
             background-color: rgba(242, 54, 69, 0.15);
             color: #f23645;
             border: 1px solid #f2364544;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
         }
         
         .badge-new {
             background-color: rgba(0, 150, 255, 0.15);
             color: #0096ff;
             border: 1px solid #0096ff44;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 150, 255, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(0, 150, 255, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 150, 255, 0); }
         }
         
         .tag {
-            background: #1a1e26;
-            color: #888;
-            border: 1px solid #2a2e36;
+            display: inline-block;
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 10px;
             font-weight: 600;
             margin-right: 4px;
+            background: #1a1e26;
+            color: #888;
+            border: 1px solid #2a2e36;
+            transform: none !important;
         }
         
-        .stButton > button {
+        /* Botones sin transformaciones */
+        .main .stButton > button {
             width: 100%;
             background-color: #0c0e12 !important;
             color: #00ffad !important;
@@ -85,24 +82,46 @@ def render():
             font-size: 12px !important;
             text-transform: uppercase !important;
             letter-spacing: 0.5px !important;
+            transform: none !important;
+            transition: all 0.2s ease !important;
         }
         
-        .stButton > button:hover {
+        .main .stButton > button:hover {
             background-color: #00ffad !important;
             color: #0c0e12 !important;
             box-shadow: 0 0 15px rgba(0, 255, 173, 0.3) !important;
+            transform: none !important;
         }
         
-        .back-button button {
+        .main .back-button button {
             background-color: #1a1e26 !important;
             color: white !important;
             border: 1px solid #444 !important;
+            transform: none !important;
         }
         
-        .back-button button:hover {
+        .main .back-button button:hover {
             background-color: #f23645 !important;
             color: white !important;
             border-color: #f23645 !important;
+            transform: none !important;
+        }
+        
+        /* Cards sin transformaciones */
+        .tesis-card {
+            background: #11141a;
+            border: 1px solid #1a1e26;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            transform: none !important;
+            transition: box-shadow 0.2s ease !important;
+        }
+        
+        .tesis-card:hover {
+            box-shadow: 0px 0px 15px rgba(0, 255, 173, 0.1);
+            border-color: #00ffad44;
+            transform: none !important;
         }
         
         .metric-card {
@@ -111,17 +130,16 @@ def render():
             border-radius: 8px;
             padding: 20px;
             text-align: center;
-        }
-        
-        /* Fix específico para sidebar - evitar que se mueva */
-        [data-testid="stSidebar"] > div:first-child {
-            width: 100% !important;
             transform: none !important;
-            transition: none !important;
         }
         
-        [data-testid="stSidebar"] .stMarkdown {
-            transition: none !important;
+        /* Forzar color de fondo */
+        .stApp {
+            background-color: #0c0e12;
+        }
+        
+        .main {
+            background-color: #0c0e12;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -194,7 +212,8 @@ def render():
                 orden_seleccionado = st.selectbox("Ordenar por:", list(orden_opciones.keys()))
                 
                 st.markdown("---")
-                if st.button("📥 Exportar CSV"):
+                export_btn = st.button("📥 Exportar CSV")
+                if export_btn:
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button(label="Descargar datos", data=csv, file_name=f"tesis_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
 
@@ -280,7 +299,9 @@ def render():
                                 badge_class = "badge-hold"
                                 badge_text = "HOLD"
                             
-                            # Card usando columnas de Streamlit (sin containers anidados)
+                            # Card container con clase específica
+                            st.markdown(f'<div class="tesis-card">', unsafe_allow_html=True)
+                            
                             # Imagen
                             img_url = str(row.get('imagenencabezado', '')).strip()
                             
@@ -292,7 +313,7 @@ def render():
                             else:
                                 st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
                             
-                            # Badges en una fila
+                            # Badges
                             badge_cols = st.columns([1, 1, 2])
                             with badge_cols[0]:
                                 st.markdown(f'<span class="{badge_class}">{badge_text}</span>', unsafe_allow_html=True)
@@ -300,9 +321,9 @@ def render():
                                 if es_nuevo:
                                     st.markdown('<span class="badge-new">NEW</span>', unsafe_allow_html=True)
                             
-                            # Info con estilos inline simples
+                            # Info
                             st.markdown(f"""
-                            <div style="margin-top:10px;">
+                            <div style="padding:0 15px; margin-top:10px;">
                                 <div style="color:#00ffad; font-size:1.2rem; font-weight:bold;">{ticker}</div>
                                 <div style="color:#888; font-size:0.85rem;">{nombre}</div>
                             </div>
@@ -315,19 +336,21 @@ def render():
                                     tags_html += f'<span class="tag">{sector}</span>'
                                 if autor:
                                     tags_html += f'<span class="tag">👤 {autor}</span>'
-                                st.markdown(f'<div style="margin-top:8px;">{tags_html}</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div style="padding:0 15px; margin-top:8px;">{tags_html}</div>', unsafe_allow_html=True)
                             
                             # Fecha
-                            st.markdown(f'<div style="color:#555; font-size:0.75rem; font-family:monospace; margin-top:8px;">📅 {fecha}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="padding:0 15px; color:#555; font-size:0.75rem; font-family:monospace; margin-top:8px;">📅 {fecha}</div>', unsafe_allow_html=True)
                             
                             # Botón
+                            st.markdown('<div style="padding:15px;">', unsafe_allow_html=True)
                             if st.button(f"Ver Análisis →", key=f"btn_{ticker}_{idx}"):
                                 st.session_state.tesis_seleccionada = ticker
                                 st.session_state.vista_actual = "lector"
                                 st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
                             
-                            # Separador visual simple
-                            st.markdown("<hr style='border-color:#1a1e26; margin:20px 0;'>", unsafe_allow_html=True)
+                            # Cerrar card
+                            st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Vista LISTA
                 else:
@@ -406,7 +429,7 @@ def render():
     elif st.session_state.vista_actual == "lector":
         try:
             df = pd.read_csv(CSV_URL)
-            df.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in df.columns]
+            df.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in data.columns]
             
             sel_row = df[df['ticker'].str.lower() == st.session_state.tesis_seleccionada.lower()].iloc[0]
             

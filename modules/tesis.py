@@ -429,7 +429,7 @@ def render():
     elif st.session_state.vista_actual == "lector":
         try:
             df = pd.read_csv(CSV_URL)
-            df.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in data.columns]
+            df.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in df.columns]
             
             sel_row = df[df['ticker'].str.lower() == st.session_state.tesis_seleccionada.lower()].iloc[0]
             

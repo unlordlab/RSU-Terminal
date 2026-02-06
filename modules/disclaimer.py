@@ -47,10 +47,6 @@ def render():
         .header-icon { font-size: 48px; margin-bottom: 15px; }
         .header-title { color: white; font-size: 2.2rem; font-weight: 700; margin: 0 0 10px 0; letter-spacing: -0.5px; }
         .header-subtitle { color: #888; font-size: 1rem; font-weight: 400; margin: 0; }
-        
-        .section-wrapper {
-            margin-bottom: 40px;
-        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -71,7 +67,8 @@ def render():
     <html>
     <head>
     <style>
-        body { margin: 0; font-family: Inter, sans-serif; background: transparent; }
+        body { margin: 0; padding: 12px 0 0 0; font-family: Inter, sans-serif; background: transparent; }
+        .wrapper { padding: 0 20px; }
         .card {
             background: #11141a;
             border: 1px solid #1a1e26;
@@ -95,6 +92,7 @@ def render():
             font-weight: 700;
             font-size: 14px;
             box-shadow: 0 4px 12px rgba(0, 255, 173, 0.3);
+            z-index: 10;
         }
         .title {
             color: white;
@@ -164,28 +162,30 @@ def render():
     </style>
     </head>
     <body>
-    <div class="card">
-        <div class="number">1</div>
-        <h2 class="title">Carácter Educativo e Informativo</h2>
-        <p class="content">
-            Todo el contenido compartido en la comunidad <strong style="color: #00ffad;">RSU</strong>, incluyendo análisis de mercado, señales de trading, gráficos, videos y comentarios, tiene una finalidad <strong>estrictamente educativa e informativa</strong>.
-        </p>
-        <div class="highlight">
-            <div class="highlight-title">⚠️ Importante</div>
-            <p class="highlight-text">
-                Bajo ninguna circunstancia debe considerarse como asesoría financiera, recomendación de inversión o invitación a comprar/vender activos financieros.
+    <div class="wrapper">
+        <div class="card">
+            <div class="number">1</div>
+            <h2 class="title">Carácter Educativo e Informativo</h2>
+            <p class="content">
+                Todo el contenido compartido en la comunidad <strong style="color: #00ffad;">RSU</strong>, incluyendo análisis de mercado, señales de trading, gráficos, videos y comentarios, tiene una finalidad <strong>estrictamente educativa e informativa</strong>.
             </p>
-        </div>
-        <div class="badges">
-            <span class="badge badge-green">Educativo</span>
-            <span class="badge badge-orange">Informativo</span>
-            <span class="badge badge-red">No es Asesoría</span>
+            <div class="highlight">
+                <div class="highlight-title">⚠️ Importante</div>
+                <p class="highlight-text">
+                    Bajo ninguna circunstancia debe considerarse como asesoría financiera, recomendación de inversión o invitación a comprar/vender activos financieros.
+                </p>
+            </div>
+            <div class="badges">
+                <span class="badge badge-green">Educativo</span>
+                <span class="badge badge-orange">Informativo</span>
+                <span class="badge badge-red">No es Asesoría</span>
+            </div>
         </div>
     </div>
     </body>
     </html>
     """
-    components.html(html_section1, height=280, scrolling=False)
+    components.html(html_section1, height=300, scrolling=False)
 
     # SECCIÓN 2: Riesgo de Capital
     html_section2 = """
@@ -193,7 +193,8 @@ def render():
     <html>
     <head>
     <style>
-        body { margin: 0; font-family: Inter, sans-serif; background: transparent; }
+        body { margin: 0; padding: 12px 0 0 0; font-family: Inter, sans-serif; background: transparent; }
+        .wrapper { padding: 0 20px; }
         .card {
             background: #11141a;
             border: 1px solid #1a1e26;
@@ -217,6 +218,7 @@ def render():
             font-weight: 700;
             font-size: 14px;
             box-shadow: 0 4px 12px rgba(0, 255, 173, 0.3);
+            z-index: 10;
         }
         .title {
             color: white;
@@ -323,41 +325,43 @@ def render():
     </style>
     </head>
     <body>
-    <div class="card">
-        <div class="number">2</div>
-        <h2 class="title">Riesgo de Capital</h2>
-        <p class="content">
-            El trading de activos financieros conlleva un <strong style="color: #f23645;">alto nivel de riesgo</strong> y puede no ser adecuado para todos los inversores. Existe la posibilidad de perder una parte o la totalidad del capital invertido.
-        </p>
-        
-        <div class="risk-meter">
-            <span class="risk-label">Riesgo:</span>
-            <div class="risk-bar-container">
-                <div class="risk-bar">
-                    <div class="risk-marker"></div>
-                </div>
-            </div>
-            <span class="risk-value">ALTO</span>
-        </div>
-        
-        <div class="highlight-warning">
-            <div class="highlight-title-warning">🛑 Advertencia Crítica</div>
-            <p class="highlight-text">
-                <strong>Nunca operes con dinero que no puedas permitirte perder.</strong> El apalancamiento puede amplificar tanto ganancias como pérdidas.
+    <div class="wrapper">
+        <div class="card">
+            <div class="number">2</div>
+            <h2 class="title">Riesgo de Capital</h2>
+            <p class="content">
+                El trading de activos financieros conlleva un <strong style="color: #f23645;">alto nivel de riesgo</strong> y puede no ser adecuado para todos los inversores. Existe la posibilidad de perder una parte o la totalidad del capital invertido.
             </p>
-        </div>
-        
-        <div class="badges">
-            <span class="badge">Forex</span>
-            <span class="badge">Criptomonedas</span>
-            <span class="badge">Acciones</span>
-            <span class="badge">Futuros</span>
+            
+            <div class="risk-meter">
+                <span class="risk-label">Riesgo:</span>
+                <div class="risk-bar-container">
+                    <div class="risk-bar">
+                        <div class="risk-marker"></div>
+                    </div>
+                </div>
+                <span class="risk-value">ALTO</span>
+            </div>
+            
+            <div class="highlight-warning">
+                <div class="highlight-title-warning">🛑 Advertencia Crítica</div>
+                <p class="highlight-text">
+                    <strong>Nunca operes con dinero que no puedas permitirte perder.</strong> El apalancamiento puede amplificar tanto ganancias como pérdidas.
+                </p>
+            </div>
+            
+            <div class="badges">
+                <span class="badge">Forex</span>
+                <span class="badge">Criptomonedas</span>
+                <span class="badge">Acciones</span>
+                <span class="badge">Futuros</span>
+            </div>
         </div>
     </div>
     </body>
     </html>
     """
-    components.html(html_section2, height=380, scrolling=False)
+    components.html(html_section2, height=400, scrolling=False)
 
     # SECCIÓN 3: Responsabilidad Individual
     html_section3 = """
@@ -365,7 +369,8 @@ def render():
     <html>
     <head>
     <style>
-        body { margin: 0; font-family: Inter, sans-serif; background: transparent; }
+        body { margin: 0; padding: 12px 0 0 0; font-family: Inter, sans-serif; background: transparent; }
+        .wrapper { padding: 0 20px; }
         .card {
             background: #11141a;
             border: 1px solid #1a1e26;
@@ -389,6 +394,7 @@ def render():
             font-weight: 700;
             font-size: 14px;
             box-shadow: 0 4px 12px rgba(0, 255, 173, 0.3);
+            z-index: 10;
         }
         .title {
             color: white;
@@ -443,37 +449,39 @@ def render():
     </style>
     </head>
     <body>
-    <div class="card">
-        <div class="number">3</div>
-        <h2 class="title">Responsabilidad Individual</h2>
-        <p class="content">
-            Cada miembro de <strong style="color: #00ffad;">RSU</strong> es el <strong>único responsable</strong> de sus propias decisiones financieras y ejecuciones en el mercado. Los resultados pasados no garantizan rendimientos futuros.
-        </p>
-        
-        <div class="check-item">
-            <span class="check-icon">✓</span>
-            <span>Tú eres responsable de tus decisiones de trading</span>
-        </div>
-        <div class="check-item">
-            <span class="check-icon">✓</span>
-            <span>Realiza tu propio análisis antes de operar</span>
-        </div>
-        <div class="check-item">
-            <span class="check-icon">✓</span>
-            <span>Gestiona tu riesgo adecuadamente</span>
-        </div>
-        
-        <div class="highlight">
-            <div class="highlight-title">📋 Limitación de Responsabilidad</div>
-            <p class="highlight-text">
-                La comunidad y sus administradores <strong>no se hacen responsables</strong> de las pérdidas o daños económicos que puedan derivarse del uso de la información compartida.
+    <div class="wrapper">
+        <div class="card">
+            <div class="number">3</div>
+            <h2 class="title">Responsabilidad Individual</h2>
+            <p class="content">
+                Cada miembro de <strong style="color: #00ffad;">RSU</strong> es el <strong>único responsable</strong> de sus propias decisiones financieras y ejecuciones en el mercado. Los resultados pasados no garantizan rendimientos futuros.
             </p>
+            
+            <div class="check-item">
+                <span class="check-icon">✓</span>
+                <span>Tú eres responsable de tus decisiones de trading</span>
+            </div>
+            <div class="check-item">
+                <span class="check-icon">✓</span>
+                <span>Realiza tu propio análisis antes de operar</span>
+            </div>
+            <div class="check-item">
+                <span class="check-icon">✓</span>
+                <span>Gestiona tu riesgo adecuadamente</span>
+            </div>
+            
+            <div class="highlight">
+                <div class="highlight-title">📋 Limitación de Responsabilidad</div>
+                <p class="highlight-text">
+                    La comunidad y sus administradores <strong>no se hacen responsables</strong> de las pérdidas o daños económicos que puedan derivarse del uso de la información compartida.
+                </p>
+            </div>
         </div>
     </div>
     </body>
     </html>
     """
-    components.html(html_section3, height=360, scrolling=False)
+    components.html(html_section3, height=380, scrolling=False)
 
     # SECCIÓN 4: No somos Asesores
     html_section4 = """
@@ -481,7 +489,8 @@ def render():
     <html>
     <head>
     <style>
-        body { margin: 0; font-family: Inter, sans-serif; background: transparent; }
+        body { margin: 0; padding: 12px 0 0 0; font-family: Inter, sans-serif; background: transparent; }
+        .wrapper { padding: 0 20px; }
         .card {
             background: #11141a;
             border: 1px solid #1a1e26;
@@ -505,6 +514,7 @@ def render():
             font-weight: 700;
             font-size: 14px;
             box-shadow: 0 4px 12px rgba(0, 255, 173, 0.3);
+            z-index: 10;
         }
         .title {
             color: white;
@@ -545,24 +555,26 @@ def render():
     </style>
     </head>
     <body>
-    <div class="card">
-        <div class="number">4</div>
-        <h2 class="title">No somos Asesores Financieros</h2>
-        <p class="content">
-            Los administradores y moderadores de <strong style="color: #00ffad;">RSU</strong> <strong>no son asesores financieros titulados</strong> ni gestores de patrimonio. Somos traders y entusiastas del mercado compartiendo conocimiento.
-        </p>
-        
-        <div class="highlight-success">
-            <div class="highlight-title-success">👨‍💼 Recomendación Profesional</div>
-            <p class="highlight-text">
-                Te recomendamos encarecidamente que consultes con un <strong>profesional financiero certificado</strong> antes de tomar cualquier decisión de inversión significativa.
+    <div class="wrapper">
+        <div class="card">
+            <div class="number">4</div>
+            <h2 class="title">No somos Asesores Financieros</h2>
+            <p class="content">
+                Los administradores y moderadores de <strong style="color: #00ffad;">RSU</strong> <strong>no son asesores financieros titulados</strong> ni gestores de patrimonio. Somos traders y entusiastas del mercado compartiendo conocimiento.
             </p>
+            
+            <div class="highlight-success">
+                <div class="highlight-title-success">👨‍💼 Recomendación Profesional</div>
+                <p class="highlight-text">
+                    Te recomendamos encarecidamente que consultes con un <strong>profesional financiero certificado</strong> antes de tomar cualquier decisión de inversión significativa.
+                </p>
+            </div>
         </div>
     </div>
     </body>
     </html>
     """
-    components.html(html_section4, height=260, scrolling=False)
+    components.html(html_section4, height=280, scrolling=False)
 
     # Divider
     st.markdown("""
@@ -634,6 +646,6 @@ def render():
     </body>
     </html>
     """
-    components.html(html_footer, height=240, scrolling=False)
+    components.html(html_footer, height=260, scrolling=False)
 
     st.markdown('</div>', unsafe_allow_html=True)

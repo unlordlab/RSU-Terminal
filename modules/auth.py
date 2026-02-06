@@ -21,6 +21,18 @@ def get_logo_base64():
     return None
 
 def login():
+    # Configurar página SOLO para login (sin conflictos)
+    try:
+        st.set_page_config(
+            page_title="RSU Terminal - Login",
+            page_icon="🔐",
+            layout="centered",
+            initial_sidebar_state="collapsed",
+            menu_items={}
+        )
+    except:
+        pass  # Ya está configurada
+    
     # Inicialización
     if "auth" not in st.session_state:
         st.session_state["auth"] = False
@@ -51,18 +63,30 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS CON !IMPORTANT EN TODO
+    # CSS COMPLETAMENTE INDEPENDIENTE
     st.markdown("""
     <style>
-        /* RESET TOTAL */
-        #MainMenu, footer, header, .stDeployButton {display: none !important;}
+        /* RESET ABSOLUTO */
+        html, body, [data-testid="stAppViewContainer"], .stApp, .main, .block-container {
+            margin: 0 !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+        }
         
-        .stApp {
+        /* Ocultar TODO lo de Streamlit */
+        #MainMenu, footer, header, .stDeployButton, [data-testid="stHeader"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+        
+        /* Fondo */
+        body, .stApp, [data-testid="stAppViewContainer"] {
             background: #0c0e12 !important;
         }
         
-        /* CONTENEDOR PRINCIPAL - CENTRADO */
-        section.main > div {
+        /* Contenedor principal - CENTRADO PERFECTO */
+        .main .block-container {
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
@@ -72,37 +96,39 @@ def login():
         }
         
         /* TARJETA LOGIN */
-        section.main > div > div {
+        .main .element-container:first-child + .element-container,
+        .main > div > div > div {
             background: #11141a !important;
             border: 1px solid #1a1e26 !important;
             border-radius: 16px !important;
-            padding: 40px 50px !important;
-            max-width: 420px !important;
+            padding: 40px !important;
+            max-width: 400px !important;
             width: 100% !important;
+            margin: 0 auto !important;
         }
         
         /* LOGO */
         .logo-img {
-            width: 130px !important;
-            height: 130px !important;
+            width: 140px !important;
+            height: 140px !important;
             border-radius: 20px !important;
             margin: 0 auto 20px !important;
             display: block !important;
-            box-shadow: 0 10px 30px rgba(0, 255, 173, 0.2) !important;
+            box-shadow: 0 15px 40px rgba(0, 255, 173, 0.25) !important;
         }
         
         /* TÍTULOS */
         h1 {
             color: white !important;
-            font-size: 1.8rem !important;
+            font-size: 1.9rem !important;
             text-align: center !important;
-            letter-spacing: 3px !important;
+            letter-spacing: 4px !important;
             margin: 0 0 10px 0 !important;
         }
         
         h3 {
             color: #00ffad !important;
-            font-size: 0.95rem !important;
+            font-size: 1rem !important;
             text-align: center !important;
             margin: 0 0 30px 0 !important;
             font-weight: normal !important;
@@ -116,14 +142,15 @@ def login():
             letter-spacing: 1px !important;
         }
         
-        /* INPUT CONTAINER */
+        /* CONTENEDOR INPUT + BOTÓN */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             gap: 10px !important;
             align-items: flex-start !important;
+            margin-top: 8px !important;
         }
         
-        /* INPUT - SIN OJO INTERNO */
+        /* INPUT */
         div[data-testid="stTextInput"] {
             flex: 1 !important;
         }
@@ -135,25 +162,17 @@ def login():
         div[data-testid="stTextInput"] input {
             background: #0c0e12 !important;
             border: 1px solid #2a3f5f !important;
-            border-radius: 8px !important;
+            border-radius: 10px !important;
             color: white !important;
-            height: 48px !important;
+            height: 50px !important;
             font-size: 15px !important;
-            width: 100% !important;
         }
         
-        /* OCULTAR CUALQUIER OJO EN EL INPUT */
-        div[data-testid="stTextInput"] button,
-        div[data-testid="stTextInput"] [data-testid="stIcon"],
-        div[data-testid="stTextInput"] svg,
+        /* OCULTAR OJO INTERNO DE STREAMLIT */
+        button[kind="secondary"],
         .stTextInput button,
-        input[type="password"] + div,
-        input[type="text"] + div {
+        div[data-testid="stTextInput"] button {
             display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            width: 0 !important;
-            height: 0 !important;
         }
         
         /* BOTÓN OJO EXTERNO */
@@ -169,13 +188,13 @@ def login():
         div[data-testid="column"]:nth-of-type(2) button {
             background: #1a1e26 !important;
             border: 1px solid #2a3f5f !important;
-            border-radius: 8px !important;
+            border-radius: 10px !important;
             color: #888 !important;
-            width: 48px !important;
-            height: 48px !important;
+            width: 50px !important;
+            height: 50px !important;
             margin: 24px 0 0 0 !important;
             padding: 0 !important;
-            font-size: 1.1rem !important;
+            font-size: 1.2rem !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -191,13 +210,13 @@ def login():
             background: linear-gradient(90deg, #00ffad, #00d4aa) !important;
             color: #0c0e12 !important;
             border: none !important;
-            border-radius: 8px !important;
+            border-radius: 10px !important;
             font-weight: 700 !important;
-            font-size: 14px !important;
-            letter-spacing: 1.5px !important;
+            font-size: 15px !important;
+            letter-spacing: 2px !important;
             width: 100% !important;
-            height: 50px !important;
-            margin-top: 15px !important;
+            height: 52px !important;
+            margin-top: 20px !important;
         }
         
         /* FOOTER */
@@ -223,7 +242,7 @@ def login():
     if logo_b64:
         st.markdown(f'<img src="data:image/png;base64,{logo_b64}" class="logo-img">', unsafe_allow_html=True)
     else:
-        st.markdown('<div style="width:130px;height:130px;margin:0 auto 20px;background:linear-gradient(135deg,#00ffad,#00a8e8);border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:4rem;">🔐</div>', unsafe_allow_html=True)
+        st.markdown('<div style="width:140px;height:140px;margin:0 auto 20px;background:linear-gradient(135deg,#00ffad,#00a8e8);border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:4rem;">🔐</div>', unsafe_allow_html=True)
     
     # TÍTULOS
     st.markdown("<h1>RSU TERMINAL</h1>", unsafe_allow_html=True)
@@ -244,7 +263,7 @@ def login():
         )
     
     with c2:
-        if st.button("👁️", key="eye_btn"):
+        if st.button("👁️", key="eye"):
             st.session_state["show_password"] = not st.session_state["show_password"]
             st.rerun()
     
@@ -294,4 +313,5 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
+
 

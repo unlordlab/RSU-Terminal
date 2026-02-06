@@ -176,7 +176,7 @@ def login():
     st.markdown("**Contraseña de Acceso**")
     
     # Input + Botón ojo (SOLO UNO EXTERNO)
-    col1, col2 = st.columns([5, 1])
+    col1 = st.columns([5, 1])
     
     with col1:
         password = st.text_input(
@@ -233,6 +233,7 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
+
 
 
 

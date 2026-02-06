@@ -11,13 +11,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_logo_base64():
-    """Convierte el logo a base64 para mostrarlo correctamente"""
+    """Convierte el logo a base64"""
     try:
         if os.path.exists("assets/logo.png"):
             with open("assets/logo.png", "rb") as f:
                 return base64.b64encode(f.read()).decode()
-    except Exception as e:
-        logger.error(f"Error loading logo: {e}")
+    except:
+        pass
     return None
 
 def login():
@@ -53,313 +53,280 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS - SIN ESPACIOS, TODO CENTRADO
+    # CSS - ELIMINAR TODO ESPACIO SUPERIOR
     st.markdown("""
     <style>
-        /* RESET TOTAL */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        .main, .block-container {
-            padding: 0 !important;
+        /* RESET ABSOLUTO - ELIMINAR TODO ESPACIO */
+        html, body, [data-testid="stAppViewContainer"], .main, .block-container {
             margin: 0 !important;
+            padding: 0 !important;
             max-width: 100% !important;
         }
         
-        #MainMenu, footer, header, .stDeployButton {display: none !important;}
+        /* Ocultar elementos de Streamlit */
+        #MainMenu, footer, header, .stDeployButton, .stToolbar {
+            display: none !important;
+        }
         
-        [data-testid="stAppViewContainer"] {
+        /* Fondo */
+        body {
             background: #0c0e12;
         }
         
-        /* CONTENEDOR PRINCIPAL - TODO CENTRADO VERTICAL Y HORIZONTAL */
-        .login-container {
+        [data-testid="stAppViewContainer"] {
+            background: #0c0e12;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: auto;
+        }
+        
+        /* CONTENEDOR - SIN ESPACIO SUPERIOR */
+        .login-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             min-height: 100vh;
             width: 100%;
-            padding: 20px;
+            padding-top: 20px !important;
+            padding-bottom: 20px;
         }
         
-        /* TARJETA CENTRADA */
+        /* TARJETA */
         .login-card {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 16px;
-            width: 100%;
-            max-width: 420px;
-            padding: 40px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 400px;
+            padding: 30px;
+            margin-top: 0;
         }
         
-        /* LOGO - GRANDE Y CENTRADO */
-        .logo-box {
-            width: 200px;
-            height: 200px;
-            margin: 0 auto 30px;
+        /* LOGO - PRIMERO EN APARECER */
+        .logo-container {
+            width: 180px;
+            height: 180px;
+            margin: 0 auto 20px;
             background: linear-gradient(135deg, #00ffad 0%, #00a8e8 100%);
-            border-radius: 32px;
+            border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 20px 60px rgba(0, 255, 173, 0.3);
+            box-shadow: 0 15px 40px rgba(0, 255, 173, 0.3);
             overflow: hidden;
         }
         
-        .logo-box img {
+        .logo-container img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
         
-        .logo-emoji {
-            font-size: 6rem;
+        .logo-fallback {
+            font-size: 5rem;
         }
         
-        /* TEXTOS CENTRADOS */
+        /* TÍTULOS */
         .brand-title {
             color: white;
-            font-size: 2.2rem;
+            font-size: 1.8rem;
             font-weight: 700;
-            letter-spacing: 4px;
+            letter-spacing: 3px;
             text-align: center;
-            margin-bottom: 10px;
+            margin: 0 0 8px 0;
         }
         
         .brand-subtitle {
             color: #00ffad;
-            font-size: 1rem;
+            font-size: 0.9rem;
             text-align: center;
-            letter-spacing: 2px;
-            margin-bottom: 40px;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
         }
         
         /* FORMULARIO */
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
         .input-label {
             color: #888;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 8px;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
             display: block;
         }
         
-        /* INPUT STYLING */
-        .stTextInput > div {
+        /* INPUT */
+        div[data-testid="stTextInput"] {
             width: 100%;
         }
         
         .stTextInput > div > div > input {
             background: #0c0e12 !important;
             border: 1px solid #2a3f5f !important;
-            border-radius: 10px !important;
+            border-radius: 8px !important;
             color: white !important;
-            padding: 16px 20px !important;
-            font-size: 16px !important;
-            width: 100% !important;
+            padding: 14px 16px !important;
+            font-size: 15px !important;
+            height: 50px !important;
         }
         
-        .stTextInput > div > div > input:focus {
-            border-color: #00ffad !important;
-            box-shadow: 0 0 0 3px rgba(0, 255, 173, 0.1) !important;
+        /* COLUMNA DEL BOTÓN OJO */
+        div[data-testid="column"]:nth-child(2) {
+            display: flex !important;
+            align-items: flex-end !important;
+            padding-bottom: 0 !important;
         }
         
-        /* BOTÓN TOGGLE OJO - POSICIÓN CORREGIDA */
-        div[data-testid="column"] {
-            display: flex;
-            align-items: flex-end;
-        }
-        
-        div[data-testid="column"] button {
+        div[data-testid="column"]:nth-child(2) button {
             background: #1a1e26 !important;
             border: 1px solid #2a3f5f !important;
-            border-radius: 10px !important;
+            border-radius: 8px !important;
             color: #888 !important;
-            height: 54px !important;
-            width: 54px !important;
+            height: 50px !important;
+            width: 50px !important;
             margin: 0 !important;
             padding: 0 !important;
-            font-size: 1.2rem !important;
+            font-size: 1.1rem !important;
         }
         
-        div[data-testid="column"] button:hover {
-            border-color: #00ffad !important;
-            color: #00ffad !important;
-        }
-        
-        /* BOTÓN PRINCIPAL - GRANDE Y ANCHO COMPLETO */
+        /* BOTÓN PRINCIPAL */
         .stButton > button {
             width: 100% !important;
             background: linear-gradient(90deg, #00ffad 0%, #00d4aa 100%) !important;
             color: #0c0e12 !important;
             border: none !important;
-            border-radius: 10px !important;
-            padding: 18px !important;
+            border-radius: 8px !important;
+            padding: 16px !important;
             font-weight: 700 !important;
-            font-size: 15px !important;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-top: 10px !important;
-            height: auto !important;
-        }
-        
-        .stButton > button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 255, 173, 0.4) !important;
+            font-size: 14px !important;
+            letter-spacing: 1.5px;
+            margin-top: 15px !important;
         }
         
         /* ERROR */
         .error-box {
             background: rgba(242, 54, 69, 0.1);
             border: 1px solid rgba(242, 54, 69, 0.3);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-top: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .error-text {
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-top: 15px;
             color: #f23645;
             font-size: 13px;
         }
         
         /* FOOTER */
-        .login-footer {
+        .footer {
             text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
+            margin-top: 25px;
+            padding-top: 15px;
             border-top: 1px solid #1a1e26;
         }
         
-        .secure-text {
+        .footer-text {
             color: #00ffad;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
-            text-transform: uppercase;
             letter-spacing: 1px;
         }
         
-        .ip-text {
+        .footer-sub {
             color: #555;
             font-size: 10px;
-            margin-top: 8px;
+            margin-top: 5px;
         }
     </style>
     """, unsafe_allow_html=True)
 
-    # Obtener logo en base64
+    # Obtener logo
     logo_b64 = get_logo_base64()
+
+    # Layout - CENTRADO, SIN MÁRGENES SUPERIORES
+    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
     
-    # Layout centrado con columnas de ancho fijo
-    left_col, center_col, right_col = st.columns([1, 3, 1])
-    
-    with center_col:
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        
-        # LOGO
-        if logo_b64:
-            st.markdown(f"""
-                <div class="logo-box">
-                    <img src="data:image/png;base64,{logo_b64}" alt="RSU Logo">
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-                <div class="logo-box">
-                    <span class="logo-emoji">🔐</span>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # TÍTULOS
-        st.markdown("""
-            <div class="brand-title">RSU TERMINAL</div>
-            <div class="brand-subtitle">Sistema de Acceso Seguro</div>
-        """, unsafe_allow_html=True)
-        
-        # FORMULARIO
-        st.markdown('<div class="form-group">', unsafe_allow_html=True)
-        st.markdown('<label class="input-label">Contraseña de Acceso</label>', unsafe_allow_html=True)
-        
-        # Input + Toggle en columnas
-        input_col, toggle_col = st.columns([5, 1])
-        
-        with input_col:
-            password = st.text_input(
-                "",
-                type="text" if st.session_state["show_password"] else "password",
-                placeholder="Ingrese su contraseña...",
-                label_visibility="collapsed"
-            )
-        
-        with toggle_col:
-            if st.button("👁️" if not st.session_state["show_password"] else "🙈", key="toggle"):
-                st.session_state["show_password"] = not st.session_state["show_password"]
-                st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # BOTÓN ACCESO
-        if st.button("🔓 Desbloquear Terminal"):
-            if not password:
-                st.markdown("""
-                    <div class="error-box">
-                        <span style="color: #f23645; font-size: 16px;">⚠️</span>
-                        <span class="error-text">Ingrese una contraseña</span>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                # Hash y verificación
-                pwd_hash = hashlib.sha256(password.encode()).hexdigest()
-                real_pwd = st.secrets.get("APP_PASSWORD", "RSU2026")
-                real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
-                
-                if pwd_hash == real_hash:
-                    st.session_state["auth"] = True
-                    st.session_state["login_attempts"] = 0
-                    st.session_state["last_activity"] = datetime.now()
-                    
-                    logger.info("[LOGIN SUCCESS]")
-                    st.success("✅ Acceso concedido")
-                    time.sleep(0.3)
-                    st.rerun()
-                else:
-                    st.session_state["login_attempts"] += 1
-                    remaining = 5 - st.session_state["login_attempts"]
-                    
-                    logger.warning(f"[LOGIN FAILED] Attempt: {st.session_state['login_attempts']}")
-                    
-                    if st.session_state["login_attempts"] >= 5:
-                        st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
-                        st.error("⏱️ Cuenta bloqueada 15 minutos")
-                    else:
-                        st.markdown("""
-                            <div class="error-box">
-                                <span style="color: #f23645; font-size: 16px;">⚠️</span>
-                                <span class="error-text">Contraseña incorrecta</span>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        if remaining <= 2:
-                            st.warning(f"⚠️ {remaining} intentos restantes")
-        
-        # FOOTER
-        st.markdown("""
-            <div class="login-footer">
-                <div class="secure-text">🔒 Conexión Segura SSL</div>
-                <div class="ip-text">© 2026 RSU Terminal v2.0</div>
+    # LOGO (PRIMERO, SIN ESPACIO ARRIBA)
+    if logo_b64:
+        st.markdown(f"""
+            <div class="logo-container">
+                <img src="data:image/png;base64,{logo_b64}" alt="RSU">
             </div>
         """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <div class="logo-container">
+                <span class="logo-fallback">🔐</span>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # TÍTULOS
+    st.markdown("""
+        <div class="brand-title">RSU TERMINAL</div>
+        <div class="brand-subtitle">Sistema de Acceso Seguro</div>
+    """, unsafe_allow_html=True)
+    
+    # FORMULARIO
+    st.markdown('<div class="input-label">Contraseña de Acceso</div>', unsafe_allow_html=True)
+    
+    # Input + Toggle
+    col1, col2 = st.columns([5, 1])
+    
+    with col1:
+        password = st.text_input(
+            "",
+            type="text" if st.session_state["show_password"] else "password",
+            placeholder="Ingrese su contraseña...",
+            label_visibility="collapsed"
+        )
+    
+    with col2:
+        if st.button("👁️" if not st.session_state["show_password"] else "🙈"):
+            st.session_state["show_password"] = not st.session_state["show_password"]
+            st.rerun()
+    
+    # Botón acceso
+    if st.button("🔓 Desbloquear Terminal"):
+        if not password:
+            st.markdown('<div class="error-box">⚠️ Ingrese una contraseña</div>', unsafe_allow_html=True)
+        else:
+            pwd_hash = hashlib.sha256(password.encode()).hexdigest()
+            real_pwd = st.secrets.get("APP_PASSWORD", "RSU2026")
+            real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
+            
+            if pwd_hash == real_hash:
+                st.session_state["auth"] = True
+                st.session_state["login_attempts"] = 0
+                st.session_state["last_activity"] = datetime.now()
+                logger.info("[LOGIN SUCCESS]")
+                st.success("✅ Acceso concedido")
+                time.sleep(0.3)
+                st.rerun()
+            else:
+                st.session_state["login_attempts"] += 1
+                remaining = 5 - st.session_state["login_attempts"]
+                logger.warning(f"[LOGIN FAILED] {st.session_state['login_attempts']}")
+                
+                if st.session_state["login_attempts"] >= 5:
+                    st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
+                    st.error("⏱️ Cuenta bloqueada 15 minutos")
+                else:
+                    st.markdown('<div class="error-box">⚠️ Contraseña incorrecta</div>', unsafe_allow_html=True)
+                    if remaining <= 2:
+                        st.warning(f"⚠️ {remaining} intentos restantes")
+    
+    # Footer
+    st.markdown("""
+        <div class="footer">
+            <div class="footer-text">🔒 CONEXIÓN SEGURA SSL</div>
+            <div class="footer-sub">© 2026 RSU Terminal v2.0</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     return False
 
@@ -380,5 +347,4 @@ def require_auth():
         st.error("🔒 Acceso denegado")
         login()
         st.stop()
-    
     st.session_state["last_activity"] = datetime.now()

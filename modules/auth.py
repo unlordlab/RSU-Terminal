@@ -176,18 +176,17 @@ def login():
     st.markdown("**Contraseña de Acceso**")
     
     # Input + Botón ojo (SOLO UNO EXTERNO)
-    col1 = st.columns([5, 1])
+    col1, col2 = st.columns([5, 1])
     
     with col1:
         password = st.text_input(
             "",
             type="text" if st.session_state["show_password"] else "password",
-            placeholder="Ingrese su contraseña...",
+            placeholder="Ingrese contraseña.",
             label_visibility="collapsed"
         )
     
-        
-    # BOTÓN ACCESO
+            # BOTÓN ACCESO
     if st.button("🔓 DESBLOQUEAR TERMINAL"):
         if not password:
             st.error("⚠️ Ingrese una contraseña")
@@ -233,6 +232,7 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
+
 
 
 

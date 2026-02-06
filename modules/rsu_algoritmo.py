@@ -53,7 +53,7 @@ def calcular_estado(rsi):
 def render():
     set_style()
     
-    # CSS consistente con market.py
+    # CSS consistente con market.py - CORREGIDO
     st.markdown("""
     <style>
         .main-container {
@@ -64,9 +64,10 @@ def render():
         .group-container {
             border: 1px solid #1a1e26;
             border-radius: 10px;
-            overflow: hidden;
+            overflow: visible;
             background: #11141a;
             margin-bottom: 20px;
+            position: relative;
         }
         .group-header {
             background: #0c0e12;
@@ -75,6 +76,7 @@ def render():
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-radius: 10px 10px 0 0;
         }
         .group-title {
             margin: 0;
@@ -86,6 +88,7 @@ def render():
         .tooltip-container {
             position: relative;
             cursor: help;
+            z-index: 1000;
         }
         .tooltip-icon {
             width: 26px;
@@ -114,15 +117,16 @@ def render():
             padding: 12px;
             border-radius: 8px;
             position: absolute;
-            z-index: 999;
+            z-index: 9999;
             top: 35px;
-            right: -10px;
+            right: 0;
             opacity: 0;
             transition: opacity 0.3s, visibility 0.3s;
             font-size: 12px;
             border: 1px solid #444;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
             line-height: 1.4;
+            pointer-events: none;
         }
         .tooltip-container:hover .tooltip-text {
             visibility: visible;
@@ -152,16 +156,6 @@ def render():
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-        .signal-box {
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 1.2rem;
-            margin-top: 10px;
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
-        }
         .status-indicator {
             display: inline-block;
             width: 12px;
@@ -174,45 +168,6 @@ def render():
             0% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,255,255,0.4); }
             70% { opacity: 0.8; box-shadow: 0 0 0 10px rgba(255,255,255,0); }
             100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,255,255,0); }
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .info-item {
-            background: #0c0e12;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #2962ff;
-        }
-        .info-title {
-            color: #888;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        .info-value {
-            color: white;
-            font-size: 1.1rem;
-            font-weight: bold;
-        }
-        .refresh-btn {
-            background: linear-gradient(135deg, #2962ff 0%, #1e88e5 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-            margin-top: 20px;
-        }
-        .refresh-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(41, 98, 255, 0.4);
         }
         .semaforo-container {
             display: flex;
@@ -244,11 +199,13 @@ def render():
         .luz-ambar.active { background: radial-gradient(circle at 30% 30%, #ffb74d, #ff9800); }
         .luz-verde.active { background: radial-gradient(circle at 30% 30%, #69f0ae, #00ffad); }
         
+        /* CORRECCIÓN: Estilos para el contexto histórico */
         .historical-context {
             background: #0c0e12;
             border-radius: 10px;
             padding: 20px;
             margin-top: 20px;
+            border: 1px solid #1a1e26;
         }
         .context-bar {
             height: 8px;
@@ -263,29 +220,56 @@ def render():
             border-radius: 4px;
             transition: width 0.8s ease;
         }
+        .refresh-btn {
+            background: linear-gradient(135deg, #2962ff 0%, #1e88e5 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(41, 98, 255, 0.4);
+        }
+        .signal-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
     </style>
     """, unsafe_allow_html=True)
     
     # Header principal
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     
-    # Título con tooltip explicativo
-    col_title, col_info = st.columns([4, 1])
+    # Título con tooltip explicativo - CORREGIDO POSICIONAMIENTO
+    col_title, col_info = st.columns([6, 1])
     with col_title:
         st.markdown("<h1 style='color: white; margin-bottom: 5px;'>🚦 RSU ALGORITMO</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #888; font-size: 14px; margin-top: 0;'>Estrategia basada en RSI Semanal del S&P 500 (SPY)</p>", unsafe_allow_html=True)
     
     with col_info:
         st.markdown("""
-        <div class="tooltip-container" style="float: right; margin-top: 10px;">
-            <div class="tooltip-icon">?</div>
-            <div class="tooltip-text">
-                <strong>RSU Algoritmo:</strong><br>
-                Sistema de trading basado en el índice de fuerza relativa (RSI) 
-                del ETF SPY en timeframe semanal. Señales: <br>
-                🟢 RSI < 30: Compra<br>
-                🟡 RSI 30-70: Neutral<br>
-                🔴 RSI > 70: Venta
+        <div style="position: relative; height: 60px;">
+            <div class="tooltip-container" style="position: absolute; top: 10px; right: 0;">
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-text">
+                    <strong>RSU Algoritmo:</strong><br>
+                    Sistema de trading basado en el índice de fuerza relativa (RSI) 
+                    del ETF SPY en timeframe semanal.<br><br>
+                    <strong>Señales:</strong><br>
+                    🟢 RSI < 30: Compra (Sobreventa)<br>
+                    🟡 RSI 30-70: Neutral<br>
+                    🔴 RSI > 70: Venta (Sobrecompra)
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -313,7 +297,7 @@ def render():
         luz_a = "active" if estado == "AMBAR" else ""
         luz_v = "active" if estado == "VERDE" else ""
         
-        semaforo_html = f"""
+        st.markdown(f"""
         <div class="group-container">
             <div class="group-header">
                 <span class="group-title">Señal del Mercado</span>
@@ -326,26 +310,24 @@ def render():
                 <div class="luz luz-ambar {luz_a}"></div>
                 <div class="luz luz-verde {luz_v}"></div>
                 <div style="margin-top: 20px; text-align: center;">
-                    <div style="display: inline-flex; align-items: center; background: {color_hex}22; 
-                                border: 1px solid {color_hex}; padding: 10px 20px; border-radius: 8px;">
+                    <div class="signal-badge" style="background: {color_hex}22; border: 2px solid {color_hex}; color: {color_hex};">
                         <span class="status-indicator" style="background: {color_hex};"></span>
-                        <span style="color: {color_hex}; font-size: 1.5rem; font-weight: bold;">{senal}</span>
+                        {senal}
                     </div>
-                    <p style="color: #888; font-size: 13px; margin-top: 15px; line-height: 1.4;">
+                    <p style="color: #888; font-size: 13px; margin-top: 15px; line-height: 1.4; padding: 0 20px;">
                         {descripcion}
                     </p>
                 </div>
             </div>
         </div>
-        """
-        st.markdown(semaforo_html, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     with col_right:
         # Métricas principales
         trend_color = "#00ffad" if rsi_trend >= 0 else "#f23645"
         trend_icon = "↑" if rsi_trend >= 0 else "↓"
         
-        metrics_html = f"""
+        st.markdown(f"""
         <div class="group-container">
             <div class="group-header">
                 <span class="group-title">Métricas Clave</span>
@@ -356,37 +338,38 @@ def render():
                         <div class="metric-label">RSI Semanal</div>
                         <div class="metric-value" style="color: {color_hex};">{rsi_val:.2f}</div>
                         <div style="color: {trend_color}; font-size: 0.9rem; margin-top: 5px;">
-                            {trend_icon} {abs(rsi_trend):.2f}
+                            {trend_icon} {abs(rsi_trend):.2f} vs semana ant.
                         </div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Precio SPY</div>
                         <div class="metric-value">${precio_val:.2f}</div>
                         <div style="color: #888; font-size: 0.8rem; margin-top: 5px;">
-                            Actualizado
+                            Actualizado {pd.Timestamp.now().strftime('%H:%M')}
                         </div>
                     </div>
                 </div>
                 
-                <div class="historical-context" style="margin-top: 15px;">
-                    <div style="color: #888; font-size: 12px; margin-bottom: 10px;">POSICIÓN EN RANGO RSI</div>
+                <div class="historical-context">
+                    <div style="color: #888; font-size: 12px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">
+                        Posición en Rango RSI
+                    </div>
                     <div class="context-bar">
                         <div class="context-fill" style="width: {rsi_val}%; background: linear-gradient(to right, #00ffad, #ff9800, #f23645);"></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #555;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-top: 5px;">
                         <span>0</span>
-                        <span>30</span>
-                        <span>70</span>
+                        <span style="color: #00ffad; font-weight: bold;">30</span>
+                        <span style="color: #ff9800; font-weight: bold;">70</span>
                         <span>100</span>
                     </div>
-                    <div style="text-align: center; margin-top: 5px; color: {color_hex}; font-weight: bold; font-size: 12px;">
+                    <div style="text-align: center; margin-top: 10px; color: {color_hex}; font-weight: bold; font-size: 14px;">
                         {rsi_val:.1f} → {estado}
                     </div>
                 </div>
             </div>
         </div>
-        """
-        st.markdown(metrics_html, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     # Grid de interpretación
     st.markdown("<h3 style='color: white; margin-top: 30px; margin-bottom: 15px;'>📊 Interpretación de Señales</h3>", unsafe_allow_html=True)
@@ -395,7 +378,7 @@ def render():
     
     with col1:
         st.markdown("""
-        <div class="group-container" style="border-color: #f2364544;">
+        <div class="group-container" style="border: 1px solid #f2364544;">
             <div style="padding: 20px; text-align: center;">
                 <div style="width: 60px; height: 60px; background: #f2364522; border: 2px solid #f23645; 
                             border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; 
@@ -411,7 +394,7 @@ def render():
     
     with col2:
         st.markdown("""
-        <div class="group-container" style="border-color: #ff980044;">
+        <div class="group-container" style="border: 1px solid #ff980044;">
             <div style="padding: 20px; text-align: center;">
                 <div style="width: 60px; height: 60px; background: #ff980022; border: 2px solid #ff9800; 
                             border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; 
@@ -427,7 +410,7 @@ def render():
     
     with col3:
         st.markdown("""
-        <div class="group-container" style="border-color: #00ffad44;">
+        <div class="group-container" style="border: 1px solid #00ffad44;">
             <div style="padding: 20px; text-align: center;">
                 <div style="width: 60px; height: 60px; background: #00ffad22; border: 2px solid #00ffad; 
                             border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; 

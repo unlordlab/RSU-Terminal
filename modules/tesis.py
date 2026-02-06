@@ -4,10 +4,9 @@ import streamlit.components.v1 as components
 from datetime import datetime, timedelta
 
 def render():
-    # CSS mínimo para tesis - sin transformaciones
+    # CSS simplificado - solo estilos básicos sin conflictos
     st.markdown("""
     <style>
-        /* Estilos básicos sin animaciones problemáticas */
         .badge-buy {
             background-color: rgba(0, 255, 173, 0.15);
             color: #00ffad;
@@ -68,6 +67,7 @@ def render():
             border: 1px solid #2a2e36;
         }
         
+        /* Botón Leer Tesis - Verde iluminado */
         .stButton > button {
             width: 100%;
             background-color: #0c0e12 !important;
@@ -79,12 +79,26 @@ def render():
             font-size: 12px !important;
             text-transform: uppercase !important;
             letter-spacing: 0.5px !important;
+            transition: all 0.2s ease !important;
         }
         
         .stButton > button:hover {
             background-color: #00ffad !important;
             color: #0c0e12 !important;
-            box-shadow: 0 0 15px rgba(0, 255, 173, 0.3) !important;
+            box-shadow: 0 0 20px rgba(0, 255, 173, 0.5) !important;
+            border-color: #00ffad !important;
+        }
+        
+        .back-button button {
+            background-color: #1a1e26 !important;
+            color: white !important;
+            border: 1px solid #444 !important;
+        }
+        
+        .back-button button:hover {
+            background-color: #f23645 !important;
+            color: white !important;
+            border-color: #f23645 !important;
         }
         
         .metric-card {
@@ -94,14 +108,26 @@ def render():
             padding: 20px;
             text-align: center;
         }
+        
+        .tesis-card {
+            background: #11141a;
+            border: 1px solid #1a1e26;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .tesis-card:hover {
+            box-shadow: 0px 0px 15px rgba(0, 255, 173, 0.1);
+            border-color: #00ffad44;
+        }
     </style>
     """, unsafe_allow_html=True)
 
     # Inicializar estado
     if 'vista_actual' not in st.session_state:
         st.session_state.vista_actual = "galeria"
-    if 'vista_tipo' not in st.session_state:
-        st.session_state.vista_tipo = "grid"
     if 'pagina' not in st.session_state:
         st.session_state.pagina = 1
     if 'tesis_por_pagina' not in st.session_state:
@@ -127,48 +153,18 @@ def render():
                 
             df = load_index(CSV_URL)
 
-            # Sidebar con filtros avanzados
-            with st.sidebar:
-                st.markdown("### 🔍 Filtros Avanzados")
-                
-                busqueda = st.text_input("Buscar activo:", "", placeholder="Ej: AAPL, Tesla...").lower()
-                
+            # Filtros simples en el área principal (NO en sidebar)
+            col_search, col_rating, col_items = st.columns([2, 1, 1])
+            
+            with col_search:
+                busqueda = st.text_input("🔍 Buscar activo:", "", placeholder="Ej: AAPL, Tesla...").lower()
+            
+            with col_rating:
                 ratings_disponibles = ["Todos"] + sorted(list(df['rating'].unique())) if 'rating' in df.columns else ["Todos"]
                 filtro_rating = st.selectbox("Rating:", ratings_disponibles)
-                
-                if 'sector' in df.columns:
-                    sectores = ["Todos"] + sorted(list(df['sector'].unique()))
-                    filtro_sector = st.selectbox("Sector:", sectores)
-                else:
-                    filtro_sector = "Todos"
-                
-                st.markdown("**Fecha:**")
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    fecha_desde = st.date_input("Desde", value=None, key="fecha_desde")
-                with col_f2:
-                    fecha_hasta = st.date_input("Hasta", value=None, key="fecha_hasta")
-                
-                solo_nuevos = st.checkbox("Solo análisis nuevos (7 días)", value=False)
-                
-                st.markdown("---")
-                st.markdown("### ⚙️ Configuración")
-                st.session_state.tesis_por_pagina = st.selectbox("Tesis por página:", [6, 9, 12, 15, 24], index=1)
-                
-                orden_opciones = {
-                    "Fecha ↓": ("fecha_dt", False),
-                    "Fecha ↑": ("fecha_dt", True),
-                    "Ticker A-Z": ("ticker", True),
-                    "Ticker Z-A": ("ticker", False),
-                    "Rating": ("rating", True)
-                }
-                orden_seleccionado = st.selectbox("Ordenar por:", list(orden_opciones.keys()))
-                
-                st.markdown("---")
-                export_btn = st.button("📥 Exportar CSV")
-                if export_btn:
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(label="Descargar datos", data=csv, file_name=f"tesis_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
+            
+            with col_items:
+                st.session_state.tesis_por_pagina = st.selectbox("Mostrar:", [6, 9, 12, 15], index=1)
 
             # Aplicar filtros
             df_view = df.copy()
@@ -181,38 +177,9 @@ def render():
             if filtro_rating != "Todos" and 'rating' in df_view.columns:
                 df_view = df_view[df_view['rating'] == filtro_rating]
             
-            if filtro_sector != "Todos" and 'sector' in df_view.columns:
-                df_view = df_view[df_view['sector'] == filtro_sector]
-            
-            if fecha_desde and 'fecha_dt' in df_view.columns:
-                df_view = df_view[df_view['fecha_dt'] >= pd.Timestamp(fecha_desde)]
-            
-            if fecha_hasta and 'fecha_dt' in df_view.columns:
-                df_view = df_view[df_view['fecha_dt'] <= pd.Timestamp(fecha_hasta)]
-            
-            if solo_nuevos and 'es_nuevo' in df_view.columns:
-                df_view = df_view[df_view['es_nuevo'] == True]
-            
-            sort_col, sort_asc = orden_opciones[orden_seleccionado]
-            if sort_col in df_view.columns:
-                df_view = df_view.sort_values(by=sort_col, ascending=sort_asc, na_position='last')
-
-            # Toggle vista
-            col_stats, col_toggle = st.columns([3, 1])
-            
-            with col_stats:
-                st.markdown(f"<p style='color:#888; margin:0;'>Mostrando {len(df_view)} análisis</p>", unsafe_allow_html=True)
-            
-            with col_toggle:
-                col_g, col_l = st.columns(2)
-                with col_g:
-                    if st.button("⊞ Grid", key="btn_grid"):
-                        st.session_state.vista_tipo = "grid"
-                        st.rerun()
-                with col_l:
-                    if st.button("☰ Lista", key="btn_lista"):
-                        st.session_state.vista_tipo = "list"
-                        st.rerun()
+            # Ordenar por fecha
+            if 'fecha_dt' in df_view.columns:
+                df_view = df_view.sort_values(by='fecha_dt', ascending=False)
 
             st.markdown("---")
 
@@ -226,136 +193,84 @@ def render():
                 fin = inicio + st.session_state.tesis_por_pagina
                 df_pagina = df_view.iloc[inicio:fin]
                 
-                # Vista GRID
-                if st.session_state.vista_tipo == "grid":
-                    cols = st.columns(3)
-                    for idx, row in df_pagina.reset_index(drop=True).iterrows():
-                        col_idx = idx % 3
-                        
-                        with cols[col_idx]:
-                            ticker = str(row.get('ticker', 'N/A')).upper()
-                            nombre = str(row.get('nombre', ''))
-                            fecha = str(row.get('fecha', 'S/D'))
-                            rating = str(row.get('rating', 'HOLD')).upper()
-                            sector = str(row.get('sector', ''))
-                            autor = str(row.get('autor', ''))
-                            es_nuevo = row.get('es_nuevo', False)
-                            
-                            # Badge rating
-                            if 'BUY' in rating:
-                                badge_class = "badge-buy"
-                                badge_text = "BUY"
-                            elif 'SELL' in rating:
-                                badge_class = "badge-sell"
-                                badge_text = "SELL"
-                            else:
-                                badge_class = "badge-hold"
-                                badge_text = "HOLD"
-                            
-                            # Card container
-                            st.markdown('<div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; overflow:hidden; margin-bottom:20px;">', unsafe_allow_html=True)
-                            
-                            # Imagen
-                            img_url = str(row.get('imagenencabezado', '')).strip()
-                            
-                            if img_url and img_url.startswith('http'):
-                                try:
-                                    st.image(img_url, use_container_width=True)
-                                except:
-                                    st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
-                            
-                            # Badges
-                            badge_cols = st.columns([1, 1, 2])
-                            with badge_cols[0]:
-                                st.markdown(f'<span class="{badge_class}">{badge_text}</span>', unsafe_allow_html=True)
-                            with badge_cols[1]:
-                                if es_nuevo:
-                                    st.markdown('<span class="badge-new">NEW</span>', unsafe_allow_html=True)
-                            
-                            # Info
-                            st.markdown(f"""
-                            <div style="padding:0 15px; margin-top:10px;">
-                                <div style="color:#00ffad; font-size:1.2rem; font-weight:bold;">{ticker}</div>
-                                <div style="color:#888; font-size:0.85rem;">{nombre}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Tags
-                            if sector or autor:
-                                tags_html = ""
-                                if sector:
-                                    tags_html += f'<span class="tag">{sector}</span>'
-                                if autor:
-                                    tags_html += f'<span class="tag">👤 {autor}</span>'
-                                st.markdown(f'<div style="padding:0 15px; margin-top:8px;">{tags_html}</div>', unsafe_allow_html=True)
-                            
-                            # Fecha
-                            st.markdown(f'<div style="padding:0 15px; color:#555; font-size:0.75rem; font-family:monospace; margin-top:8px;">📅 {fecha}</div>', unsafe_allow_html=True)
-                            
-                            # Botón
-                            st.markdown('<div style="padding:15px;">', unsafe_allow_html=True)
-                            if st.button(f"Ver Análisis →", key=f"btn_{ticker}_{idx}"):
-                                st.session_state.tesis_seleccionada = ticker
-                                st.session_state.vista_actual = "lector"
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
-                            
-                            # Cerrar card
-                            st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Vista LISTA
-                else:
-                    for idx, row in df_pagina.iterrows():
+                # Grid de tarjetas
+                cols = st.columns(3)
+                for idx, row in df_pagina.reset_index(drop=True).iterrows():
+                    col_idx = idx % 3
+                    
+                    with cols[col_idx]:
                         ticker = str(row.get('ticker', 'N/A')).upper()
                         nombre = str(row.get('nombre', ''))
                         fecha = str(row.get('fecha', 'S/D'))
                         rating = str(row.get('rating', 'HOLD')).upper()
                         sector = str(row.get('sector', ''))
+                        autor = str(row.get('autor', ''))
                         es_nuevo = row.get('es_nuevo', False)
                         
-                        sector_colors = {
-                            'Tecnología': '#00ffad', 'Technology': '#00ffad',
-                            'Energía': '#ff9800', 'Energy': '#ff9800',
-                            'Salud': '#f23645', 'Healthcare': '#f23645',
-                            'Finanzas': '#0096ff', 'Financials': '#0096ff',
-                            'Consumo': '#ff5722', 'Consumer': '#ff5722'
-                        }
-                        sector_color = sector_colors.get(sector, '#888')
-                        
+                        # Badge rating
                         if 'BUY' in rating:
                             badge_class = "badge-buy"
+                            badge_text = "BUY"
                         elif 'SELL' in rating:
                             badge_class = "badge-sell"
+                            badge_text = "SELL"
                         else:
                             badge_class = "badge-hold"
+                            badge_text = "HOLD"
                         
-                        col1, col2, col3, col4 = st.columns([0.5, 2, 1, 1])
+                        # Card
+                        st.markdown('<div class="tesis-card">', unsafe_allow_html=True)
                         
-                        with col1:
-                            st.markdown(f'<div style="width:40px; height:40px; background:{sector_color}22; border:1px solid {sector_color}44; border-radius:8px; display:flex; align-items:center; justify-content:center; color:{sector_color}; font-weight:bold; font-size:14px;">{ticker[:2]}</div>', unsafe_allow_html=True)
+                        # Imagen
+                        img_url = str(row.get('imagenencabezado', '')).strip()
                         
-                        with col2:
-                            nuevo_badge = '<span class="badge-new" style="margin-left:8px;">NEW</span>' if es_nuevo else ''
-                            st.markdown(f'<div style="display:flex; align-items:center;"><span style="color:white; font-weight:bold; font-size:16px;">{ticker}</span>{nuevo_badge}</div><div style="color:#888; font-size:13px;">{nombre}</div>', unsafe_allow_html=True)
+                        if img_url and img_url.startswith('http'):
+                            try:
+                                st.image(img_url, use_container_width=True)
+                            except:
+                                st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
                         
-                        with col3:
-                            st.markdown(f'<span class="{badge_class}">{rating}</span>', unsafe_allow_html=True)
+                        # Badges
+                        badge_cols = st.columns([1, 1, 2])
+                        with badge_cols[0]:
+                            st.markdown(f'<span class="{badge_class}">{badge_text}</span>', unsafe_allow_html=True)
+                        with badge_cols[1]:
+                            if es_nuevo:
+                                st.markdown('<span class="badge-new">NEW</span>', unsafe_allow_html=True)
+                        
+                        # Info
+                        st.markdown(f"""
+                        <div style="padding:0 15px; margin-top:10px;">
+                            <div style="color:#00ffad; font-size:1.2rem; font-weight:bold;">{ticker}</div>
+                            <div style="color:#888; font-size:0.85rem;">{nombre}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Tags
+                        if sector or autor:
+                            tags_html = ""
                             if sector:
-                                st.markdown(f'<div style="color:#666; font-size:11px; margin-top:4px;">{sector}</div>', unsafe_allow_html=True)
+                                tags_html += f'<span class="tag">{sector}</span>'
+                            if autor:
+                                tags_html += f'<span class="tag">👤 {autor}</span>'
+                            st.markdown(f'<div style="padding:0 15px; margin-top:8px;">{tags_html}</div>', unsafe_allow_html=True)
                         
-                        with col4:
-                            st.markdown(f'<div style="color:#555; font-size:12px; text-align:right;">{fecha}</div>', unsafe_allow_html=True)
-                            if st.button("Ver →", key=f"btn_list_{ticker}_{idx}"):
-                                st.session_state.tesis_seleccionada = ticker
-                                st.session_state.vista_actual = "lector"
-                                st.rerun()
+                        # Fecha
+                        st.markdown(f'<div style="padding:0 15px; color:#555; font-size:0.75rem; font-family:monospace; margin-top:8px; margin-bottom:10px;">📅 {fecha}</div>', unsafe_allow_html=True)
                         
-                        st.markdown("<hr style='margin:10px 0; border-color:#1a1e26; opacity:0.3;'>", unsafe_allow_html=True)
+                        # Botón Leer Tesis - Verde iluminado
+                        if st.button(f"Leer Tesis →", key=f"btn_{ticker}_{idx}"):
+                            st.session_state.tesis_seleccionada = ticker
+                            st.session_state.vista_actual = "lector"
+                            st.rerun()
+                        
+                        st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Paginación
                 if total_paginas > 1:
+                    st.markdown("---")
                     col_prev, col_info, col_next = st.columns([1, 2, 1])
                     
                     with col_prev:
@@ -401,7 +316,7 @@ def render():
                 st.markdown(f'<h2 style="color:#00ffad; margin:0;">{nombre} <span style="color:#444; font-size:0.6em;">({ticker})</span></h2>', unsafe_allow_html=True)
             
             with col_actions:
-                if st.button("⭐"):
+                if st.button("⭐ Fav"):
                     st.toast("Añadido a favoritos", icon="⭐")
             
             st.markdown("---")

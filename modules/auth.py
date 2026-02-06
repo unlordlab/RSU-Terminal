@@ -50,7 +50,7 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS - CAJA MÁS ANCHA, PROporciones mejoradas
+    # CSS - INPUT Y BOTÓN ALINEADOS
     st.markdown("""
     <style>
         /* Ocultar elementos de Streamlit */
@@ -68,23 +68,23 @@ def login():
             min-height: 90vh;
         }
         
-        /* Contenedor del login - MÁS ANCHO */
+        /* Contenedor del login */
         div[data-testid="stVerticalBlock"] {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 16px;
-            padding: 50px 60px;
-            max-width: 500px;
+            padding: 45px 50px;
+            max-width: 480px;
             width: 100%;
             margin: 0 auto;
         }
         
-        /* Logo más grande */
+        /* Logo */
         .logo-img {
-            width: 160px;
-            height: 160px;
-            border-radius: 24px;
-            margin: 0 auto 25px;
+            width: 150px;
+            height: 150px;
+            border-radius: 20px;
+            margin: 0 auto 20px;
             display: block;
             box-shadow: 0 15px 40px rgba(0, 255, 173, 0.25);
         }
@@ -92,48 +92,78 @@ def login():
         /* Títulos */
         h1 {
             color: white !important;
-            font-size: 2.2rem !important;
+            font-size: 2rem !important;
             text-align: center !important;
             letter-spacing: 4px !important;
-            margin-bottom: 12px !important;
+            margin-bottom: 10px !important;
         }
         
         h3 {
             color: #00ffad !important;
-            font-size: 1.1rem !important;
+            font-size: 1rem !important;
             text-align: center !important;
-            margin-bottom: 40px !important;
+            margin-bottom: 35px !important;
             font-weight: normal !important;
         }
         
         /* Label */
         label {
             color: #888 !important;
-            font-size: 12px !important;
+            font-size: 11px !important;
             text-transform: uppercase !important;
             letter-spacing: 1.5px !important;
         }
         
-        /* Input más grande */
-        .stTextInput input {
+        /* CONTENEDOR DE INPUT - FLEX PARA ALINEAR */
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            margin-top: 8px;
+        }
+        
+        /* Input que ocupa todo el espacio disponible */
+        .stTextInput {
+            flex: 1;
+        }
+        
+        .stTextInput > div {
+            width: 100%;
+        }
+        
+        .stTextInput > div > div > input {
             background: #0c0e12 !important;
             border: 1px solid #2a3f5f !important;
             border-radius: 10px !important;
             color: white !important;
-            height: 52px !important;
-            font-size: 16px !important;
+            height: 50px !important;
+            font-size: 15px !important;
+            width: 100% !important;
         }
         
-        /* Botón ojo - SOLO UNO, estilizado */
+        /* BOTÓN OJO - ALINEADO CON INPUT */
+        div[data-testid="column"]:nth-of-type(2) {
+            display: flex;
+            align-items: stretch;
+        }
+        
+        div[data-testid="column"]:nth-of-type(2) > div {
+            width: 100%;
+        }
+        
         div[data-testid="column"]:nth-of-type(2) button {
             background: #1a1e26 !important;
             border: 1px solid #2a3f5f !important;
             border-radius: 10px !important;
             color: #888 !important;
-            height: 52px !important;
-            width: 52px !important;
-            margin-top: 24px !important;
+            height: 50px !important;
+            width: 50px !important;
+            margin: 0 !important;
+            padding: 0 !important;
             font-size: 1.2rem !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         div[data-testid="column"]:nth-of-type(2) button:hover {
@@ -141,33 +171,33 @@ def login():
             color: #00ffad !important;
         }
         
-        /* Botón principal más grande */
+        /* Botón principal */
         .stButton > button {
             background: linear-gradient(90deg, #00ffad, #00d4aa) !important;
             color: #0c0e12 !important;
             border: none !important;
             border-radius: 10px !important;
             font-weight: 700 !important;
-            font-size: 16px !important;
+            font-size: 15px !important;
             letter-spacing: 2px !important;
             width: 100% !important;
-            height: 54px !important;
-            margin-top: 15px !important;
+            height: 52px !important;
+            margin-top: 20px !important;
         }
         
         /* Footer */
         .footer-text {
             text-align: center;
             color: #00ffad;
-            font-size: 12px;
-            margin-top: 35px;
-            padding-top: 25px;
+            font-size: 11px;
+            margin-top: 30px;
+            padding-top: 20px;
             border-top: 1px solid #1a1e26;
         }
         
         .footer-text span {
             color: #555;
-            font-size: 11px;
+            font-size: 10px;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -178,7 +208,7 @@ def login():
     if logo_b64:
         st.markdown(f'<img src="data:image/png;base64,{logo_b64}" class="logo-img">', unsafe_allow_html=True)
     else:
-        st.markdown('<div style="width:160px;height:160px;margin:0 auto 25px;background:linear-gradient(135deg,#00ffad,#00a8e8);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:5rem;">🔐</div>', unsafe_allow_html=True)
+        st.markdown('<div style="width:150px;height:150px;margin:0 auto 20px;background:linear-gradient(135deg,#00ffad,#00a8e8);border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:4rem;">🔐</div>', unsafe_allow_html=True)
     
     # TÍTULOS
     st.markdown("<h1>RSU TERMINAL</h1>", unsafe_allow_html=True)
@@ -187,10 +217,10 @@ def login():
     # CONTRASEÑA
     st.markdown("**Contraseña de Acceso**")
     
-    # Input y botón ojo - SOLO UN OJO
-    col1, col2 = st.columns([5, 1])
+    # Input y botón ojo - SOLO ESTOS DOS ELEMENTOS
+    c1, c2 = st.columns([5, 1])
     
-    with col1:
+    with c1:
         password = st.text_input(
             "",
             type="text" if st.session_state["show_password"] else "password",
@@ -198,9 +228,8 @@ def login():
             label_visibility="collapsed"
         )
     
-    with col2:
-        # Botón ojo simple
-        if st.button("👁️", key="toggle_eye"):
+    with c2:
+        if st.button("👁️", key="eye"):
             st.session_state["show_password"] = not st.session_state["show_password"]
             st.rerun()
     

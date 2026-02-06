@@ -186,11 +186,7 @@ def login():
             label_visibility="collapsed"
         )
     
-    with col2:
-        if st.button("P", key="toggle"):
-            st.session_state["show_password"] = not st.session_state["show_password"]
-            st.rerun()
-    
+        
     # BOTÓN ACCESO
     if st.button("🔓 DESBLOQUEAR TERMINAL"):
         if not password:
@@ -237,5 +233,6 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
+
 
 

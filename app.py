@@ -1,519 +1,834 @@
-import streamlit as st
-import pandas as pd
-import streamlit.components.v1 as components
-from datetime import datetime, timedelta
 
-def render():
-    # CSS CRÍTICO: Aislar completamente de animaciones globales del sidebar
+# app.py
+import os
+import sys
+import streamlit as st
+import plotly.graph_objects as go
+import pandas as pd
+import math
+from datetime import datetime
+import pytz
+
+# --- CONFIGURACION Y MODULOS ---
+# Asegurar que el directorio actual esté en el path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios, get_market_index
+
+# Importar TODOS los módulos desde modules/
+from modules import market as market_module
+from modules import manifest as manifest_module
+from modules import rsu_club as rsu_club_module
+from modules import rsrw as rsrw_module
+from modules import rsu_algoritmo as rsu_algoritmo_module
+from modules import ema_edge as ema_edge_module
+from modules import earnings as earnings_module
+from modules import cartera as cartera_module
+from modules import tesis as tesis_module
+from modules import ia_report as ia_report_module
+from modules import academy as academy_module
+from modules import trade_grader as trade_grader_module
+from modules import spxl_strategy as spxl_strategy_module
+from modules import roadmap_2026 as roadmap_2026_module
+from modules import trump_playbook as trump_playbook_module
+from modules import comunidad as comunidad_module
+from modules import disclaimer as disclaimer_module
+from modules import auth as auth_module  # <-- IMPORTAMOS AUTH REAL
+
+# Aplicar estilos definidos en config.py
+set_style()
+
+# CSS Profesional mejorado (igual que antes)
+st.markdown("""
+<style>
+    /* Sidebar base */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a0c10 0%, #11141a 50%, #0c0e12 100%);
+        border-right: 1px solid #1a1e26;
+    }
+    
+    [data-testid="stSidebar"] > div:first-child {
+        padding-top: 0;
+    }
+    
+    /* Logo container con efecto glow */
+    .logo-container {
+        background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 50%, #0c0e12 100%);
+        padding: 25px 20px;
+        border-bottom: 1px solid #2a3f5f;
+        margin: -1rem -1rem 0 -1rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .logo-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(0,255,173,0.1), transparent);
+        animation: shimmer 3s infinite;
+    }
+    
+    @keyframes shimmer {
+        0% { left: -100%; }
+        50% { left: 100%; }
+        100% { left: 100%; }
+    }
+    
+    /* Live badge premium */
+    .live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, rgba(0,255,173,0.15) 0%, rgba(41,98,255,0.1) 100%);
+        border: 1px solid rgba(0, 255, 173, 0.4);
+        padding: 8px 16px;
+        border-radius: 25px;
+        margin-top: 15px;
+        box-shadow: 0 0 15px rgba(0,255,173,0.1);
+    }
+    
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background: #00ffad;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+        box-shadow: 0 0 10px #00ffad;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    
+    /* Mini ticker en sidebar */
+    .mini-ticker {
+        background: #0c0e12;
+        border: 1px solid #1a1e26;
+        border-radius: 8px;
+        padding: 10px;
+        margin: 15px 0;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .mini-ticker-content {
+        display: flex;
+        animation: ticker-slide 20s linear infinite;
+        white-space: nowrap;
+    }
+    
+    @keyframes ticker-slide {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+    }
+    
+    .ticker-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 20px;
+        font-size: 0.75rem;
+    }
+    
+    /* Market clock */
+    .market-clock {
+        background: linear-gradient(135deg, rgba(41,98,255,0.1) 0%, rgba(0,255,173,0.05) 100%);
+        border: 1px solid #2a3f5f;
+        border-radius: 12px;
+        padding: 15px;
+        margin: 15px 0;
+    }
+    
+    .clock-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .clock-title {
+        color: #888;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+    
+    .market-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.7rem;
+    }
+    
+    .status-open { color: #00ffad; }
+    .status-closed { color: #f23645; }
+    
+    .clock-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    
+    .clock-item {
+        background: rgba(0,0,0,0.3);
+        padding: 8px;
+        border-radius: 6px;
+        text-align: center;
+    }
+    
+    .clock-city {
+        color: #666;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+    }
+    
+    .clock-time {
+        color: white;
+        font-size: 0.9rem;
+        font-weight: bold;
+        font-family: 'Courier New', monospace;
+    }
+    
+    /* Menu styling premium */
+    .stRadio > div[role="radiogroup"] > label {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin: 3px 0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stRadio > div[role="radiogroup"] > label::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, #2962ff 0%, #00ffad 100%);
+        opacity: 0.1;
+        transition: width 0.3s ease;
+    }
+    
+    .stRadio > div[role="radiogroup"] > label:hover::before {
+        width: 100%;
+    }
+    
+    .stRadio > div[role="radiogroup"] > label:hover {
+        border-color: rgba(41, 98, 255, 0.5);
+        transform: translateX(5px);
+    }
+    
+    .stRadio > div[role="radiogroup"] > label[data-checked="true"] {
+        background: linear-gradient(90deg, rgba(41, 98, 255, 0.15) 0%, rgba(0, 255, 173, 0.08) 100%);
+        border-left: 3px solid #00ffad;
+        border-top: 1px solid rgba(0, 255, 173, 0.3);
+        border-bottom: 1px solid rgba(0, 255, 173, 0.3);
+        border-right: 1px solid rgba(0, 255, 173, 0.3);
+        box-shadow: 0 0 20px rgba(0,255,173,0.1);
+    }
+    
+    /* FNG Container */
+    .fng-container {
+        background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
+        border: 1px solid #1a1e26;
+        border-radius: 16px;
+        padding: 20px;
+        margin-top: 15px;
+        position: relative;
+    }
+    
+    .fng-container::after {
+        content: '';
+        position: absolute;
+        top: -1px;
+        left: 20%;
+        right: 20%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #2962ff, transparent);
+    }
+    
+    .fng-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+    }
+    
+    .fng-title {
+        color: white;
+        font-size: 0.8rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+    }
+    
+    .fng-value {
+        background: linear-gradient(135deg, #2962ff 0%, #00ffad 100%);
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        box-shadow: 0 4px 15px rgba(41,98,255,0.3);
+    }
+    
+    /* Quick stats */
+    .quick-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 15px 0;
+    }
+    
+    .stat-box {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid #1a1e26;
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    
+    .stat-box:hover {
+        background: rgba(41,98,255,0.05);
+        border-color: #2a3f5f;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 4px;
+    }
+    
+    .stat-value {
+        color: white;
+        font-size: 1rem;
+        font-weight: bold;
+    }
+    
+    .stat-change {
+        font-size: 0.7rem;
+        margin-top: 2px;
+    }
+    
+    /* Section headers */
+    .section-header {
+        color: #2962ff;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        margin: 20px 0 12px 0;
+        padding-left: 5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-header::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(90deg, #2962ff, transparent);
+    }
+    
+    /* Separator */
+    .sidebar-separator {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, #2a3f5f 50%, transparent 100%);
+        margin: 20px 0;
+        border: none;
+        position: relative;
+    }
+    
+    .sidebar-separator::after {
+        content: '◆';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: #2962ff;
+        font-size: 0.5rem;
+        background: #11141a;
+        padding: 0 10px;
+    }
+    
+    /* Legend grid */
+    .legend-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        background: rgba(255,255,255,0.02);
+        border-radius: 6px;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+    
+    .legend-item:hover {
+        background: rgba(255,255,255,0.05);
+        border-color: #1a1e26;
+    }
+    
+    .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        box-shadow: 0 0 8px currentColor;
+    }
+    
+    .legend-text {
+        color: #999;
+        font-size: 0.7rem;
+    }
+    
+    /* Footer */
+    .sidebar-footer {
+        text-align: center;
+        padding: 20px 0 10px;
+        margin-top: 10px;
+        border-top: 1px solid #1a1e26;
+    }
+    
+    .footer-version {
+        color: #2962ff;
+        font-size: 0.75rem;
+        font-weight: bold;
+        letter-spacing: 2px;
+    }
+    
+    .footer-copy {
+        color: #444;
+        font-size: 0.65rem;
+        margin-top: 6px;
+    }
+    
+    /* Scrollbar personalizada */
+    [data-testid="stSidebar"] ::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    [data-testid="stSidebar"] ::-webkit-scrollbar-track {
+        background: #0c0e12;
+    }
+    
+    [data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
+        background: #2a3f5f;
+        border-radius: 3px;
+    }
+    
+    [data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover {
+        background: #2962ff;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Funciones auxiliares
+def get_market_status():
+    """Determina si el mercado esta abierto"""
+    ny_time = datetime.now(pytz.timezone('America/New_York'))
+    hour = ny_time.hour
+    minute = ny_time.minute
+    weekday = ny_time.weekday()
+    
+    # Mercado abierto 9:30 - 16:00 NY time, Lunes-Viernes
+    if weekday < 5:  # Lunes a Viernes
+        if (hour == 9 and minute >= 30) or (10 <= hour < 16):
+            return True, "OPEN"
+    return False, "CLOSED"
+
+def get_clock_times():
+    """Obtiene horas de diferentes mercados"""
+    times = {}
+    now = datetime.now(pytz.UTC)
+    
+    markets = {
+        'NY': 'America/New_York',
+        'LON': 'Europe/London',
+        'TKY': 'Asia/Tokyo',
+        'SYD': 'Australia/Sydney'
+    }
+    
+    for city, tz in markets.items():
+        local_time = now.astimezone(pytz.timezone(tz))
+        times[city] = local_time.strftime('%H:%M')
+    
+    return times
+
+# Control de acceso REAL usando auth.py de modules
+if not auth_module.login():
+    st.stop()
+    
+# Inicializamos el motor del algoritmo RS/RW en la sesion
+if 'rsrw_engine' not in st.session_state:
+    try:
+        from modules.rsrw import RSRWEngine
+        st.session_state.rsrw_engine = RSRWEngine()
+    except Exception as e:
+        st.error(f"Error inicializando RS/RW Engine: {e}")
+        st.session_state.rsrw_engine = None
+
+if 'algoritmo_engine' not in st.session_state:
+    st.session_state.algoritmo_engine = None
+
+# --- SIDEBAR PROFESIONAL MEJORADO ---
+with st.sidebar:
+    
+    # 1. LOGO Y HEADER CON EFECTO
+    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
+    
+    if os.path.exists("assets/logo.png"):
+        st.image("assets/logo.png", use_container_width=True)
+    else:
+        st.markdown("""
+            <div style="text-align: center; padding: 10px;">
+                <div style="font-size: 2.5rem; font-weight: bold; background: linear-gradient(135deg, #00ffad 0%, #2962ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">RSU</div>
+                <div style="font-size: 0.75rem; color: #666; letter-spacing: 4px; margin-top: 5px;">TERMINAL</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Live users badge premium
+    try:
+        usuarios_activos = actualizar_contador_usuarios()
+    except:
+        usuarios_activos = 1
+    
+    st.markdown(f"""
+        <div style="text-align: center;">
+            <div class="live-badge">
+                <div class="live-dot"></div>
+                <span style="color: #00ffad; font-size: 0.8rem; font-weight: 600; letter-spacing: 1px;">{usuarios_activos} ONLINE</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 2. MINI TICKER DE PRECIOS (Scrolleable)
+    st.markdown('<div class="section-header">Live Markets</div>', unsafe_allow_html=True)
+    
+    # Obtener datos rapidos para el mini ticker
+    try:
+        spx = get_market_index("^GSPC")
+        ndx = get_market_index("^IXIC")
+        vix = get_market_index("^VIX")
+        
+        spx_color = "#00ffad" if spx[1] >= 0 else "#f23645"
+        ndx_color = "#00ffad" if ndx[1] >= 0 else "#f23645"
+        
+        ticker_content = f"""
+            <div class="mini-ticker">
+                <div class="mini-ticker-content">
+                    <span class="ticker-item">
+                        <span style="color: #888;">S&P 500</span>
+                        <span style="color: white; font-weight: bold;">{spx[0]:,.0f}</span>
+                        <span style="color: {spx_color};">{spx[1]:+.2f}%</span>
+                    </span>
+                    <span class="ticker-item">
+                        <span style="color: #888;">NASDAQ</span>
+                        <span style="color: white; font-weight: bold;">{ndx[0]:,.0f}</span>
+                        <span style="color: {ndx_color};">{ndx[1]:+.2f}%</span>
+                    </span>
+                    <span class="ticker-item">
+                        <span style="color: #888;">VIX</span>
+                        <span style="color: white; font-weight: bold;">{vix[0]:.2f}</span>
+                        <span style="color: #f23645;">{vix[1]:+.2f}%</span>
+                    </span>
+                    <span class="ticker-item">
+                        <span style="color: #888;">BTC</span>
+                        <span style="color: white; font-weight: bold;">$104K</span>
+                        <span style="color: #00ffad;">+2.4%</span>
+                    </span>
+                    <!-- Duplicado para loop infinito -->
+                    <span class="ticker-item">
+                        <span style="color: #888;">S&P 500</span>
+                        <span style="color: white; font-weight: bold;">{spx[0]:,.0f}</span>
+                        <span style="color: {spx_color};">{spx[1]:+.2f}%</span>
+                    </span>
+                    <span class="ticker-item">
+                        <span style="color: #888;">NASDAQ</span>
+                        <span style="color: white; font-weight: bold;">{ndx[0]:,.0f}</span>
+                        <span style="color: {ndx_color};">{ndx[1]:+.2f}%</span>
+                    </span>
+                    <span class="ticker-item">
+                        <span style="color: #888;">VIX</span>
+                        <span style="color: white; font-weight: bold;">{vix[0]:.2f}</span>
+                        <span style="color: #f23645;">{vix[1]:+.2f}%</span>
+                    </span>
+                    <span class="ticker-item">
+                        <span style="color: #888;">BTC</span>
+                        <span style="color: white; font-weight: bold;">$104K</span>
+                        <span style="color: #00ffad;">+2.4%</span>
+                    </span>
+                </div>
+            </div>
+        """
+        st.markdown(ticker_content, unsafe_allow_html=True)
+    except Exception as e:
+        st.markdown("""
+            <div class="mini-ticker" style="text-align: center; color: #666; font-size: 0.75rem;">
+                Market data loading...
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # 3. RELOJ DE MERCADOS GLOBALES
+    is_open, status_text = get_market_status()
+    status_class = "status-open" if is_open else "status-closed"
+    status_dot = "🟢" if is_open else "🔴"
+    times = get_clock_times()
+    
+    st.markdown(f"""
+        <div class="market-clock">
+            <div class="clock-header">
+                <span class="clock-title">🌍 Market Hours</span>
+                <span class="market-status {status_class}">
+                    {status_dot} {status_text}
+                </span>
+            </div>
+            <div class="clock-grid">
+                <div class="clock-item">
+                    <div class="clock-city">New York</div>
+                    <div class="clock-time" style="color: {'#00ffad' if is_open else '#f23645'};">{times['NY']}</div>
+                </div>
+                <div class="clock-item">
+                    <div class="clock-city">London</div>
+                    <div class="clock-time">{times['LON']}</div>
+                </div>
+                <div class="clock-item">
+                    <div class="clock-city">Tokyo</div>
+                    <div class="clock-time">{times['TKY']}</div>
+                </div>
+                <div class="clock-item">
+                    <div class="clock-city">Sydney</div>
+                    <div class="clock-time">{times['SYD']}</div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Separador decorativo
+    st.markdown('<div class="sidebar-separator"></div>', unsafe_allow_html=True)
+    
+    # 4. QUICK STATS (Stats rapidas)
+    st.markdown('<div class="section-header">Quick Stats</div>', unsafe_allow_html=True)
+    
+    # Obtener datos para stats
+    try:
+        fng = get_cnn_fear_greed()
+        spx = get_market_index("^GSPC")
+        
+        col1_stat, col2_stat = st.columns(2)
+        with col1_stat:
+            fng_val = fng if fng else 50
+            st.markdown(f"""
+                <div class="stat-box">
+                    <div class="stat-label">S&P 500</div>
+                    <div class="stat-value">{spx[0]:,.0f}</div>
+                    <div class="stat-change" style="color: {'#00ffad' if spx[1] >= 0 else '#f23645'};">
+                        {'▲' if spx[1] >= 0 else '▼'} {abs(spx[1]):.2f}%
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col2_stat:
+            st.markdown(f"""
+                <div class="stat-box">
+                    <div class="stat-label">Fear & Greed</div>
+                    <div class="stat-value">{fng if fng else 'N/A'}</div>
+                    <div class="stat-change" style="color: {'#00ffad' if fng and fng > 50 else '#f23645'};">
+                        {'Greed' if fng and fng > 50 else 'Fear'}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    except Exception as e:
+        st.markdown("""
+            <div style="text-align: center; color: #444; font-size: 0.75rem; padding: 20px;">
+                Stats loading...
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Separador
+    st.markdown('<div class="sidebar-separator"></div>', unsafe_allow_html=True)
+    
+    # 5. MENU DE NAVEGACION
+    st.markdown('<div class="section-header">Navigation</div>', unsafe_allow_html=True)
+    
+    menu = st.radio(
+        "",
+        [
+            "📊 DASHBOARD", 
+            "📜 MANIFEST",
+            "♣️ RSU CLUB",
+            "📈 SCANNER RS/RW", 
+            "🤖 ALGORITMO RSU",
+            "⚡ EMA EDGE",
+            "📅 EARNINGS", 
+            "💼 CARTERA", 
+            "📝 TESIS",
+            "🤖 AI REPORT",
+            "🎓 ACADEMY",
+            "🏆 TRADE GRADER",
+            "🚀 SPXL STRATEGY",
+            "🗺️ ROADMAP 2026",
+            "🇺🇸 TRUMP PLAYBOOK",
+            "👥 COMUNIDAD",
+            "⚠️ DISCLAIMER"
+        ],
+        label_visibility="collapsed"
+    )
+    
+    # Separador final
+    st.markdown('<div class="sidebar-separator"></div>', unsafe_allow_html=True)
+    
+    # 6. FEAR & GREED DETALLADO (Al final, mas compacto)
+    try:
+        fng = get_cnn_fear_greed()
+        if fng is not None:
+            # Determinar color y estado
+            if fng < 25: 
+                estado, color, bg_color = "EXTREME FEAR", "#d32f2f", "rgba(211, 47, 47, 0.1)"
+            elif fng < 45: 
+                estado, color, bg_color = "FEAR", "#f57c00", "rgba(245, 124, 0, 0.1)"
+            elif fng < 55: 
+                estado, color, bg_color = "NEUTRAL", "#ff9800", "rgba(255, 152, 0, 0.1)"
+            elif fng < 75: 
+                estado, color, bg_color = "GREED", "#4caf50", "rgba(76, 175, 80, 0.1)"
+            else: 
+                estado, color, bg_color = "EXTREME GREED", "#00ffad", "rgba(0, 255, 173, 0.1)"
+            
+            st.markdown(f"""
+                <div class="fng-container">
+                    <div class="fng-header">
+                        <span class="fng-title">📊 SENTIMENT</span>
+                        <span class="fng-value">{fng}</span>
+                    </div>
+            """, unsafe_allow_html=True)
+            
+            # Gauge minimalista
+            fig = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = fng,
+                number = {'font': {'size': 0}},
+                domain = {'x': [0, 1], 'y': [0, 1]},
+                gauge = {
+                    'axis': {'range': [0, 100], 'tickwidth': 0, 'tickcolor': "transparent"},
+                    'bar': {'color': "rgba(0,0,0,0)"},
+                    'bgcolor': "rgba(0,0,0,0)",
+                    'borderwidth': 0,
+                    'steps': [
+                        {'range': [0, 25], 'color': "#d32f2f"},
+                        {'range': [25, 45], 'color': "#f57c00"},
+                        {'range': [45, 55], 'color': "#ff9800"},
+                        {'range': [55, 75], 'color': "#4caf50"},
+                        {'range': [75, 100], 'color': "#00ffad"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "white", 'width': 3},
+                        'thickness': 0.85,
+                        'value': fng
+                    }
+                }
+            ))
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=90,
+                margin=dict(l=10, r=10, t=5, b=5)
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            
+            # Estado
+            st.markdown(f"""
+                    <div style="text-align: center; margin-top: 8px;">
+                        <div style="display: inline-block; background: {bg_color}; border: 1px solid {color}; padding: 8px 18px; border-radius: 25px;">
+                            <span style="color: {color}; font-size: 0.75rem; font-weight: bold; letter-spacing: 1px;">{estado}</span>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Leyenda compacta
+            st.markdown("""
+                <div class="legend-grid">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #d32f2f; color: #d32f2f;"></div>
+                        <span class="legend-text">Extreme Fear</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f57c00; color: #f57c00;"></div>
+                        <span class="legend-text">Fear</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff9800; color: #ff9800;"></div>
+                        <span class="legend-text">Neutral</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4caf50; color: #4caf50;"></div>
+                        <span class="legend-text">Greed</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    except Exception as e:
+        pass
+    
+    # 7. FOOTER PREMIUM
     st.markdown("""
-    <style>
-        /* FORZAR reset de transformaciones en el contenido principal */
-        .main [data-testid="stVerticalBlock"] > div[class*="element-container"] {
-            transform: none !important;
-            transition: none !important;
-            animation: none !important;
-        }
-        
-        /* Asegurar que las imágenes no tengan transformaciones */
-        .main img {
-            transform: none !important;
-            transition: opacity 0.2s ease !important;
-        }
-        
-        /* Badges estáticos sin animaciones */
-        .badge-buy, .badge-hold, .badge-sell, .badge-new {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            transform: none !important;
-            animation: none !important;
-        }
-        
-        .badge-buy {
-            background-color: rgba(0, 255, 173, 0.15);
-            color: #00ffad;
-            border: 1px solid #00ffad44;
-        }
-        
-        .badge-hold {
-            background-color: rgba(255, 152, 0, 0.15);
-            color: #ff9800;
-            border: 1px solid #ff980044;
-        }
-        
-        .badge-sell {
-            background-color: rgba(242, 54, 69, 0.15);
-            color: #f23645;
-            border: 1px solid #f2364544;
-        }
-        
-        .badge-new {
-            background-color: rgba(0, 150, 255, 0.15);
-            color: #0096ff;
-            border: 1px solid #0096ff44;
-        }
-        
-        .tag {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-            margin-right: 4px;
-            background: #1a1e26;
-            color: #888;
-            border: 1px solid #2a2e36;
-            transform: none !important;
-        }
-        
-        /* Botones sin transformaciones */
-        .main .stButton > button {
-            width: 100%;
-            background-color: #0c0e12 !important;
-            color: #00ffad !important;
-            border: 1px solid #00ffad44 !important;
-            border-radius: 6px !important;
-            padding: 8px 16px !important;
-            font-weight: bold !important;
-            font-size: 12px !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.5px !important;
-            transform: none !important;
-            transition: all 0.2s ease !important;
-        }
-        
-        .main .stButton > button:hover {
-            background-color: #00ffad !important;
-            color: #0c0e12 !important;
-            box-shadow: 0 0 15px rgba(0, 255, 173, 0.3) !important;
-            transform: none !important;
-        }
-        
-        .main .back-button button {
-            background-color: #1a1e26 !important;
-            color: white !important;
-            border: 1px solid #444 !important;
-            transform: none !important;
-        }
-        
-        .main .back-button button:hover {
-            background-color: #f23645 !important;
-            color: white !important;
-            border-color: #f23645 !important;
-            transform: none !important;
-        }
-        
-        /* Cards sin transformaciones */
-        .tesis-card {
-            background: #11141a;
-            border: 1px solid #1a1e26;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 20px;
-            transform: none !important;
-            transition: box-shadow 0.2s ease !important;
-        }
-        
-        .tesis-card:hover {
-            box-shadow: 0px 0px 15px rgba(0, 255, 173, 0.1);
-            border-color: #00ffad44;
-            transform: none !important;
-        }
-        
-        .metric-card {
-            background: #11141a;
-            border: 1px solid #1a1e26;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            transform: none !important;
-        }
-        
-        /* Forzar color de fondo */
-        .stApp {
-            background-color: #0c0e12;
-        }
-        
-        .main {
-            background-color: #0c0e12;
-        }
-    </style>
+        <div class="sidebar-footer">
+            <div class="footer-version">RSU TERMINAL v2.0</div>
+            <div class="footer-copy">© 2026 Professional Trading Suite</div>
+        </div>
     """, unsafe_allow_html=True)
 
-    # Inicializar estado
-    if 'vista_actual' not in st.session_state:
-        st.session_state.vista_actual = "galeria"
-    if 'vista_tipo' not in st.session_state:
-        st.session_state.vista_tipo = "grid"
-    if 'pagina' not in st.session_state:
-        st.session_state.pagina = 1
-    if 'tesis_por_pagina' not in st.session_state:
-        st.session_state.tesis_por_pagina = 9
-
-    CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQVyU3x2DEQVczsqgmUwMSS1SS99Npe8LO-Om5n-VmXKuT-PYxuX65YinMg5XcGZehYE2df6jQuCzTo/pub?output=csv"
-
-    # --- VISTA 1: GALERÍA ---
-    if st.session_state.vista_actual == "galeria":
-        st.markdown('<h1 style="text-align:center; margin-bottom:10px; color:white;">📄 Terminal de Análisis</h1>', unsafe_allow_html=True)
-        st.markdown('<p style="text-align:center; color:#666; margin-bottom:30px;">Análisis técnicos y fundamentales de activos</p>', unsafe_allow_html=True)
-
-        try:
-            @st.cache_data(ttl=300)
-            def load_index(url):
-                data = pd.read_csv(url)
-                data.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in data.columns]
-                if 'fecha' in data.columns:
-                    data['fecha_dt'] = pd.to_datetime(data['fecha'], dayfirst=True, errors='coerce')
-                    data['dias_desde'] = (datetime.now() - data['fecha_dt']).dt.days
-                    data['es_nuevo'] = data['dias_desde'] <= 7
-                return data
-                
-            df = load_index(CSV_URL)
-
-            # Sidebar con filtros avanzados
-            with st.sidebar:
-                st.markdown("### 🔍 Filtros Avanzados")
-                
-                busqueda = st.text_input("Buscar activo:", "", placeholder="Ej: AAPL, Tesla...").lower()
-                
-                ratings_disponibles = ["Todos"] + sorted(list(df['rating'].unique())) if 'rating' in df.columns else ["Todos"]
-                filtro_rating = st.selectbox("Rating:", ratings_disponibles)
-                
-                if 'sector' in df.columns:
-                    sectores = ["Todos"] + sorted(list(df['sector'].unique()))
-                    filtro_sector = st.selectbox("Sector:", sectores)
-                else:
-                    filtro_sector = "Todos"
-                
-                st.markdown("**Fecha:**")
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    fecha_desde = st.date_input("Desde", value=None, key="fecha_desde")
-                with col_f2:
-                    fecha_hasta = st.date_input("Hasta", value=None, key="fecha_hasta")
-                
-                solo_nuevos = st.checkbox("Solo análisis nuevos (7 días)", value=False)
-                
-                st.markdown("---")
-                st.markdown("### ⚙️ Configuración")
-                st.session_state.tesis_por_pagina = st.selectbox("Tesis por página:", [6, 9, 12, 15, 24], index=1)
-                
-                orden_opciones = {
-                    "Fecha ↓": ("fecha_dt", False),
-                    "Fecha ↑": ("fecha_dt", True),
-                    "Ticker A-Z": ("ticker", True),
-                    "Ticker Z-A": ("ticker", False),
-                    "Rating": ("rating", True)
-                }
-                orden_seleccionado = st.selectbox("Ordenar por:", list(orden_opciones.keys()))
-                
-                st.markdown("---")
-                export_btn = st.button("📥 Exportar CSV")
-                if export_btn:
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(label="Descargar datos", data=csv, file_name=f"tesis_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
-
-            # Aplicar filtros
-            df_view = df.copy()
-            
-            if busqueda and 'ticker' in df_view.columns and 'nombre' in df_view.columns:
-                mask = (df_view['ticker'].str.contains(busqueda, case=False, na=False) | 
-                       df_view['nombre'].str.contains(busqueda, case=False, na=False))
-                df_view = df_view[mask]
-            
-            if filtro_rating != "Todos" and 'rating' in df_view.columns:
-                df_view = df_view[df_view['rating'] == filtro_rating]
-            
-            if filtro_sector != "Todos" and 'sector' in df_view.columns:
-                df_view = df_view[df_view['sector'] == filtro_sector]
-            
-            if fecha_desde and 'fecha_dt' in df_view.columns:
-                df_view = df_view[df_view['fecha_dt'] >= pd.Timestamp(fecha_desde)]
-            
-            if fecha_hasta and 'fecha_dt' in df_view.columns:
-                df_view = df_view[df_view['fecha_dt'] <= pd.Timestamp(fecha_hasta)]
-            
-            if solo_nuevos and 'es_nuevo' in df_view.columns:
-                df_view = df_view[df_view['es_nuevo'] == True]
-            
-            sort_col, sort_asc = orden_opciones[orden_seleccionado]
-            if sort_col in df_view.columns:
-                df_view = df_view.sort_values(by=sort_col, ascending=sort_asc, na_position='last')
-
-            # Toggle vista
-            col_stats, col_toggle = st.columns([3, 1])
-            
-            with col_stats:
-                st.markdown(f"<p style='color:#888; margin:0;'>Mostrando {len(df_view)} análisis</p>", unsafe_allow_html=True)
-            
-            with col_toggle:
-                col_g, col_l = st.columns(2)
-                with col_g:
-                    if st.button("⊞ Grid", key="btn_grid"):
-                        st.session_state.vista_tipo = "grid"
-                        st.rerun()
-                with col_l:
-                    if st.button("☰ Lista", key="btn_lista"):
-                        st.session_state.vista_tipo = "list"
-                        st.rerun()
-
-            st.markdown("---")
-
-            if len(df_view) > 0:
-                total_paginas = max(1, (len(df_view) + st.session_state.tesis_por_pagina - 1) // st.session_state.tesis_por_pagina)
-                
-                if st.session_state.pagina > total_paginas:
-                    st.session_state.pagina = 1
-                
-                inicio = (st.session_state.pagina - 1) * st.session_state.tesis_por_pagina
-                fin = inicio + st.session_state.tesis_por_pagina
-                df_pagina = df_view.iloc[inicio:fin]
-                
-                # Vista GRID
-                if st.session_state.vista_tipo == "grid":
-                    cols = st.columns(3)
-                    for idx, row in df_pagina.reset_index(drop=True).iterrows():
-                        col_idx = idx % 3
-                        
-                        with cols[col_idx]:
-                            ticker = str(row.get('ticker', 'N/A')).upper()
-                            nombre = str(row.get('nombre', ''))
-                            fecha = str(row.get('fecha', 'S/D'))
-                            rating = str(row.get('rating', 'HOLD')).upper()
-                            sector = str(row.get('sector', ''))
-                            autor = str(row.get('autor', ''))
-                            es_nuevo = row.get('es_nuevo', False)
-                            
-                            # Badge rating
-                            if 'BUY' in rating:
-                                badge_class = "badge-buy"
-                                badge_text = "BUY"
-                            elif 'SELL' in rating:
-                                badge_class = "badge-sell"
-                                badge_text = "SELL"
-                            else:
-                                badge_class = "badge-hold"
-                                badge_text = "HOLD"
-                            
-                            # Card container con clase específica
-                            st.markdown(f'<div class="tesis-card">', unsafe_allow_html=True)
-                            
-                            # Imagen
-                            img_url = str(row.get('imagenencabezado', '')).strip()
-                            
-                            if img_url and img_url.startswith('http'):
-                                try:
-                                    st.image(img_url, use_container_width=True)
-                                except:
-                                    st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown(f'<div style="height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;"><span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span></div>', unsafe_allow_html=True)
-                            
-                            # Badges
-                            badge_cols = st.columns([1, 1, 2])
-                            with badge_cols[0]:
-                                st.markdown(f'<span class="{badge_class}">{badge_text}</span>', unsafe_allow_html=True)
-                            with badge_cols[1]:
-                                if es_nuevo:
-                                    st.markdown('<span class="badge-new">NEW</span>', unsafe_allow_html=True)
-                            
-                            # Info
-                            st.markdown(f"""
-                            <div style="padding:0 15px; margin-top:10px;">
-                                <div style="color:#00ffad; font-size:1.2rem; font-weight:bold;">{ticker}</div>
-                                <div style="color:#888; font-size:0.85rem;">{nombre}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Tags
-                            if sector or autor:
-                                tags_html = ""
-                                if sector:
-                                    tags_html += f'<span class="tag">{sector}</span>'
-                                if autor:
-                                    tags_html += f'<span class="tag">👤 {autor}</span>'
-                                st.markdown(f'<div style="padding:0 15px; margin-top:8px;">{tags_html}</div>', unsafe_allow_html=True)
-                            
-                            # Fecha
-                            st.markdown(f'<div style="padding:0 15px; color:#555; font-size:0.75rem; font-family:monospace; margin-top:8px;">📅 {fecha}</div>', unsafe_allow_html=True)
-                            
-                            # Botón
-                            st.markdown('<div style="padding:15px;">', unsafe_allow_html=True)
-                            if st.button(f"Ver Análisis →", key=f"btn_{ticker}_{idx}"):
-                                st.session_state.tesis_seleccionada = ticker
-                                st.session_state.vista_actual = "lector"
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
-                            
-                            # Cerrar card
-                            st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Vista LISTA
-                else:
-                    for idx, row in df_pagina.iterrows():
-                        ticker = str(row.get('ticker', 'N/A')).upper()
-                        nombre = str(row.get('nombre', ''))
-                        fecha = str(row.get('fecha', 'S/D'))
-                        rating = str(row.get('rating', 'HOLD')).upper()
-                        sector = str(row.get('sector', ''))
-                        es_nuevo = row.get('es_nuevo', False)
-                        
-                        sector_colors = {
-                            'Tecnología': '#00ffad', 'Technology': '#00ffad',
-                            'Energía': '#ff9800', 'Energy': '#ff9800',
-                            'Salud': '#f23645', 'Healthcare': '#f23645',
-                            'Finanzas': '#0096ff', 'Financials': '#0096ff',
-                            'Consumo': '#ff5722', 'Consumer': '#ff5722'
-                        }
-                        sector_color = sector_colors.get(sector, '#888')
-                        
-                        if 'BUY' in rating:
-                            badge_class = "badge-buy"
-                        elif 'SELL' in rating:
-                            badge_class = "badge-sell"
-                        else:
-                            badge_class = "badge-hold"
-                        
-                        col1, col2, col3, col4 = st.columns([0.5, 2, 1, 1])
-                        
-                        with col1:
-                            st.markdown(f'<div style="width:40px; height:40px; background:{sector_color}22; border:1px solid {sector_color}44; border-radius:8px; display:flex; align-items:center; justify-content:center; color:{sector_color}; font-weight:bold; font-size:14px;">{ticker[:2]}</div>', unsafe_allow_html=True)
-                        
-                        with col2:
-                            nuevo_badge = '<span class="badge-new" style="margin-left:8px;">NEW</span>' if es_nuevo else ''
-                            st.markdown(f'<div style="display:flex; align-items:center;"><span style="color:white; font-weight:bold; font-size:16px;">{ticker}</span>{nuevo_badge}</div><div style="color:#888; font-size:13px;">{nombre}</div>', unsafe_allow_html=True)
-                        
-                        with col3:
-                            st.markdown(f'<span class="{badge_class}">{rating}</span>', unsafe_allow_html=True)
-                            if sector:
-                                st.markdown(f'<div style="color:#666; font-size:11px; margin-top:4px;">{sector}</div>', unsafe_allow_html=True)
-                        
-                        with col4:
-                            st.markdown(f'<div style="color:#555; font-size:12px; text-align:right;">{fecha}</div>', unsafe_allow_html=True)
-                            if st.button("Ver →", key=f"btn_list_{ticker}_{idx}"):
-                                st.session_state.tesis_seleccionada = ticker
-                                st.session_state.vista_actual = "lector"
-                                st.rerun()
-                        
-                        st.markdown("<hr style='margin:10px 0; border-color:#1a1e26; opacity:0.3;'>", unsafe_allow_html=True)
-                
-                # Paginación
-                if total_paginas > 1:
-                    col_prev, col_info, col_next = st.columns([1, 2, 1])
-                    
-                    with col_prev:
-                        if st.button("← Anterior", disabled=st.session_state.pagina <= 1, key="btn_prev"):
-                            st.session_state.pagina -= 1
-                            st.rerun()
-                    
-                    with col_info:
-                        st.markdown(f"<p style='text-align:center; color:#888;'>Página {st.session_state.pagina} de {total_paginas}</p>", unsafe_allow_html=True)
-                    
-                    with col_next:
-                        if st.button("Siguiente →", disabled=st.session_state.pagina >= total_paginas, key="btn_next"):
-                            st.session_state.pagina += 1
-                            st.rerun()
-            
-            else:
-                st.info("No se encontraron resultados. Intenta ajustar los filtros de búsqueda.")
-
-        except Exception as e:
-            st.error(f"Error al cargar datos: {e}")
-            st.exception(e)
-
-    # --- VISTA 2: LECTOR ---
-    elif st.session_state.vista_actual == "lector":
-        try:
-            df = pd.read_csv(CSV_URL)
-            df.columns = [col.strip().lower().replace(" ", "").replace("_", "") for col in data.columns]
-            
-            sel_row = df[df['ticker'].str.lower() == st.session_state.tesis_seleccionada.lower()].iloc[0]
-            
-            col_back, col_title, col_actions = st.columns([1, 4, 1])
-            
-            with col_back:
-                st.markdown('<div class="back-button">', unsafe_allow_html=True)
-                if st.button("⬅️ Volver"):
-                    st.session_state.vista_actual = "galeria"
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with col_title:
-                nombre = sel_row.get('nombre', st.session_state.tesis_seleccionada)
-                ticker = str(sel_row.get('ticker', '')).upper()
-                st.markdown(f'<h2 style="color:#00ffad; margin:0;">{nombre} <span style="color:#444; font-size:0.6em;">({ticker})</span></h2>', unsafe_allow_html=True)
-            
-            with col_actions:
-                if st.button("⭐"):
-                    st.toast("Añadido a favoritos", icon="⭐")
-            
-            st.markdown("---")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                rating = str(sel_row.get('rating', 'N/A')).upper()
-                rating_color = "#00ffad" if "BUY" in rating else "#f23645" if "SELL" in rating else "#ff9800"
-                st.markdown(f'<div class="metric-card"><div style="font-size:2rem; font-weight:bold; color:{rating_color};">{rating}</div><div style="color:#888; font-size:0.9rem; margin-top:5px;">Rating</div></div>', unsafe_allow_html=True)
-            
-            with col2:
-                fecha = str(sel_row.get('fecha', 'N/A'))
-                st.markdown(f'<div class="metric-card"><div style="font-size:2rem; font-weight:bold; color:white;">{fecha}</div><div style="color:#888; font-size:0.9rem; margin-top:5px;">Fecha</div></div>', unsafe_allow_html=True)
-            
-            with col3:
-                sector = str(sel_row.get('sector', 'N/A'))
-                st.markdown(f'<div class="metric-card"><div style="font-size:2rem; font-weight:bold; color:#0096ff;">{sector}</div><div style="color:#888; font-size:0.9rem; margin-top:5px;">Sector</div></div>', unsafe_allow_html=True)
-            
-            with col4:
-                autor = str(sel_row.get('autor', 'N/A'))
-                st.markdown(f'<div class="metric-card"><div style="font-size:2rem; font-weight:bold; color:#ff9800;">{autor}</div><div style="color:#888; font-size:0.9rem; margin-top:5px;">Analista</div></div>', unsafe_allow_html=True)
-            
-            if 'resumen' in sel_row and pd.notna(sel_row['resumen']):
-                st.markdown("---")
-                st.markdown("### 📝 Resumen Ejecutivo")https://github.com/unlordlab/RSU-Terminal/blob/main/app.py
-                st.info(sel_row['resumen'])
-            
-            metricas_cols = []
-            if 'precioobjetivo' in sel_row and pd.notna(sel_row['precioobjetivo']):
-                metricas_cols.append(("🎯 Precio Objetivo", f"${sel_row['precioobjetivo']}", "#00ffad"))
-            if 'precioactual' in sel_row and pd.notna(sel_row['precioactual']):
-                metricas_cols.append(("💵 Precio Actual", f"${sel_row['precioactual']}", "#888"))
-            if 'upside' in sel_row and pd.notna(sel_row['upside']):
-                upside_val = sel_row['upside']
-                upside_color = "#00ffad" if upside_val > 0 else "#f23645"
-                metricas_cols.append(("📈 Upside", f"{upside_val:+.1f}%", upside_color))
-            if 'riesgo' in sel_row and pd.notna(sel_row['riesgo']):
-                riesgo = str(sel_row['riesgo']).upper()
-                riesgo_color = "#00ffad" if "BAJO" in riesgo else "#ff9800" if "MEDIO" in riesgo else "#f23645"
-                metricas_cols.append(("⚠️ Riesgo", riesgo, riesgo_color))
-            
-            if metricas_cols:
-                st.markdown("---")
-                st.markdown("### 📊 Métricas Clave")
-                cols_metricas = st.columns(len(metricas_cols))
-                for i, (label, value, color) in enumerate(metricas_cols):
-                    with cols_metricas[i]:
-                        st.markdown(f'<div class="metric-card"><div style="font-size:2rem; font-weight:bold; color:{color};">{value}</div><div style="color:#888; font-size:0.9rem; margin-top:5px;">{label}</div></div>', unsafe_allow_html=True)
-            
-            st.markdown("---")
-            st.markdown("### 📄 Documento Completo")
-            
-            url_doc = str(sel_row.get('urldoc', '')).strip()
-            if url_doc:
-                if "/pub" in url_doc:
-                    url_doc = url_doc.split("?")[0].split("&")[0] + "?embedded=true"
-                
-                with st.spinner("Cargando documento..."):
-                    components.iframe(url_doc, height=800, scrolling=True)
-            else:
-                st.warning("No hay documento disponible para este análisis.")
-                
-        except Exception as e:
-            st.error(f"Error al cargar el análisis: {e}")
-            if st.button("← Volver a la galería"):
-                st.session_state.vista_actual = "galeria"
-                st.rerun()
+# --- LOGICA DE NAVEGACION CON TODOS LOS MODULOS REALES ---
+if menu == "📊 DASHBOARD":
+    market_module.render()
+elif menu == "📜 MANIFEST":
+    manifest_module.render()
+elif menu == "♣️ RSU CLUB":
+    rsu_club_module.render()
+elif menu == "📈 SCANNER RS/RW":
+    rsrw_module.render()
+elif menu == "🤖 ALGORITMO RSU":
+    rsu_algoritmo_module.render()
+elif menu == "⚡ EMA EDGE":
+    ema_edge_module.render()
+elif menu == "📅 EARNINGS":
+    earnings_module.render()
+elif menu == "💼 CARTERA":
+    cartera_module.render()
+elif menu == "📝 TESIS":
+    tesis_module.render()
+elif menu == "🤖 AI REPORT":
+    ia_report_module.render()
+elif menu == "🎓 ACADEMY":
+    academy_module.render()
+elif menu == "🏆 TRADE GRADER":
+    trade_grader_module.render()
+elif menu == "🚀 SPXL STRATEGY":
+    spxl_strategy_module.render()
+elif menu == "🗺️ ROADMAP 2026":
+    roadmap_2026_module.render()
+elif menu == "🇺🇸 TRUMP PLAYBOOK":
+    trump_playbook_module.render()
+elif menu == "👥 COMUNIDAD":
+    comunidad_module.render()
+elif menu == "⚠️ DISCLAIMER":
+    disclaimer_module.render()

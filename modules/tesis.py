@@ -4,57 +4,56 @@ import streamlit.components.v1 as components
 from datetime import datetime, timedelta
 
 def render():
-    # CSS CRÍTICO: Aislar completamente de animaciones globales del sidebar
+    # CSS mínimo para tesis - sin transformaciones
     st.markdown("""
     <style>
-        /* FORZAR reset de transformaciones en el contenido principal */
-        .main [data-testid="stVerticalBlock"] > div[class*="element-container"] {
-            transform: none !important;
-            transition: none !important;
-            animation: none !important;
-        }
-        
-        /* Asegurar que las imágenes no tengan transformaciones */
-        .main img {
-            transform: none !important;
-            transition: opacity 0.2s ease !important;
-        }
-        
-        /* Badges estáticos sin animaciones */
-        .badge-buy, .badge-hold, .badge-sell, .badge-new {
-            display: inline-block;
+        /* Estilos básicos sin animaciones problemáticas */
+        .badge-buy {
+            background-color: rgba(0, 255, 173, 0.15);
+            color: #00ffad;
+            border: 1px solid #00ffad44;
             padding: 4px 10px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: bold;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            transform: none !important;
-            animation: none !important;
-        }
-        
-        .badge-buy {
-            background-color: rgba(0, 255, 173, 0.15);
-            color: #00ffad;
-            border: 1px solid #00ffad44;
+            display: inline-block;
         }
         
         .badge-hold {
             background-color: rgba(255, 152, 0, 0.15);
             color: #ff9800;
             border: 1px solid #ff980044;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: inline-block;
         }
         
         .badge-sell {
             background-color: rgba(242, 54, 69, 0.15);
             color: #f23645;
             border: 1px solid #f2364544;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: inline-block;
         }
         
         .badge-new {
             background-color: rgba(0, 150, 255, 0.15);
             color: #0096ff;
             border: 1px solid #0096ff44;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: inline-block;
         }
         
         .tag {
@@ -67,11 +66,9 @@ def render():
             background: #1a1e26;
             color: #888;
             border: 1px solid #2a2e36;
-            transform: none !important;
         }
         
-        /* Botones sin transformaciones */
-        .main .stButton > button {
+        .stButton > button {
             width: 100%;
             background-color: #0c0e12 !important;
             color: #00ffad !important;
@@ -82,46 +79,12 @@ def render():
             font-size: 12px !important;
             text-transform: uppercase !important;
             letter-spacing: 0.5px !important;
-            transform: none !important;
-            transition: all 0.2s ease !important;
         }
         
-        .main .stButton > button:hover {
+        .stButton > button:hover {
             background-color: #00ffad !important;
             color: #0c0e12 !important;
             box-shadow: 0 0 15px rgba(0, 255, 173, 0.3) !important;
-            transform: none !important;
-        }
-        
-        .main .back-button button {
-            background-color: #1a1e26 !important;
-            color: white !important;
-            border: 1px solid #444 !important;
-            transform: none !important;
-        }
-        
-        .main .back-button button:hover {
-            background-color: #f23645 !important;
-            color: white !important;
-            border-color: #f23645 !important;
-            transform: none !important;
-        }
-        
-        /* Cards sin transformaciones */
-        .tesis-card {
-            background: #11141a;
-            border: 1px solid #1a1e26;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 20px;
-            transform: none !important;
-            transition: box-shadow 0.2s ease !important;
-        }
-        
-        .tesis-card:hover {
-            box-shadow: 0px 0px 15px rgba(0, 255, 173, 0.1);
-            border-color: #00ffad44;
-            transform: none !important;
         }
         
         .metric-card {
@@ -130,16 +93,6 @@ def render():
             border-radius: 8px;
             padding: 20px;
             text-align: center;
-            transform: none !important;
-        }
-        
-        /* Forzar color de fondo */
-        .stApp {
-            background-color: #0c0e12;
-        }
-        
-        .main {
-            background-color: #0c0e12;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -299,8 +252,8 @@ def render():
                                 badge_class = "badge-hold"
                                 badge_text = "HOLD"
                             
-                            # Card container con clase específica
-                            st.markdown(f'<div class="tesis-card">', unsafe_allow_html=True)
+                            # Card container
+                            st.markdown('<div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; overflow:hidden; margin-bottom:20px;">', unsafe_allow_html=True)
                             
                             # Imagen
                             img_url = str(row.get('imagenencabezado', '')).strip()

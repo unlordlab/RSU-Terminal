@@ -1,7 +1,8 @@
+
+
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
-import os
 from datetime import datetime
 
 def render():
@@ -285,13 +286,21 @@ def render():
                             badge_class = "badge-hold"
                             badge_text = "HOLD"
                         
-                        # Imagen con fallback
-                        ticker_clean = ticker.lower().strip()
-                        img_path = f"assets/{ticker_clean}.png"
+                        # === IMAGEN DESDE URL DEL SHEET (CORREGIDO) ===
+                        img_url = str(row.get('imagenencabezado', '')).strip()
                         
-                        if os.path.exists(img_path):
-                            img_html = f'<img src="{img_path}" style="width:100%; height:180px; object-fit:cover; border-bottom:1px solid #1a1e26;">'
+                        if img_url and img_url.startswith('http'):
+                            # Usar URL de GitHub directamente con fallback visual
+                            img_html = f'''
+                            <div style="width:100%; height:180px; overflow:hidden; border-bottom:1px solid #1a1e26;">
+                                <img src="{img_url}" 
+                                     style="width:100%; height:100%; object-fit:cover;" 
+                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'width:100%; height:100%; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;\\'><span style=\\'color:#00ffad; font-size:3rem; font-weight:bold;\\'>{ticker}</span></div>';"
+                                     loading="lazy">
+                            </div>
+                            '''
                         else:
+                            # Fallback si no hay URL válida
                             img_html = f'''
                             <div style="width:100%; height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); 
                                         display:flex; align-items:center; justify-content:center; border-bottom:1px solid #1a1e26;">

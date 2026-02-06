@@ -14,7 +14,8 @@ investpy
 pytz
 lxml
 html5lib
-datetime
+
+
 
 
 

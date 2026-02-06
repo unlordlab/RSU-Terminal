@@ -9,7 +9,8 @@ import pytz
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import set_style, get_cnn_fear_greed, actualizar_contador_usuarios, get_market_index
+# NO importar set_style todavía
+from config import get_cnn_fear_greed, actualizar_contador_usuarios, get_market_index
 
 from modules import market as market_module
 from modules import manifest as manifest_module
@@ -30,9 +31,15 @@ from modules import comunidad as comunidad_module
 from modules import disclaimer as disclaimer_module
 from modules import auth as auth_module
 
+# Control de acceso PRIMERO, sin estilos globales
+if not auth_module.login():
+    st.stop()
+
+# AHORA sí aplicar estilos globales (después del login)
+from config import set_style
 set_style()
 
-# CSS Sidebar
+# CSS Sidebar (solo para usuarios logueados)
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -83,7 +90,6 @@ def get_clock_times():
     return times
 
 def format_session_time():
-    """CORREGIDO: Maneja caso cuando no hay last_activity"""
     if "last_activity" not in st.session_state or st.session_state["last_activity"] is None:
         return "30:00"
     
@@ -100,10 +106,6 @@ def format_session_time():
     except Exception:
         return "30:00"
 
-# Control de acceso
-if not auth_module.login():
-    st.stop()
-
 # Inicializar motores
 if 'rsrw_engine' not in st.session_state:
     try:
@@ -114,13 +116,11 @@ if 'rsrw_engine' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    # Logo
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", use_container_width=True)
     else:
         st.markdown("<h2 style='text-align: center; color: #00ffad;'>RSU</h2>", unsafe_allow_html=True)
     
-    # Usuario y sesión
     st.markdown(f"""
         <div class="user-info">
             <div class="user-status">🟢 SESIÓN ACTIVA</div>
@@ -128,7 +128,6 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # Market status
     is_open, status = get_market_status()
     times = get_clock_times()
     
@@ -153,7 +152,6 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # Menú
     menu = st.radio("", [
         "📊 DASHBOARD", "📜 MANIFEST", "♣️ RSU CLUB", "📈 SCANNER RS/RW", 
         "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "📅 EARNINGS", "💼 CARTERA", 
@@ -162,7 +160,6 @@ with st.sidebar:
         "👥 COMUNIDAD", "⚠️ DISCLAIMER"
     ], label_visibility="collapsed")
     
-    # Logout
     st.markdown("---")
     if st.button("🔒 Cerrar Sesión", use_container_width=True):
         auth_module.logout()

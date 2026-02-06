@@ -8,23 +8,16 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # ────────────────────────────────────────────────
-# FUNCIONES AUXILIARES CORREGIDAS
+# FUNCIONES AUXILIARES
 # ────────────────────────────────────────────────
 
 def flatten_columns(df):
-    """
-    Aplana columnas MultiIndex de yfinance.
-    Estructura: [('Close', 'AAPL'), ('High', 'AAPL'), ...] -> ['Close', 'High', ...]
-    """
+    """Aplana columnas MultiIndex de yfinance."""
     if df.empty:
         return df
-    
-    # Si es MultiIndex, tomar el PRIMER nivel (Close, High, Low, Open, Volume)
     if isinstance(df.columns, pd.MultiIndex):
         df = df.copy()
-        df.columns = df.columns.get_level_values(0)  # <-- CAMBIO CLAVE: nivel 0, no 1
-        return df
-    
+        df.columns = df.columns.get_level_values(0)
     return df
 
 def ensure_1d_series(data):
@@ -36,6 +29,14 @@ def ensure_1d_series(data):
             return data['Close']
         return data.iloc[:, 0]
     return data
+
+def hex_to_rgba(hex_color, alpha=1.0):
+    """Convierte hex a rgba para Plotly"""
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return f"rgba({r}, {g}, {b}, {alpha})"
 
 # ────────────────────────────────────────────────
 # CÁLCULOS MATEMÁTICOS
@@ -175,6 +176,7 @@ def get_z_color(z):
 # ────────────────────────────────────────────────
 
 def create_z_score_gauge(z_score):
+    # Usar rgba en lugar de hex con transparencia
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=float(z_score),
@@ -189,11 +191,11 @@ def create_z_score_gauge(z_score):
             'borderwidth': 2,
             'bordercolor': "#1a1e26",
             'steps': [
-                {'range': [-3, -2], 'color': "#f2364522"},
-                {'range': [-2, -1], 'color': "#ff980022"},
-                {'range': [-1, 1], 'color': "#00ffad22"},
-                {'range': [1, 2], 'color': "#ff980022"},
-                {'range': [2, 3], 'color': "#f2364522"}
+                {'range': [-3, -2], 'color': hex_to_rgba("#f23645", 0.13)},  # rgba con alpha
+                {'range': [-2, -1], 'color': hex_to_rgba("#ff9800", 0.13)},
+                {'range': [-1, 1], 'color': hex_to_rgba("#00ffad", 0.13)},
+                {'range': [1, 2], 'color': hex_to_rgba("#ff9800", 0.13)},
+                {'range': [2, 3], 'color': hex_to_rgba("#f23645", 0.13)}
             ],
             'threshold': {'line': {'color': "white", 'width': 4}, 'thickness': 0.8, 'value': float(z_score)}
         }
@@ -317,6 +319,123 @@ def create_price_chart_with_emas(data, symbol):
     return fig
 
 # ────────────────────────────────────────────────
+# SECCIONES EDUCATIVAS Y DE RIESGO
+# ────────────────────────────────────────────────
+
+def render_explanation_section():
+    """Renderiza la sección de explicación de la metodología"""
+    st.markdown("""
+    <div style="background:linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border:1px solid #2a3f5f; border-radius:15px; padding:25px; margin:20px 0;">
+        <h3 style="color:#00ffad; margin-bottom:20px; font-size:1.3rem;">📚 ¿CÓMO FUNCIONA RSU EMA EDGE?</h3>
+        
+        <div style="display:grid; gap:20px;">
+            <div style="background:#0c0e12; padding:15px; border-radius:10px; border-left:3px solid #00ffad;">
+                <h4 style="color:#00ffad; margin:0 0 10px 0; font-size:1rem;">1️⃣ Tensión Elástica (Z-Score) - 40%</h4>
+                <p style="color:#aaa; margin:0; font-size:0.9rem; line-height:1.5;">
+                    La EMA actúa como una "liga elástica". El Z-Score mide cuántas desviaciones estándar 
+                    se ha alejado el precio de esa media. Valores entre -1 y +1σ indican que el precio 
+                    está en su "zona de confort estadístico". Valores extremos (>±2σ) sugieren que el 
+                    precio está sobreextendido y probabilísticamente tenderá a revertir a la media.
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:10px; border-left:3px solid #2196f3;">
+                <h4 style="color:#2196f3; margin:0 0 10px 0; font-size:1rem;">2️⃣ Alineación Multi-Timeframe - 30%</h4>
+                <p style="color:#aaa; margin:0; font-size:0.9rem; line-height:1.5;">
+                    "La tendencia es tu amiga". Analizamos 4 timeframes simultáneamente (15m, 1H, 4H, 1D) 
+                    usando cruces de EMA. Cuando 3 o más timeframes están alineados (alcistas o bajistas), 
+                    la probabilidad de que el movimiento continúe aumenta significativamente. Evita nadar 
+                    contra la corriente.
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:10px; border-left:3px solid #ff9800;">
+                <h4 style="color:#ff9800; margin:0 0 10px 0; font-size:1rem;">3️⃣ Volumen como Gasolina - 20%</h4>
+                <p style="color:#aaa; margin:0; font-size:0.9rem; line-height:1.5;">
+                    El volumen es el combustible de los movimientos. Un rebote sin volumen es como un coche 
+                    sin gasolina: no llegará lejos. Comparamos el volumen actual vs el promedio de 20 días. 
+                    Ratios >2x sugieren participación institucional (dinero "inteligente").
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:10px; border-left:3px solid #9c27b0;">
+                <h4 style="color:#9c27b0; margin:0 0 10px 0; font-size:1rem;">4️⃣ RSI - Filtro de Momentum - 10%</h4>
+                <p style="color:#aaa; margin:0; font-size:0.9rem; line-height:1.5;">
+                    El RSI (Índice de Fuerza Relativa) evita que entremos en zonas de sobrecompra (>70) 
+                    o sobreventa extrema (<30). Buscamos el "punto dulce" entre 40-60 donde el momentum 
+                    tiene espacio para continuar sin estar exhausto.
+                </p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_risks_section():
+    """Renderiza la sección de riesgos y limitaciones"""
+    st.markdown("""
+    <div style="background:linear-gradient(135deg, #1a0f0f 0%, #261a1a 100%); border:2px solid #f23645; border-radius:15px; padding:25px; margin:20px 0;">
+        <h3 style="color:#f23645; margin-bottom:20px; font-size:1.3rem;">⚠️ RIESGOS Y LIMITACIONES CRÍTICAS</h3>
+        
+        <div style="display:grid; gap:15px;">
+            <div style="background:#0c0e12; padding:15px; border-radius:8px; border:1px solid #f2364533;">
+                <h4 style="color:#f23645; margin:0 0 8px 0; font-size:0.95rem;">🎲 Naturaleza Probabilística</h4>
+                <p style="color:#aaa; margin:0; font-size:0.85rem; line-height:1.4;">
+                    <strong>ESTA HERRAMIENTA NO PREDICE EL FUTURO.</strong> Un Z-Score alto no garantiza 
+                    reversión, solo indica que estadísticamente es más probable. El mercado puede permanecer 
+                    irracional más tiempo del que puedes permanecer solvente. El Z-Score de +3 puede 
+                    convertirse en +5 (tendencia parabólica) antes de revertir.
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:8px; border:1px solid #f2364533;">
+                <h4 style="color:#f23645; margin:0 0 8px 0; font-size:0.95rem;">📰 Eventos de Cola Negra (Black Swans)</h4>
+                <p style="color:#aaa; margin:0; font-size:0.85rem; line-height:1.4;">
+                    Esta herramienta no detecta eventos impredecibles: guerras, fraudes corporativos, 
+                    decisiones de la FED sorpresa, tweets de CEOs, etc. El análisis técnico falla 
+                    catastróficamente ante noticias fundamentales de alto impacto.
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:8px; border:1px solid #f2364533;">
+                <h4 style="color:#f23645; margin:0 0 8px 0; font-size:0.95rem;">⏱️ Lag en Datos</h4>
+                <p style="color:#aaa; margin:0; font-size:0.85rem; line-height:1.4;">
+                    Los datos de yfinance tienen delay (15 min para intradía). En mercados volátiles, 
+                    el "setup perfecto" puede desaparecer antes de que ejecutes. Esta herramienta es 
+                    para análisis, no para ejecución en tiempo real.
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:8px; border:1px solid #f2364533;">
+                <h4 style="color:#f23645; margin:0 0 8px 0; font-size:0.95rem;">🤖 Sobre-optimización (Curve Fitting)</h4>
+                <p style="color:#aaa; margin:0; font-size:0.85rem; line-height:1.4;">
+                    Los parámetros (EMA 9/21/50, RSI 14, lookback 20) funcionan bien en condiciones 
+                    normales pero pueden fallar en regímenes de mercado cambiantes. No hay "santo grial" 
+                    en el trading. Los mercados evolucionan y las estrategias dejan de funcionar.
+                </p>
+            </div>
+            
+            <div style="background:#0c0e12; padding:15px; border-radius:8px; border:1px solid #ff980033;">
+                <h4 style="color:#ff9800; margin:0 0 8px 0; font-size:0.95rem;">💡 Uso Recomendado</h4>
+                <p style="color:#aaa; margin:0; font-size:0.85rem; line-height:1.4;">
+                    Usa esta herramienta como <strong>filtro de probabilidad</strong>, no como señal de 
+                    entrada única. Combínala con:<br>
+                    • Análisis fundamental del activo<br>
+                    • Contexto macroeconómico (noticias, earnings)<br>
+                    • Gestión de riesgo estricta (stop losses, sizing)<br>
+                    • Diario de trading para trackear tu edge real
+                </p>
+            </div>
+        </div>
+        
+        <div style="margin-top:20px; padding:15px; background:#f2364511; border-radius:8px; text-align:center;">
+            <p style="color:#f23645; margin:0; font-size:0.9rem; font-weight:bold;">
+                🚨 NUNCA ARRIESGUES MÁS DEL 1-2% DE TU CAPITAL EN UNA SOLA OPERACIÓN 🚨
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
 # COMPONENTES UI
 # ────────────────────────────────────────────────
 
@@ -363,6 +482,18 @@ def render():
         .stApp { background: #0c0e12; }
         h1, h2, h3 { color: white !important; }
         p { color: #ccc !important; }
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+        .stTabs [data-baseweb="tab"] { 
+            background: #0c0e12; 
+            color: #888; 
+            border: 1px solid #1a1e26;
+            border-radius: 8px 8px 0 0;
+        }
+        .stTabs [aria-selected="true"] { 
+            background: #1a1e26; 
+            color: #00ffad; 
+            border-bottom: 2px solid #00ffad;
+        }
     </style>
     """, unsafe_allow_html=True)
     
@@ -373,135 +504,183 @@ def render():
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Tabs para organizar la información
+    tab1, tab2, tab3 = st.tabs(["🎯 Análisis", "📚 Metodología", "⚠️ Riesgos"])
     
-    with col1:
-        symbol = st.text_input("Símbolo del Activo", value="AAPL", 
-                              help="Ingresa el ticker (ej: AAPL, MSFT, BTC-USD)", key="symbol_input").upper().strip()
-    
-    with col2:
-        timeframe = st.selectbox("Timeframe Principal", ["15m", "1h", "4h", "1d"], index=3, key="timeframe_select")
-    
-    with col3:
-        st.markdown("<br>", unsafe_allow_html=True)
-        analyze_btn = st.button("🔍 ANALIZAR", use_container_width=True, type="primary", key="analyze_button")
-    
-    show_debug = st.checkbox("Mostrar debug de datos", value=False, key="debug_checkbox")
-    
-    if analyze_btn or symbol:
-        with st.spinner("Calculando matrices de probabilidad..."):
-            try:
-                tf_map = {"15m": ("5d", "15m"), "1h": ("1mo", "1h"), "4h": ("3mo", "1h"), "1d": ("1y", "1d")}
-                period, interval = tf_map.get(timeframe, ("1y", "1d"))
-                
-                if show_debug:
-                    st.write(f"Descargando: {symbol} | Periodo: {period} | Intervalo: {interval}")
-                
-                data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
-                
-                if show_debug:
-                    st.write("Estructura original:")
-                    st.write(f"Columns: {data.columns.tolist()}")
-                
-                if data.empty:
-                    st.error(f"No se pudieron descargar datos para {symbol}.")
-                    return
-                
-                # Aplanar columnas (ahora correctamente)
-                data = flatten_columns(data)
-                
-                if show_debug:
-                    st.write("Después de flatten_columns:")
-                    st.write(f"Columns: {data.columns.tolist()}")
-                    st.dataframe(data.head(3))
-                
-                # Verificar columnas
-                required = ['Close', 'High', 'Low', 'Open']
-                missing = [r for r in required if r not in data.columns]
-                
-                if missing:
-                    st.error(f"Faltan columnas: {missing}")
-                    st.write(f"Columnas disponibles: {data.columns.tolist()}")
-                    return
-                
-                if len(data) < 50:
-                    st.error(f"Datos insuficientes ({len(data)} filas).")
-                    return
-                
-                # Cálculos principales
-                close = ensure_1d_series(data['Close'])
-                ema_21 = calculate_ema(close, 21)
-                current_z = float(calculate_z_score(close, ema_21).iloc[-1])
-                
-                trends = get_multi_timeframe_trend(symbol)
-                vol_analysis = analyze_volume_profile(data)
-                
-                rsi_series = calculate_rsi(close)
-                rsi = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else 50.0
-                
-                trend_alignment = {k: v.get('trend') for k, v in trends.items()}
-                rsu_data = calculate_rsu_score(current_z, trend_alignment, vol_analysis['volume_ratio'], rsi)
-                
-                # Dashboard
-                render_verdict_banner(rsu_data)
-                
-                m1, m2, m3, m4 = st.columns(4)
-                with m1:
-                    render_metric_card("TENSIÓN ELÁSTICA", f"{current_z:+.2f}σ", "Z-Score vs EMA21", get_z_color(current_z), "⚡")
-                with m2:
-                    trend_1d = trends.get('1D', {}).get('trend', 'N/A')
-                    trend_color = "#00ffad" if trend_1d == "BULLISH" else "#f23645" if trend_1d == "BEARISH" else "#888"
-                    render_metric_card("TENDENCIA 1D", trend_1d, "Dirección principal", trend_color, "📈")
-                with m3:
-                    vol_color = "#00ffad" if vol_analysis['volume_ratio'] > 1.5 else "#ff9800" if vol_analysis['volume_ratio'] > 1 else "#f23645"
-                    render_metric_card("VOLUMEN", f"{vol_analysis['volume_ratio']:.2f}x", "vs Promedio 20d", vol_color, "⛽")
-                with m4:
-                    rsi_color = "#00ffad" if 40 <= rsi <= 60 else "#ff9800" if 30 <= rsi < 40 or 60 < rsi <= 70 else "#f23645"
-                    render_metric_card("RSI", f"{rsi:.1f}", "Momentum 14d", rsi_color, "💪")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                g1, g2 = st.columns([2, 1])
-                with g1:
-                    st.plotly_chart(create_price_chart_with_emas(data, symbol), use_container_width=True, key="price_chart")
-                with g2:
-                    st.plotly_chart(create_z_score_gauge(current_z), use_container_width=True, key="z_gauge")
+    with tab1:
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
+        with col1:
+            symbol = st.text_input("Símbolo del Activo", value="AAPL", 
+                                  help="Ingresa el ticker (ej: AAPL, MSFT, BTC-USD)", key="symbol_input").upper().strip()
+        
+        with col2:
+            timeframe = st.selectbox("Timeframe Principal", ["15m", "1h", "4h", "1d"], index=3, key="timeframe_select")
+        
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            analyze_btn = st.button("🔍 ANALIZAR", use_container_width=True, type="primary", key="analyze_button")
+        
+        show_debug = st.checkbox("Mostrar debug de datos", value=False, key="debug_checkbox")
+        
+        if analyze_btn or symbol:
+            with st.spinner("Calculando matrices de probabilidad..."):
+                try:
+                    tf_map = {"15m": ("5d", "15m"), "1h": ("1mo", "1h"), "4h": ("3mo", "1h"), "1d": ("1y", "1d")}
+                    period, interval = tf_map.get(timeframe, ("1y", "1d"))
                     
-                    z_interp = "✅ Precio cerca de la media." if abs(current_z) <= 0.5 else "⚠️ Ligera desviación." if abs(current_z) <= 1 else "🚨 Precio estirado." if abs(current_z) <= 2 else "❌ Extremo estadístico."
-                    st.markdown(f"""
-                    <div style="background:#0c0e12; padding:12px; border-radius:8px; border-left:3px solid {get_z_color(current_z)}; margin-top:10px;">
-                        <div style="color:white; font-size:12px; font-weight:bold;">Interpretación:</div>
-                        <div style="color:#aaa; font-size:11px;">{z_interp}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                g3, g4 = st.columns(2)
-                with g3:
-                    st.plotly_chart(create_trend_alignment_chart(trends), use_container_width=True, key="trend_chart")
-                with g4:
-                    st.plotly_chart(create_rsu_score_radar(rsu_data), use_container_width=True, key="radar_chart")
-                
-                st.plotly_chart(create_volume_heatmap(data, vol_analysis), use_container_width=True, key="vol_chart")
-                
-                with st.expander("📊 ANÁLISIS DETALLADO", expanded=False):
-                    st.write("Detalles del análisis:")
-                    st.json({
-                        "z_score": current_z,
-                        "trends": trends,
-                        "volume": vol_analysis,
-                        "rsi": rsi,
-                        "rsu_score": rsu_data
-                    })
-                
-                st.markdown("""
-                <div style="margin-top:30px; padding:15px; background:#1a1e26; border-radius:8px; border-left:3px solid #ff9800;">
-                    <div style="color:#ff9800; font-weight:bold; font-size:12px;">⚠️ ADVERTENCIA</div>
-                    <div style="color:#888; font-size:11px;">Esta herramienta proporciona análisis estadístico basado en datos históricos.</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            except Exception as e:
-                st.error(f"Error en el análisis: {str(e)}")
-                import traceback
-                with st.expander("Detalles técnicos"):
-                    st.code(traceback.format_exc())
+                    if show_debug:
+                        st.write(f"Descargando: {symbol} | Periodo: {period} | Intervalo: {interval}")
+                    
+                    data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
+                    
+                    if show_debug:
+                        st.write("Estructura original:")
+                        st.write(f"Columns: {data.columns.tolist()}")
+                    
+                    if data.empty:
+                        st.error(f"No se pudieron descargar datos para {symbol}.")
+                        return
+                    
+                    data = flatten_columns(data)
+                    
+                    if show_debug:
+                        st.write("Después de flatten_columns:")
+                        st.write(f"Columns: {data.columns.tolist()}")
+                        st.dataframe(data.head(3))
+                    
+                    required = ['Close', 'High', 'Low', 'Open']
+                    missing = [r for r in required if r not in data.columns]
+                    
+                    if missing:
+                        st.error(f"Faltan columnas: {missing}")
+                        st.write(f"Columnas disponibles: {data.columns.tolist()}")
+                        return
+                    
+                    if len(data) < 50:
+                        st.error(f"Datos insuficientes ({len(data)} filas).")
+                        return
+                    
+                    # Cálculos
+                    close = ensure_1d_series(data['Close'])
+                    ema_21 = calculate_ema(close, 21)
+                    current_z = float(calculate_z_score(close, ema_21).iloc[-1])
+                    
+                    trends = get_multi_timeframe_trend(symbol)
+                    vol_analysis = analyze_volume_profile(data)
+                    
+                    rsi_series = calculate_rsi(close)
+                    rsi = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else 50.0
+                    
+                    trend_alignment = {k: v.get('trend') for k, v in trends.items()}
+                    rsu_data = calculate_rsu_score(current_z, trend_alignment, vol_analysis['volume_ratio'], rsi)
+                    
+                    # Dashboard
+                    render_verdict_banner(rsu_data)
+                    
+                    m1, m2, m3, m4 = st.columns(4)
+                    with m1:
+                        render_metric_card("TENSIÓN ELÁSTICA", f"{current_z:+.2f}σ", "Z-Score vs EMA21", get_z_color(current_z), "⚡")
+                    with m2:
+                        trend_1d = trends.get('1D', {}).get('trend', 'N/A')
+                        trend_color = "#00ffad" if trend_1d == "BULLISH" else "#f23645" if trend_1d == "BEARISH" else "#888"
+                        render_metric_card("TENDENCIA 1D", trend_1d, "Dirección principal", trend_color, "📈")
+                    with m3:
+                        vol_color = "#00ffad" if vol_analysis['volume_ratio'] > 1.5 else "#ff9800" if vol_analysis['volume_ratio'] > 1 else "#f23645"
+                        render_metric_card("VOLUMEN", f"{vol_analysis['volume_ratio']:.2f}x", "vs Promedio 20d", vol_color, "⛽")
+                    with m4:
+                        rsi_color = "#00ffad" if 40 <= rsi <= 60 else "#ff9800" if 30 <= rsi < 40 or 60 < rsi <= 70 else "#f23645"
+                        render_metric_card("RSI", f"{rsi:.1f}", "Momentum 14d", rsi_color, "💪")
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    g1, g2 = st.columns([2, 1])
+                    with g1:
+                        st.plotly_chart(create_price_chart_with_emas(data, symbol), use_container_width=True, key="price_chart")
+                    with g2:
+                        st.plotly_chart(create_z_score_gauge(current_z), use_container_width=True, key="z_gauge")
+                        
+                        z_interp = "✅ Precio cerca de la media." if abs(current_z) <= 0.5 else "⚠️ Ligera desviación." if abs(current_z) <= 1 else "🚨 Precio estirado." if abs(current_z) <= 2 else "❌ Extremo estadístico."
+                        st.markdown(f"""
+                        <div style="background:#0c0e12; padding:12px; border-radius:8px; border-left:3px solid {get_z_color(current_z)}; margin-top:10px;">
+                            <div style="color:white; font-size:12px; font-weight:bold;">Interpretación:</div>
+                            <div style="color:#aaa; font-size:11px;">{z_interp}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    g3, g4 = st.columns(2)
+                    with g3:
+                        st.plotly_chart(create_trend_alignment_chart(trends), use_container_width=True, key="trend_chart")
+                    with g4:
+                        st.plotly_chart(create_rsu_score_radar(rsu_data), use_container_width=True, key="radar_chart")
+                    
+                    st.plotly_chart(create_volume_heatmap(data, vol_analysis), use_container_width=True, key="vol_chart")
+                    
+                    # Detalles técnicos en expander
+                    with st.expander("🔬 DETALLES TÉCNICOS DEL CÁLCULO", expanded=False):
+                        st.subheader("Parámetros Utilizados")
+                        st.json({
+                            "símbolo": symbol,
+                            "timeframe_principal": timeframe,
+                            "periodo_descarga": period,
+                            "intervalo": interval,
+                            "filas_datos": len(data),
+                            "rango_fechas": f"{data.index[0].strftime('%Y-%m-%d')} a {data.index[-1].strftime('%Y-%m-%d')}"
+                        })
+                        
+                        st.subheader("Cálculos por Componente")
+                        col_c1, col_c2 = st.columns(2)
+                        with col_c1:
+                            st.markdown("**Z-Score (Tensión Elástica)**")
+                            st.code(f"""
+Precio actual: {float(close.iloc[-1]):.2f}
+EMA 21: {float(ema_21.iloc[-1]):.2f}
+Desviación estándar (20d): {float(close.rolling(20).std().iloc[-1]):.2f}
+Z-Score: (Precio - EMA) / STD = {current_z:.3f}
+Puntos asignados: {rsu_data['z_component']}/40
+                            """)
+                            
+                            st.markdown("**RSI (Momentum)**")
+                            st.code(f"""
+RSI (14 días): {rsi:.2f}
+Zona: {"Neutral (40-60)" if 40 <= rsi <= 60 else "Alta (60-70)" if 60 < rsi <= 70 else "Baja (30-40)" if 30 <= rsi < 40 else "Extrema"}
+Puntos asignados: {rsu_data['rsi_component']}/10
+                            """)
+                        
+                        with col_c2:
+                            st.markdown("**Multi-Timeframe**")
+                            for tf, info in trends.items():
+                                st.write(f"• **{tf}**: {info.get('trend', 'N/A')} (fuerza: {info.get('strength', 0):.3f}%)")
+                            st.code(f"Timeframes alcistas: {len([t for t in trend_alignment.values() if t == 'BULLISH'])}/4\nPuntos asignados: {rsu_data['trend_component']}/30")
+                            
+                            st.markdown("**Volumen**")
+                            st.code(f"""
+Volumen hoy: {vol_analysis['current_volume']:,}
+Promedio 20d: {vol_analysis['avg_volume']:,}
+Ratio: {vol_analysis['volume_ratio']:.2f}x
+Tendencia: {vol_analysis['trend_volume']}
+Puntos asignados: {rsu_data['volume_component']}/20
+                            """)
+                        
+                        st.subheader("Fórmula Final")
+                        st.code(f"""
+RSU SCORE = {rsu_data['z_component']} + {rsu_data['trend_component']} + {rsu_data['volume_component']} + {rsu_data['rsi_component']} = {rsu_data['total']}/100
+                        """)
+                        
+                        st.info("""
+                        **Nota técnica**: El Z-Score asume distribución normal de retornos, lo cual 
+                        es una aproximación. Los mercados financieros tienen "colas gordas" (fat tails), 
+                        meaning que eventos extremos son más probables que en una distribución normal pura.
+                        """)
+                    
+                except Exception as e:
+                    st.error(f"Error en el análisis: {str(e)}")
+                    import traceback
+                    with st.expander("Detalles técnicos del error"):
+                        st.code(traceback.format_exc())
+    
+    with tab2:
+        render_explanation_section()
+    
+    with tab3:
+        render_risks_section()

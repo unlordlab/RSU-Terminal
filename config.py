@@ -29,10 +29,18 @@ def set_style():
         .luz-ambar.luz-on { background-color: #ffaa00; box-shadow: 0 0 40px #ffaa00, inset 0 0 20px rgba(0,0,0,0.2); }
         .luz-verde.luz-on { background-color: #00ffad; box-shadow: 0 0 40px #00ffad, inset 0 0 20px rgba(0,0,0,0.2); }
         .stApp { background-color: #0c0e12; color: #e0e0e0; }
-        [data-testid="stSidebar"] { background-color: #151921; border-right: 1px solid #2962ff; }
-        [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .stSubheader {
-            text-align: center !important; width: 100%;
+        
+        /* Sidebar - CORREGIDO: sin transformaciones que causen movimiento */
+        [data-testid="stSidebar"] { 
+            background-color: #151921; 
+            border-right: 1px solid #2962ff; 
         }
+        
+        /* ELIMINADO: Estilos de texto que causaban conflictos */
+        /* [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .stSubheader {
+            text-align: center !important; width: 100%;
+        } */
+        
         .group-container {
             background-color: #11141a; border: 1px solid #2d3439; border-radius: 12px;
             padding: 0px; height: 100%; overflow: hidden; margin-bottom: 20px;
@@ -189,5 +197,5 @@ def obtener_prompt_github():
         return r.text if r.status_code == 200 else ""
     except: 
         return ""
-
          
+

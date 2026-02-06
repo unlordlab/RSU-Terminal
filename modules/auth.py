@@ -187,7 +187,7 @@ def login():
         )
     
     with col2:
-        if st.button("👁️", key="toggle"):
+        if st.button("P", key="toggle"):
             st.session_state["show_password"] = not st.session_state["show_password"]
             st.rerun()
     
@@ -237,4 +237,5 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
+
 

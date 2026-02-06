@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
+import html
 from datetime import datetime, timedelta
 
 def render():
@@ -538,15 +539,21 @@ def render():
                                 badge_class = "badge-hold"
                                 badge_text = "HOLD"
                             
-                            # Imagen
+                            # Imagen - ESCAPAR URL PARA EVITAR PROBLEMAS
                             img_url = str(row.get('imagenencabezado', '')).strip()
                             
                             if img_url and img_url.startswith('http'):
+                                # Escapar la URL para el HTML
+                                img_url_escaped = html.escape(img_url)
+                                ticker_escaped = html.escape(ticker)
+                                
+                                # Usar un div con background image en lugar de img tag para mejor control
                                 img_html = f'''
-                                <div style="width:100%; height:180px; overflow:hidden; border-bottom:1px solid #1a1e26; position:relative;">
-                                    <img src="{img_url}" 
-                                         style="width:100%; height:100%; object-fit:cover;" 
-                                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'width:100%; height:100%; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); display:flex; align-items:center; justify-content:center;\\'><span style=\\'color:#00ffad; font-size:3rem; font-weight:bold;\\'>{ticker}</span></div>';"
+                                <div style="width:100%; height:180px; overflow:hidden; border-bottom:1px solid #1a1e26; position:relative; background:#0c0e12;">
+                                    <img src="{img_url_escaped}" 
+                                         style="width:100%; height:100%; object-fit:cover; display:block;" 
+                                         alt="{ticker_escaped}"
+                                         onerror="this.onerror=null; this.src=''; this.style.display='none'; this.parentElement.style.background='linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%)'; this.parentElement.innerHTML='<div style=\\'width:100%; height:100%; display:flex; align-items:center; justify-content:center;\\'><span style=\\'color:#00ffad; font-size:3rem; font-weight:bold;\\'>{ticker_escaped}</span></div>';"
                                          loading="lazy">
                                     {'<span class="badge badge-new" style="position:absolute; top:10px; left:10px;">NEW</span>' if es_nuevo else ''}
                                 </div>
@@ -555,7 +562,7 @@ def render():
                                 img_html = f'''
                                 <div style="width:100%; height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); 
                                             display:flex; align-items:center; justify-content:center; border-bottom:1px solid #1a1e26; position:relative;">
-                                    <span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span>
+                                    <span style="color:#00ffad; font-size:3rem; font-weight:bold;">{html.escape(ticker)}</span>
                                     {'<span class="badge badge-new" style="position:absolute; top:10px; left:10px;">NEW</span>' if es_nuevo else ''}
                                 </div>
                                 '''
@@ -563,13 +570,20 @@ def render():
                             # Tags
                             tags_html = ""
                             if sector:
-                                tags_html += f'<span class="tag">{sector}</span>'
+                                tags_html += f'<span class="tag">{html.escape(sector)}</span>'
                             if autor:
-                                tags_html += f'<span class="tag">👤 {autor}</span>'
+                                tags_html += f'<span class="tag">👤 {html.escape(autor)}</span>'
                             
+                            # Tooltip
                             tooltip_text = f"Análisis técnico y fundamental de {nombre}. Fecha: {fecha}"
                             if 'resumen' in row and pd.notna(row['resumen']):
                                 tooltip_text += f"\n\nResumen: {str(row['resumen'])[:100]}..."
+                            
+                            # Escapar todo el contenido dinámico
+                            ticker_escaped = html.escape(ticker)
+                            nombre_escaped = html.escape(nombre)
+                            fecha_escaped = html.escape(fecha)
+                            tooltip_escaped = html.escape(tooltip_text)
                             
                             card_html = f'''
                             <div class="group-container" style="margin-bottom:20px;">
@@ -580,14 +594,14 @@ def render():
                                     </div>
                                 </div>
                                 <div style="padding:15px;">
-                                    <div class="ticker-title">{ticker}</div>
-                                    <div class="company-name">{nombre}</div>
+                                    <div class="ticker-title">{ticker_escaped}</div>
+                                    <div class="company-name">{nombre_escaped}</div>
                                     <div style="margin-top:8px;">{tags_html}</div>
                                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
-                                        <span class="date-text">📅 {fecha}</span>
+                                        <span class="date-text">📅 {fecha_escaped}</span>
                                         <div class="tooltip-container">
                                             <div class="tooltip-icon" style="width:20px; height:20px; font-size:12px;">?</div>
-                                            <div class="tooltip-text">{tooltip_text}</div>
+                                            <div class="tooltip-text">{tooltip_escaped}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -636,7 +650,7 @@ def render():
                             <div style="width:40px; height:40px; background:{sector_color}22; border:1px solid {sector_color}44; 
                                         border-radius:8px; display:flex; align-items:center; justify-content:center; color:{sector_color};
                                         font-weight:bold; font-size:14px;">
-                                {ticker[:2]}
+                                {html.escape(ticker[:2])}
                             </div>
                             ''', unsafe_allow_html=True)
                         
@@ -644,19 +658,19 @@ def render():
                             nuevo_badge = '<span class="badge badge-new" style="margin-left:8px;">NEW</span>' if es_nuevo else ''
                             st.markdown(f'''
                             <div style="display:flex; align-items:center;">
-                                <span style="color:white; font-weight:bold; font-size:16px;">{ticker}</span>
+                                <span style="color:white; font-weight:bold; font-size:16px;">{html.escape(ticker)}</span>
                                 {nuevo_badge}
                             </div>
-                            <div style="color:#888; font-size:13px;">{nombre}</div>
+                            <div style="color:#888; font-size:13px;">{html.escape(nombre)}</div>
                             ''', unsafe_allow_html=True)
                         
                         with col3:
-                            st.markdown(f'<span class="badge {badge_class}">{rating}</span>', unsafe_allow_html=True)
+                            st.markdown(f'<span class="badge {badge_class}">{badge_text}</span>', unsafe_allow_html=True)
                             if sector:
-                                st.markdown(f'<div style="color:#666; font-size:11px; margin-top:4px;">{sector}</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div style="color:#666; font-size:11px; margin-top:4px;">{html.escape(sector)}</div>', unsafe_allow_html=True)
                         
                         with col4:
-                            st.markdown(f'<div style="color:#555; font-size:12px; text-align:right;">{fecha}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="color:#555; font-size:12px; text-align:right;">{html.escape(fecha)}</div>', unsafe_allow_html=True)
                             if st.button("Ver →", key=f"btn_list_{ticker}_{idx}"):
                                 st.session_state.tesis_seleccionada = ticker
                                 st.session_state.vista_actual = "lector"
@@ -715,7 +729,7 @@ def render():
             with col_title:
                 nombre = sel_row.get('nombre', st.session_state.tesis_seleccionada)
                 ticker = str(sel_row.get('ticker', '')).upper()
-                st.markdown(f'<h2 style="color:#00ffad; margin:0;">{nombre} <span style="color:#444; font-size:0.6em;">({ticker})</span></h2>', unsafe_allow_html=True)
+                st.markdown(f'<h2 style="color:#00ffad; margin:0;">{html.escape(nombre)} <span style="color:#444; font-size:0.6em;">({html.escape(ticker)})</span></h2>', unsafe_allow_html=True)
             
             with col_actions:
                 # Botón favoritos (placeholder para futura funcionalidad)
@@ -736,7 +750,7 @@ def render():
                         <span class="group-title">Rating</span>
                     </div>
                     <div class="group-content" style="padding:20px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:{rating_color};">{rating}</div>
+                        <div style="font-size:2rem; font-weight:bold; color:{rating_color};">{html.escape(rating)}</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -749,7 +763,7 @@ def render():
                         <span class="group-title">Fecha</span>
                     </div>
                     <div class="group-content" style="padding:20px; text-align:center;">
-                        <div style="font-size:1.2rem; font-weight:bold; color:white;">{fecha}</div>
+                        <div style="font-size:1.2rem; font-weight:bold; color:white;">{html.escape(fecha)}</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -762,7 +776,7 @@ def render():
                         <span class="group-title">Sector</span>
                     </div>
                     <div class="group-content" style="padding:20px; text-align:center;">
-                        <div style="font-size:1.2rem; font-weight:bold; color:#0096ff;">{sector}</div>
+                        <div style="font-size:1.2rem; font-weight:bold; color:#0096ff;">{html.escape(sector)}</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -775,7 +789,7 @@ def render():
                         <span class="group-title">Analista</span>
                     </div>
                     <div class="group-content" style="padding:20px; text-align:center;">
-                        <div style="font-size:1.2rem; font-weight:bold; color:#ff9800;">{autor}</div>
+                        <div style="font-size:1.2rem; font-weight:bold; color:#ff9800;">{html.escape(autor)}</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -784,7 +798,8 @@ def render():
             if 'resumen' in sel_row and pd.notna(sel_row['resumen']):
                 st.markdown("---")
                 st.markdown("### 📝 Resumen Ejecutivo")
-                st.markdown(f"<div style='background:#11141a; padding:20px; border-radius:8px; border-left:3px solid #00ffad; color:#ccc; line-height:1.6;'>{sel_row['resumen']}</div>", unsafe_allow_html=True)
+                resumen_text = html.escape(str(sel_row['resumen']))
+                st.markdown(f"<div style='background:#11141a; padding:20px; border-radius:8px; border-left:3px solid #00ffad; color:#ccc; line-height:1.6;'>{resumen_text}</div>", unsafe_allow_html=True)
             
             # Métricas clave si existen
             metricas_cols = []
@@ -809,8 +824,8 @@ def render():
                     with cols_metricas[i]:
                         st.markdown(f'''
                         <div class="metric-card">
-                            <div class="metric-value" style="color:{color};">{value}</div>
-                            <div class="metric-label">{label}</div>
+                            <div class="metric-value" style="color:{color};">{html.escape(value)}</div>
+                            <div class="metric-label">{html.escape(label)}</div>
                         </div>
                         ''', unsafe_allow_html=True)
             

@@ -1,4 +1,3 @@
-
 # app.py
 import os
 import sys
@@ -38,21 +37,23 @@ from modules import auth as auth_module  # <-- IMPORTAMOS AUTH REAL
 # Aplicar estilos definidos en config.py
 set_style()
 
-# CSS Profesional mejorado (igual que antes)
+# CSS Profesional mejorado - CORREGIDO para aislar animaciones del sidebar
 st.markdown("""
 <style>
-    /* Sidebar base */
+    /* Sidebar base - SIN animaciones que afecten fuera */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a0c10 0%, #11141a 50%, #0c0e12 100%);
         border-right: 1px solid #1a1e26;
+        contain: layout style paint;
     }
     
     [data-testid="stSidebar"] > div:first-child {
         padding-top: 0;
+        transform: none !important;
     }
     
-    /* Logo container con efecto glow */
-    .logo-container {
+    /* Logo container - animación solo dentro del sidebar */
+    [data-testid="stSidebar"] .logo-container {
         background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 50%, #0c0e12 100%);
         padding: 25px 20px;
         border-bottom: 1px solid #2a3f5f;
@@ -62,7 +63,7 @@ st.markdown("""
         overflow: hidden;
     }
     
-    .logo-container::before {
+    [data-testid="stSidebar"] .logo-container::before {
         content: '';
         position: absolute;
         top: 0;
@@ -79,8 +80,8 @@ st.markdown("""
         100% { left: 100%; }
     }
     
-    /* Live badge premium */
-    .live-badge {
+    /* Live badge - solo en sidebar */
+    [data-testid="stSidebar"] .live-badge {
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -92,7 +93,7 @@ st.markdown("""
         box-shadow: 0 0 15px rgba(0,255,173,0.1);
     }
     
-    .live-dot {
+    [data-testid="stSidebar"] .live-dot {
         width: 8px;
         height: 8px;
         background: #00ffad;
@@ -106,8 +107,8 @@ st.markdown("""
         50% { opacity: 0.5; transform: scale(0.8); }
     }
     
-    /* Mini ticker en sidebar */
-    .mini-ticker {
+    /* Mini ticker - SOLO en sidebar */
+    [data-testid="stSidebar"] .mini-ticker {
         background: #0c0e12;
         border: 1px solid #1a1e26;
         border-radius: 8px;
@@ -115,12 +116,14 @@ st.markdown("""
         margin: 15px 0;
         overflow: hidden;
         position: relative;
+        contain: layout style paint;
     }
     
-    .mini-ticker-content {
+    [data-testid="stSidebar"] .mini-ticker-content {
         display: flex;
         animation: ticker-slide 20s linear infinite;
         white-space: nowrap;
+        will-change: transform;
     }
     
     @keyframes ticker-slide {
@@ -128,7 +131,7 @@ st.markdown("""
         100% { transform: translateX(-50%); }
     }
     
-    .ticker-item {
+    [data-testid="stSidebar"] .ticker-item {
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -137,7 +140,7 @@ st.markdown("""
     }
     
     /* Market clock */
-    .market-clock {
+    [data-testid="stSidebar"] .market-clock {
         background: linear-gradient(135deg, rgba(41,98,255,0.1) 0%, rgba(0,255,173,0.05) 100%);
         border: 1px solid #2a3f5f;
         border-radius: 12px;
@@ -145,21 +148,21 @@ st.markdown("""
         margin: 15px 0;
     }
     
-    .clock-header {
+    [data-testid="stSidebar"] .clock-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 10px;
     }
     
-    .clock-title {
+    [data-testid="stSidebar"] .clock-title {
         color: #888;
         font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 2px;
     }
     
-    .market-status {
+    [data-testid="stSidebar"] .market-status {
         display: flex;
         align-items: center;
         gap: 6px;
@@ -169,46 +172,47 @@ st.markdown("""
     .status-open { color: #00ffad; }
     .status-closed { color: #f23645; }
     
-    .clock-grid {
+    [data-testid="stSidebar"] .clock-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
     }
     
-    .clock-item {
+    [data-testid="stSidebar"] .clock-item {
         background: rgba(0,0,0,0.3);
         padding: 8px;
         border-radius: 6px;
         text-align: center;
     }
     
-    .clock-city {
+    [data-testid="stSidebar"] .clock-city {
         color: #666;
         font-size: 0.65rem;
         text-transform: uppercase;
     }
     
-    .clock-time {
+    [data-testid="stSidebar"] .clock-time {
         color: white;
         font-size: 0.9rem;
         font-weight: bold;
         font-family: 'Courier New', monospace;
     }
     
-    /* Menu styling premium */
-    .stRadio > div[role="radiogroup"] > label {
+    /* Menu styling - SOLO en sidebar y SIN transform global */
+    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label {
         background: transparent;
         border: 1px solid transparent;
         border-radius: 10px;
         padding: 12px 15px;
         margin: 3px 0;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: border-color 0.3s ease, background 0.3s ease;
         cursor: pointer;
         position: relative;
         overflow: hidden;
+        transform: none !important;
     }
     
-    .stRadio > div[role="radiogroup"] > label::before {
+    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label::before {
         content: '';
         position: absolute;
         left: 0;
@@ -220,16 +224,17 @@ st.markdown("""
         transition: width 0.3s ease;
     }
     
-    .stRadio > div[role="radiogroup"] > label:hover::before {
+    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover::before {
         width: 100%;
     }
     
-    .stRadio > div[role="radiogroup"] > label:hover {
+    /* ELIMINADO: transform: translateX(5px) que causaba el problema */
+    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {
         border-color: rgba(41, 98, 255, 0.5);
-        transform: translateX(5px);
+        background: rgba(41, 98, 255, 0.05);
     }
     
-    .stRadio > div[role="radiogroup"] > label[data-checked="true"] {
+    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[data-checked="true"] {
         background: linear-gradient(90deg, rgba(41, 98, 255, 0.15) 0%, rgba(0, 255, 173, 0.08) 100%);
         border-left: 3px solid #00ffad;
         border-top: 1px solid rgba(0, 255, 173, 0.3);
@@ -239,7 +244,7 @@ st.markdown("""
     }
     
     /* FNG Container */
-    .fng-container {
+    [data-testid="stSidebar"] .fng-container {
         background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
         border: 1px solid #1a1e26;
         border-radius: 16px;
@@ -248,7 +253,7 @@ st.markdown("""
         position: relative;
     }
     
-    .fng-container::after {
+    [data-testid="stSidebar"] .fng-container::after {
         content: '';
         position: absolute;
         top: -1px;
@@ -258,21 +263,21 @@ st.markdown("""
         background: linear-gradient(90deg, transparent, #2962ff, transparent);
     }
     
-    .fng-header {
+    [data-testid="stSidebar"] .fng-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         margin-bottom: 15px;
     }
     
-    .fng-title {
+    [data-testid="stSidebar"] .fng-title {
         color: white;
         font-size: 0.8rem;
         font-weight: bold;
         letter-spacing: 1px;
     }
     
-    .fng-value {
+    [data-testid="stSidebar"] .fng-value {
         background: linear-gradient(135deg, #2962ff 0%, #00ffad 100%);
         color: white;
         padding: 6px 14px;
@@ -283,14 +288,14 @@ st.markdown("""
     }
     
     /* Quick stats */
-    .quick-stats {
+    [data-testid="stSidebar"] .quick-stats {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
         margin: 15px 0;
     }
     
-    .stat-box {
+    [data-testid="stSidebar"] .stat-box {
         background: rgba(255,255,255,0.03);
         border: 1px solid #1a1e26;
         border-radius: 10px;
@@ -299,12 +304,12 @@ st.markdown("""
         transition: all 0.2s;
     }
     
-    .stat-box:hover {
+    [data-testid="stSidebar"] .stat-box:hover {
         background: rgba(41,98,255,0.05);
         border-color: #2a3f5f;
     }
     
-    .stat-label {
+    [data-testid="stSidebar"] .stat-label {
         color: #666;
         font-size: 0.65rem;
         text-transform: uppercase;
@@ -312,19 +317,19 @@ st.markdown("""
         margin-bottom: 4px;
     }
     
-    .stat-value {
+    [data-testid="stSidebar"] .stat-value {
         color: white;
         font-size: 1rem;
         font-weight: bold;
     }
     
-    .stat-change {
+    [data-testid="stSidebar"] .stat-change {
         font-size: 0.7rem;
         margin-top: 2px;
     }
     
     /* Section headers */
-    .section-header {
+    [data-testid="stSidebar"] .section-header {
         color: #2962ff;
         font-size: 0.7rem;
         text-transform: uppercase;
@@ -336,7 +341,7 @@ st.markdown("""
         gap: 10px;
     }
     
-    .section-header::after {
+    [data-testid="stSidebar"] .section-header::after {
         content: '';
         flex: 1;
         height: 1px;
@@ -344,7 +349,7 @@ st.markdown("""
     }
     
     /* Separator */
-    .sidebar-separator {
+    [data-testid="stSidebar"] .sidebar-separator {
         height: 1px;
         background: linear-gradient(90deg, transparent 0%, #2a3f5f 50%, transparent 100%);
         margin: 20px 0;
@@ -352,7 +357,7 @@ st.markdown("""
         position: relative;
     }
     
-    .sidebar-separator::after {
+    [data-testid="stSidebar"] .sidebar-separator::after {
         content: '◆';
         position: absolute;
         left: 50%;
@@ -365,14 +370,14 @@ st.markdown("""
     }
     
     /* Legend grid */
-    .legend-grid {
+    [data-testid="stSidebar"] .legend-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
         margin-top: 12px;
     }
     
-    .legend-item {
+    [data-testid="stSidebar"] .legend-item {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -383,39 +388,39 @@ st.markdown("""
         transition: all 0.2s;
     }
     
-    .legend-item:hover {
+    [data-testid="stSidebar"] .legend-item:hover {
         background: rgba(255,255,255,0.05);
         border-color: #1a1e26;
     }
     
-    .legend-color {
+    [data-testid="stSidebar"] .legend-color {
         width: 12px;
         height: 12px;
         border-radius: 3px;
         box-shadow: 0 0 8px currentColor;
     }
     
-    .legend-text {
+    [data-testid="stSidebar"] .legend-text {
         color: #999;
         font-size: 0.7rem;
     }
     
     /* Footer */
-    .sidebar-footer {
+    [data-testid="stSidebar"] .sidebar-footer {
         text-align: center;
         padding: 20px 0 10px;
         margin-top: 10px;
         border-top: 1px solid #1a1e26;
     }
     
-    .footer-version {
+    [data-testid="stSidebar"] .footer-version {
         color: #2962ff;
         font-size: 0.75rem;
         font-weight: bold;
         letter-spacing: 2px;
     }
     
-    .footer-copy {
+    [data-testid="stSidebar"] .footer-copy {
         color: #444;
         font-size: 0.65rem;
         margin-top: 6px;
@@ -437,6 +442,16 @@ st.markdown("""
     
     [data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover {
         background: #2962ff;
+    }
+    
+    /* CRÍTICO: Resetear cualquier transformación que pueda haberse filtrado */
+    .main {
+        transform: none !important;
+    }
+    
+    /* Asegurar que el contenido principal no herede animaciones */
+    .main [data-testid="stVerticalBlock"] {
+        animation: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -832,3 +847,4 @@ elif menu == "👥 COMUNIDAD":
     comunidad_module.render()
 elif menu == "⚠️ DISCLAIMER":
     disclaimer_module.render()
+

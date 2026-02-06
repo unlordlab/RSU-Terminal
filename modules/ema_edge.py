@@ -9,11 +9,40 @@ from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 
 # ────────────────────────────────────────────────
+# FUNCIONES AUXILIARES PARA MANEJAR MULTIINDEX
+# ────────────────────────────────────────────────
+
+def flatten_columns(df):
+    """
+    Aplana las columnas MultiIndex de yfinance (ticker, campo) -> campo
+    """
+    if isinstance(df.columns, pd.MultiIndex):
+        # Si es MultiIndex, tomar el segundo nivel (Close, Open, etc)
+        df.columns = df.columns.get_level_values(1)
+    return df
+
+def safe_get_series(df, column):
+    """
+    Extrae una serie de forma segura, manejando MultiIndex
+    """
+    df = flatten_columns(df)
+    if column in df.columns:
+        series = df[column]
+        # Asegurar que es una Serie 1D, no DataFrame
+        if isinstance(series, pd.DataFrame):
+            return series.iloc[:, 0]
+        return series
+    return None
+
+# ────────────────────────────────────────────────
 # CÁLCULOS MATEMÁTICOS - NÚCLEO DEL RSU EMA EDGE
 # ────────────────────────────────────────────────
 
 def calculate_ema(prices, period):
     """Calcula EMA usando fórmula estándar"""
+    # Asegurar que prices es 1D
+    if isinstance(prices, pd.DataFrame):
+        prices = prices.iloc[:, 0]
     return prices.ewm(span=period, adjust=False).mean()
 
 def calculate_z_score(price, ema, std_period=20):
@@ -21,12 +50,22 @@ def calculate_z_score(price, ema, std_period=20):
     Z-Score: Medida de "Tensión Elástica"
     Cuántas desviaciones estándar está el precio de la EMA
     """
+    # Asegurar 1D
+    if isinstance(price, pd.DataFrame):
+        price = price.iloc[:, 0]
+    if isinstance(ema, pd.DataFrame):
+        ema = ema.iloc[:, 0]
+    
     std = price.rolling(window=std_period).std()
     z_score = (price - ema) / std
     return z_score
 
 def calculate_rsi(prices, period=14):
     """RSI para confirmación adicional"""
+    # Asegurar 1D
+    if isinstance(prices, pd.DataFrame):
+        prices = prices.iloc[:, 0]
+        
     delta = prices.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
@@ -43,31 +82,37 @@ def get_multi_timeframe_trend(symbol):
     
     timeframes = {
         '1D': ('1y', '1d'),
-        '4H': ('3mo', '1h'),  # Nota: yfinance no tiene 4H exacto, usamos 1H
+        '4H': ('3mo', '1h'),
         '1H': ('1mo', '1h'),
         '15m': ('5d', '15m')
     }
     
     for tf, (period, interval) in timeframes.items():
         try:
-            data = yf.download(symbol, period=period, interval=interval, progress=False)
+            data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
+            data = flatten_columns(data)
+            
             if len(data) > 50:
-                ema_fast = calculate_ema(data['Close'], 9 if tf in ['15m', '1H'] else 20)
-                ema_slow = calculate_ema(data['Close'], 21 if tf in ['15m', '1H'] else 50)
+                close = data['Close']
+                ema_fast = calculate_ema(close, 9 if tf in ['15m', '1H'] else 20)
+                ema_slow = calculate_ema(close, 21 if tf in ['15m', '1H'] else 50)
                 
-                current_price = data['Close'].iloc[-1]
-                trend = "BULLISH" if ema_fast.iloc[-1] > ema_slow.iloc[-1] else "BEARISH"
-                strength = abs(ema_fast.iloc[-1] - ema_slow.iloc[-1]) / current_price * 100
+                current_price = float(close.iloc[-1])
+                ema_fast_val = float(ema_fast.iloc[-1])
+                ema_slow_val = float(ema_slow.iloc[-1])
+                
+                trend = "BULLISH" if ema_fast_val > ema_slow_val else "BEARISH"
+                strength = abs(ema_fast_val - ema_slow_val) / current_price * 100
                 
                 trends[tf] = {
                     'trend': trend,
                     'strength': float(strength),
                     'price': float(current_price),
-                    'ema_fast': float(ema_fast.iloc[-1]),
-                    'ema_slow': float(ema_slow.iloc[-1])
+                    'ema_fast': float(ema_fast_val),
+                    'ema_slow': float(ema_slow_val)
                 }
         except Exception as e:
-            trends[tf] = {'trend': 'ERROR', 'strength': 0}
+            trends[tf] = {'trend': 'ERROR', 'strength': 0, 'error': str(e)}
     
     return trends
 
@@ -76,6 +121,8 @@ def analyze_volume_profile(data, lookback=20):
     Análisis de Volumen: "Gasolina Real"
     Compara volumen actual vs promedio para detectar participación institucional
     """
+    data = flatten_columns(data)
+    
     if 'Volume' not in data.columns or data['Volume'].isna().all():
         return {
             'current_volume': 0,
@@ -85,16 +132,20 @@ def analyze_volume_profile(data, lookback=20):
             'institutional_participation': False
         }
     
-    current_vol = data['Volume'].iloc[-1]
-    avg_vol = data['Volume'].rolling(window=lookback).mean().iloc[-1]
+    volume = data['Volume']
+    # Asegurar 1D
+    if isinstance(volume, pd.DataFrame):
+        volume = volume.iloc[:, 0]
+    
+    current_vol = float(volume.iloc[-1])
+    avg_vol = float(volume.tail(lookback).mean())
     volume_ratio = current_vol / avg_vol if avg_vol > 0 else 1
     
-    # Análisis de tendencia de volumen (últimos 5 días vs anteriores)
-    recent_vol = data['Volume'].tail(5).mean()
-    previous_vol = data['Volume'].iloc[-10:-5].mean()
+    # Análisis de tendencia de volumen
+    recent_vol = float(volume.tail(5).mean())
+    previous_vol = float(volume.iloc[-10:-5].mean()) if len(volume) >= 10 else recent_vol
     vol_trend = "INCREASING" if recent_vol > previous_vol * 1.1 else "DECREASING" if recent_vol < previous_vol * 0.9 else "STABLE"
     
-    # Detección de participación institucional (volumen > 2x promedio)
     institutional = volume_ratio > 2.0
     
     return {
@@ -111,24 +162,23 @@ def calculate_rsu_score(z_score, trend_alignment, volume_score, rsi_value):
     Combina todos los factores en una métrica única
     """
     # Normalizar Z-Score (0-40 puntos)
-    # Z-score entre -1 y 1 = zona óptima (precio cerca de media)
     z_abs = abs(z_score)
     if z_abs <= 0.5:
-        z_points = 40  # Zona perfecta
+        z_points = 40
     elif z_abs <= 1.0:
-        z_points = 30  # Zona buena
+        z_points = 30
     elif z_abs <= 2.0:
-        z_points = 15  # Zona de precaución
+        z_points = 15
     else:
-        z_points = 0   # Zona peligrosa (sobreextendido)
+        z_points = 0
     
     # Alineación de tendencia (0-30 puntos)
-    tf_count = len([t for t in trend_alignment.values() if t != 'ERROR'])
+    tf_count = len([t for t in trend_alignment.values() if t not in ['ERROR', None]])
     bullish_count = len([t for t in trend_alignment.values() if t == 'BULLISH'])
     
     if tf_count > 0:
         alignment_ratio = bullish_count / tf_count
-        if alignment_ratio >= 0.75:  # 3 de 4 o más
+        if alignment_ratio >= 0.75:
             trend_points = 30
         elif alignment_ratio >= 0.5:
             trend_points = 20
@@ -141,23 +191,23 @@ def calculate_rsu_score(z_score, trend_alignment, volume_score, rsi_value):
     
     # Volumen (0-20 puntos)
     if volume_score > 2.0:
-        vol_points = 20  # Confirmación fuerte
+        vol_points = 20
     elif volume_score > 1.5:
         vol_points = 15
     elif volume_score > 1.0:
         vol_points = 10
     else:
-        vol_points = 5   # Poco volumen, señal débil
+        vol_points = 5
     
-    # RSI (0-10 puntos) - Evitar sobrecompra/sobreventa extrema
+    # RSI (0-10 puntos)
     if 40 <= rsi_value <= 60:
-        rsi_points = 10  # Zona neutral óptima
+        rsi_points = 10
     elif 30 <= rsi_value < 40 or 60 < rsi_value <= 70:
         rsi_points = 7
     elif 20 <= rsi_value < 30 or 70 < rsi_value <= 80:
         rsi_points = 4
     else:
-        rsi_points = 0   # Sobrecompra/sobreventa extrema
+        rsi_points = 0
     
     total_score = z_points + trend_points + vol_points + rsi_points
     
@@ -172,7 +222,6 @@ def calculate_rsu_score(z_score, trend_alignment, volume_score, rsi_value):
     }
 
 def get_grade(score):
-    """Convierte score numérico en calificación alfabética"""
     if score >= 85: return "A+", "EXCELENTE"
     elif score >= 75: return "A", "MUY BUENA"
     elif score >= 65: return "B", "BUENA"
@@ -181,7 +230,6 @@ def get_grade(score):
     else: return "F", "PELIGROSO"
 
 def get_verdict(score, z_score):
-    """Interpretación textual del veredicto"""
     if score >= 75 and abs(z_score) <= 1:
         return "🟢 OPORTUNIDAD ÓPTIMA", "#00ffad"
     elif score >= 60:
@@ -196,15 +244,14 @@ def get_verdict(score, z_score):
 # ────────────────────────────────────────────────
 
 def create_z_score_gauge(z_score):
-    """Gauge visual para Z-Score (Tensión Elástica)"""
     fig = go.Figure(go.Indicator(
-        mode = "gauge+number+delta",
-        value = float(z_score),
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': "Tensión Elástica (Z-Score)", 'font': {'size': 14, 'color': 'white'}},
-        number = {'font': {'size': 24, 'color': 'white'}, 'suffix': "σ"},
-        delta = {'reference': 0, 'position': "top"},
-        gauge = {
+        mode="gauge+number+delta",
+        value=float(z_score),
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': "Tensión Elástica (Z-Score)", 'font': {'size': 14, 'color': 'white'}},
+        number={'font': {'size': 24, 'color': 'white'}, 'suffix': "σ"},
+        delta={'reference': 0, 'position': "top"},
+        gauge={
             'axis': {'range': [-3, 3], 'tickwidth': 1, 'tickcolor': "#1a1e26"},
             'bar': {'color': get_z_color(z_score), 'thickness': 0.75},
             'bgcolor': "#0c0e12",
@@ -226,16 +273,15 @@ def create_z_score_gauge(z_score):
     ))
     
     fig.update_layout(
-        paper_bgcolor = "#11141a",
-        font = {'color': "white", 'family': "Arial"},
-        height = 280,
-        margin = dict(l=20, r=20, t=50, b=20)
+        paper_bgcolor="#11141a",
+        font={'color': "white", 'family': "Arial"},
+        height=280,
+        margin=dict(l=20, r=20, t=50, b=20)
     )
     
     return fig
 
 def get_z_color(z):
-    """Color según nivel de Z-Score"""
     if abs(z) <= 1:
         return "#00ffad"
     elif abs(z) <= 2:
@@ -244,29 +290,33 @@ def get_z_color(z):
         return "#f23645"
 
 def create_trend_alignment_chart(trends):
-    """Visualización de alineación de timeframes"""
     timeframes = list(trends.keys())
     values = []
     colors = []
+    labels = []
     
     for tf in timeframes:
         trend_data = trends.get(tf, {})
-        if trend_data.get('trend') == 'BULLISH':
+        trend = trend_data.get('trend', 'ERROR')
+        if trend == 'BULLISH':
             values.append(1)
             colors.append("#00ffad")
-        elif trend_data.get('trend') == 'BEARISH':
+            labels.append("ALCISTA")
+        elif trend == 'BEARISH':
             values.append(-1)
             colors.append("#f23645")
+            labels.append("BAJISTA")
         else:
             values.append(0)
             colors.append("#888")
+            labels.append("N/A")
     
     fig = go.Figure(data=[
         go.Bar(
             x=timeframes,
             y=values,
             marker_color=colors,
-            text=[trends.get(tf, {}).get('trend', 'N/A') for tf in timeframes],
+            text=labels,
             textposition='outside',
             textfont=dict(color='white', size=11)
         )
@@ -278,7 +328,8 @@ def create_trend_alignment_chart(trends):
         font=dict(color="white"),
         title=dict(text="Alineación de Tendencias (Multi-Timeframe)", font=dict(color="white", size=14)),
         xaxis=dict(color="white", gridcolor="#1a1e26"),
-        yaxis=dict(color="white", gridcolor="#1a1e26", range=[-1.5, 1.5], tickvals=[-1, 0, 1], ticktext=['BAJISTA', 'NEUTRO', 'ALCISTA']),
+        yaxis=dict(color="white", gridcolor="#1a1e26", range=[-1.5, 1.5], 
+                   tickvals=[-1, 0, 1], ticktext=['BAJISTA', 'NEUTRO', 'ALCISTA']),
         height=250,
         margin=dict(l=40, r=20, t=50, b=40),
         showlegend=False
@@ -287,12 +338,17 @@ def create_trend_alignment_chart(trends):
     return fig
 
 def create_volume_heatmap(data, vol_analysis):
-    """Heatmap de volumen reciente"""
+    data = flatten_columns(data)
     recent_data = data.tail(20).copy()
     
+    volume = recent_data['Volume']
+    if isinstance(volume, pd.DataFrame):
+        volume = volume.iloc[:, 0]
+    
     colors = []
-    for vol in recent_data['Volume']:
-        ratio = vol / vol_analysis['avg_volume']
+    avg_vol = vol_analysis['avg_volume']
+    for vol in volume:
+        ratio = vol / avg_vol if avg_vol > 0 else 1
         if ratio > 2:
             colors.append("#00ffad")
         elif ratio > 1.5:
@@ -305,15 +361,15 @@ def create_volume_heatmap(data, vol_analysis):
     fig = go.Figure(data=[
         go.Bar(
             x=recent_data.index.strftime('%m-%d'),
-            y=recent_data['Volume'],
+            y=volume,
             marker_color=colors,
             hovertemplate='Fecha: %{x}<br>Volumen: %{y:,.0f}<br>Ratio: %{text:.2f}x<extra></extra>',
-            text=[v/vol_analysis['avg_volume'] for v in recent_data['Volume']]
+            text=[v/avg_vol for v in volume]
         )
     ])
     
     fig.add_hline(
-        y=vol_analysis['avg_volume'], 
+        y=avg_vol, 
         line_dash="dash", 
         line_color="white",
         annotation_text="Promedio",
@@ -335,17 +391,16 @@ def create_volume_heatmap(data, vol_analysis):
     return fig
 
 def create_rsu_score_radar(score_components):
-    """Radar chart para componentes del RSU Score"""
     categories = ['Z-Score<br>(Tensión)', 'Tendencia<br>(Timeframes)', 'Volumen<br>(Gasolina)', 'RSI<br>(Momentum)']
     values = [
-        score_components['z_component'] / 40 * 100,  # Normalizar a 0-100
+        score_components['z_component'] / 40 * 100,
         score_components['trend_component'] / 30 * 100,
         score_components['volume_component'] / 20 * 100,
         score_components['rsi_component'] / 10 * 100
     ]
     
     fig = go.Figure(data=go.Scatterpolar(
-        r=values + [values[0]],  # Cerrar el polígono
+        r=values + [values[0]],
         theta=categories + [categories[0]],
         fill='toself',
         fillcolor='rgba(0, 255, 173, 0.3)',
@@ -377,19 +432,19 @@ def create_rsu_score_radar(score_components):
     return fig
 
 def create_price_chart_with_emas(data, symbol):
-    """Gráfico principal de precio con EMAs y zonas de Z-Score"""
+    data = flatten_columns(data)
+    
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
                         vertical_spacing=0.08, 
                         row_heights=[0.7, 0.3],
                         subplot_titles=(f'{symbol} - Análisis Técnico', 'Z-Score Histórico'))
     
-    # Calcular EMAs
-    ema_9 = calculate_ema(data['Close'], 9)
-    ema_21 = calculate_ema(data['Close'], 21)
-    ema_50 = calculate_ema(data['Close'], 50)
+    close = data['Close']
+    ema_9 = calculate_ema(close, 9)
+    ema_21 = calculate_ema(close, 21)
+    ema_50 = calculate_ema(close, 50)
     
-    # Z-Score histórico
-    z_scores = calculate_z_score(data['Close'], ema_21)
+    z_scores = calculate_z_score(close, ema_21)
     
     # Candlesticks
     fig.add_trace(go.Candlestick(
@@ -408,9 +463,7 @@ def create_price_chart_with_emas(data, symbol):
     fig.add_trace(go.Scatter(x=data.index, y=ema_21, line=dict(color='#ff9800', width=1.5), name='EMA 21'), row=1, col=1)
     fig.add_trace(go.Scatter(x=data.index, y=ema_50, line=dict(color='#9c27b0', width=1.5), name='EMA 50'), row=1, col=1)
     
-    # Z-Score con colores
-    colors = [get_z_color(z) for z in z_scores]
-    
+    # Z-Score
     fig.add_trace(go.Scatter(
         x=data.index, 
         y=z_scores, 
@@ -421,7 +474,6 @@ def create_price_chart_with_emas(data, symbol):
         fillcolor='rgba(100,100,100,0.1)'
     ), row=2, col=1)
     
-    # Líneas de referencia Z-Score
     for level in [-2, -1, 1, 2]:
         fig.add_hline(y=level, line_dash="dash", line_color="#444", line_width=1, row=2, col=1)
     
@@ -452,7 +504,6 @@ def create_price_chart_with_emas(data, symbol):
 # ────────────────────────────────────────────────
 
 def render_metric_card(title, value, subtitle, color, icon=""):
-    """Tarjeta de métrica estilo market.py"""
     st.markdown(f"""
     <div style="background:#0c0e12; padding:15px; border-radius:10px; border:1px solid #1a1e26; text-align:center;">
         <div style="color:#888; font-size:11px; text-transform:uppercase; margin-bottom:5px;">{title}</div>
@@ -461,22 +512,7 @@ def render_metric_card(title, value, subtitle, color, icon=""):
     </div>
     """, unsafe_allow_html=True)
 
-def render_analysis_section(title, content, status_color="#00ffad"):
-    """Sección de análisis con estilo consistente"""
-    st.markdown(f"""
-    <div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; overflow:hidden; margin-bottom:15px;">
-        <div style="background:#0c0e12; padding:12px 15px; border-bottom:1px solid #1a1e26;">
-            <span style="color:white; font-size:14px; font-weight:bold;">{title}</span>
-            <span style="float:right; color:{status_color}; font-size:12px;">● ACTIVO</span>
-        </div>
-        <div style="padding:15px;">
-            {content}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 def render_verdict_banner(score_data):
-    """Banner grande con el veredicto final"""
     grade, grade_text = score_data['grade']
     verdict, color = score_data['verdict']
     
@@ -520,13 +556,9 @@ def render_verdict_banner(score_data):
 # ────────────────────────────────────────────────
 
 def render():
-    # CSS Global consistente con market.py
     st.markdown("""
     <style>
         .stApp {
-            background: #0c0e12;
-        }
-        .css-1d391kg, .css-1lcbmhc {
             background: #0c0e12;
         }
         div[data-testid="stMetricValue"] {
@@ -534,16 +566,6 @@ def render():
         }
         div[data-testid="stMetricLabel"] {
             color: #888 !important;
-        }
-        .stSelectbox > div > div {
-            background: #0c0e12;
-            color: white;
-            border: 1px solid #1a1e26;
-        }
-        .stTextInput > div > div > input {
-            background: #0c0e12;
-            color: white;
-            border: 1px solid #1a1e26;
         }
         h1, h2, h3 {
             color: white !important;
@@ -554,7 +576,6 @@ def render():
     </style>
     """, unsafe_allow_html=True)
     
-    # Header
     st.markdown("""
     <div style="text-align:center; margin-bottom:30px;">
         <h1 style="font-size:2.5rem; margin-bottom:10px;">⚡ RSU EMA EDGE</h1>
@@ -564,7 +585,6 @@ def render():
     </div>
     """, unsafe_allow_html=True)
     
-    # Controles de entrada
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
@@ -584,28 +604,38 @@ def render():
     if analyze_btn or symbol:
         with st.spinner("Calculando matrices de probabilidad..."):
             try:
-                # Mapear timeframe a parámetros de yfinance
                 tf_map = {
                     "15m": ("5d", "15m"),
                     "1h": ("1mo", "1h"),
-                    "4h": ("3mo", "1h"),  # yfinance no tiene 4h nativo
+                    "4h": ("3mo", "1h"),
                     "1d": ("1y", "1d")
                 }
                 
                 period, interval = tf_map.get(timeframe, ("1y", "1d"))
                 
                 # Descargar datos
-                data = yf.download(symbol, period=period, interval=interval, progress=False)
+                data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
                 
-                if len(data) < 50:
+                if data.empty or len(data) < 50:
                     st.error("Datos insuficientes para análisis. Intenta con otro timeframe o símbolo.")
+                    return
+                
+                # Aplanar columnas inmediatamente
+                data = flatten_columns(data)
+                
+                # Verificar que tenemos las columnas necesarias
+                required_cols = ['Close', 'Open', 'High', 'Low']
+                missing = [c for c in required_cols if c not in data.columns]
+                if missing:
+                    st.error(f"Faltan columnas: {missing}")
                     return
                 
                 # ─── CÁLCULOS PRINCIPALES ───
                 
                 # 1. Tensión Elástica (Z-Score)
-                ema_21 = calculate_ema(data['Close'], 21)
-                current_z = float(calculate_z_score(data['Close'], ema_21).iloc[-1])
+                close = data['Close']
+                ema_21 = calculate_ema(close, 21)
+                current_z = float(calculate_z_score(close, ema_21).iloc[-1])
                 
                 # 2. Multi-Timeframe
                 trends = get_multi_timeframe_trend(symbol)
@@ -614,7 +644,8 @@ def render():
                 vol_analysis = analyze_volume_profile(data)
                 
                 # 4. RSI
-                rsi = float(calculate_rsi(data['Close']).iloc[-1])
+                rsi_series = calculate_rsi(close)
+                rsi = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else 50.0
                 
                 # 5. RSU Score Final
                 trend_alignment = {k: v.get('trend') for k, v in trends.items()}
@@ -627,10 +658,8 @@ def render():
                 
                 # ─── DASHBOARD DE RESULTADOS ───
                 
-                # Veredicto Principal
                 render_verdict_banner(rsu_data)
                 
-                # Métricas Rápidas
                 m1, m2, m3, m4 = st.columns(4)
                 
                 with m1:
@@ -676,20 +705,16 @@ def render():
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # Gráficos Principales
                 g1, g2 = st.columns([2, 1])
                 
                 with g1:
-                    # Gráfico de precio con EMAs
                     fig_price = create_price_chart_with_emas(data, symbol)
                     st.plotly_chart(fig_price, use_container_width=True, key="price_chart")
                 
                 with g2:
-                    # Gauge de Z-Score
                     fig_gauge = create_z_score_gauge(current_z)
                     st.plotly_chart(fig_gauge, use_container_width=True, key="z_gauge")
                     
-                    # Interpretación del Z-Score
                     z_interpretation = ""
                     if abs(current_z) <= 0.5:
                         z_interpretation = "✅ Precio cerca de la media. Zona óptima para entrada."
@@ -707,27 +732,21 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # Segunda fila de gráficos
                 g3, g4 = st.columns(2)
                 
                 with g3:
-                    # Alineación de timeframes
                     fig_trend = create_trend_alignment_chart(trends)
                     st.plotly_chart(fig_trend, use_container_width=True, key="trend_chart")
                 
                 with g4:
-                    # Radar de componentes
                     fig_radar = create_rsu_score_radar(rsu_data)
                     st.plotly_chart(fig_radar, use_container_width=True, key="radar_chart")
                 
-                # Tercera fila: Volumen
                 fig_vol = create_volume_heatmap(data, vol_analysis)
                 st.plotly_chart(fig_vol, use_container_width=True, key="vol_chart")
                 
-                # Análisis Detallado en Expanders
                 with st.expander("📊 ANÁLISIS DETALLADO POR COMPONENTE", expanded=False):
                     
-                    # Z-Score detallado
                     st.markdown("""
                     <div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; padding:20px; margin-bottom:15px;">
                         <h4 style="color:#00ffad; margin-bottom:10px;">1. Tensión Elástica (Z-Score)</h4>
@@ -736,14 +755,16 @@ def render():
                     col_z1, col_z2 = st.columns(2)
                     with col_z1:
                         st.metric("Z-Score Actual", f"{current_z:.3f}")
-                        st.metric("Desviación Estándar", f"{data['Close'].rolling(20).std().iloc[-1]:.2f}")
+                        std_val = float(close.rolling(20).std().iloc[-1])
+                        st.metric("Desviación Estándar", f"{std_val:.2f}")
                     with col_z2:
-                        st.metric("Distancia a EMA21", f"{((data['Close'].iloc[-1] / ema_21.iloc[-1] - 1) * 100):+.2f}%")
+                        current_price = float(close.iloc[-1])
+                        ema_val = float(ema_21.iloc[-1])
+                        st.metric("Distancia a EMA21", f"{((current_price / ema_val - 1) * 100):+.2f}%")
                         st.metric("Probabilidad de Reversión", f"{min(abs(current_z) * 25, 95):.0f}%")
                     
                     st.markdown("</div>", unsafe_allow_html=True)
                     
-                    # Multi-timeframe detallado
                     st.markdown("""
                     <div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; padding:20px; margin-bottom:15px;">
                         <h4 style="color:#2196f3; margin-bottom:10px;">2. Análisis Multi-Timeframe</h4>
@@ -763,7 +784,6 @@ def render():
                     st.dataframe(pd.DataFrame(trend_df_data), use_container_width=True, hide_index=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                     
-                    # Volumen detallado
                     st.markdown("""
                     <div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; padding:20px; margin-bottom:15px;">
                         <h4 style="color:#ff9800; margin-bottom:10px;">3. Análisis de Volumen (Gasolina Real)</h4>
@@ -786,7 +806,6 @@ def render():
                     """, unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                     
-                    # Fórmula del RSU Score
                     st.markdown("""
                     <div style="background:#11141a; border:1px solid #1a1e26; border-radius:10px; padding:20px;">
                         <h4 style="color:#9c27b0; margin-bottom:10px;">4. Fórmula del RSU Score</h4>
@@ -825,7 +844,6 @@ TOTAL: {rsu_data['total']}/100
                     
                     st.markdown("</div></div>", unsafe_allow_html=True)
                 
-                # Disclaimer
                 st.markdown("""
                 <div style="margin-top:30px; padding:15px; background:#1a1e26; border-radius:8px; border-left:3px solid #ff9800;">
                     <div style="color:#ff9800; font-weight:bold; font-size:12px; margin-bottom:5px;">⚠️ ADVERTENCIA</div>
@@ -841,5 +859,6 @@ TOTAL: {rsu_data['total']}/100
             except Exception as e:
                 st.error(f"Error en el análisis: {str(e)}")
                 st.info("Verifica que el símbolo sea correcto (ej: AAPL, MSFT, BTC-USD, ETH-USD)")
-
-# Final del archivo ema_edge.py
+                import traceback
+                with st.expander("Detalles técnicos del error"):
+                    st.code(traceback.format_exc())

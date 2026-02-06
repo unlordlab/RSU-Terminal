@@ -8,16 +8,23 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # ────────────────────────────────────────────────
-# FUNCIONES AUXILIARES
+# FUNCIONES AUXILIARES CORREGIDAS
 # ────────────────────────────────────────────────
 
 def flatten_columns(df):
-    """Aplana columnas MultiIndex de yfinance"""
+    """
+    Aplana columnas MultiIndex de yfinance.
+    Estructura: [('Close', 'AAPL'), ('High', 'AAPL'), ...] -> ['Close', 'High', ...]
+    """
     if df.empty:
         return df
+    
+    # Si es MultiIndex, tomar el PRIMER nivel (Close, High, Low, Open, Volume)
     if isinstance(df.columns, pd.MultiIndex):
         df = df.copy()
-        df.columns = df.columns.get_level_values(1)
+        df.columns = df.columns.get_level_values(0)  # <-- CAMBIO CLAVE: nivel 0, no 1
+        return df
+    
     return df
 
 def ensure_1d_series(data):
@@ -69,6 +76,7 @@ def get_multi_timeframe_trend(symbol):
                 continue
             
             data = flatten_columns(data)
+            
             if 'Close' not in data.columns or len(data) < 50:
                 trends[tf] = {'trend': 'INSUFFICIENT_DATA', 'strength': 0}
                 continue
@@ -378,7 +386,6 @@ def render():
         st.markdown("<br>", unsafe_allow_html=True)
         analyze_btn = st.button("🔍 ANALIZAR", use_container_width=True, type="primary", key="analyze_button")
     
-    # Checkbox de debug con key única - SOLO UNA VEZ
     show_debug = st.checkbox("Mostrar debug de datos", value=False, key="debug_checkbox")
     
     if analyze_btn or symbol:
@@ -393,49 +400,35 @@ def render():
                 data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
                 
                 if show_debug:
-                    st.write("Estructura del DataFrame:")
-                    st.write(f"Shape: {data.shape}")
+                    st.write("Estructura original:")
                     st.write(f"Columns: {data.columns.tolist()}")
-                    st.write(f"Columns type: {type(data.columns)}")
-                    st.dataframe(data.head())
                 
                 if data.empty:
                     st.error(f"No se pudieron descargar datos para {symbol}.")
                     return
                 
+                # Aplanar columnas (ahora correctamente)
                 data = flatten_columns(data)
                 
                 if show_debug:
                     st.write("Después de flatten_columns:")
                     st.write(f"Columns: {data.columns.tolist()}")
+                    st.dataframe(data.head(3))
                 
-                # Verificar columnas (case insensitive)
-                available_cols = [str(c).upper() for c in data.columns]
-                required = ['CLOSE', 'OPEN', 'HIGH', 'LOW']
-                missing = [r for r in required if r not in available_cols]
+                # Verificar columnas
+                required = ['Close', 'High', 'Low', 'Open']
+                missing = [r for r in required if r not in data.columns]
                 
                 if missing:
                     st.error(f"Faltan columnas: {missing}")
-                    st.write(f"Disponibles: {data.columns.tolist()}")
-                    
-                    # Intentar renombrar si existe mapeo
-                    col_mapping = {}
-                    for col in data.columns:
-                        col_upper = str(col).upper()
-                        if col_upper in ['CLOSE', 'OPEN', 'HIGH', 'LOW', 'VOLUME']:
-                            col_mapping[col] = col_upper
-                    
-                    if col_mapping:
-                        st.write("Renombrando columnas...")
-                        data = data.rename(columns=col_mapping)
-                    else:
-                        return
+                    st.write(f"Columnas disponibles: {data.columns.tolist()}")
+                    return
                 
                 if len(data) < 50:
                     st.error(f"Datos insuficientes ({len(data)} filas).")
                     return
                 
-                # Cálculos
+                # Cálculos principales
                 close = ensure_1d_series(data['Close'])
                 ema_21 = calculate_ema(close, 21)
                 current_z = float(calculate_z_score(close, ema_21).iloc[-1])
@@ -491,12 +484,19 @@ def render():
                 st.plotly_chart(create_volume_heatmap(data, vol_analysis), use_container_width=True, key="vol_chart")
                 
                 with st.expander("📊 ANÁLISIS DETALLADO", expanded=False):
-                    st.write("Detalles completos del análisis RSU...")
+                    st.write("Detalles del análisis:")
+                    st.json({
+                        "z_score": current_z,
+                        "trends": trends,
+                        "volume": vol_analysis,
+                        "rsi": rsi,
+                        "rsu_score": rsu_data
+                    })
                 
                 st.markdown("""
                 <div style="margin-top:30px; padding:15px; background:#1a1e26; border-radius:8px; border-left:3px solid #ff9800;">
                     <div style="color:#ff9800; font-weight:bold; font-size:12px;">⚠️ ADVERTENCIA</div>
-                    <div style="color:#888; font-size:11px;">Esta herramienta proporciona análisis estadístico basado en datos históricos. No predice el futuro.</div>
+                    <div style="color:#888; font-size:11px;">Esta herramienta proporciona análisis estadístico basado en datos históricos.</div>
                 </div>
                 """, unsafe_allow_html=True)
                 

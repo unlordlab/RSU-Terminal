@@ -4,14 +4,15 @@ import streamlit.components.v1 as components
 from datetime import datetime, timedelta
 
 def render():
-    # CSS Global
+    # CSS Global - Agregamos clase para containers estilizados
     st.markdown("""
     <style>
         .stApp {
             background-color: #0c0e12;
         }
         
-        .group-container {
+        /* Estilo para containers de cards */
+        div[data-testid="stVerticalBlock"]:has(> div.element-container:nth-child(1) div.card-container) {
             border: 1px solid #1a1e26;
             border-radius: 10px;
             overflow: hidden;
@@ -19,10 +20,15 @@ def render():
             transition: transform 0.2s ease, box-shadow 0.2s ease;
             margin-bottom: 20px;
         }
-        .group-container:hover {
+        
+        div[data-testid="stVerticalBlock"]:has(> div.element-container:nth-child(1) div.card-container):hover {
             transform: translateY(-3px);
             box-shadow: 0px 0px 15px rgba(0, 255, 173, 0.1);
             border-color: #00ffad44;
+        }
+        
+        .card-container {
+            display: none; /* Solo para identificación */
         }
         
         .badge {
@@ -152,6 +158,15 @@ def render():
             color: #888;
             font-size: 0.9rem;
             margin-top: 5px;
+        }
+        
+        /* Fix para sidebar */
+        [data-testid="stSidebar"] .element-container {
+            margin-bottom: 0.5rem;
+        }
+        
+        [data-testid="stSidebar"] .stMarkdown {
+            margin-bottom: 0.5rem;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -288,7 +303,9 @@ def render():
                 if st.session_state.vista_tipo == "grid":
                     cols = st.columns(3)
                     for idx, row in df_pagina.reset_index(drop=True).iterrows():
-                        with cols[idx % 3]:
+                        col_idx = idx % 3
+                        
+                        with cols[col_idx]:
                             ticker = str(row.get('ticker', 'N/A')).upper()
                             nombre = str(row.get('nombre', ''))
                             fecha = str(row.get('fecha', 'S/D'))
@@ -308,53 +325,45 @@ def render():
                                 badge_class = "badge-hold"
                                 badge_text = "HOLD"
                             
-                            # Container de la card
-                            with st.container():
-                                st.markdown('<div class="group-container">', unsafe_allow_html=True)
+                            # Container nativo de Streamlit con estilos CSS
+                            card_container = st.container()
+                            
+                            with card_container:
+                                # Marcador invisible para CSS
+                                st.markdown('<div class="card-container"></div>', unsafe_allow_html=True)
                                 
-                                # Imagen con st.image nativo (más confiable)
+                                # Imagen
                                 img_url = str(row.get('imagenencabezado', '')).strip()
                                 
                                 if img_url and img_url.startswith('http'):
-                                    # Usar st.image con manejo de error
                                     try:
-                                        col_img, col_badge = st.columns([4, 1])
-                                        with col_img:
-                                            st.image(img_url, use_container_width=True)
-                                        with col_badge:
-                                            st.markdown(f'<div style="margin-top:10px;"><span class="badge {badge_class}">{badge_text}</span></div>', unsafe_allow_html=True)
-                                            if es_nuevo:
-                                                st.markdown('<div style="margin-top:5px;"><span class="badge badge-new">NEW</span></div>', unsafe_allow_html=True)
+                                        st.image(img_url, use_container_width=True)
                                     except:
-                                        # Fallback si la imagen falla
                                         st.markdown(f'''
                                         <div style="width:100%; height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); 
-                                                    display:flex; align-items:center; justify-content:center; position:relative;">
+                                                    display:flex; align-items:center; justify-content:center;">
                                             <span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span>
-                                            <div style="position:absolute; top:10px; right:10px;">
-                                                <span class="badge {badge_class}">{badge_text}</span>
-                                            </div>
                                         </div>
                                         ''', unsafe_allow_html=True)
                                 else:
-                                    # Fallback sin imagen
                                     st.markdown(f'''
                                     <div style="width:100%; height:180px; background:linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); 
-                                                display:flex; align-items:center; justify-content:center; position:relative;">
+                                                display:flex; align-items:center; justify-content:center;">
                                         <span style="color:#00ffad; font-size:3rem; font-weight:bold;">{ticker}</span>
-                                        <div style="position:absolute; top:10px; right:10px;">
-                                            <span class="badge {badge_class}">{badge_text}</span>
-                                        </div>
                                     </div>
                                     ''', unsafe_allow_html=True)
                                 
-                                # Contenido de la card
-                                st.markdown(f'''
-                                <div style="padding:15px;">
-                                    <div class="ticker-title">{ticker}</div>
-                                    <div class="company-name">{nombre}</div>
-                                </div>
-                                ''', unsafe_allow_html=True)
+                                # Badge de rating (posicionado con columnas)
+                                badge_col, new_col = st.columns([1, 1])
+                                with badge_col:
+                                    st.markdown(f'<span class="badge {badge_class}">{badge_text}</span>', unsafe_allow_html=True)
+                                with new_col:
+                                    if es_nuevo:
+                                        st.markdown('<span class="badge badge-new">NEW</span>', unsafe_allow_html=True)
+                                
+                                # Info
+                                st.markdown(f'<div class="ticker-title">{ticker}</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="company-name">{nombre}</div>', unsafe_allow_html=True)
                                 
                                 # Tags
                                 if sector or autor:
@@ -363,21 +372,19 @@ def render():
                                         tags_html += f'<span class="tag">{sector}</span>'
                                     if autor:
                                         tags_html += f'<span class="tag">👤 {autor}</span>'
-                                    st.markdown(f'<div style="padding:0 15px;">{tags_html}</div>', unsafe_allow_html=True)
+                                    st.markdown(f'<div>{tags_html}</div>', unsafe_allow_html=True)
                                 
-                                # Fecha y botón
-                                st.markdown(f'''
-                                <div style="padding:15px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span class="date-text">📅 {fecha}</span>
-                                </div>
-                                ''', unsafe_allow_html=True)
+                                # Fecha
+                                st.markdown(f'<div class="date-text">📅 {fecha}</div>', unsafe_allow_html=True)
                                 
+                                # Botón
                                 if st.button(f"Ver Análisis →", key=f"btn_{ticker}_{idx}"):
                                     st.session_state.tesis_seleccionada = ticker
                                     st.session_state.vista_actual = "lector"
                                     st.rerun()
                                 
-                                st.markdown('</div>', unsafe_allow_html=True)
+                                # Espaciado entre cards
+                                st.markdown("<br>", unsafe_allow_html=True)
                 
                 # Vista LISTA
                 else:

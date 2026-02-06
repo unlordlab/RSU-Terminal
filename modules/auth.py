@@ -20,18 +20,6 @@ def get_logo_base64():
     return None
 
 def login():
-    # Configurar página SOLO para login
-    try:
-        st.set_page_config(
-            page_title="RSU Terminal - Login",
-            page_icon="🔐",
-            layout="centered",
-            initial_sidebar_state="collapsed",
-            menu_items={}
-        )
-    except:
-        pass
-    
     # Inicialización
     if "auth" not in st.session_state:
         st.session_state["auth"] = False
@@ -62,35 +50,36 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS LIMPIO Y FUNCIONAL
+    # CSS - SIN OJOS, INPUT LIMPIO
     st.markdown("""
     <style>
-        /* RESET */
-        #MainMenu, footer, header, .stDeployButton {
-            display: none !important;
+        /* Ocultar elementos de Streamlit */
+        #MainMenu, footer, header {visibility: hidden;}
+        
+        /* Fondo */
+        .stApp {background: #0c0e12;}
+        
+        /* Centrar todo */
+        .main {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 90vh;
         }
         
-        .stApp {
-            background: #0c0e12;
-        }
-        
-        /* Centrar contenido */
-        .main .block-container {
-            max-width: 450px;
-            padding: 20px;
-            margin: 0 auto;
-        }
-        
-        /* TARJETA */
-        .stApp .main > div > div > div {
+        /* Contenedor del login */
+        div[data-testid="stVerticalBlock"] {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 16px;
-            padding: 40px;
-            margin-top: 20px;
+            padding: 40px 50px;
+            max-width: 450px;
+            width: 100%;
+            margin: 0 auto;
         }
         
-        /* LOGO */
+        /* Logo */
         .logo-img {
             width: 140px;
             height: 140px;
@@ -100,32 +89,32 @@ def login():
             box-shadow: 0 15px 40px rgba(0, 255, 173, 0.25);
         }
         
-        /* TÍTULOS */
+        /* Títulos */
         h1 {
             color: white !important;
             font-size: 1.9rem !important;
             text-align: center !important;
             letter-spacing: 4px !important;
-            margin: 0 0 10px 0 !important;
+            margin-bottom: 10px !important;
         }
         
         h3 {
             color: #00ffad !important;
             font-size: 1rem !important;
             text-align: center !important;
-            margin: 0 0 30px 0 !important;
+            margin-bottom: 30px !important;
             font-weight: normal !important;
         }
         
-        /* LABEL */
-        p > strong {
+        /* Label */
+        label {
             color: #888 !important;
             font-size: 11px !important;
             text-transform: uppercase !important;
-            letter-spacing: 1px !important;
+            letter-spacing: 1.5px !important;
         }
         
-        /* INPUT */
+        /* Input SIN OJO INTERNO */
         .stTextInput > div > div > input {
             background: #0c0e12 !important;
             border: 1px solid #2a3f5f !important;
@@ -135,15 +124,21 @@ def login():
             font-size: 15px !important;
         }
         
-        /* BOTÓN OJO */
+        /* OCULTAR OJO DE STREAMLIT */
+        .stTextInput [data-testid="stIcon"] {
+            display: none !important;
+        }
+        
+        /* Botón ojo externo */
         div[data-testid="column"]:nth-of-type(2) button {
             background: #1a1e26 !important;
             border: 1px solid #2a3f5f !important;
             border-radius: 10px !important;
             color: #888 !important;
-            width: 50px !important;
             height: 50px !important;
-            margin-top: 24px !important;
+            width: 50px !important;
+            margin: 24px 0 0 0 !important;
+            padding: 0 !important;
             font-size: 1.2rem !important;
         }
         
@@ -152,7 +147,7 @@ def login():
             color: #00ffad !important;
         }
         
-        /* BOTÓN PRINCIPAL */
+        /* Botón principal */
         .stButton > button {
             background: linear-gradient(90deg, #00ffad, #00d4aa) !important;
             color: #0c0e12 !important;
@@ -163,20 +158,20 @@ def login():
             letter-spacing: 2px !important;
             width: 100% !important;
             height: 52px !important;
-            margin-top: 20px !important;
+            margin-top: 15px !important;
         }
         
-        /* FOOTER */
-        .footer-box {
+        /* Footer */
+        .footer-text {
             text-align: center;
+            color: #00ffad;
+            font-size: 11px;
             margin-top: 30px;
             padding-top: 20px;
             border-top: 1px solid #1a1e26;
-            color: #00ffad;
-            font-size: 11px;
         }
         
-        .footer-box span {
+        .footer-text span {
             color: #555;
             font-size: 10px;
         }
@@ -196,10 +191,10 @@ def login():
     st.markdown("<h3>Sistema de Acceso Seguro</h3>", unsafe_allow_html=True)
     
     # CONTRASEÑA
-    st.markdown("<p><strong>Contraseña de Acceso</strong></p>", unsafe_allow_html=True)
+    st.markdown("**Contraseña de Acceso**")
     
-    # Input + Botón ojo
-    col1, col2 = st.columns([4, 1])
+    # Input + Botón ojo (SOLO UNO EXTERNO)
+    col1, col2 = st.columns([5, 1])
     
     with col1:
         password = st.text_input(
@@ -210,11 +205,11 @@ def login():
         )
     
     with col2:
-        if st.button("👁️", key="toggle_eye"):
+        if st.button("👁️", key="toggle"):
             st.session_state["show_password"] = not st.session_state["show_password"]
             st.rerun()
     
-    # BOTÓN ACCESO - FUERA DE LAS COLUMNAS
+    # BOTÓN ACCESO
     if st.button("🔓 DESBLOQUEAR TERMINAL"):
         if not password:
             st.error("⚠️ Ingrese una contraseña")
@@ -241,7 +236,7 @@ def login():
                         st.warning(f"⚠️ {5 - st.session_state['login_attempts']} intentos restantes")
     
     # FOOTER
-    st.markdown('<div class="footer-box">🔒 CONEXIÓN SEGURA SSL<br><span>© 2026 RSU Terminal v2.0</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer-text">🔒 CONEXIÓN SEGURA SSL<br><span>© 2026 RSU Terminal v2.0</span></div>', unsafe_allow_html=True)
 
     return False
 
@@ -260,7 +255,3 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
-
-   
-    
-      

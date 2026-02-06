@@ -128,25 +128,7 @@ def login():
         .stTextInput [data-testid="stIcon"] {
             display: none !important;
         }
-        
-        /* Botón ojo externo */
-        div[data-testid="column"]:nth-of-type(2) button {
-            background: #1a1e26 !important;
-            border: 1px solid #2a3f5f !important;
-            border-radius: 10px !important;
-            color: #888 !important;
-            height: 50px !important;
-            width: 50px !important;
-            margin: 24px 0 0 0 !important;
-            padding: 0 !important;
-            font-size: 1.2rem !important;
-        }
-        
-        div[data-testid="column"]:nth-of-type(2) button:hover {
-            border-color: #00ffad !important;
-            color: #00ffad !important;
-        }
-        
+             
         /* Botón principal */
         .stButton > button {
             background: linear-gradient(90deg, #00ffad, #00d4aa) !important;
@@ -215,7 +197,7 @@ def login():
             st.error("⚠️ Ingrese una contraseña")
         else:
             pwd_hash = hashlib.sha256(password.encode()).hexdigest()
-            real_pwd = st.secrets.get("APP_PASSWORD", "RSU2026")
+            real_pwd = st.secrets.get("APP_PASSWORD")
             real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
             
             if pwd_hash == real_hash:
@@ -255,3 +237,4 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
+

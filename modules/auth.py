@@ -1,3 +1,4 @@
+
 # modules/auth.py
 import os
 import streamlit as st
@@ -50,7 +51,7 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS - SIN OJOS, INPUT LIMPIO
+    # CSS - SIN OJOS, INPUT LIMPIO Y CENTRADO
     st.markdown("""
     <style>
         /* Ocultar elementos de Streamlit */
@@ -68,7 +69,7 @@ def login():
             min-height: 90vh;
         }
         
-        /* Contenedor del login */
+        /* Contenedor del login - CENTRADO Y SIN COLUMNAS EXTRA */
         div[data-testid="stVerticalBlock"] {
             background: #11141a;
             border: 1px solid #1a1e26;
@@ -128,6 +129,11 @@ def login():
         .stTextInput [data-testid="stIcon"] {
             display: none !important;
         }
+        
+        /* OCULTAR BOTÓN DE MOSTRAR/OCULTAR CONTRASEÑA */
+        button[kind="secondary"] {
+            display: none !important;
+        }
              
         /* Botón principal */
         .stButton > button {
@@ -157,6 +163,17 @@ def login():
             color: #555;
             font-size: 10px;
         }
+        
+        /* ELIMINAR ESPACIOS EXTRA DE COLUMNAS */
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0 !important;
+        }
+        
+        /* OCULTAR COLUMNA VACÍA */
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -172,21 +189,18 @@ def login():
     st.markdown("<h1>RSU TERMINAL</h1>", unsafe_allow_html=True)
     st.markdown("<h3>Sistema de Acceso Seguro</h3>", unsafe_allow_html=True)
     
-    # CONTRASEÑA
+    # CONTRASEÑA - SIN COLUMNAS, SOLO UN INPUT CENTRADO
     st.markdown("**Contraseña de Acceso**")
     
-    # Input + Botón ojo (SOLO UNO EXTERNO)
-    col1, col2 = st.columns([5, 1])
+    # Input simple sin columnas
+    password = st.text_input(
+        "",
+        type="password",
+        placeholder="Ingrese contraseña",
+        label_visibility="collapsed"
+    )
     
-    with col1:
-        password = st.text_input(
-            "",
-            type="text" if st.session_state["show_password"] else "password",
-            placeholder="Ingrese contraseña.",
-            label_visibility="collapsed"
-        )
-    
-            # BOTÓN ACCESO
+    # BOTÓN ACCESO
     if st.button("🔓 DESBLOQUEAR TERMINAL"):
         if not password:
             st.error("⚠️ Ingrese una contraseña")
@@ -232,7 +246,6 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
-
 
 
 

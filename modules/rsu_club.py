@@ -1,6 +1,28 @@
 # modules/rsu_club.py
 import streamlit as st
 import streamlit.components.v1 as components
+import base64
+from pathlib import Path
+
+def get_image_base64():
+    """Convierte el logo a base64 para incrustarlo en HTML"""
+    try:
+        # Intentar múltiples rutas posibles
+        possible_paths = [
+            "rsu_logo.png",
+            "assets/rsu_logo.png", 
+            "static/rsu_logo.png",
+            "/mnt/kimi/upload/rsu_logo.png"
+        ]
+        
+        for path in possible_paths:
+            if Path(path).exists():
+                with open(path, "rb") as image_file:
+                    return base64.b64encode(image_file.read()).decode()
+        return ""
+    except Exception as e:
+        print(f"Error cargando logo: {e}")
+        return ""
 
 def render():
     # CSS global consistente con market.py
@@ -41,6 +63,7 @@ def render():
             border-radius: 10px;
             overflow: hidden;
             background: #11141a;
+            margin-bottom: 20px;
         }
         .group-header {
             background: #0c0e12;
@@ -62,22 +85,48 @@ def render():
         }
         .rsu-logo-container {
             text-align: center;
-            padding: 20px;
+            padding: 30px 20px;
             background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
             border-bottom: 1px solid #1a1e26;
         }
         .rsu-logo {
-            max-width: 120px;
+            max-width: 100px;
             border-radius: 10px;
             box-shadow: 0 4px 20px rgba(0, 255, 173, 0.2);
+            margin-bottom: 15px;
         }
         .hero-text {
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             font-weight: bold;
             color: #00ffad;
             text-align: center;
-            margin: 20px 0;
+            margin: 10px 0;
             text-shadow: 0 0 20px rgba(0, 255, 173, 0.3);
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #00ffad22;
+            color: #00ffad;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border: 1px solid #00ffad44;
+            margin-top: 10px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ffad;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
         .section-title {
             color: #00ffad;
@@ -128,30 +177,6 @@ def render():
             margin: 15px 0;
             border-radius: 0 8px 8px 0;
         }
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #00ffad22;
-            color: #00ffad;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            border: 1px solid #00ffad44;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #00ffad;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
         .signature {
             margin-top: 30px;
             padding-top: 20px;
@@ -164,22 +189,31 @@ def render():
             color: #00ffad;
             font-style: normal;
         }
+        .main-content {
+            margin-top: 20px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
-    # Header con logo
-    st.markdown("""
+    # Header con logo usando components.html para mejor renderizado
+    logo_b64 = get_image_base64()
+    
+    header_html = f'''
     <div class="group-container" style="margin-bottom: 20px;">
         <div class="rsu-logo-container">
-            <img src="data:image/png;base64,{}" class="rsu-logo" alt="RSU Logo">
+            <img src="data:image/png;base64,{logo_b64}" class="rsu-logo" alt="RSU Logo" onerror="this.style.display='none'">
             <div class="hero-text">♣️ RSU Elite Club</div>
-            <div class="status-badge">
-                <div class="status-dot"></div>
-                <span>Estado de suscripción: ACTIVO (Elite Member)</span>
+            <div style="text-align: center;">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span>Estado de suscripción: ACTIVO (Elite Member)</span>
+                </div>
             </div>
         </div>
     </div>
-    """.format(get_image_base64()), unsafe_allow_html=True)
+    '''
+    
+    components.html(header_html, height=280, scrolling=False)
 
     # Layout de dos columnas
     col1, col2 = st.columns([1, 1])
@@ -187,7 +221,7 @@ def render():
     with col1:
         # Manifiesto / Introducción
         st.markdown("""
-        <div class="group-container" style="height: 100%;">
+        <div class="group-container" style="height: 600px;">
             <div class="group-header">
                 <p class="group-title">🎯 Nuestra Filosofía</p>
                 <div class="tooltip-container">
@@ -195,7 +229,7 @@ def render():
                     <div class="tooltip-text">El núcleo de valores que define a nuestra comunidad de trading.</div>
                 </div>
             </div>
-            <div class="group-content" style="padding: 20px; background: #11141a;">
+            <div class="group-content" style="padding: 20px; background: #11141a; height: calc(100% - 50px); overflow-y: auto;">
                 <div class="highlight-box">
                     <strong style="color: #00ffad; font-size: 1.1rem;">Más que un club, una comunidad.</strong>
                 </div>
@@ -211,7 +245,7 @@ def render():
     with col2:
         # Qué te ofrecemos
         st.markdown("""
-        <div class="group-container" style="height: 100%;">
+        <div class="group-container" style="height: 600px;">
             <div class="group-header">
                 <p class="group-title">🛠️ ¿Qué te ofrecemos?</p>
                 <div class="tooltip-container">
@@ -240,9 +274,9 @@ def render():
 
         st.markdown('</div></div>', unsafe_allow_html=True)
 
-    # Sección de bienvenida / cierre
+    # Sección de bienvenida / cierre - CORREGIDA
     st.markdown("""
-    <div class="group-container" style="margin-top: 20px;">
+    <div class="group-container">
         <div class="group-header">
             <p class="group-title">🚀 Tu camino empieza aquí</p>
             <div class="tooltip-container">
@@ -251,29 +285,32 @@ def render():
             </div>
         </div>
         <div class="group-content" style="padding: 25px; background: #11141a;">
-            <div class="manifesto-text">
-                <p>Te invito a explorar la comunidad, participar en los debates y consultar cualquier duda. Si necesitas algo específico, puedes contactarme por <strong style="color: #00ffad;">mensaje directo (MD)</strong>; te responderé lo antes posible.</p>
-                
-                <div class="highlight-box" style="margin: 20px 0;">
-                    <p style="margin: 0; color: #fff;">💡 <strong>Consejo:</strong> No te abrumes por el volumen de información. Tómalo con calma, a tu ritmo; poco a poco integrarás los conocimientos necesarios para operar con confianza.</p>
-                </div>
-                
-                <p>Gracias por formar parte de un espacio donde la <strong>formación, la responsabilidad y la transparencia</strong> son la prioridad. Deja atrás el ruido de los falsos gurús y comienza tu camino hacia un <strong style="color: #00ffad;">trading consciente</strong>.</p>
-            </div>
-            
-            <div class="signature">
-                <strong>unlord</strong> | RSU Club ♣️
-            </div>
-        </div>
+    """, unsafe_allow_html=True)
+    
+    # Contenido en texto plano de Streamlit para evitar problemas de escape
+    st.markdown("""
+    <div class="manifesto-text">
+        <p>Te invito a explorar la comunidad, participar en los debates y consultar cualquier duda. Si necesitas algo específico, puedes contactarme por <strong style="color: #00ffad;">mensaje directo (MD)</strong>; te responderé lo antes posible.</p>
     </div>
     """, unsafe_allow_html=True)
-
-def get_image_base64():
-    """Convierte el logo a base64 para incrustarlo en HTML"""
-    import base64
-    try:
-        with open("assets/rsu_logo.png", "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode()
-    except:
-        # Fallback si no encuentra la imagen
-        return ""
+    
+    # Highlight box separada
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #00ffad11 0%, #00ffad05 100%); border-left: 3px solid #00ffad; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+        <p style="margin: 0; color: #fff;">💡 <strong>Consejo:</strong> No te abrumes por el volumen de información. Tómalo con calma, a tu ritmo; poco a poco integrarás los conocimientos necesarios para operar con confianza.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Texto final
+    st.markdown("""
+    <div class="manifesto-text">
+        <p>Gracias por formar parte de un espacio donde la <strong>formación, la responsabilidad y la transparencia</strong> son la prioridad. Deja atrás el ruido de los falsos gurús y comienza tu camino hacia un <strong style="color: #00ffad;">trading consciente</strong>.</p>
+    </div>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #1a1e26; text-align: center; color: #888; font-style: italic;">
+        <strong style="color: #00ffad; font-style: normal;">unlord</strong> | RSU Club ♣️
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Cierre del container
+    st.markdown("</div></div>", unsafe_allow_html=True)

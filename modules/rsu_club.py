@@ -1,48 +1,36 @@
 # modules/rsu_club.py
 import streamlit as st
-import base64
 from pathlib import Path
 
-def get_logo_base64():
+def get_logo_path():
     possible_paths = [
+        "/mnt/kimi/upload/rsu_logo.png",
         "rsu_logo.png",
         "assets/rsu_logo.png", 
-        "static/rsu_logo.png",
-        "/mnt/kimi/upload/rsu_logo.png"
+        "static/rsu_logo.png"
     ]
     for path in possible_paths:
         if Path(path).exists():
-            with open(path, "rb") as f:
-                return base64.b64encode(f.read()).decode()
+            return path
     return None
 
 def render():
     # CSS
     st.markdown("""
     <style>
-        .rsu-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
         .rsu-header {
             text-align: center;
-            padding: 40px 20px;
+            padding: 30px;
             background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
             border: 1px solid #1a1e26;
             border-radius: 12px;
-            margin-bottom: 30px;
-        }
-        .rsu-logo {
-            width: 120px;
-            height: auto;
-            margin-bottom: 15px;
-            filter: drop-shadow(0 4px 20px rgba(0, 255, 173, 0.3));
+            margin-bottom: 25px;
         }
         .rsu-title {
             font-size: 2.2rem;
             font-weight: bold;
             color: #00ffad;
-            margin: 0;
+            margin-top: 10px;
             text-shadow: 0 0 30px rgba(0, 255, 173, 0.4);
         }
         .rsu-card {
@@ -50,6 +38,7 @@ def render():
             border: 1px solid #1a1e26;
             border-radius: 12px;
             overflow: hidden;
+            height: 580px;
         }
         .rsu-card-header {
             background: #0c0e12;
@@ -58,12 +47,16 @@ def render():
             font-weight: bold;
             color: white;
             font-size: 1.1rem;
+            height: 55px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            box-sizing: border-box;
         }
         .rsu-card-body {
             padding: 20px;
+            height: calc(580px - 55px);
+            overflow-y: auto;
+            box-sizing: border-box;
         }
         .highlight-box {
             background: linear-gradient(90deg, #00ffad22 0%, transparent 100%);
@@ -133,24 +126,17 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # HEADER CON LOGO EN BASE64
-    logo_b64 = get_logo_base64()
+    # HEADER CON LOGO
+    logo_path = get_logo_path()
     
-    if logo_b64:
-        st.markdown(f"""
-        <div class="rsu-header">
-            <img src="data:image/png;base64,{logo_b64}" class="rsu-logo" alt="RSU Logo">
-            <div class="rsu-title">♣️ RSU Elite Club</div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="rsu-header">
-            <div class="rsu-title">♣️ RSU Elite Club</div>
-        </div>
-        """, unsafe_allow_html=True)
+    with st.container():
+        cols = st.columns([1, 2, 1])
+        with cols[1]:
+            if logo_path:
+                st.image(logo_path, width=140)
+            st.markdown('<div class="rsu-title">♣️ RSU Elite Club</div>', unsafe_allow_html=True)
 
-    # COLUMNAS PRINCIPALES
+    # COLUMNAS PRINCIPALES CON ALTURA IGUAL
     col1, col2 = st.columns(2, gap="large")
 
     with col1:
@@ -199,20 +185,22 @@ def render():
 
     # SECCIÓN FINAL
     st.markdown("""
-    <div class="rsu-card" style="margin-top: 30px;">
-        <div class="rsu-card-header">🚀 Tu camino empieza aquí</div>
-        <div class="rsu-card-body">
-            <p>
-                Te invito a explorar la comunidad, participar en los debates y consultar cualquier duda. Si necesitas algo específico, puedes contactarme por <strong style="color: #00ffad;">mensaje directo (MD)</strong>; te responderé lo antes posible.
-            </p>
-            <div class="tip-box">
-                💡 <strong>Consejo:</strong> No te abrumes por el volumen de información. Tómalo con calma, a tu ritmo; poco a poco integrarás los conocimientos necesarios para operar con confianza.
-            </div>
-            <p>
-                Gracias por formar parte de un espacio donde la <strong>formación, la responsabilidad y la transparencia</strong> son la prioridad. Deja atrás el ruido de los falsos gurús y comienza tu camino hacia un <strong style="color: #00ffad;">trading consciente</strong>.
-            </p>
-            <div class="signature">
-                <strong>unlord</strong> | RSU Club ♣️
+    <div style="margin-top: 25px;">
+        <div class="rsu-card" style="height: auto;">
+            <div class="rsu-card-header">🚀 Tu camino empieza aquí</div>
+            <div class="rsu-card-body" style="height: auto;">
+                <p>
+                    Te invito a explorar la comunidad, participar en los debates y consultar cualquier duda. Si necesitas algo específico, puedes contactarme por <strong style="color: #00ffad;">mensaje directo (MD)</strong>; te responderé lo antes posible.
+                </p>
+                <div class="tip-box">
+                    💡 <strong>Consejo:</strong> No te abrumes por el volumen de información. Tómalo con calma, a tu ritmo; poco a poco integrarás los conocimientos necesarios para operar con confianza.
+                </div>
+                <p>
+                    Gracias por formar parte de un espacio donde la <strong>formación, la responsabilidad y la transparencia</strong> son la prioridad. Deja atrás el ruido de los falsos gurús y comienza tu camino hacia un <strong style="color: #00ffad;">trading consciente</strong>.
+                </p>
+                <div class="signature">
+                    <strong>unlord</strong> | RSU Club ♣️
+                </div>
             </div>
         </div>
     </div>

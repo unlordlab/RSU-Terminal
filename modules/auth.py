@@ -50,7 +50,7 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS - CENTRADO Y SIMÉTRICO
+    # CSS - CENTRADO Y SIMÉTRICO SIN CAJAS EXTRA
     st.markdown("""
     <style>
         /* Ocultar elementos de Streamlit */
@@ -142,11 +142,12 @@ def login():
             display: none !important;
         }
         
-        /* Contenedor del botón centrado */
+        /* Contenedor del botón - CENTRADO CON MARGEN */
         div[data-testid="stButton"] {
             display: flex !important;
             justify-content: center !important;
             width: 100% !important;
+            margin-top: 25px !important;
         }
         
         /* Botón principal - CENTRADO Y MÁS PEQUEÑO */
@@ -159,11 +160,23 @@ def login():
             font-size: 14px !important;
             letter-spacing: 2px !important;
             width: auto !important;
-            min-width: 200px !important;
-            max-width: 280px !important;
+            min-width: 220px !important;
             height: 48px !important;
-            margin-top: 25px !important;
-            padding: 0 30px !important;
+            padding: 0 25px !important;
+            margin: 0 auto !important;
+        }
+        
+        /* OCULTAR BORDES DE COLUMNAS */
+        div[data-testid="stHorizontalBlock"] {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        
+        div[data-testid="column"] {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
         
         /* Footer */
@@ -206,33 +219,33 @@ def login():
         label_visibility="collapsed"
     )
     
-    # BOTÓN ACCESO CENTRADO
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🔓 DESBLOQUEAR TERMINAL"):
-            if not password:
-                st.error("⚠️ Ingrese una contraseña")
+    # BOTÓN ACCESO CENTRADO CON HTML
+    button_clicked = st.button("🔓 DESBLOQUEAR TERMINAL")
+    
+    if button_clicked:
+        if not password:
+            st.error("⚠️ Ingrese una contraseña")
+        else:
+            pwd_hash = hashlib.sha256(password.encode()).hexdigest()
+            real_pwd = st.secrets.get("APP_PASSWORD")
+            real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
+            
+            if pwd_hash == real_hash:
+                st.session_state["auth"] = True
+                st.session_state["login_attempts"] = 0
+                st.session_state["last_activity"] = datetime.now()
+                st.success("✅ Acceso concedido")
+                time.sleep(0.3)
+                st.rerun()
             else:
-                pwd_hash = hashlib.sha256(password.encode()).hexdigest()
-                real_pwd = st.secrets.get("APP_PASSWORD")
-                real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
-                
-                if pwd_hash == real_hash:
-                    st.session_state["auth"] = True
-                    st.session_state["login_attempts"] = 0
-                    st.session_state["last_activity"] = datetime.now()
-                    st.success("✅ Acceso concedido")
-                    time.sleep(0.3)
-                    st.rerun()
+                st.session_state["login_attempts"] += 1
+                if st.session_state["login_attempts"] >= 5:
+                    st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
+                    st.error("⏱️ Bloqueado 15 minutos")
                 else:
-                    st.session_state["login_attempts"] += 1
-                    if st.session_state["login_attempts"] >= 5:
-                        st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
-                        st.error("⏱️ Bloqueado 15 minutos")
-                    else:
-                        st.error("⚠️ Contraseña incorrecta")
-                        if 5 - st.session_state["login_attempts"] <= 2:
-                            st.warning(f"⚠️ {5 - st.session_state['login_attempts']} intentos restantes")
+                    st.error("⚠️ Contraseña incorrecta")
+                    if 5 - st.session_state["login_attempts"] <= 2:
+                        st.warning(f"⚠️ {5 - st.session_state['login_attempts']} intentos restantes")
     
     # FOOTER
     st.markdown('<div class="footer-text">🔒 CONEXIÓN SEGURA SSL<br><span>© 2026 RSU Terminal v2.0</span></div>', unsafe_allow_html=True)

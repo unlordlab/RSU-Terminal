@@ -8,10 +8,10 @@ import io
 def get_logo_base64_enlarged():
     """Carga el logo, lo amplía y lo convierte a base64"""
     possible_paths = [
-        "/mnt/kimi/upload/rsu_logo.png",
+        "/mnt/kimi/upload/logo.png",
         "rsu_logo.png",
-        "assets/rsu_logo.png", 
-        "static/rsu_logo.png"
+        "assets/logo.png", 
+        "static/logo.png"
     ]
     
     for path in possible_paths:
@@ -277,5 +277,6 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 
 

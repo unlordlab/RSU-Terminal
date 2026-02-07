@@ -1,4 +1,3 @@
-
 # modules/auth.py
 import os
 import streamlit as st
@@ -51,7 +50,7 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    # CSS - SIN OJOS, INPUT LIMPIO Y CENTRADO
+    # CSS - CENTRADO Y SIMÉTRICO
     st.markdown("""
     <style>
         /* Ocultar elementos de Streamlit */
@@ -69,7 +68,7 @@ def login():
             min-height: 90vh;
         }
         
-        /* Contenedor del login - CENTRADO Y SIN COLUMNAS EXTRA */
+        /* Contenedor del login */
         div[data-testid="stVerticalBlock"] {
             background: #11141a;
             border: 1px solid #1a1e26;
@@ -107,15 +106,28 @@ def login():
             font-weight: normal !important;
         }
         
-        /* Label */
+        /* Label centrado */
         label {
             color: #888 !important;
             font-size: 11px !important;
             text-transform: uppercase !important;
             letter-spacing: 1.5px !important;
+            text-align: center !important;
+            display: block !important;
+            width: 100% !important;
         }
         
-        /* Input SIN OJO INTERNO */
+        /* Centrar el contenedor del label */
+        .stMarkdown p {
+            text-align: center !important;
+            color: #888 !important;
+            font-size: 11px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1.5px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        /* Input */
         .stTextInput > div > div > input {
             background: #0c0e12 !important;
             border: 1px solid #2a3f5f !important;
@@ -130,11 +142,6 @@ def login():
             display: none !important;
         }
         
-        /* OCULTAR BOTÓN DE MOSTRAR/OCULTAR CONTRASEÑA */
-        button[kind="secondary"] {
-            display: none !important;
-        }
-             
         /* Botón principal */
         .stButton > button {
             background: linear-gradient(90deg, #00ffad, #00d4aa) !important;
@@ -146,7 +153,7 @@ def login():
             letter-spacing: 2px !important;
             width: 100% !important;
             height: 52px !important;
-            margin-top: 15px !important;
+            margin-top: 25px !important;
         }
         
         /* Footer */
@@ -163,17 +170,6 @@ def login():
             color: #555;
             font-size: 10px;
         }
-        
-        /* ELIMINAR ESPACIOS EXTRA DE COLUMNAS */
-        div[data-testid="stHorizontalBlock"] {
-            gap: 0 !important;
-        }
-        
-        /* OCULTAR COLUMNA VACÍA */
-        div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -189,10 +185,10 @@ def login():
     st.markdown("<h1>RSU TERMINAL</h1>", unsafe_allow_html=True)
     st.markdown("<h3>Sistema de Acceso Seguro</h3>", unsafe_allow_html=True)
     
-    # CONTRASEÑA - SIN COLUMNAS, SOLO UN INPUT CENTRADO
-    st.markdown("**Contraseña de Acceso**")
+    # CONTRASEÑA - LABEL CENTRADO
+    st.markdown('<p style="text-align:center;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Contraseña de Acceso</p>', unsafe_allow_html=True)
     
-    # Input simple sin columnas
+    # Input de contraseña
     password = st.text_input(
         "",
         type="password",
@@ -246,7 +242,3 @@ def require_auth():
         login()
         st.stop()
     st.session_state["last_activity"] = datetime.now()
-
-
-
-

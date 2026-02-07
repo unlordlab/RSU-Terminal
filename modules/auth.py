@@ -142,18 +142,28 @@ def login():
             display: none !important;
         }
         
-        /* Botón principal */
+        /* Contenedor del botón centrado */
+        div[data-testid="stButton"] {
+            display: flex !important;
+            justify-content: center !important;
+            width: 100% !important;
+        }
+        
+        /* Botón principal - CENTRADO Y MÁS PEQUEÑO */
         .stButton > button {
             background: linear-gradient(90deg, #00ffad, #00d4aa) !important;
             color: #0c0e12 !important;
             border: none !important;
             border-radius: 10px !important;
             font-weight: 700 !important;
-            font-size: 15px !important;
+            font-size: 14px !important;
             letter-spacing: 2px !important;
-            width: 100% !important;
-            height: 52px !important;
+            width: auto !important;
+            min-width: 200px !important;
+            max-width: 280px !important;
+            height: 48px !important;
             margin-top: 25px !important;
+            padding: 0 30px !important;
         }
         
         /* Footer */
@@ -196,31 +206,33 @@ def login():
         label_visibility="collapsed"
     )
     
-    # BOTÓN ACCESO
-    if st.button("🔓 DESBLOQUEAR TERMINAL"):
-        if not password:
-            st.error("⚠️ Ingrese una contraseña")
-        else:
-            pwd_hash = hashlib.sha256(password.encode()).hexdigest()
-            real_pwd = st.secrets.get("APP_PASSWORD")
-            real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
-            
-            if pwd_hash == real_hash:
-                st.session_state["auth"] = True
-                st.session_state["login_attempts"] = 0
-                st.session_state["last_activity"] = datetime.now()
-                st.success("✅ Acceso concedido")
-                time.sleep(0.3)
-                st.rerun()
+    # BOTÓN ACCESO CENTRADO
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔓 DESBLOQUEAR TERMINAL"):
+            if not password:
+                st.error("⚠️ Ingrese una contraseña")
             else:
-                st.session_state["login_attempts"] += 1
-                if st.session_state["login_attempts"] >= 5:
-                    st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
-                    st.error("⏱️ Bloqueado 15 minutos")
+                pwd_hash = hashlib.sha256(password.encode()).hexdigest()
+                real_pwd = st.secrets.get("APP_PASSWORD")
+                real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
+                
+                if pwd_hash == real_hash:
+                    st.session_state["auth"] = True
+                    st.session_state["login_attempts"] = 0
+                    st.session_state["last_activity"] = datetime.now()
+                    st.success("✅ Acceso concedido")
+                    time.sleep(0.3)
+                    st.rerun()
                 else:
-                    st.error("⚠️ Contraseña incorrecta")
-                    if 5 - st.session_state["login_attempts"] <= 2:
-                        st.warning(f"⚠️ {5 - st.session_state['login_attempts']} intentos restantes")
+                    st.session_state["login_attempts"] += 1
+                    if st.session_state["login_attempts"] >= 5:
+                        st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
+                        st.error("⏱️ Bloqueado 15 minutos")
+                    else:
+                        st.error("⚠️ Contraseña incorrecta")
+                        if 5 - st.session_state["login_attempts"] <= 2:
+                            st.warning(f"⚠️ {5 - st.session_state['login_attempts']} intentos restantes")
     
     # FOOTER
     st.markdown('<div class="footer-text">🔒 CONEXIÓN SEGURA SSL<br><span>© 2026 RSU Terminal v2.0</span></div>', unsafe_allow_html=True)

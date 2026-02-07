@@ -2,19 +2,42 @@
 import streamlit as st
 import base64
 from pathlib import Path
+from PIL import Image
+import io
 
-def get_logo_base64():
-    """Carga el logo y lo convierte a base64 para mostrarlo en HTML"""
+def get_logo_base64_enlarged():
+    """Carga el logo, lo amplía y lo convierte a base64"""
     possible_paths = [
         "/mnt/kimi/upload/rsu_logo.png",
         "rsu_logo.png",
         "assets/rsu_logo.png", 
         "static/rsu_logo.png"
     ]
+    
     for path in possible_paths:
         if Path(path).exists():
-            with open(path, "rb") as image_file:
-                return base64.b64encode(image_file.read()).decode()
+            try:
+                # Abrir imagen
+                img = Image.open(path)
+                
+                # Convertir a RGBA si es necesario
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                # Ampliar el logo (4x su tamaño original para mejor calidad)
+                width, height = img.size
+                new_size = (width * 4, height * 4)
+                img_enlarged = img.resize(new_size, Image.Resampling.LANCZOS)
+                
+                # Guardar en buffer
+                buffer = io.BytesIO()
+                img_enlarged.save(buffer, format='PNG')
+                return base64.b64encode(buffer.getvalue()).decode()
+            except Exception as e:
+                print(f"Error procesando logo: {e}")
+                # Fallback a método simple
+                with open(path, "rb") as f:
+                    return base64.b64encode(f.read()).decode()
     return None
 
 def render():
@@ -27,23 +50,43 @@ def render():
         }
         .logo-container {
             text-align: center;
-            padding: 40px 20px;
+            padding: 50px 20px 40px 20px;
             background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
             border: 1px solid #1a1e26;
-            border-radius: 12px;
-            margin-bottom: 30px;
+            border-radius: 16px;
+            margin-bottom: 35px;
+            position: relative;
+            overflow: hidden;
+        }
+        .logo-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(0,255,173,0.15) 0%, transparent 70%);
+            pointer-events: none;
         }
         .logo-img {
-            width: 180px;
+            width: 280px;
             height: auto;
-            filter: drop-shadow(0 0 30px rgba(0, 255, 173, 0.4));
+            position: relative;
+            z-index: 1;
+            filter: drop-shadow(0 0 40px rgba(0, 255, 173, 0.5)) drop-shadow(0 0 80px rgba(0, 255, 173, 0.3));
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
         }
         .logo-title {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
             font-weight: bold;
             color: #00ffad;
-            margin-top: 15px;
-            text-shadow: 0 0 20px rgba(0, 255, 173, 0.3);
+            margin-top: 25px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 0 30px rgba(0, 255, 173, 0.4), 0 0 60px rgba(0, 255, 173, 0.2);
+            letter-spacing: 1px;
         }
         .rsu-card {
             background: #11141a;
@@ -130,8 +173,8 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # HEADER CON LOGO EN BASE64 (PARA MAYOR CONTROL)
-    logo_b64 = get_logo_base64()
+    # HEADER CON LOGO AMPLIADO
+    logo_b64 = get_logo_base64_enlarged()
     
     if logo_b64:
         st.markdown(f"""
@@ -141,10 +184,10 @@ def render():
         </div>
         """, unsafe_allow_html=True)
     else:
-        # Fallback si no encuentra el logo
+        # Fallback con icono grande
         st.markdown("""
         <div class="logo-container">
-            <div style="font-size: 4rem; margin-bottom: 10px;">♣️</div>
+            <div style="font-size: 8rem; line-height: 1; margin-bottom: 20px; text-shadow: 0 0 40px rgba(0,255,173,0.5);">♣️</div>
             <div class="logo-title">RSU Elite Club</div>
         </div>
         """, unsafe_allow_html=True)

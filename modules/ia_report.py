@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -968,4 +969,3 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
 # Ejecutar render
 if __name__ == "__main__":
     render()
-

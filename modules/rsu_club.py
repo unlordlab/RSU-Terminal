@@ -4,10 +4,10 @@ from pathlib import Path
 
 def get_logo_path():
     possible_paths = [
-        "/mnt/kimi/upload/rsu_logo.png",
-        "rsu_logo.png",
-        "assets/rsu_logo.png", 
-        "static/rsu_logo.png"
+        "/mnt/kimi/upload/logo.png",
+        "logo.png",
+        "assets/logo.png", 
+        "static/logo.png"
     ]
     for path in possible_paths:
         if Path(path).exists():
@@ -18,14 +18,7 @@ def render():
     # CSS
     st.markdown("""
     <style>
-        .header-container {
-            background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
-            border: 1px solid #1a1e26;
-            border-radius: 16px;
-            padding: 40px 20px;
-            margin-bottom: 30px;
-            text-align: center;
-        }
+     
         .logo-container {
             position: relative;
             display: inline-block;
@@ -200,6 +193,7 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 

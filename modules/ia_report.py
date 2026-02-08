@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+
+  # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf

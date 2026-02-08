@@ -13,7 +13,7 @@ import pytz
 st.set_page_config(
     page_title="RSU Trading Platform",
     page_icon="📈",
-    layout="wide",  # ← MODO WIDE ACTIVADO
+    layout="wide",
     initial_sidebar_state="expanded"
 )
 
@@ -49,33 +49,231 @@ if not auth_module.login():
 from config import set_style
 set_style()
 
-# CSS Sidebar (solo para usuarios logueados)
+# CSS Sidebar con estética de market.py
 st.markdown("""
 <style>
+    /* FONDO DEL SIDEBAR - Estética market.py */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a0c10 0%, #11141a 50%, #0c0e12 100%);
         border-right: 1px solid #1a1e26;
     }
     
+    [data-testid="stSidebar"] > div:first-child {
+        padding: 1.5rem 1rem;
+    }
+    
+    /* CONTADOR DE USUARIOS - Sutil y pequeño */
+    .visitor-counter {
+        background: rgba(0, 255, 173, 0.03);
+        border: 1px solid rgba(0, 255, 173, 0.15);
+        border-radius: 20px;
+        padding: 4px 12px;
+        margin: 10px 0 20px 0;
+        text-align: center;
+        font-size: 0.65rem;
+        color: #00ffad;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.5px;
+        opacity: 0.8;
+    }
+    
+    .visitor-counter:hover {
+        opacity: 1;
+        border-color: rgba(0, 255, 173, 0.3);
+    }
+    
+    /* INFO DE USUARIO */
     .user-info {
         background: rgba(0, 255, 173, 0.05);
         border: 1px solid rgba(0, 255, 173, 0.2);
-        border-radius: 8px;
-        padding: 12px;
+        border-radius: 10px;
+        padding: 15px;
         margin: 15px 0;
+        position: relative;
     }
     
     .user-status {
         color: #00ffad;
         font-size: 0.8rem;
         font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
     
     .session-timer {
-        color: #888;
+        color: #666;
         font-size: 0.7rem;
-        margin-top: 4px;
-        font-family: monospace;
+        margin-top: 6px;
+        font-family: 'Courier New', monospace;
+    }
+    
+    /* RELOJES GLOBALES - Grid 2x2 */
+    .clocks-container {
+        background: #0c0e12;
+        border-radius: 10px;
+        padding: 12px;
+        margin: 15px 0;
+        border: 1px solid #1a1e26;
+    }
+    
+    .clocks-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    
+    .clock-item {
+        text-align: center;
+        padding: 8px 4px;
+        background: rgba(26, 30, 38, 0.5);
+        border-radius: 6px;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+    
+    .clock-item:hover {
+        border-color: #2a3f5f;
+        background: rgba(26, 30, 38, 0.8);
+    }
+    
+    .clock-label {
+        color: #555;
+        font-size: 0.6rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+        margin-bottom: 2px;
+    }
+    
+    .clock-time {
+        color: #00ffad;
+        font-size: 0.9rem;
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+    }
+    
+    .market-status {
+        text-align: center;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #1a1e26;
+    }
+    
+    .market-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: bold;
+    }
+    
+    .market-open {
+        background: rgba(0, 255, 173, 0.1);
+        color: #00ffad;
+        border: 1px solid rgba(0, 255, 173, 0.3);
+    }
+    
+    .market-closed {
+        background: rgba(242, 54, 69, 0.1);
+        color: #f23645;
+        border: 1px solid rgba(242, 54, 69, 0.3);
+    }
+    
+    /* MENÚ ESTÉTICO - Botones estilo market.py */
+    .stRadio > div {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .stRadio > div > label {
+        background: linear-gradient(135deg, #11141a 0%, #0c0e12 100%);
+        border: 1px solid #1a1e26;
+        border-radius: 8px;
+        padding: 12px 15px;
+        margin: 0 !important;
+        transition: all 0.25s ease;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stRadio > div > label:hover {
+        border-color: #2a3f5f;
+        background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%);
+        transform: translateX(3px);
+    }
+    
+    .stRadio > div > label[data-baseweb="radio"] > div:first-child {
+        display: none;
+    }
+    
+    .stRadio > div > label > div {
+        color: #888;
+        font-size: 0.85rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    /* Estado seleccionado */
+    .stRadio > div > label[aria-checked="true"] {
+        background: linear-gradient(135deg, #1a3a2f 0%, #0f2a1f 100%);
+        border-color: #00ffad;
+        box-shadow: 0 0 15px rgba(0, 255, 173, 0.15);
+    }
+    
+    .stRadio > div > label[aria-checked="true"] > div {
+        color: #00ffad;
+        font-weight: 600;
+    }
+    
+    .stRadio > div > label[aria-checked="true"]::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: #00ffad;
+    }
+    
+    /* Separador elegante */
+    .sidebar-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, #1a1e26 50%, transparent 100%);
+        margin: 20px 0;
+    }
+    
+    /* Botón logout estilizado */
+    .logout-button {
+        background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%);
+        border: 1px solid #f23645;
+        color: #f23645;
+        border-radius: 8px;
+        padding: 10px;
+        width: 100%;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .logout-button:hover {
+        background: rgba(242, 54, 69, 0.1);
+        box-shadow: 0 0 10px rgba(242, 54, 69, 0.2);
+    }
+    
+    /* Ocultar radio circle nativo */
+    .stRadio > div > div > div > div {
+        display: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -92,7 +290,13 @@ def get_market_status():
 def get_clock_times():
     times = {}
     now = datetime.now(pytz.UTC)
-    markets = {'NY': 'America/New_York', 'LON': 'Europe/London', 'TKY': 'Asia/Tokyo'}
+    markets = {
+        'NY': 'America/New_York', 
+        'LON': 'Europe/London', 
+        'TKY': 'Asia/Tokyo',
+        'MAD': 'Europe/Madrid',
+        'SYD': 'Australia/Sydney'
+    }
     
     for city, tz in markets.items():
         local_time = now.astimezone(pytz.timezone(tz))
@@ -116,6 +320,11 @@ def format_session_time():
     except Exception:
         return "30:00"
 
+def get_active_visitors():
+    """Simula contador de visitantes activos - reemplazar con lógica real"""
+    # Aquí puedes conectar con tu backend real
+    return 42  # Número de ejemplo
+
 # Inicializar motores
 if 'rsrw_engine' not in st.session_state:
     try:
@@ -126,11 +335,21 @@ if 'rsrw_engine' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
+    # Logo
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", use_container_width=True)
     else:
-        st.markdown("<h2 style='text-align: center; color: #00ffad;'>RSU</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; color: #00ffad; font-size: 1.8rem; margin-bottom: 5px;'>RSU</h2>", unsafe_allow_html=True)
     
+    # CONTADOR DE VISITANTES - Sutil y pequeño
+    active_visitors = get_active_visitors()
+    st.markdown(f"""
+        <div class="visitor-counter">
+            ● {active_visitors} USUARIOS ACTIVOS
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Usuario y sesión
     st.markdown(f"""
         <div class="user-info">
             <div class="user-status">🟢 SESIÓN ACTIVA</div>
@@ -138,30 +357,44 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
+    # RELOJES GLOBALES - NY, LON, TKY, MAD, SYD
     is_open, status = get_market_status()
     times = get_clock_times()
     
+    status_class = "market-open" if is_open else "market-closed"
+    status_icon = "🟢" if is_open else "🔴"
+    
     st.markdown(f"""
-        <div style="background: #0c0e12; border-radius: 8px; padding: 12px; margin: 10px 0;">
-            <div style="display: flex; justify-content: space-between;">
-                <span style="color: #888; font-size: 0.7rem;">Market</span>
-                <span style="color: {'#00ffad' if is_open else '#f23645'}; font-size: 0.7rem;">
-                    {'🟢' if is_open else '🔴'} {status}
-                </span>
+        <div class="clocks-container">
+            <div class="clocks-grid">
+                <div class="clock-item">
+                    <div class="clock-label">NY</div>
+                    <div class="clock-time">{times['NY']}</div>
+                </div>
+                <div class="clock-item">
+                    <div class="clock-label">LON</div>
+                    <div class="clock-time">{times['LON']}</div>
+                </div>
+                <div class="clock-item">
+                    <div class="clock-label">MAD</div>
+                    <div class="clock-time">{times['MAD']}</div>
+                </div>
+                <div class="clock-item">
+                    <div class="clock-label">SYD</div>
+                    <div class="clock-time">{times['SYD']}</div>
+                </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-                <div style="text-align: center;">
-                    <div style="color: #666; font-size: 0.6rem;">NY</div>
-                    <div style="color: white; font-size: 0.8rem;">{times['NY']}</div>
-                </div>
-                <div style="text-align: center;">
-                    <div style="color: #666; font-size: 0.6rem;">LON</div>
-                    <div style="color: white; font-size: 0.8rem;">{times['LON']}</div>
-                </div>
+            <div class="market-status">
+                <span class="market-badge {status_class}">
+                    {status_icon} MARKET {status}
+                </span>
             </div>
         </div>
     """, unsafe_allow_html=True)
     
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+    
+    # MENÚ ESTÉTICO
     menu = st.radio("", [
         "📊 DASHBOARD", "📜 MANIFEST", "♣️ RSU CLUB", "📈 SCANNER RS/RW", 
         "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "📅 EARNINGS", "💼 CARTERA", 
@@ -170,8 +403,10 @@ with st.sidebar:
         "👥 COMUNIDAD", "⚠️ DISCLAIMER"
     ], label_visibility="collapsed")
     
-    st.markdown("---")
-    if st.button("🔒 Cerrar Sesión", use_container_width=True):
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+    
+    # Logout estilizado
+    if st.button("🔒 Cerrar Sesión", use_container_width=True, type="secondary"):
         auth_module.logout()
 
 # Navegación
@@ -200,7 +435,5 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
-
-
 
 

@@ -7,7 +7,7 @@ def get_logo_path():
         "/mnt/kimi/upload/logo.png",
         "logo.png",
         "assets/logo.png", 
-        "static/ogo.png"
+        "static/logo.png"
     ]
     for path in possible_paths:
         if Path(path).exists():
@@ -207,4 +207,5 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 

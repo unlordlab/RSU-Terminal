@@ -18,10 +18,6 @@ def render():
     # CSS
     st.markdown("""
     <style>
-        .header-container {
-            text-align: center;
-            margin-bottom: 30px;
-        }
         .main-title {
             font-size: 2.5rem;
             font-weight: bold;
@@ -101,27 +97,27 @@ def render():
     # HEADER CENTRADO
     logo_path = get_logo_path()
     
-    # Usar columnas para centrar el contenido
+    # Centrar usando columns
     left_spacer, center_col, right_spacer = st.columns([1, 2, 1])
     
     with center_col:
-        # Contenedor del logo con glow
+        # Glow effect
         st.markdown("""
         <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 300px;">
             <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px);"></div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Logo centrado
+        # Logo
         if logo_path:
-            st.image(logo_path, width=260, use_container_width=False)
+            st.image(logo_path, width=260)
         else:
             st.markdown('<div style="text-align: center; font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
         
-        # Título centrado
+        # Título
         st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
 
-    st.write("")  # Espaciado
+    st.write("")
 
     # COLUMNAS
     col1, col2 = st.columns(2, gap="large")
@@ -142,13 +138,7 @@ def render():
         """, unsafe_allow_html=True)
 
     with col2:
-        # 🔧 CORRECCIÓN: Construir todo el contenido HTML en una sola cadena
-        features_html = """
-        <div class="rsu-card">
-            <div class="rsu-header">🛠️ ¿Qué te ofrecemos?</div>
-            <div class="rsu-body">
-        """
-        
+        # CORRECCIÓN: Renderizar todo de una vez usando write con HTML
         features = [
             ("📊", "Análisis profundo y actualizado", "Seguimiento diario del sentimiento del mercado, tesis de compra exhaustivas e ideas operativas de alto interés."),
             ("🎓", "Estrategias y Formación", "Metodologías únicas adaptadas a diversos perfiles de riesgo. Base de datos de 'operaciones inusuales' y biblioteca exclusiva."),
@@ -156,22 +146,23 @@ def render():
             ("🤝", "Soporte Personalizado", "Asesoramiento individual en configuración de herramientas (TradingView, brókers) para un entorno operativo óptimo.")
         ]
         
+        # Construir HTML de features
+        features_html = ""
         for icon, title, desc in features:
-            features_html += f"""
-                <div class="feature-box">
-                    <div style="font-size: 1.5rem;">{icon}</div>
-                    <div class="feature-title">{title}</div>
-                    <div class="feature-desc">{desc}</div>
-                </div>
-            """
+            features_html += '<div class="feature-box">'
+            features_html += f'<div style="font-size: 1.5rem;">{icon}</div>'
+            features_html += f'<div class="feature-title">{title}</div>'
+            features_html += f'<div class="feature-desc">{desc}</div>'
+            features_html += '</div>'
         
-        features_html += """
-            </div>
-        </div>
-        """
+        # Renderizar card completa
+        card_html = '<div class="rsu-card">'
+        card_html += '<div class="rsu-header">🛠️ ¿Qué te ofrecemos?</div>'
+        card_html += '<div class="rsu-body">'
+        card_html += features_html
+        card_html += '</div></div>'
         
-        # Renderizar todo el bloque completo de una vez
-        st.markdown(features_html, unsafe_allow_html=True)
+        st.markdown(card_html, unsafe_allow_html=True)
 
     # SECCIÓN FINAL
     st.write("")

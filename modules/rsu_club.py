@@ -4,10 +4,10 @@ from pathlib import Path
 
 def get_logo_path():
     possible_paths = [
-        "/mnt/kimi/upload/rsu_logo.png",
-        "rsu_logo.png",
-        "assets/rsu_logo.png", 
-        "static/rsu_logo.png"
+        "/mnt/kimi/upload/logo.png",
+        "logo.png",
+        "assets/logo.png", 
+        "static/ogo.png"
     ]
     for path in possible_paths:
         if Path(path).exists():
@@ -207,3 +207,4 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+

@@ -59,7 +59,7 @@ st.markdown("""
     }
     
     [data-testid="stSidebar"] > div:first-child {
-        padding: 1.5rem 1rem;
+        padding: 1rem 0.8rem;
     }
     
     /* CONTADOR DE USUARIOS - Sutil y pequeño */
@@ -67,10 +67,10 @@ st.markdown("""
         background: rgba(0, 255, 173, 0.03);
         border: 1px solid rgba(0, 255, 173, 0.15);
         border-radius: 20px;
-        padding: 4px 12px;
-        margin: 10px 0 20px 0;
+        padding: 3px 10px;
+        margin: 8px 0 15px 0;
         text-align: center;
-        font-size: 0.65rem;
+        font-size: 0.6rem;
         color: #00ffad;
         font-family: 'Courier New', monospace;
         letter-spacing: 0.5px;
@@ -86,48 +86,48 @@ st.markdown("""
     .user-info {
         background: rgba(0, 255, 173, 0.05);
         border: 1px solid rgba(0, 255, 173, 0.2);
-        border-radius: 10px;
-        padding: 15px;
-        margin: 15px 0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin: 10px 0;
         position: relative;
     }
     
     .user-status {
         color: #00ffad;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 600;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
     }
     
     .session-timer {
         color: #666;
-        font-size: 0.7rem;
-        margin-top: 6px;
+        font-size: 0.65rem;
+        margin-top: 4px;
         font-family: 'Courier New', monospace;
     }
     
-    /* RELOJES GLOBALES - Grid 2x2 */
+    /* RELOJES GLOBALES - Grid 2x2 compacto */
     .clocks-container {
         background: #0c0e12;
-        border-radius: 10px;
-        padding: 12px;
-        margin: 15px 0;
+        border-radius: 8px;
+        padding: 10px;
+        margin: 10px 0;
         border: 1px solid #1a1e26;
     }
     
     .clocks-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        gap: 6px;
     }
     
     .clock-item {
         text-align: center;
-        padding: 8px 4px;
+        padding: 6px 2px;
         background: rgba(26, 30, 38, 0.5);
-        border-radius: 6px;
+        border-radius: 4px;
         border: 1px solid transparent;
         transition: all 0.2s;
     }
@@ -139,33 +139,33 @@ st.markdown("""
     
     .clock-label {
         color: #555;
-        font-size: 0.6rem;
+        font-size: 0.55rem;
         font-weight: bold;
         letter-spacing: 1px;
-        margin-bottom: 2px;
+        margin-bottom: 1px;
     }
     
     .clock-time {
         color: #00ffad;
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         font-family: 'Courier New', monospace;
         font-weight: bold;
     }
     
     .market-status {
         text-align: center;
-        margin-top: 10px;
-        padding-top: 10px;
+        margin-top: 8px;
+        padding-top: 8px;
         border-top: 1px solid #1a1e26;
     }
     
     .market-badge {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 0.7rem;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 0.6rem;
         font-weight: bold;
     }
     
@@ -181,29 +181,30 @@ st.markdown("""
         border: 1px solid rgba(242, 54, 69, 0.3);
     }
     
-    /* MENÚ ESTÉTICO - Botones estilo market.py */
+    /* MENÚ ESTÉTICO - Botones MÁS PEQUEÑOS */
     .stRadio > div {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
     }
     
     .stRadio > div > label {
         background: linear-gradient(135deg, #11141a 0%, #0c0e12 100%);
         border: 1px solid #1a1e26;
-        border-radius: 8px;
-        padding: 12px 15px;
+        border-radius: 6px;
+        padding: 8px 12px !important;
         margin: 0 !important;
-        transition: all 0.25s ease;
+        transition: all 0.2s ease;
         cursor: pointer;
         position: relative;
         overflow: hidden;
+        min-height: auto !important;
     }
     
     .stRadio > div > label:hover {
         border-color: #2a3f5f;
         background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%);
-        transform: translateX(3px);
+        transform: translateX(2px);
     }
     
     .stRadio > div > label[data-baseweb="radio"] > div:first-child {
@@ -212,18 +213,19 @@ st.markdown("""
     
     .stRadio > div > label > div {
         color: #888;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         font-weight: 500;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
+        line-height: 1.2;
     }
     
     /* Estado seleccionado */
     .stRadio > div > label[aria-checked="true"] {
         background: linear-gradient(135deg, #1a3a2f 0%, #0f2a1f 100%);
         border-color: #00ffad;
-        box-shadow: 0 0 15px rgba(0, 255, 173, 0.15);
+        box-shadow: 0 0 10px rgba(0, 255, 173, 0.1);
     }
     
     .stRadio > div > label[aria-checked="true"] > div {
@@ -237,7 +239,7 @@ st.markdown("""
         left: 0;
         top: 0;
         bottom: 0;
-        width: 3px;
+        width: 2px;
         background: #00ffad;
     }
     
@@ -245,35 +247,35 @@ st.markdown("""
     .sidebar-divider {
         height: 1px;
         background: linear-gradient(90deg, transparent 0%, #1a1e26 50%, transparent 100%);
-        margin: 20px 0;
+        margin: 15px 0;
     }
     
-    /* Botón logout estilizado */
-    .logout-button {
-        background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%);
-        border: 1px solid #f23645;
-        color: #f23645;
-        border-radius: 8px;
-        padding: 10px;
-        width: 100%;
-        font-size: 0.8rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
+    /* Botón logout estilizado y pequeño */
+    .stButton > button {
+        background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%) !important;
+        border: 1px solid #f23645 !important;
+        color: #f23645 !important;
+        border-radius: 6px !important;
+        padding: 8px !important;
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+        transition: all 0.2s !important;
     }
     
-    .logout-button:hover {
-        background: rgba(242, 54, 69, 0.1);
-        box-shadow: 0 0 10px rgba(242, 54, 69, 0.2);
+    .stButton > button:hover {
+        background: rgba(242, 54, 69, 0.1) !important;
+        box-shadow: 0 0 8px rgba(242, 54, 69, 0.2) !important;
     }
     
     /* Ocultar radio circle nativo */
     .stRadio > div > div > div > div {
         display: none;
+    }
+    
+    /* Reducir espacio entre elementos del sidebar */
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -322,8 +324,7 @@ def format_session_time():
 
 def get_active_visitors():
     """Simula contador de visitantes activos - reemplazar con lógica real"""
-    # Aquí puedes conectar con tu backend real
-    return 42  # Número de ejemplo
+    return 42
 
 # Inicializar motores
 if 'rsrw_engine' not in st.session_state:
@@ -335,13 +336,13 @@ if 'rsrw_engine' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    # Logo
+    # Logo más pequeño
     if os.path.exists("assets/logo.png"):
         st.image("assets/logo.png", use_container_width=True)
     else:
-        st.markdown("<h2 style='text-align: center; color: #00ffad; font-size: 1.8rem; margin-bottom: 5px;'>RSU</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; color: #00ffad; font-size: 1.5rem; margin-bottom: 3px;'>RSU</h2>", unsafe_allow_html=True)
     
-    # CONTADOR DE VISITANTES - Sutil y pequeño
+    # CONTADOR DE VISITANTES
     active_visitors = get_active_visitors()
     st.markdown(f"""
         <div class="visitor-counter">
@@ -349,7 +350,7 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # Usuario y sesión
+    # Usuario y sesión compacto
     st.markdown(f"""
         <div class="user-info">
             <div class="user-status">🟢 SESIÓN ACTIVA</div>
@@ -357,7 +358,7 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # RELOJES GLOBALES - NY, LON, TKY, MAD, SYD
+    # RELOJES GLOBALES compactos
     is_open, status = get_market_status()
     times = get_clock_times()
     
@@ -394,7 +395,7 @@ with st.sidebar:
     
     st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
     
-    # MENÚ ESTÉTICO
+    # MENÚ ESTÉTICO COMPACTO
     menu = st.radio("", [
         "📊 DASHBOARD", "📜 MANIFEST", "♣️ RSU CLUB", "📈 SCANNER RS/RW", 
         "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "📅 EARNINGS", "💼 CARTERA", 
@@ -405,7 +406,7 @@ with st.sidebar:
     
     st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
     
-    # Logout estilizado
+    # Logout compacto
     if st.button("🔒 Cerrar Sesión", use_container_width=True, type="secondary"):
         auth_module.logout()
 
@@ -435,5 +436,3 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
-
-

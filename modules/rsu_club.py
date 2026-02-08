@@ -18,36 +18,24 @@ def render():
     # CSS
     st.markdown("""
     <style>
-     
-        .logo-container {
-            position: relative;
-            display: inline-block;
-            margin-bottom: 20px;
-        }
-        .glow-effect {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(0,255,173,0.25) 0%, rgba(0,255,173,0.05) 50%, transparent 70%);
-            filter: blur(40px);
-            z-index: 0;
-            pointer-events: none;
+        .header-container {
+            text-align: center;
+            margin-bottom: 30px;
         }
         .main-title {
             font-size: 2.5rem;
             font-weight: bold;
             color: #00ffad;
             text-shadow: 0 0 30px rgba(0, 255, 173, 0.4);
-            margin-top: 10px;
+            margin-top: 20px;
+            text-align: center;
         }
         .rsu-card {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
             overflow: hidden;
+            height: 100%;
         }
         .rsu-header {
             background: #0c0e12;
@@ -110,28 +98,30 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # HEADER
+    # HEADER CENTRADO
     logo_path = get_logo_path()
     
-    st.markdown('<div class="header-container">', unsafe_allow_html=True)
+    # Usar columnas para centrar el contenido
+    left_spacer, center_col, right_spacer = st.columns([1, 2, 1])
     
-    # Logo con glow usando HTML + st.image
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+    with center_col:
+        # Contenedor del logo con glow
         st.markdown("""
-        <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 320px;">
+        <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 300px;">
             <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px);"></div>
+        </div>
         """, unsafe_allow_html=True)
         
+        # Logo centrado
         if logo_path:
-            st.image(logo_path, width=260)
+            st.image(logo_path, width=260, use_container_width=False)
         else:
-            st.markdown('<div style="font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
-            
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('<div style="text-align: center; font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
+        
+        # Título centrado
         st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.write("")  # Espaciado
 
     # COLUMNAS
     col1, col2 = st.columns(2, gap="large")
@@ -152,11 +142,12 @@ def render():
         """, unsafe_allow_html=True)
 
     with col2:
-        st.markdown("""
+        # 🔧 CORRECCIÓN: Construir todo el contenido HTML en una sola cadena
+        features_html = """
         <div class="rsu-card">
             <div class="rsu-header">🛠️ ¿Qué te ofrecemos?</div>
             <div class="rsu-body">
-        """, unsafe_allow_html=True)
+        """
         
         features = [
             ("📊", "Análisis profundo y actualizado", "Seguimiento diario del sentimiento del mercado, tesis de compra exhaustivas e ideas operativas de alto interés."),
@@ -166,15 +157,21 @@ def render():
         ]
         
         for icon, title, desc in features:
-            st.markdown(f"""
-            <div class="feature-box">
-                <div style="font-size: 1.5rem;">{icon}</div>
-                <div class="feature-title">{title}</div>
-                <div class="feature-desc">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            features_html += f"""
+                <div class="feature-box">
+                    <div style="font-size: 1.5rem;">{icon}</div>
+                    <div class="feature-title">{title}</div>
+                    <div class="feature-desc">{desc}</div>
+                </div>
+            """
         
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        features_html += """
+            </div>
+        </div>
+        """
+        
+        # Renderizar todo el bloque completo de una vez
+        st.markdown(features_html, unsafe_allow_html=True)
 
     # SECCIÓN FINAL
     st.write("")
@@ -193,7 +190,3 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-
-
-

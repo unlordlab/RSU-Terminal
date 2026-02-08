@@ -1,6 +1,8 @@
+
 # modules/rsu_club.py
 import streamlit as st
 from pathlib import Path
+import base64
 
 def get_logo_path():
     possible_paths = [
@@ -94,30 +96,31 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # HEADER CENTRADO
+    # HEADER CENTRADO CON LOGO EN EL GLOW
     logo_path = get_logo_path()
     
     # Centrar usando columns
     left_spacer, center_col, right_spacer = st.columns([1, 2, 1])
     
     with center_col:
-        # Contenedor principal centrado
-        st.markdown("""
-        <div style="text-align: center; position: relative; height: 320px;">
-            <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px); top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
-        """, unsafe_allow_html=True)
-        
-        # Logo centrado usando HTML
+        # Contenedor con glow y logo juntos
         if logo_path:
-            # Leer la imagen como base64 para embeberla
-            import base64
             with open(logo_path, "rb") as img_file:
                 img_base64 = base64.b64encode(img_file.read()).decode()
-            st.markdown(f'<div style="position: relative; z-index: 1; margin-top: 20px;"><img src="data:image/png;base64,{img_base64}" width="260" style="display: block; margin: 0 auto;"></div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="position: relative; z-index: 1; font-size: 6rem; margin-top: 20px;">♣️</div>', unsafe_allow_html=True)
             
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 320px;">
+                <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px); top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0;"></div>
+                <img src="data:image/png;base64,{img_base64}" width="260" style="position: relative; z-index: 1;">
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 320px;">
+                <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px); top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0;"></div>
+                <div style="position: relative; z-index: 1; font-size: 6rem;">♣️</div>
+            </div>
+            """, unsafe_allow_html=True)
         
         # Título
         st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
@@ -143,7 +146,7 @@ def render():
         """, unsafe_allow_html=True)
 
     with col2:
-        # CORRECCIÓN: Renderizar todo de una vez usando write con HTML
+        # Construir HTML de features
         features = [
             ("📊", "Análisis profundo y actualizado", "Seguimiento diario del sentimiento del mercado, tesis de compra exhaustivas e ideas operativas de alto interés."),
             ("🎓", "Estrategias y Formación", "Metodologías únicas adaptadas a diversos perfiles de riesgo. Base de datos de 'operaciones inusuales' y biblioteca exclusiva."),
@@ -151,7 +154,6 @@ def render():
             ("🤝", "Soporte Personalizado", "Asesoramiento individual en configuración de herramientas (TradingView, brókers) para un entorno operativo óptimo.")
         ]
         
-        # Construir HTML de features
         features_html = ""
         for icon, title, desc in features:
             features_html += '<div class="feature-box">'
@@ -160,7 +162,6 @@ def render():
             features_html += f'<div class="feature-desc">{desc}</div>'
             features_html += '</div>'
         
-        # Renderizar card completa
         card_html = '<div class="rsu-card">'
         card_html += '<div class="rsu-header">🛠️ ¿Qué te ofrecemos?</div>'
         card_html += '<div class="rsu-body">'
@@ -186,4 +187,3 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
-

@@ -176,7 +176,7 @@ def render():
                 <p class="desc-text">
                     Únete al ecosistema de traders. Comparte operativas, recibe feedback en tiempo real y accede a salas de voz exclusivas durante sesiones de mercado.
                 </p>
-                <button class="btn-discord" onclick="window.open('https://discord.gg/TU_INVITACION', '_blank')">
+                <button class="btn-discord" onclick="window.open('https://discord.gg/8BZDAXAx', '_blank')">
                     Unirse al Discord →
                 </button>
             </div>
@@ -263,3 +263,4 @@ def render():
 # Para testing standalone
 if __name__ == "__main__":
     render()
+

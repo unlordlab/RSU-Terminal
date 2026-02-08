@@ -4,10 +4,10 @@ from pathlib import Path
 
 def get_logo_path():
     possible_paths = [
-        "/mnt/kimi/upload/logo.png",
-        "logo.png",
-        "assets/logo.png", 
-        "static/logo.png"
+        "/mnt/kimi/upload/rsu_logo.png",
+        "rsu_logo.png",
+        "assets/rsu_logo.png", 
+        "static/rsu_logo.png"
     ]
     for path in possible_paths:
         if Path(path).exists():
@@ -18,54 +18,43 @@ def render():
     # CSS
     st.markdown("""
     <style>
-        .header-box {
-            text-align: center;
-            padding: 50px 20px 40px 20px;
+        .header-container {
             background: linear-gradient(180deg, #0c0e12 0%, #11141a 100%);
             border: 1px solid #1a1e26;
             border-radius: 16px;
+            padding: 40px 20px;
             margin-bottom: 30px;
-            position: relative;
+            text-align: center;
         }
-        .logo-wrapper {
+        .logo-container {
+            position: relative;
             display: inline-block;
-            position: relative;
+            margin-bottom: 20px;
         }
-        .logo-glow {
+        .glow-effect {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 350px;
-            height: 350px;
-            background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, rgba(0,255,173,0.1) 40%, transparent 70%);
-            filter: blur(30px);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(0,255,173,0.25) 0%, rgba(0,255,173,0.05) 50%, transparent 70%);
+            filter: blur(40px);
             z-index: 0;
-        }
-        .logo-img {
-            width: 280px;
-            height: 280px;
-            object-fit: contain;
-            border-radius: 20px;
-            position: relative;
-            z-index: 1;
-            box-shadow: 
-                0 0 50px rgba(0, 255, 173, 0.4),
-                0 0 100px rgba(0, 255, 173, 0.2);
+            pointer-events: none;
         }
         .main-title {
             font-size: 2.5rem;
             font-weight: bold;
             color: #00ffad;
-            margin-top: 25px;
             text-shadow: 0 0 30px rgba(0, 255, 173, 0.4);
+            margin-top: 10px;
         }
         .rsu-card {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
             overflow: hidden;
-            height: 100%;
         }
         .rsu-header {
             background: #0c0e12;
@@ -131,64 +120,68 @@ def render():
     # HEADER
     logo_path = get_logo_path()
     
-    st.markdown('<div class="header-box">', unsafe_allow_html=True)
+    st.markdown('<div class="header-container">', unsafe_allow_html=True)
     
-    if logo_path:
-        st.markdown(f"""
-        <div class="logo-wrapper">
-            <div class="logo-glow"></div>
-            <img src="file://{logo_path}" class="logo-img" alt="RSU Logo">
-        </div>
+    # Logo con glow usando HTML + st.image
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("""
+        <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 320px;">
+            <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px);"></div>
         """, unsafe_allow_html=True)
-    else:
-        st.markdown('<div style="font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
+        
+        if logo_path:
+            st.image(logo_path, width=260)
+        else:
+            st.markdown('<div style="font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
+            
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
     
-    st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # COLUMNAS - USANDO CONTAINER PARA ALINEACIÓN
-    with st.container():
-        col1, col2 = st.columns(2, gap="large")
+    # COLUMNAS
+    col1, col2 = st.columns(2, gap="large")
 
-        with col1:
-            st.markdown("""
-            <div class="rsu-card">
-                <div class="rsu-header">🎯 Nuestra Filosofía</div>
-                <div class="rsu-body">
-                    <div class="highlight-box">
-                        <span class="highlight-text">Más que un club, una comunidad.</span>
-                    </div>
-                    <p>En el ecosistema del trading, encontrar un espacio transparente es un verdadero desafío. Entre "gurús" que prometen riqueza inmediata y cursos costosos de nula eficacia, es normal sentirse perdido.</p>
-                    <p>En <strong style="color: #00ffad;">RSU Club</strong> marcamos la distancia: aquí no hay promesas vacías, solo <strong>conocimiento real, colaboración y responsabilidad</strong>.</p>
-                    <p>Somos una comunidad de trading diseñada para ser <strong>seria, responsable y rentable</strong>. Te dotamos de las herramientas y el respaldo necesarios para que tus decisiones de inversión estén fundamentadas y cuenten con garantías.</p>
+    with col1:
+        st.markdown("""
+        <div class="rsu-card">
+            <div class="rsu-header">🎯 Nuestra Filosofía</div>
+            <div class="rsu-body">
+                <div class="highlight-box">
+                    <span class="highlight-text">Más que un club, una comunidad.</span>
                 </div>
+                <p>En el ecosistema del trading, encontrar un espacio transparente es un verdadero desafío. Entre "gurús" que prometen riqueza inmediata y cursos costosos de nula eficacia, es normal sentirse perdido.</p>
+                <p>En <strong style="color: #00ffad;">RSU Club</strong> marcamos la distancia: aquí no hay promesas vacías, solo <strong>conocimiento real, colaboración y responsabilidad</strong>.</p>
+                <p>Somos una comunidad de trading diseñada para ser <strong>seria, responsable y rentable</strong>. Te dotamos de las herramientas y el respaldo necesarios para que tus decisiones de inversión estén fundamentadas y cuenten con garantías.</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="rsu-card">
+            <div class="rsu-header">🛠️ ¿Qué te ofrecemos?</div>
+            <div class="rsu-body">
+        """, unsafe_allow_html=True)
+        
+        features = [
+            ("📊", "Análisis profundo y actualizado", "Seguimiento diario del sentimiento del mercado, tesis de compra exhaustivas e ideas operativas de alto interés."),
+            ("🎓", "Estrategias y Formación", "Metodologías únicas adaptadas a diversos perfiles de riesgo. Base de datos de 'operaciones inusuales' y biblioteca exclusiva."),
+            ("💎", "Recursos Exclusivos", "Listado actualizado de activos para carteras de medio/largo plazo e información de 'segundo nivel'."),
+            ("🤝", "Soporte Personalizado", "Asesoramiento individual en configuración de herramientas (TradingView, brókers) para un entorno operativo óptimo.")
+        ]
+        
+        for icon, title, desc in features:
+            st.markdown(f"""
+            <div class="feature-box">
+                <div style="font-size: 1.5rem;">{icon}</div>
+                <div class="feature-title">{title}</div>
+                <div class="feature-desc">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("""
-            <div class="rsu-card">
-                <div class="rsu-header">🛠️ ¿Qué te ofrecemos?</div>
-                <div class="rsu-body">
-            """, unsafe_allow_html=True)
-            
-            features = [
-                ("📊", "Análisis profundo y actualizado", "Seguimiento diario del sentimiento del mercado, tesis de compra exhaustivas e ideas operativas de alto interés."),
-                ("🎓", "Estrategias y Formación", "Metodologías únicas adaptadas a diversos perfiles de riesgo. Base de datos de 'operaciones inusuales' y biblioteca exclusiva."),
-                ("💎", "Recursos Exclusivos", "Listado actualizado de activos para carteras de medio/largo plazo e información de 'segundo nivel'."),
-                ("🤝", "Soporte Personalizado", "Asesoramiento individual en configuración de herramientas (TradingView, brókers) para un entorno operativo óptimo.")
-            ]
-            
-            for icon, title, desc in features:
-                st.markdown(f"""
-                <div class="feature-box">
-                    <div style="font-size: 1.5rem;">{icon}</div>
-                    <div class="feature-title">{title}</div>
-                    <div class="feature-desc">{desc}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown("</div></div>", unsafe_allow_html=True)
+        
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
     # SECCIÓN FINAL
     st.write("")
@@ -207,5 +200,4 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
-
 

@@ -123,7 +123,7 @@ def render():
             """, unsafe_allow_html=True)
         
         # Título
-        st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-title">RSU Club</div>', unsafe_allow_html=True)
 
     st.write("")
 
@@ -187,3 +187,4 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+

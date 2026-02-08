@@ -4,10 +4,10 @@ from pathlib import Path
 
 def get_logo_path():
     possible_paths = [
-        "/mnt/kimi/upload/logo.png",
-        "logo.png",
-        "assets/logo.png", 
-        "static/logo.png"
+        "/mnt/kimi/upload/rsu_logo.png",
+        "rsu_logo.png",
+        "assets/rsu_logo.png", 
+        "static/rsu_logo.png"
     ]
     for path in possible_paths:
         if Path(path).exists():
@@ -15,7 +15,7 @@ def get_logo_path():
     return None
 
 def render():
-    # CSS actualizado
+    # CSS
     st.markdown("""
     <style>
         .header-container {
@@ -26,54 +26,35 @@ def render():
             margin-bottom: 30px;
             text-align: center;
         }
-        .logo-wrapper {
+        .logo-container {
             position: relative;
             display: inline-block;
-            margin: 0 auto 20px auto;
+            margin-bottom: 20px;
         }
-        .logo-glow {
+        .glow-effect {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 320px;
-            height: 320px;
-            background: radial-gradient(circle, rgba(0,255,173,0.28) 0%, rgba(0,255,173,0.06) 60%, transparent 80%);
-            filter: blur(35px);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(0,255,173,0.25) 0%, rgba(0,255,173,0.05) 50%, transparent 70%);
+            filter: blur(40px);
             z-index: 0;
             pointer-events: none;
-            border-radius: 50%;
-        }
-        .logo-circle {
-            width: 260px;
-            height: 260px;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 2px solid #00ffad33;
-            box-shadow: 0 0 30px rgba(0,255,173,0.35);
-            position: relative;
-            z-index: 1;
-            background: #0c0e12;
-        }
-        .logo-circle img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
         }
         .main-title {
-            font-size: 2.8rem;
-            font-weight: 800;
+            font-size: 2.5rem;
+            font-weight: bold;
             color: #00ffad;
-            text-shadow: 0 0 35px rgba(0, 255, 173, 0.45);
-            margin: 10px 0 0 0;
-            letter-spacing: 1px;
+            text-shadow: 0 0 30px rgba(0, 255, 173, 0.4);
+            margin-top: 10px;
         }
         .rsu-card {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
             overflow: hidden;
-            margin-bottom: 24px;
         }
         .rsu-header {
             background: #0c0e12;
@@ -81,103 +62,85 @@ def render():
             border-bottom: 1px solid #1a1e26;
             font-weight: bold;
             color: white;
-            font-size: 1.15rem;
+            font-size: 1.1rem;
         }
         .rsu-body {
             padding: 20px;
         }
         .highlight-box {
             background: linear-gradient(90deg, #00ffad22 0%, transparent 100%);
-            border-left: 4px solid #00ffad;
-            padding: 14px 16px;
-            margin: 16px 0;
-            border-radius: 0 10px 10px 0;
+            border-left: 3px solid #00ffad;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
         }
         .highlight-text {
             color: #00ffad;
             font-weight: bold;
-            font-size: 1.15rem;
+            font-size: 1.1rem;
         }
         .feature-box {
             background: #0c0e12;
             border: 1px solid #1a1e26;
-            border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 14px;
-            display: flex;
-            gap: 14px;
-            align-items: flex-start;
-        }
-        .feature-icon {
-            font-size: 1.8rem;
-            line-height: 1;
-            min-width: 40px;
-        }
-        .feature-content {
-            flex: 1;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
         }
         .feature-title {
             color: white;
-            font-weight: 600;
-            margin: 0 0 6px 0;
+            font-weight: bold;
+            margin: 8px 0 5px 0;
         }
         .feature-desc {
-            color: #aaa;
-            font-size: 0.95rem;
-            line-height: 1.5;
+            color: #888;
+            font-size: 0.9rem;
         }
         .tip-box {
-            background: #00ffad0f;
-            border-left: 4px solid #00ffad;
-            padding: 16px;
-            margin: 24px 0;
-            border-radius: 0 10px 10px 0;
-            font-size: 0.98rem;
+            background: #00ffad11;
+            border-left: 3px solid #00ffad;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
         }
         .signature {
             text-align: center;
-            margin-top: 30px;
+            margin-top: 25px;
             padding-top: 20px;
             border-top: 1px solid #1a1e26;
-            color: #777;
-            font-size: 0.95rem;
+            color: #666;
         }
         p {
-            color: #ccc;
-            line-height: 1.75;
-            margin-bottom: 14px;
+            color: #bbb;
+            line-height: 1.7;
+            margin-bottom: 12px;
         }
     </style>
     """, unsafe_allow_html=True)
 
     # HEADER
     logo_path = get_logo_path()
-
+    
     st.markdown('<div class="header-container">', unsafe_allow_html=True)
     
-    # Logo circular + glow
-    st.markdown('<div class="logo-wrapper">', unsafe_allow_html=True)
-    st.markdown('<div class="logo-glow"></div>', unsafe_allow_html=True)
-    
-    if logo_path:
-        st.markdown(f"""
-        <div class="logo-circle">
-            <img src="{logo_path}" alt="RSU Logo">
-        </div>
-        """, unsafe_allow_html=True)
-    else:
+    # Logo con glow usando HTML + st.image
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
         st.markdown("""
-        <div class="logo-circle" style="display:flex; align-items:center; justify-content:center; font-size:8rem; color:#00ffad44;">
-            ♣
-        </div>
+        <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 320px;">
+            <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px);"></div>
         """, unsafe_allow_html=True)
+        
+        if logo_path:
+            st.image(logo_path, width=260)
+        else:
+            st.markdown('<div style="font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
+            
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # COLUMNAS con las dos tarjetas principales
+    # COLUMNAS
     col1, col2 = st.columns(2, gap="large")
 
     with col1:
@@ -212,17 +175,16 @@ def render():
         for icon, title, desc in features:
             st.markdown(f"""
             <div class="feature-box">
-                <div class="feature-icon">{icon}</div>
-                <div class="feature-content">
-                    <div class="feature-title">{title}</div>
-                    <div class="feature-desc">{desc}</div>
-                </div>
+                <div style="font-size: 1.5rem;">{icon}</div>
+                <div class="feature-title">{title}</div>
+                <div class="feature-desc">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
         
         st.markdown("</div></div>", unsafe_allow_html=True)
 
     # SECCIÓN FINAL
+    st.write("")
     st.markdown("""
     <div class="rsu-card">
         <div class="rsu-header">🚀 Tu camino empieza aquí</div>

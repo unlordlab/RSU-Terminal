@@ -101,18 +101,23 @@ def render():
     left_spacer, center_col, right_spacer = st.columns([1, 2, 1])
     
     with center_col:
-        # Glow effect
+        # Contenedor principal centrado
         st.markdown("""
-        <div style="position: relative; display: flex; justify-content: center; align-items: center; height: 300px;">
-            <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px);"></div>
-        </div>
+        <div style="text-align: center; position: relative; height: 320px;">
+            <div style="position: absolute; width: 350px; height: 350px; background: radial-gradient(circle, rgba(0,255,173,0.3) 0%, transparent 70%); filter: blur(30px); top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
         """, unsafe_allow_html=True)
         
-        # Logo
+        # Logo centrado usando HTML
         if logo_path:
-            st.image(logo_path, width=260)
+            # Leer la imagen como base64 para embeberla
+            import base64
+            with open(logo_path, "rb") as img_file:
+                img_base64 = base64.b64encode(img_file.read()).decode()
+            st.markdown(f'<div style="position: relative; z-index: 1; margin-top: 20px;"><img src="data:image/png;base64,{img_base64}" width="260" style="display: block; margin: 0 auto;"></div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div style="text-align: center; font-size: 6rem;">♣️</div>', unsafe_allow_html=True)
+            st.markdown('<div style="position: relative; z-index: 1; font-size: 6rem; margin-top: 20px;">♣️</div>', unsafe_allow_html=True)
+            
+        st.markdown('</div>', unsafe_allow_html=True)
         
         # Título
         st.markdown('<div class="main-title">RSU Elite Club</div>', unsafe_allow_html=True)
@@ -181,3 +186,4 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+

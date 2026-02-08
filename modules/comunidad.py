@@ -1,132 +1,122 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import re
+
+# ────────────────────────────────────────────────
+# CONFIGURACIÓN DE ENLACES
+# ────────────────────────────────────────────────
+
+DISCORD_URL = "https://discord.gg/8BZDAXAx"
+TELEGRAM_URL = "https://t.me/TU_CANAL"  # Modifica cuando tengas el link
+EMAIL_DESTINO = "unl4b@proton.me"
 
 # ────────────────────────────────────────────────
 # RENDER PRINCIPAL
 # ────────────────────────────────────────────────
 
 def render():
-    # CSS Global - Estética market.py
+    # CSS Global - Estética market.py limpia
     st.markdown("""
     <style>
+        /* Reset base */
         .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            max-width: 1200px;
         }
         
-        /* Tooltips */
-        .tooltip-container {
-            position: relative;
-            cursor: help;
-        }
-        .tooltip-container .tooltip-text {
-            visibility: hidden;
-            width: 260px;
-            background-color: #1e222d;
-            color: #eee;
-            text-align: left;
-            padding: 12px 14px;
-            border-radius: 8px;
-            position: absolute;
-            z-index: 999;
-            top: 140%;
-            right: -10px;
-            opacity: 0;
-            transition: opacity 0.3s, visibility 0.3s;
-            font-size: 12px;
-            border: 1px solid #444;
-            pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            line-height: 1.4;
-        }
-        .tooltip-container:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-        
-        /* Contenedores */
-        .group-container {
-            border: 1px solid #1a1e26;
-            border-radius: 10px;
-            overflow: hidden;
-            background: #11141a;
-        }
-        .group-header {
-            background: #0c0e12;
-            padding: 12px 15px;
-            border-bottom: 1px solid #1a1e26;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .group-title {
-            margin: 0;
+        /* Título principal */
+        .main-title {
+            text-align: center;
             color: white;
-            font-size: 14px;
+            font-size: 2.5rem;
             font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            margin-bottom: 3rem;
+            letter-spacing: -0.5px;
         }
         
-        /* Botones estilo trading */
-        .btn-discord {
+        /* Tarjetas de conexión */
+        .connect-card {
+            background: linear-gradient(180deg, #11141a 0%, #0c0e12 100%);
+            border: 1px solid #1a1e26;
+            border-radius: 12px;
+            padding: 2rem;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+        .connect-card:hover {
+            border-color: #2a3f5f;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        /* Iconos grandes */
+        .platform-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .discord-color { color: #5865F2; }
+        .telegram-color { color: #0088cc; }
+        .email-color { color: #00ffad; }
+        
+        /* Títulos de tarjeta */
+        .card-title {
+            color: white;
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.8rem;
+        }
+        
+        /* Descripción */
+        .card-desc {
+            color: #888;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            min-height: 70px;
+        }
+        
+        /* Botones estilizados via CSS puro */
+        .stButton > button {
+            width: 100%;
+            border-radius: 8px !important;
+            padding: 0.8rem 1.5rem !important;
+            font-weight: bold !important;
+            font-size: 1rem !important;
+            border: none !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        /* Discord button */
+        .btn-discord > button {
             background: linear-gradient(135deg, #5865F2 0%, #4752C4 100%) !important;
             color: white !important;
-            border: none !important;
-            padding: 14px 28px !important;
-            border-radius: 8px !important;
-            font-weight: bold !important;
-            width: 100% !important;
-            font-size: 15px !important;
-            transition: all 0.3s !important;
-            cursor: pointer !important;
         }
-        .btn-discord:hover {
+        .btn-discord > button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(88, 101, 242, 0.4) !important;
+            box-shadow: 0 8px 20px rgba(88, 101, 242, 0.4) !important;
         }
         
-        .btn-telegram {
+        /* Telegram button */
+        .btn-telegram > button {
             background: linear-gradient(135deg, #0088cc 0%, #006699 100%) !important;
             color: white !important;
-            border: none !important;
-            padding: 14px 28px !important;
-            border-radius: 8px !important;
-            font-weight: bold !important;
-            width: 100% !important;
-            font-size: 15px !important;
-            transition: all 0.3s !important;
-            cursor: pointer !important;
         }
-        .btn-telegram:hover {
+        .btn-telegram > button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 136, 204, 0.4) !important;
+            box-shadow: 0 8px 20px rgba(0, 136, 204, 0.4) !important;
         }
         
-        .btn-submit {
-            background: linear-gradient(135deg, #00ffad 0%, #00cc8a 100%) !important;
-            color: #0c0e12 !important;
-            border: none !important;
-            padding: 14px 28px !important;
-            border-radius: 8px !important;
-            font-weight: bold !important;
-            font-size: 15px !important;
-            width: 100% !important;
-            transition: all 0.3s !important;
-            cursor: pointer !important;
-        }
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 255, 173, 0.4) !important;
+        /* Formulario */
+        .contact-form {
+            background: #0c0e12;
+            border: 1px solid #1a1e26;
+            border-radius: 8px;
+            padding: 1.5rem;
         }
         
-        /* Inputs */
         .stTextInput > div > div > input,
-        .stTextArea > div > div > textarea,
-        .stSelectbox > div > div > select {
-            background-color: #0c0e12 !important;
+        .stTextArea > div > div > textarea {
+            background-color: #11141a !important;
             color: white !important;
             border: 1px solid #1a1e26 !important;
             border-radius: 6px !important;
@@ -134,110 +124,130 @@ def render():
         .stTextInput > div > div > input:focus,
         .stTextArea > div > div > textarea:focus {
             border-color: #00ffad !important;
-            box-shadow: 0 0 0 1px #00ffad !important;
+            box-shadow: 0 0 0 2px rgba(0, 255, 173, 0.2) !important;
         }
         
-        /* Descripción */
-        .desc-text {
+        /* Submit button email */
+        .btn-email > button {
+            background: linear-gradient(135deg, #00ffad 0%, #00cc8a 100%) !important;
+            color: #0c0e12 !important;
+        }
+        .btn-email > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 255, 173, 0.4) !important;
+        }
+        
+        /* Tooltips personalizados */
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: #1a1e26;
+            border: 1px solid #444;
+            border-radius: 50%;
             color: #888;
-            font-size: 0.9rem;
-            line-height: 1.6;
-            margin: 15px 0;
+            font-size: 12px;
+            cursor: help;
+            margin-left: 8px;
+            position: relative;
+        }
+        
+        .tooltip-icon:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 220px;
+            background: #1e222d;
+            color: #eee;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            border: 1px solid #444;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 1000;
+            line-height: 1.4;
+            pointer-events: none;
+        }
+        
+        /* Separador visual */
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, #2a3f5f 50%, transparent 100%);
+            margin: 2rem 0;
         }
     </style>
     """, unsafe_allow_html=True)
 
     # TÍTULO
-    st.markdown('<h1 style="text-align:center; margin-bottom:40px; color:white;">👥 Comunidad RSU</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">👥 Comunidad RSU</h1>', unsafe_allow_html=True)
 
     # ─── TRES COLUMNAS ───
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3, gap="large")
 
     # DISCORD
     with col1:
-        discord_card = """
-        <div class="group-container" style="height: 100%;">
-            <div class="group-header">
-                <p class="group-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#5865F2" style="margin-right:8px;">
-                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
-                    </svg>
-                    Discord
-                </p>
-                <div class="tooltip-container">
-                    <div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div>
-                    <div class="tooltip-text">
-                        <strong>Nuestra comunidad principal</strong><br>
-                        Salas de voz 24/7, canales organizados por temas (análisis técnico, crypto, forex), alertas en tiempo real y sesiones de trading en equipo.
-                    </div>
-                </div>
+        st.markdown("""
+        <div class="connect-card">
+            <div class="platform-icon discord-color">💬</div>
+            <div class="card-title">
+                Discord
+                <span class="tooltip-icon" data-tooltip="Comunidad principal con salas de voz 24/7, canales organizados por temas y alertas en tiempo real">?</span>
             </div>
-            <div style="padding: 20px; background: #11141a;">
-                <p class="desc-text">
-                    Únete al ecosistema de traders. Comparte operativas, recibe feedback en tiempo real y accede a salas de voz exclusivas durante sesiones de mercado.
-                </p>
-                <button class="btn-discord" onclick="window.open('https://discord.gg/8BZDAXAx', '_blank')">
-                    Unirse al Discord →
-                </button>
+            <div class="card-desc">
+                Únete al ecosistema de traders. Comparte operativas, recibe feedback en tiempo real y accede a salas de voz durante sesiones de mercado.
             </div>
         </div>
-        """
-        components.html(discord_card, height=280, scrolling=False)
+        """, unsafe_allow_html=True)
+        
+        # Botón nativo de Streamlit con clase CSS
+        st.markdown('<div class="btn-discord">', unsafe_allow_html=True)
+        if st.button("Unirse al Discord →", key="btn_discord", use_container_width=True):
+            st.markdown(f'<meta http-equiv="refresh" content="0; url={DISCORD_URL}">', unsafe_allow_html=True)
+            st.markdown(f'<a href="{DISCORD_URL}" target="_blank">Click aquí si no redirige automáticamente</a>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # TELEGRAM
     with col2:
-        telegram_card = """
-        <div class="group-container" style="height: 100%;">
-            <div class="group-header">
-                <p class="group-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0088cc" style="margin-right:8px;">
-                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                    </svg>
-                    Telegram
-                </p>
-                <div class="tooltip-container">
-                    <div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div>
-                    <div class="tooltip-text">
-                        <strong>Canal de anuncios oficiales</strong><br>
-                        Alertas instantáneas push a tu móvil. Sin spam, solo contenido relevante: breakouts, cambios de tendencia y oportunidades detectadas.
-                    </div>
-                </div>
+        st.markdown("""
+        <div class="connect-card">
+            <div class="platform-icon telegram-color">📢</div>
+            <div class="card-title">
+                Telegram
+                <span class="tooltip-icon" data-tooltip="Canal de anuncios oficiales. Alertas push instantáneas a tu móvil sin spam, solo contenido relevante de mercado">?</span>
             </div>
-            <div style="padding: 20px; background: #11141a;">
-                <p class="desc-text">
-                    Recibe alertas instantáneas en tu móvil. Notificaciones push con análisis rápidos, niveles clave y oportunidades de mercado en tiempo real.
-                </p>
-                <button class="btn-telegram" onclick="window.open('https://t.me/TU_CANAL', '_blank')">
-                    Unirse al Canal →
-                </button>
+            <div class="card-desc">
+                Recibe alertas instantáneas en tu móvil. Notificaciones push con análisis rápidos, niveles clave y oportunidades de mercado en tiempo real.
             </div>
         </div>
-        """
-        components.html(telegram_card, height=280, scrolling=False)
+        """, unsafe_allow_html=True)
+        
+        st.markdown('<div class="btn-telegram">', unsafe_allow_html=True)
+        if st.button("Unirse al Canal →", key="btn_telegram", use_container_width=True):
+            st.markdown(f'<meta http-equiv="refresh" content="0; url={TELEGRAM_URL}">', unsafe_allow_html=True)
+            st.markdown(f'<a href="{TELEGRAM_URL}" target="_blank">Click aquí si no redirige automáticamente</a>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # FORMULARIO DE CONTACTO
     with col3:
         st.markdown("""
-        <div class="group-container" style="height: 100%;">
-            <div class="group-header">
-                <p class="group-title">✉️ Contacto</p>
-                <div class="tooltip-container">
-                    <div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div>
-                    <div class="tooltip-text">
-                        <strong>Contacto directo</strong><br>
-                        Para colaboraciones, soporte o consultas privadas. Respuesta garantizada en 24-48h a unl4b@proton.me
-                    </div>
-                </div>
+        <div class="connect-card">
+            <div class="platform-icon email-color">✉️</div>
+            <div class="card-title">
+                Contacto
+                <span class="tooltip-icon" data-tooltip="Para colaboraciones, soporte o consultas privadas. Respuesta garantizada en 24-48h">?</span>
             </div>
-        </div>
         """, unsafe_allow_html=True)
         
         with st.form("contact_form", clear_on_submit=True):
             nombre = st.text_input("Nombre", placeholder="Tu nombre", label_visibility="collapsed")
             email = st.text_input("Email", placeholder="tu@email.com", label_visibility="collapsed")
-            mensaje = st.text_area("Mensaje", placeholder="Escribe tu mensaje...", height=80, label_visibility="collapsed")
+            mensaje = st.text_area("Mensaje", placeholder="Escribe tu mensaje...", height=100, label_visibility="collapsed")
             
-            submitted = st.form_submit_button("📤 Enviar a unl4b@proton.me", use_container_width=True)
+            submitted = st.form_submit_button(f"Enviar a {EMAIL_DESTINO} →", use_container_width=True)
             
             if submitted:
                 if nombre and email and mensaje:
@@ -247,20 +257,18 @@ def render():
                         st.error("❌ Email inválido")
                 else:
                     st.warning("⚠️ Completa todos los campos")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown("""
-        <style>
-        [data-testid="stForm"] {
-            background: #11141a;
-            padding: 0 20px 20px 20px;
-            border-radius: 0 0 10px 10px;
-            margin-top: -5px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+    # Separador y footer
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="text-align: center; color: #555; font-size: 0.9rem; margin-top: 1rem;">
+        💡 Los miembros activos reciben acceso prioritario a alertas y análisis exclusivos
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # Para testing standalone
 if __name__ == "__main__":
     render()
-

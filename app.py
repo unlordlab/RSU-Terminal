@@ -7,6 +7,16 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 
+# ============================================================
+# CONFIGURACIÓN DE PÁGINA - DEBE SER LA PRIMERA LLAMADA STREAMLIT
+# ============================================================
+st.set_page_config(
+    page_title="RSU Trading Platform",
+    page_icon="📈",
+    layout="wide",  # ← MODO WIDE ACTIVADO
+    initial_sidebar_state="expanded"
+)
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # NO importar set_style todavía
@@ -190,6 +200,7 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
+
 
 
 

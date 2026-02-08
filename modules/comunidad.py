@@ -2,7 +2,7 @@ import streamlit as st
 
 DISCORD_URL = "https://discord.gg/8BZDAXAx"
 TELEGRAM_URL = "https://t.me/TU_CANAL"
-FORMSPREE_ID = "TU_ID_AQUI"  # Ej: xnqkvnzp
+FORMSPREE_ID = "meelqyyb"  # Ej: xnqkvnzp
 
 def render():
     st.markdown("""
@@ -83,3 +83,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

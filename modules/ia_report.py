@@ -9,6 +9,16 @@ import requests
 import time
 
 # ────────────────────────────────────────────────
+# CONFIGURACIÓN DE PÁGINA
+# ────────────────────────────────────────────────
+st.set_page_config(
+    page_title="RSU AI Report",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# ────────────────────────────────────────────────
 # FUNCIONES AUXILIARES
 # ────────────────────────────────────────────────
 
@@ -28,7 +38,6 @@ def get_analyst_recommendations(ticker):
         stock = yf.Ticker(ticker)
         recommendations = stock.recommendations
         if recommendations is not None and not recommendations.empty:
-            # Obtener el período más reciente (0m)
             latest = recommendations.iloc[0]
             return {
                 'strong_buy': int(latest.get('strongBuy', 0)),
@@ -78,9 +87,7 @@ def translate_text(text, target_lang='es'):
         return text
 
     try:
-        # Limitar texto para la API gratuita
         text_to_translate = text[:500] if len(text) > 500 else text
-
         url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text_to_translate)}&langpair=en|{target_lang}"
         response = requests.get(url, timeout=5)
 
@@ -88,7 +95,6 @@ def translate_text(text, target_lang='es'):
             data = response.json()
             if data.get('responseStatus') == 200:
                 translated = data['responseData']['translatedText']
-                # Si el texto original era más largo, añadir indicación
                 if len(text) > 500:
                     translated += "... [Texto truncado para traducción]"
                 return translated
@@ -105,7 +111,7 @@ def get_valuation_metrics(info):
         'price_to_sales': info.get('priceToSalesTrailing12Months'),
         'ev_ebitda': info.get('enterpriseToEbitda'),
         'peg_ratio': info.get('pegRatio'),
-        'sector_pe': info.get('trailingPE', 0) * 0.8 if info.get('trailingPE') else None  # Estimación
+        'sector_pe': info.get('trailingPE', 0) * 0.8 if info.get('trailingPE') else None
     }
     return metrics
 
@@ -169,9 +175,20 @@ def get_suggestions(ticker, info, recommendations, target):
 # ────────────────────────────────────────────────
 
 def render():
-    # CSS Global con estética market.py
+    # CSS Global compacto
     st.markdown("""
     <style>
+        /* Reset y base */
+        .stApp {
+            background: #0c0e12;
+        }
+
+        .main .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            max-width: 100%;
+        }
+
         /* Variables de color */
         :root {
             --bg-dark: #0c0e12;
@@ -187,25 +204,19 @@ def render():
             --text-muted: #555555;
         }
 
-        /* Contenedores principales */
-        .main-container {
-            background: var(--bg-dark);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
+        /* Contenedores */
         .group-container {
             border: 1px solid var(--border);
             border-radius: 12px;
             overflow: hidden;
             background: var(--bg-card);
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
 
         .group-header {
             background: var(--bg-header);
-            padding: 15px 20px;
+            padding: 12px 16px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
@@ -215,7 +226,7 @@ def render():
         .group-title {
             margin: 0;
             color: var(--text-primary);
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
             display: flex;
             align-items: center;
@@ -223,81 +234,128 @@ def render():
         }
 
         .group-content {
-            padding: 20px;
+            padding: 16px;
+        }
+
+        /* Input compacto */
+        .stTextInput > div {
+            margin-bottom: 0 !important;
+        }
+
+        .stTextInput > div > div > input {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+
+        /* Header del ticker */
+        .ticker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .ticker-info h1 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 24px;
+        }
+
+        .ticker-info p {
+            margin: 4px 0 0 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .ticker-price {
+            text-align: right;
+        }
+
+        .price-main {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .price-change {
+            font-size: 14px;
+            font-weight: bold;
         }
 
         /* Tarjetas de valoración */
         .valuation-card {
             background: var(--bg-dark);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 16px;
+            border-radius: 8px;
+            padding: 12px;
             position: relative;
-            transition: all 0.3s ease;
             height: 100%;
-        }
-
-        .valuation-card:hover {
-            border-color: var(--accent);
-            transform: translateY(-2px);
         }
 
         .val-tag {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 8px;
+            right: 8px;
             background: #2a3f5f;
             color: var(--accent);
-            padding: 4px 10px;
+            padding: 2px 8px;
             border-radius: 4px;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: bold;
         }
 
         .val-label {
             color: var(--text-secondary);
-            font-size: 11px;
+            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 8px;
-            margin-top: 5px;
+            margin-bottom: 6px;
+            margin-top: 4px;
         }
 
         .val-value {
             color: var(--text-primary);
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .val-sub-label {
             color: var(--text-muted);
-            font-size: 10px;
+            font-size: 9px;
         }
 
-        /* Barra de progreso para ratings */
+        /* Barra de ratings */
         .rating-bar-container {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .rating-label {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 4px;
-            font-size: 13px;
+            margin-bottom: 3px;
+            font-size: 12px;
             color: var(--text-primary);
         }
 
         .rating-bar-bg {
             background: var(--bg-dark);
-            height: 8px;
-            border-radius: 4px;
+            height: 6px;
+            border-radius: 3px;
             overflow: hidden;
         }
 
         .rating-bar-fill {
             height: 100%;
-            border-radius: 4px;
+            border-radius: 3px;
             transition: width 0.5s ease;
         }
 
@@ -305,23 +363,23 @@ def render():
         .target-price-box {
             background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 24px;
+            border-radius: 10px;
+            padding: 20px;
             text-align: center;
         }
 
         .target-main {
-            font-size: 42px;
+            font-size: 36px;
             font-weight: bold;
             color: var(--accent);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .target-change {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            padding: 4px 12px;
-            border-radius: 20px;
+            padding: 4px 10px;
+            border-radius: 16px;
             display: inline-block;
         }
 
@@ -342,34 +400,34 @@ def render():
         }
 
         .tooltip-icon {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             background: #1a1e26;
-            border: 2px solid #555;
+            border: 1px solid #555;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #aaa;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
         }
 
         .tooltip-text {
             visibility: hidden;
-            width: 280px;
+            width: 260px;
             background-color: #1e222d;
             color: #eee;
             text-align: left;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 10px;
+            border-radius: 6px;
             position: absolute;
             z-index: 999;
-            top: 35px;
-            right: -10px;
+            top: 28px;
+            right: -8px;
             opacity: 0;
             transition: opacity 0.3s;
-            font-size: 12px;
+            font-size: 11px;
             border: 1px solid #444;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
@@ -379,111 +437,53 @@ def render():
             opacity: 1;
         }
 
-        /* Sección RSU Prompt */
+        /* Sección RSU */
         .rsu-section {
             background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%);
             border: 2px solid var(--accent);
             border-radius: 12px;
-            padding: 24px;
-            margin: 30px 0;
+            padding: 20px;
+            margin: 20px 0;
         }
 
         .rsu-title {
             color: var(--accent);
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .rsu-button {
-            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
-            color: #000;
-            border: none;
-            padding: 16px 32px;
-            border-radius: 8px;
             font-size: 16px;
             font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .rsu-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 255, 173, 0.3);
-        }
-
-        /* Lista de sugerencias */
+        /* Sugerencias */
         .suggestion-item {
             background: var(--bg-dark);
             border-left: 3px solid var(--accent);
-            padding: 12px 16px;
-            margin-bottom: 10px;
-            border-radius: 0 8px 8px 0;
-            font-size: 14px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            border-radius: 0 6px 6px 0;
+            font-size: 13px;
             color: var(--text-primary);
-            line-height: 1.5;
+            line-height: 1.4;
         }
 
-        /* Header del ticker */
-        .ticker-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 20px;
-            background: var(--bg-card);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-        }
-
-        .ticker-info h1 {
-            margin: 0;
-            color: var(--text-primary);
-            font-size: 32px;
-        }
-
-        .ticker-info p {
-            margin: 4px 0 0 0;
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-
-        .ticker-price {
-            text-align: right;
-        }
-
-        .price-main {
-            font-size: 36px;
-            font-weight: bold;
-            color: var(--text-primary);
-        }
-
-        .price-change {
-            font-size: 16px;
-            font-weight: bold;
-        }
-
-        /* Tabs personalizados */
+        /* Tabs */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
+            gap: 6px;
             background: var(--bg-card);
-            padding: 10px;
-            border-radius: 10px;
+            padding: 8px;
+            border-radius: 8px;
             border: 1px solid var(--border);
+            margin-bottom: 16px;
         }
 
         .stTabs [data-baseweb="tab"] {
             background: transparent;
             color: var(--text-secondary);
             border-radius: 6px;
-            padding: 10px 20px;
-            font-weight: 500;
+            padding: 8px 16px;
+            font-size: 13px;
         }
 
         .stTabs [aria-selected="true"] {
@@ -491,33 +491,48 @@ def render():
             color: #000 !important;
         }
 
-        /* Input personalizado */
-        .stTextInput > div > div > input {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-size: 16px;
+        /* Dataframe */
+        .stDataFrame {
+            background: var(--bg-dark);
         }
 
-        .stTextInput > div > div > input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 2px rgba(0, 255, 173, 0.2);
+        /* Botón */
+        .stButton > button {
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+            color: #000;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .stButton > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 255, 173, 0.3);
+        }
+
+        /* Eliminar espacios */
+        div[data-testid="stVerticalBlock"] > div {
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        .element-container {
+            margin-bottom: 0 !important;
         }
     </style>
     """, unsafe_allow_html=True)
 
-    # ─── HEADER CON SELECTOR DE TICKER ───
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
-
-    col_input, col_empty = st.columns([1, 3])
+    # ─── INPUT DEL TICKER ───
+    col_input, _ = st.columns([1, 3])
     with col_input:
         t_in = st.text_input("🔍 Introducir Ticker", "NVDA").upper()
 
     if not t_in:
         st.warning("⚠️ Por favor, introduce un ticker válido.")
-        st.markdown('</div>', unsafe_allow_html=True)
         return
 
     # ─── OBTENER DATOS ───
@@ -525,7 +540,6 @@ def render():
         info = get_stock_info(t_in)
         if not info:
             st.error(f"No se pudieron obtener datos para {t_in}")
-            st.markdown('</div>', unsafe_allow_html=True)
             return
 
         recommendations = get_analyst_recommendations(t_in)
@@ -557,13 +571,17 @@ def render():
         </div>
     """, unsafe_allow_html=True)
 
-    # ─── GRÁFICO TRADINGVIEW ───
-    tradingview_widget = f"""
-    <div class="group-container" style="margin-bottom: 30px;">
+    # ─── GRÁFICO EN CONTENEDOR ───
+    chart_html = f"""
+    <div class="group-container" style="margin-bottom: 16px;">
         <div class="group-header">
-            <span class="group-title">📈 Gráfico Avanzado</span>
+            <span class="group-title">📈 Gráfico Avanzado - {t_in}</span>
+            <div class="tooltip-container">
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
+            </div>
         </div>
-        <div style="height: 600px; padding: 0;">
+        <div style="height: 550px; background: #0c0e12;">
             <div id="tradingview_chart" style="height: 100%; width: 100%;"></div>
             <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
             <script type="text/javascript">
@@ -580,26 +598,28 @@ def render():
                 "hide_side_toolbar": false,
                 "allow_symbol_change": true,
                 "container_id": "tradingview_chart",
-                "studies": ["RSI@tv-basicstudies", "MASimple@tv-basicstudies"]
+                "studies": ["RSI@tv-basicstudies", "MASimple@tv-basicstudies"],
+                "hide_top_toolbar": false,
+                "save_image": true
             }});
             </script>
         </div>
     </div>
     """
-    components.html(tradingview_widget, height=680)
+    components.html(chart_html, height=600)
 
     # ─── SECCIÓN ABOUT ───
     st.markdown(f"""
         <div class="group-container">
             <div class="group-header">
-                <span class="group-title">ℹ️ Sobre {info.get('longName', t_in)}</span>
+                <span class="group-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
                 <div class="tooltip-container">
                     <div class="tooltip-icon">?</div>
                     <div class="tooltip-text">Descripción de la empresa traducida automáticamente al español.</div>
                 </div>
             </div>
             <div class="group-content">
-                <p style="color: #cccccc; line-height: 1.6; font-size: 15px;">{translated_summary}</p>
+                <p style="color: #cccccc; line-height: 1.5; font-size: 14px; margin: 0;">{translated_summary}</p>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -609,13 +629,13 @@ def render():
 
     # TAB 1: OVERVIEW
     with tabs[0]:
-        st.markdown('<div class="group-container">', unsafe_allow_html=True)
+        st.markdown('<div class="group-container" style="margin: 0;">', unsafe_allow_html=True)
         st.markdown("""
             <div class="group-header">
                 <span class="group-title">💵 Múltiplos de Valoración</span>
                 <div class="tooltip-container">
                     <div class="tooltip-icon">?</div>
-                    <div class="tooltip-text">Métricas clave para evaluar la valoración de la empresa. Comparar con el sector para contexto.</div>
+                    <div class="tooltip-text">Métricas clave para evaluar la valoración de la empresa.</div>
                 </div>
             </div>
             <div class="group-content">
@@ -626,9 +646,9 @@ def render():
         valuation_data = [
             {"label": "P/E (Trailing)", "val": metrics['trailing_pe'], "tag": "Trailing", "desc": "Precio/Beneficio"},
             {"label": "P/S (TTM)", "val": metrics['price_to_sales'], "tag": "TTM", "desc": "Precio/Ventas"},
-            {"label": "EV/EBITDA", "val": metrics['ev_ebitda'], "tag": "TTM", "desc": "Enterprise Value/EBITDA"},
+            {"label": "EV/EBITDA", "val": metrics['ev_ebitda'], "tag": "TTM", "desc": "EV/EBITDA"},
             {"label": "Forward P/E", "val": metrics['forward_pe'], "tag": "Next 12M", "desc": "P/E Futuro"},
-            {"label": "PEG Ratio", "val": metrics['peg_ratio'], "tag": "Growth", "desc": "P/E ajustado al crecimiento"},
+            {"label": "PEG Ratio", "val": metrics['peg_ratio'], "tag": "Growth", "desc": "P/E ajustado"},
         ]
 
         for i, m in enumerate(valuation_data):
@@ -658,28 +678,27 @@ def render():
             with col1:
                 st.markdown(f"""
                     <div class="target-price-box">
-                        <div style="color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
+                        <div style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">
                             Precio Objetivo Medio
                         </div>
                         <div class="target-main">${target_data['mean']:.2f}</div>
                         <div class="target-change {upside_class}">
                             {upside_symbol} {abs(upside):.1f}% vs Actual
                         </div>
-                        <div style="color: #555; font-size: 12px; margin-top: 12px;">
+                        <div style="color: #555; font-size: 11px; margin-top: 10px;">
                             Basado en {info.get('numberOfAnalystOpinions', 'N/A')} analistas
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
 
             with col2:
-                # Rango de precios
                 if target_data['low'] and target_data['high']:
                     st.markdown("""
                         <div class="group-container" style="height: 100%; margin: 0;">
                             <div class="group-header">
                                 <span class="group-title">Rango de Precios</span>
                             </div>
-                            <div class="group-content" style="display: flex; flex-direction: column; justify-content: center; gap: 20px;">
+                            <div class="group-content" style="display: flex; flex-direction: column; justify-content: center; gap: 16px;">
                     """, unsafe_allow_html=True)
 
                     metrics_range = [
@@ -692,14 +711,14 @@ def render():
                         if value:
                             st.markdown(f"""
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="color: #888; font-size: 14px;">{label}</span>
-                                    <span style="color: {color}; font-size: 20px; font-weight: bold;">${value:.2f}</span>
+                                    <span style="color: #888; font-size: 13px;">{label}</span>
+                                    <span style="color: {color}; font-size: 18px; font-weight: bold;">${value:.2f}</span>
                                 </div>
                             """, unsafe_allow_html=True)
 
                     st.markdown('</div></div>', unsafe_allow_html=True)
         else:
-            st.info("No hay datos de precio objetivo disponibles para este ticker.")
+            st.info("No hay datos de precio objetivo disponibles.")
 
     # TAB 3: RECOMENDACIONES
     with tabs[2]:
@@ -740,7 +759,6 @@ def render():
                 st.markdown('</div></div>', unsafe_allow_html=True)
 
             with col2:
-                # Consenso
                 buy_count = recommendations['strong_buy'] + recommendations['buy']
                 hold_count = recommendations['hold']
                 sell_count = recommendations['sell'] + recommendations['strong_sell']
@@ -760,23 +778,23 @@ def render():
 
                 st.markdown(f"""
                     <div class="target-price-box" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
-                        <div style="color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">
+                        <div style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
                             Consenso de Analistas
                         </div>
-                        <div style="font-size: 32px; font-weight: bold; color: {consensus_color}; margin-bottom: 8px;">
+                        <div style="font-size: 28px; font-weight: bold; color: {consensus_color}; margin-bottom: 6px;">
                             {consensus}
                         </div>
-                        <div style="color: #888; font-size: 14px;">
+                        <div style="color: #888; font-size: 13px;">
                             {consensus_pct:.0f}% de acuerdo
                         </div>
-                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #333;">
-                            <div style="color: #555; font-size: 12px;">Total de Analistas</div>
-                            <div style="color: white; font-size: 24px; font-weight: bold;">{recommendations['total']}</div>
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                            <div style="color: #555; font-size: 11px;">Total Analistas</div>
+                            <div style="color: white; font-size: 20px; font-weight: bold;">{recommendations['total']}</div>
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("No hay recomendaciones de analistas disponibles para este ticker.")
+            st.info("No hay recomendaciones de analistas disponibles.")
 
     # TAB 4: FINANCIALS
     with tabs[3]:
@@ -804,9 +822,8 @@ def render():
             <div class="rsu-title">
                 🤖 RSU Artificial Intelligence
             </div>
-            <p style="color: #888; margin-bottom: 20px; font-size: 14px;">
-                Genera un informe completo y profesional utilizando el prompt personalizado de RSU. 
-                El análisis incluirá métricas fundamentales, técnicas y de sentimiento.
+            <p style="color: #888; margin-bottom: 16px; font-size: 13px;">
+                Genera un informe completo utilizando el prompt personalizado de RSU con análisis fundamental, técnico y de sentimiento.
             </p>
     """, unsafe_allow_html=True)
 
@@ -815,7 +832,7 @@ def render():
         if error_ia:
             st.error(f"❌ Error: {error_ia}")
         else:
-            with st.spinner(f"🧠 La IA está analizando {t_in}... Esto puede tomar unos segundos..."):
+            with st.spinner(f"🧠 Analizando {t_in}..."):
                 try:
                     template = obtener_prompt_github()
                     if not template:
@@ -829,21 +846,20 @@ Datos adicionales para el análisis:
 - Precio actual: ${current_price:.2f}
 - P/E Ratio: {metrics['trailing_pe'] or 'N/A'}
 - Precio objetivo medio: ${target_data['mean'] if target_data and target_data['mean'] else 'N/A'}
-- Recomendación consenso: {consensus if 'consensus' in locals() else 'N/A'}
 - Sector: {info.get('sector', 'N/A')}
 - Crecimiento ingresos: {(info.get('revenueGrowth', 0) * 100):.1f}%
 
-Proporciona recomendaciones claras de inversión con niveles de entrada, stop-loss y objetivos de precio."""
+Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos de precio."""
 
                     res = model_ia.generate_content(prompt_final)
 
                     st.markdown(f"""
-                        <div class="group-container" style="margin-top: 20px;">
+                        <div class="group-container" style="margin-top: 16px;">
                             <div class="group-header">
                                 <span class="group-title">📋 Informe RSU: {t_in}</span>
                             </div>
                             <div class="group-content" style="background: #0c0e12; border-left: 3px solid #00ffad;">
-                                <div style="color: #e0e0e0; line-height: 1.8; font-size: 14px; white-space: pre-wrap;">
+                                <div style="color: #e0e0e0; line-height: 1.7; font-size: 13px; white-space: pre-wrap;">
                                     {res.text}
                                 </div>
                             </div>
@@ -881,7 +897,6 @@ Proporciona recomendaciones claras de inversión con niveles de entrada, stop-lo
 
     st.markdown('</div></div>', unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Final del fitxer ia_report.py
-
+# Ejecutar render
+if __name__ == "__main__":
+    render()

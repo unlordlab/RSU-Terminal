@@ -205,7 +205,7 @@ def get_suggestions(ticker, info, recommendations, target):
 # ────────────────────────────────────────────────
 
 def render():
-    # CSS Global - Optimizado
+    # CSS Global - Optimizado para evitar espacios y solapamientos
     st.markdown("""
     <style>
         .stApp {
@@ -218,8 +218,8 @@ def render():
             max-width: 100%;
         }
 
-        /* CONTENEDOR PRINCIPAL */
-        .card {
+        /* CONTENEDOR PRINCIPAL - Todo encapsulado */
+        .module-box {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -227,7 +227,7 @@ def render():
             margin-bottom: 16px;
         }
 
-        .card-header {
+        .module-header {
             background: #0c0e12;
             padding: 14px 18px;
             border-bottom: 1px solid #1a1e26;
@@ -236,20 +236,20 @@ def render():
             align-items: center;
         }
 
-        .card-title {
+        .module-title {
             color: #ffffff;
             font-size: 14px;
             font-weight: bold;
             margin: 0;
         }
 
-        .card-body {
+        .module-body {
             padding: 18px;
             background: #11141a;
         }
 
         /* Header del ticker */
-        .header-card {
+        .header-box {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -289,7 +289,7 @@ def render():
         }
 
         /* Métricas */
-        .metric-box {
+        .metric-card {
             background: #0c0e12;
             border: 1px solid #1a1e26;
             border-radius: 10px;
@@ -405,13 +405,13 @@ def render():
             color: #f23645;
         }
 
-        /* Tooltip */
-        .tip {
+        /* Tooltip - Posicionado para evitar solapamientos */
+        .tooltip-container {
             position: relative;
             cursor: help;
         }
 
-        .tip-icon {
+        .tooltip-icon {
             width: 22px;
             height: 22px;
             border-radius: 50%;
@@ -425,32 +425,32 @@ def render():
             font-weight: bold;
         }
 
-        .tip-text {
+        .tooltip-text {
             visibility: hidden;
-            width: 280px;
+            width: 260px;
             background: #1e222d;
             color: #eee;
             text-align: left;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 10px;
+            border-radius: 6px;
             position: absolute;
-            z-index: 999;
-            top: 30px;
+            z-index: 1000;
+            top: 28px;
             right: 0;
             opacity: 0;
             transition: opacity 0.3s;
-            font-size: 12px;
+            font-size: 11px;
             border: 1px solid #444;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
 
-        .tip:hover .tip-text {
+        .tooltip-container:hover .tooltip-text {
             visibility: visible;
             opacity: 1;
         }
 
         /* RSU */
-        .rsu-card {
+        .rsu-box {
             background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%);
             border: 2px solid #00ffad;
             border-radius: 12px;
@@ -548,7 +548,11 @@ def render():
             margin-bottom: 0 !important;
         }
 
-        /* Ocultar elementos de streamlit que causan problemas */
+        .element-container {
+            margin-bottom: 0 !important;
+        }
+
+        /* Ocultar elementos vacíos */
         .element-container:empty {
             display: none !important;
         }
@@ -586,7 +590,7 @@ def render():
     change_color = "#00ffad" if price_change >= 0 else "#f23645"
 
     st.markdown(f"""
-        <div class="header-card">
+        <div class="header-box">
             <div>
                 <div class="header-title">{info.get('longName', t_in)}</div>
                 <div class="header-meta">{info.get('sector', 'N/A')} • {info.get('industry', 'N/A')} • Market Cap: ${info.get('marketCap', 0)/1e9:.2f}B</div>
@@ -600,7 +604,7 @@ def render():
         </div>
     """, unsafe_allow_html=True)
 
-    # ─── GRÁFICO TRADINGVIEW ───
+    # ─── GRÁFICO TRADINGVIEW - TODO EN UN SOLO CONTENEDOR ───
     chart_html = f"""
     <!DOCTYPE html>
     <html>
@@ -631,32 +635,34 @@ def render():
     </html>
     """
 
-    # Contenedor del gráfico con header
+    # Header del gráfico
     st.markdown(f"""
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">📈 Gráfico Avanzado - {t_in}</span>
-                <div class="tip">
-                    <div class="tip-icon">?</div>
-                    <div class="tip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
+        <div class="module-box">
+            <div class="module-header">
+                <span class="module-title">📈 Gráfico Avanzado - {t_in}</span>
+                <div class="tooltip-container">
+                    <div class="tooltip-icon">?</div>
+                    <div class="tooltip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
                 </div>
             </div>
-        </div>
     """, unsafe_allow_html=True)
 
+    # Gráfico dentro del mismo contenedor
     components.html(chart_html, height=480)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ─── SECCIÓN ABOUT - EN ESPAÑOL ───
     st.markdown(f"""
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
-                <div class="tip">
-                    <div class="tip-icon">?</div>
-                    <div class="tip-text">Descripción de la empresa traducida al español.</div>
+        <div class="module-box">
+            <div class="module-header">
+                <span class="module-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
+                <div class="tooltip-container">
+                    <div class="tooltip-icon">?</div>
+                    <div class="tooltip-text">Descripción de la empresa traducida al español.</div>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="module-body">
                 <p style="color: #cccccc; line-height: 1.6; font-size: 14px; margin: 0;">{translated_summary}</p>
             </div>
         </div>
@@ -668,15 +674,15 @@ def render():
     # TAB 1: OVERVIEW
     with tabs[0]:
         st.markdown("""
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">💵 Múltiplos de Valoración</span>
-                    <div class="tip">
-                        <div class="tip-icon">?</div>
-                        <div class="tip-text">Métricas clave para evaluar la valoración de la empresa.</div>
+            <div class="module-box">
+                <div class="module-header">
+                    <span class="module-title">💵 Múltiplos de Valoración</span>
+                    <div class="tooltip-container">
+                        <div class="tooltip-icon">?</div>
+                        <div class="tooltip-text">Métricas clave para evaluar la valoración de la empresa.</div>
                     </div>
                 </div>
-                <div class="card-body">
+                <div class="module-body">
         """, unsafe_allow_html=True)
 
         c1, c2, c3 = st.columns(3)
@@ -694,7 +700,7 @@ def render():
             with target_col:
                 v = f"{m['val']:.2f}x" if isinstance(m['val'], (int, float)) else "N/A"
                 st.markdown(f"""
-                    <div class="metric-box">
+                    <div class="metric-card">
                         <span class="metric-tag">{m['tag']}</span>
                         <div class="metric-label">{m['label']}</div>
                         <div class="metric-value">{v}</div>
@@ -711,7 +717,7 @@ def render():
             upside_class = "target-up" if upside >= 0 else "target-down"
             upside_symbol = "▲" if upside >= 0 else "▼"
 
-            st.markdown('<div class="card"><div class="card-body">', unsafe_allow_html=True)
+            st.markdown('<div class="module-box"><div class="module-body">', unsafe_allow_html=True)
 
             col1, col2 = st.columns([1, 1])
 
@@ -760,7 +766,7 @@ def render():
     # TAB 3: RECOMENDACIONES
     with tabs[2]:
         if recommendations and recommendations['total'] > 0:
-            st.markdown('<div class="card"><div class="card-body">', unsafe_allow_html=True)
+            st.markdown('<div class="module-box"><div class="module-body">', unsafe_allow_html=True)
 
             col1, col2 = st.columns([1, 1])
 
@@ -860,7 +866,7 @@ def render():
                     'Current Liabilities': 'Pasivos Corrientes',
                 }
 
-                table_html = '<div class="card"><div class="card-header"><span class="card-title">📑 Estado de Resultados</span></div><div class="card-body"><table class="fin-table">'
+                table_html = '<div class="module-box"><div class="module-header"><span class="module-title">📑 Estado de Resultados</span></div><div class="module-body"><table class="fin-table">'
 
                 table_html += '<thead><tr><th>Métrica</th>'
                 for col in financials.columns:
@@ -887,7 +893,7 @@ def render():
 
     # ─── SECCIÓN RSU PROMPT ───
     st.markdown("""
-        <div class="rsu-card">
+        <div class="rsu-box">
             <div class="rsu-title">
                 🤖 RSU Artificial Intelligence
             </div>
@@ -923,11 +929,11 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
                     res = model_ia.generate_content(prompt_final)
 
                     st.markdown(f"""
-                        <div class="card" style="margin-top: 20px;">
-                            <div class="card-header">
-                                <span class="card-title">📋 Informe RSU: {t_in}</span>
+                        <div class="module-box" style="margin-top: 20px;">
+                            <div class="module-header">
+                                <span class="module-title">📋 Informe RSU: {t_in}</span>
                             </div>
-                            <div class="card-body" style="background: #0c0e12; border-left: 3px solid #00ffad;">
+                            <div class="module-body" style="background: #0c0e12; border-left: 3px solid #00ffad;">
                                 <div style="color: #e0e0e0; line-height: 1.8; font-size: 14px; white-space: pre-wrap;">
                                     {res.text}
                                 </div>
@@ -942,19 +948,19 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ─── SUGERENCIAS ───
+    # ─── SUGERENCIAS - TODO DENTRO DEL CONTENEDOR ───
     suggestions = get_suggestions(t_in, info, recommendations, target_data)
 
     st.markdown("""
-        <div class="card">
-            <div class="card-header">
-                <span class="card-title">💡 Sugerencias de Inversión</span>
-                <div class="tip">
-                    <div class="tip-icon">?</div>
-                    <div class="tip-text">Análisis automatizado basado en métricas fundamentales y técnicas actuales.</div>
+        <div class="module-box">
+            <div class="module-header">
+                <span class="module-title">💡 Sugerencias de Inversión</span>
+                <div class="tooltip-container">
+                    <div class="tooltip-icon">?</div>
+                    <div class="tooltip-text">Análisis automatizado basado en métricas fundamentales y técnicas actuales.</div>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="module-body">
     """, unsafe_allow_html=True)
 
     for i, suggestion in enumerate(suggestions, 1):

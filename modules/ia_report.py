@@ -218,7 +218,7 @@ def render():
         }
 
         /* CONTENEDOR PRINCIPAL - Sin espacios */
-        .box-container {
+        .card {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -226,7 +226,7 @@ def render():
             margin-bottom: 16px;
         }
 
-        .box-header {
+        .card-header {
             background: #0c0e12;
             padding: 14px 18px;
             border-bottom: 1px solid #1a1e26;
@@ -235,20 +235,20 @@ def render():
             align-items: center;
         }
 
-        .box-title {
+        .card-title {
             color: #ffffff;
             font-size: 14px;
             font-weight: bold;
             margin: 0;
         }
 
-        .box-content {
+        .card-body {
             padding: 18px;
             background: #11141a;
         }
 
         /* Header del ticker */
-        .ticker-box {
+        .ticker-card {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -288,7 +288,7 @@ def render():
         }
 
         /* Métricas */
-        .metric-box {
+        .metric-card {
             background: #0c0e12;
             border: 1px solid #1a1e26;
             border-radius: 10px;
@@ -363,7 +363,7 @@ def render():
         }
 
         /* Precio objetivo */
-        .target-box {
+        .target-card {
             background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%);
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -405,7 +405,7 @@ def render():
         }
 
         /* Tooltip */
-        .tip-wrap {
+        .tip {
             position: relative;
             cursor: help;
         }
@@ -443,13 +443,13 @@ def render():
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
 
-        .tip-wrap:hover .tip-text {
+        .tip:hover .tip-text {
             visibility: visible;
             opacity: 1;
         }
 
         /* RSU */
-        .rsu-box {
+        .rsu-card {
             background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%);
             border: 2px solid #00ffad;
             border-radius: 12px;
@@ -542,18 +542,29 @@ def render():
             margin-bottom: 12px !important;
         }
 
-        /* Eliminar espacios */
+        /* ELIMINAR ESPACIOS - Reglas críticas */
         div[data-testid="stVerticalBlock"] > div {
             margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
         }
 
         .element-container {
             margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
         }
 
         /* Ocultar elementos vacíos */
-        .element-container:empty {
+        .element-container:empty,
+        div[data-testid="stVerticalBlock"] > div:empty {
             display: none !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Forzar altura mínima en contenedores */
+        .card-body > div {
+            margin-top: 0 !important;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -589,7 +600,7 @@ def render():
     change_color = "#00ffad" if price_change >= 0 else "#f23645"
 
     st.markdown(f"""
-        <div class="ticker-box">
+        <div class="ticker-card">
             <div>
                 <div class="ticker-name">{info.get('longName', t_in)}</div>
                 <div class="ticker-meta">{info.get('sector', 'N/A')} • {info.get('industry', 'N/A')} • Market Cap: ${info.get('marketCap', 0)/1e9:.2f}B</div>
@@ -603,7 +614,7 @@ def render():
         </div>
     """, unsafe_allow_html=True)
 
-    # ─── GRÁFICO TRADINGVIEW - CONTENEDOR COMPLETO ───
+    # ─── GRÁFICO TRADINGVIEW ───
     chart_html = f"""
     <!DOCTYPE html>
     <html>
@@ -634,12 +645,12 @@ def render():
     </html>
     """
 
-    # Contenedor completo del gráfico
+    # Contenedor del gráfico - Header y contenido juntos
     st.markdown(f"""
-        <div class="box-container">
-            <div class="box-header">
-                <span class="box-title">📈 Gráfico Avanzado - {t_in}</span>
-                <div class="tip-wrap">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">📈 Gráfico Avanzado - {t_in}</span>
+                <div class="tip">
                     <div class="tip-icon">?</div>
                     <div class="tip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
                 </div>
@@ -653,15 +664,15 @@ def render():
 
     # ─── SECCIÓN ABOUT - EN ESPAÑOL ───
     st.markdown(f"""
-        <div class="box-container">
-            <div class="box-header">
-                <span class="box-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
-                <div class="tip-wrap">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
+                <div class="tip">
                     <div class="tip-icon">?</div>
                     <div class="tip-text">Descripción de la empresa traducida al español.</div>
                 </div>
             </div>
-            <div class="box-content">
+            <div class="card-body">
                 <p style="color: #cccccc; line-height: 1.6; font-size: 14px; margin: 0;">{translated_summary}</p>
             </div>
         </div>
@@ -670,24 +681,10 @@ def render():
     # ─── PESTAÑAS DE ANÁLISIS ───
     tabs = st.tabs(["📊 Visión General", "💰 Precio Objetivo", "📋 Recomendaciones", "📑 Estados Financieros"])
 
-    # TAB 1: OVERVIEW - TODO DENTRO DEL CONTENEDOR
+    # TAB 1: OVERVIEW
     with tabs[0]:
-        # Inicio del contenedor
-        st.markdown("""
-            <div class="box-container">
-                <div class="box-header">
-                    <span class="box-title">💵 Múltiplos de Valoración</span>
-                    <div class="tip-wrap">
-                        <div class="tip-icon">?</div>
-                        <div class="tip-text">Métricas clave para evaluar la valoración de la empresa.</div>
-                    </div>
-                </div>
-                <div class="box-content">
-        """, unsafe_allow_html=True)
-
-        # Contenido dentro del contenedor
-        c1, c2, c3 = st.columns(3)
-
+        # Generar HTML de métricas
+        metrics_html = ""
         valuation_data = [
             {"label": "P/E (Trailing)", "val": metrics['trailing_pe'], "tag": "Trailing", "desc": "Precio/Beneficio"},
             {"label": "P/S (TTM)", "val": metrics['price_to_sales'], "tag": "TTM", "desc": "Precio/Ventas"},
@@ -697,20 +694,33 @@ def render():
         ]
 
         for i, m in enumerate(valuation_data):
-            target_col = [c1, c2, c3][i % 3]
-            with target_col:
-                v = f"{m['val']:.2f}x" if isinstance(m['val'], (int, float)) else "N/A"
-                st.markdown(f"""
-                    <div class="metric-box">
+            v = f"{m['val']:.2f}x" if isinstance(m['val'], (int, float)) else "N/A"
+            col_class = "col-4" if i < 3 else "col-4"
+            metrics_html += f"""
+                <div style="display: inline-block; width: 32%; margin-right: 1%; margin-bottom: 10px; vertical-align: top;">
+                    <div class="metric-card">
                         <span class="metric-tag">{m['tag']}</span>
                         <div class="metric-label">{m['label']}</div>
                         <div class="metric-value">{v}</div>
                         <div class="metric-desc">{m['desc']}</div>
                     </div>
-                """, unsafe_allow_html=True)
+                </div>
+            """
 
-        # Cierre del contenedor
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">💵 Múltiplos de Valoración</span>
+                    <div class="tip">
+                        <div class="tip-icon">?</div>
+                        <div class="tip-text">Métricas clave para evaluar la valoración de la empresa.</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {metrics_html}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
     # TAB 2: PRECIO OBJETIVO
     with tabs[1]:
@@ -719,130 +729,126 @@ def render():
             upside_class = "target-up" if upside >= 0 else "target-down"
             upside_symbol = "▲" if upside >= 0 else "▼"
 
-            # Inicio del contenedor
-            st.markdown('<div class="box-container"><div class="box-content">', unsafe_allow_html=True)
-
-            col1, col2 = st.columns([1, 1])
-
-            with col1:
-                st.markdown(f"""
-                    <div class="target-box">
-                        <div class="target-label">Precio Objetivo Medio</div>
-                        <div class="target-price">${target_data['mean']:.2f}</div>
-                        <div class="target-badge {upside_class}">
-                            {upside_symbol} {abs(upside):.1f}% vs Actual
-                        </div>
-                        <div style="color: #555555; font-size: 12px; margin-top: 12px;">
-                            Basado en {info.get('numberOfAnalystOpinions', 'N/A')} analistas
+            # Rango de precios HTML
+            range_html = ""
+            if target_data['low'] and target_data['high']:
+                metrics_range = [
+                    ("Mínimo", target_data['low'], "#f23645"),
+                    ("Mediana", target_data['median'], "#ff9800"),
+                    ("Máximo", target_data['high'], "#00ffad"),
+                ]
+                range_rows = ""
+                for label, value, color in metrics_range:
+                    if value:
+                        range_rows += f"""
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <span style="color: #888888; font-size: 14px;">{label}</span>
+                                <span style="color: {color}; font-size: 20px; font-weight: bold;">${value:.2f}</span>
+                            </div>
+                        """
+                range_html = f"""
+                    <div style="display: inline-block; width: 48%; vertical-align: top;">
+                        <div style="background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); border: 1px solid #1a1e26; border-radius: 12px; padding: 24px;">
+                            <div style="color: #ffffff; font-size: 14px; font-weight: bold; margin-bottom: 20px; text-align: center;">RANGO DE PRECIOS</div>
+                            {range_rows}
                         </div>
                     </div>
-                """, unsafe_allow_html=True)
+                """
 
-            with col2:
-                if target_data['low'] and target_data['high']:
-                    st.markdown("""
-                        <div style="background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%); border: 1px solid #1a1e26; border-radius: 12px; padding: 24px; height: 100%;">
-                            <div style="color: #ffffff; font-size: 14px; font-weight: bold; margin-bottom: 20px; text-align: center;">RANGO DE PRECIOS</div>
-                    """, unsafe_allow_html=True)
-
-                    metrics_range = [
-                        ("Mínimo", target_data['low'], "#f23645"),
-                        ("Mediana", target_data['median'], "#ff9800"),
-                        ("Máximo", target_data['high'], "#00ffad"),
-                    ]
-
-                    for label, value, color in metrics_range:
-                        if value:
-                            st.markdown(f"""
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                                    <span style="color: #888888; font-size: 14px;">{label}</span>
-                                    <span style="color: {color}; font-size: 20px; font-weight: bold;">${value:.2f}</span>
+            st.markdown(f"""
+                <div class="card">
+                    <div class="card-body">
+                        <div style="display: inline-block; width: 48%; margin-right: 2%; vertical-align: top;">
+                            <div class="target-card">
+                                <div class="target-label">Precio Objetivo Medio</div>
+                                <div class="target-price">${target_data['mean']:.2f}</div>
+                                <div class="target-badge {upside_class}">
+                                    {upside_symbol} {abs(upside):.1f}% vs Actual
                                 </div>
-                            """, unsafe_allow_html=True)
-
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-            # Cierre del contenedor
-            st.markdown('</div></div>', unsafe_allow_html=True)
+                                <div style="color: #555555; font-size: 12px; margin-top: 12px;">
+                                    Basado en {info.get('numberOfAnalystOpinions', 'N/A')} analistas
+                                </div>
+                            </div>
+                        </div>
+                        {range_html}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("No hay datos de precio objetivo disponibles.")
 
     # TAB 3: RECOMENDACIONES
     with tabs[2]:
         if recommendations and recommendations['total'] > 0:
-            # Inicio del contenedor
-            st.markdown('<div class="box-container"><div class="box-content">', unsafe_allow_html=True)
+            # Ratings HTML
+            ratings_html = ""
+            ratings = [
+                ("Strong Buy", recommendations['strong_buy'], "#00ffad"),
+                ("Buy", recommendations['buy'], "#4caf50"),
+                ("Hold", recommendations['hold'], "#ff9800"),
+                ("Sell", recommendations['sell'], "#f57c00"),
+                ("Strong Sell", recommendations['strong_sell'], "#f23645"),
+            ]
 
-            col1, col2 = st.columns([1, 1])
-
-            with col1:
-                st.markdown("""
-                    <div style="margin-bottom: 20px;">
-                        <div style="color: #ffffff; font-size: 14px; font-weight: bold; margin-bottom: 16px;">📊 Distribución de Ratings</div>
-                """, unsafe_allow_html=True)
-
-                ratings = [
-                    ("Strong Buy", recommendations['strong_buy'], "#00ffad"),
-                    ("Buy", recommendations['buy'], "#4caf50"),
-                    ("Hold", recommendations['hold'], "#ff9800"),
-                    ("Sell", recommendations['sell'], "#f57c00"),
-                    ("Strong Sell", recommendations['strong_sell'], "#f23645"),
-                ]
-
-                for label, count, color in ratings:
-                    pct = (count / recommendations['total']) * 100 if recommendations['total'] > 0 else 0
-                    st.markdown(f"""
-                        <div class="rating-item">
-                            <div class="rating-top">
-                                <span class="rating-name">{label}</span>
-                                <span class="rating-count" style="color: {color};">{count}</span>
-                            </div>
-                            <div class="rating-bar">
-                                <div class="rating-fill" style="width: {pct}%; background: {color};"></div>
-                            </div>
+            for label, count, color in ratings:
+                pct = (count / recommendations['total']) * 100 if recommendations['total'] > 0 else 0
+                ratings_html += f"""
+                    <div class="rating-item">
+                        <div class="rating-top">
+                            <span class="rating-name">{label}</span>
+                            <span class="rating-count" style="color: {color};">{count}</span>
                         </div>
-                    """, unsafe_allow_html=True)
-
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            with col2:
-                buy_count = recommendations['strong_buy'] + recommendations['buy']
-                hold_count = recommendations['hold']
-                sell_count = recommendations['sell'] + recommendations['strong_sell']
-
-                if buy_count > sell_count and buy_count > hold_count:
-                    consensus = "COMPRAR"
-                    consensus_color = "#00ffad"
-                    consensus_pct = (buy_count / recommendations['total']) * 100
-                elif sell_count > buy_count:
-                    consensus = "VENDER"
-                    consensus_color = "#f23645"
-                    consensus_pct = (sell_count / recommendations['total']) * 100
-                else:
-                    consensus = "MANTENER"
-                    consensus_color = "#ff9800"
-                    consensus_pct = (hold_count / recommendations['total']) * 100
-
-                st.markdown(f"""
-                    <div class="target-box" style="height: auto;">
-                        <div style="color: #888888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
-                            Consenso de Analistas
-                        </div>
-                        <div style="font-size: 32px; font-weight: bold; color: {consensus_color}; margin-bottom: 8px;">
-                            {consensus}
-                        </div>
-                        <div style="color: #888888; font-size: 14px;">
-                            {consensus_pct:.0f}% de acuerdo
-                        </div>
-                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #333333;">
-                            <div style="color: #555555; font-size: 11px;">Total Analistas</div>
-                            <div style="color: #ffffff; font-size: 24px; font-weight: bold;">{recommendations['total']}</div>
+                        <div class="rating-bar">
+                            <div class="rating-fill" style="width: {pct}%; background: {color};"></div>
                         </div>
                     </div>
-                """, unsafe_allow_html=True)
+                """
 
-            # Cierre del contenedor
-            st.markdown('</div></div>', unsafe_allow_html=True)
+            # Consenso
+            buy_count = recommendations['strong_buy'] + recommendations['buy']
+            hold_count = recommendations['hold']
+            sell_count = recommendations['sell'] + recommendations['strong_sell']
+
+            if buy_count > sell_count and buy_count > hold_count:
+                consensus = "COMPRAR"
+                consensus_color = "#00ffad"
+                consensus_pct = (buy_count / recommendations['total']) * 100
+            elif sell_count > buy_count:
+                consensus = "VENDER"
+                consensus_color = "#f23645"
+                consensus_pct = (sell_count / recommendations['total']) * 100
+            else:
+                consensus = "MANTENER"
+                consensus_color = "#ff9800"
+                consensus_pct = (hold_count / recommendations['total']) * 100
+
+            st.markdown(f"""
+                <div class="card">
+                    <div class="card-body">
+                        <div style="display: inline-block; width: 48%; margin-right: 2%; vertical-align: top;">
+                            <div style="color: #ffffff; font-size: 14px; font-weight: bold; margin-bottom: 16px;">📊 Distribución de Ratings</div>
+                            {ratings_html}
+                        </div>
+                        <div style="display: inline-block; width: 48%; vertical-align: top;">
+                            <div class="target-card" style="height: auto;">
+                                <div style="color: #888888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                                    Consenso de Analistas
+                                </div>
+                                <div style="font-size: 32px; font-weight: bold; color: {consensus_color}; margin-bottom: 8px;">
+                                    {consensus}
+                                </div>
+                                <div style="color: #888888; font-size: 14px;">
+                                    {consensus_pct:.0f}% de acuerdo
+                                </div>
+                                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #333333;">
+                                    <div style="color: #555555; font-size: 11px;">Total Analistas</div>
+                                    <div style="color: #ffffff; font-size: 24px; font-weight: bold;">{recommendations['total']}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("No hay recomendaciones de analistas disponibles.")
 
@@ -872,9 +878,7 @@ def render():
                     'Current Liabilities': 'Pasivos Corrientes',
                 }
 
-                # Inicio del contenedor
-                table_html = '<div class="box-container"><div class="box-header"><span class="box-title">📑 Estado de Resultados</span></div><div class="box-content"><table class="fin-table">'
-
+                table_html = '<table class="fin-table">'
                 table_html += '<thead><tr><th>Métrica</th>'
                 for col in financials.columns:
                     date_str = col.strftime('%Y-%m-%d') if hasattr(col, 'strftime') else str(col)[:10]
@@ -890,10 +894,18 @@ def render():
                         table_html += f'<td>{formatted}</td>'
                     table_html += '</tr>'
 
-                # Cierre del contenedor
-                table_html += '</tbody></table></div></div>'
+                table_html += '</tbody></table>'
 
-                st.markdown(table_html, unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">📑 Estado de Resultados</span>
+                        </div>
+                        <div class="card-body">
+                            {table_html}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
             else:
                 st.info("Estados financieros no disponibles.")
         except Exception as e:
@@ -901,7 +913,7 @@ def render():
 
     # ─── SECCIÓN RSU PROMPT ───
     st.markdown("""
-        <div class="rsu-box">
+        <div class="rsu-card">
             <div class="rsu-title">
                 🤖 RSU Artificial Intelligence
             </div>
@@ -937,11 +949,11 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
                     res = model_ia.generate_content(prompt_final)
 
                     st.markdown(f"""
-                        <div class="box-container" style="margin-top: 20px;">
-                            <div class="box-header">
-                                <span class="box-title">📋 Informe RSU: {t_in}</span>
+                        <div class="card" style="margin-top: 20px;">
+                            <div class="card-header">
+                                <span class="card-title">📋 Informe RSU: {t_in}</span>
                             </div>
-                            <div class="box-content" style="background: #0c0e12; border-left: 3px solid #00ffad;">
+                            <div class="card-body" style="background: #0c0e12; border-left: 3px solid #00ffad;">
                                 <div style="color: #e0e0e0; line-height: 1.8; font-size: 14px; white-space: pre-wrap;">
                                     {res.text}
                                 </div>
@@ -956,34 +968,34 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ─── SUGERENCIAS - TODO DENTRO DEL CONTENEDOR ───
+    # ─── SUGERENCIAS - TODO EN UN SOLO BLOQUE HTML ───
     suggestions = get_suggestions(t_in, info, recommendations, target_data)
 
-    # Inicio del contenedor
-    st.markdown("""
-        <div class="box-container">
-            <div class="box-header">
-                <span class="box-title">💡 Sugerencias de Inversión</span>
-                <div class="tip-wrap">
+    suggestions_html = ""
+    for i, suggestion in enumerate(suggestions, 1):
+        suggestions_html += f"""
+            <div class="suggestion-item">
+                <strong>{i}.</strong> {suggestion}
+            </div>
+        """
+
+    st.markdown(f"""
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">💡 Sugerencias de Inversión</span>
+                <div class="tip">
                     <div class="tip-icon">?</div>
                     <div class="tip-text">Análisis automatizado basado en métricas fundamentales y técnicas actuales.</div>
                 </div>
             </div>
-            <div class="box-content">
-    """, unsafe_allow_html=True)
-
-    # Contenido dentro del contenedor
-    for i, suggestion in enumerate(suggestions, 1):
-        st.markdown(f"""
-            <div class="suggestion-item">
-                <strong>{i}.</strong> {suggestion}
+            <div class="card-body">
+                {suggestions_html}
             </div>
-        """, unsafe_allow_html=True)
-
-    # Cierre del contenedor
-    st.markdown('</div></div>', unsafe_allow_html=True)
+        </div>
+    """, unsafe_allow_html=True)
 
 # Ejecutar render
 if __name__ == "__main__":
     render()
+
 

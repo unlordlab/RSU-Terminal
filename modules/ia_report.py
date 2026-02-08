@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -205,7 +204,7 @@ def get_suggestions(ticker, info, recommendations, target):
 # ────────────────────────────────────────────────
 
 def render():
-    # CSS Global - Optimizado para evitar espacios y solapamientos
+    # CSS Global - Estructura compacta sin espacios
     st.markdown("""
     <style>
         .stApp {
@@ -218,8 +217,8 @@ def render():
             max-width: 100%;
         }
 
-        /* CONTENEDOR PRINCIPAL - Todo encapsulado */
-        .module-box {
+        /* CONTENEDOR PRINCIPAL - Sin espacios */
+        .box-container {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -227,7 +226,7 @@ def render():
             margin-bottom: 16px;
         }
 
-        .module-header {
+        .box-header {
             background: #0c0e12;
             padding: 14px 18px;
             border-bottom: 1px solid #1a1e26;
@@ -236,20 +235,20 @@ def render():
             align-items: center;
         }
 
-        .module-title {
+        .box-title {
             color: #ffffff;
             font-size: 14px;
             font-weight: bold;
             margin: 0;
         }
 
-        .module-body {
+        .box-content {
             padding: 18px;
             background: #11141a;
         }
 
         /* Header del ticker */
-        .header-box {
+        .ticker-box {
             background: #11141a;
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -260,36 +259,36 @@ def render():
             align-items: center;
         }
 
-        .header-title {
+        .ticker-name {
             font-size: 26px;
             font-weight: bold;
             color: #ffffff;
             margin: 0;
         }
 
-        .header-meta {
+        .ticker-meta {
             font-size: 13px;
             color: #888888;
             margin-top: 4px;
         }
 
-        .header-price-box {
+        .ticker-price-box {
             text-align: right;
         }
 
-        .header-price {
+        .ticker-price {
             font-size: 30px;
             font-weight: bold;
             color: #ffffff;
         }
 
-        .header-change {
+        .ticker-change {
             font-size: 15px;
             font-weight: bold;
         }
 
         /* Métricas */
-        .metric-card {
+        .metric-box {
             background: #0c0e12;
             border: 1px solid #1a1e26;
             border-radius: 10px;
@@ -364,7 +363,7 @@ def render():
         }
 
         /* Precio objetivo */
-        .target-card {
+        .target-box {
             background: linear-gradient(135deg, #1a1e26 0%, #0c0e12 100%);
             border: 1px solid #1a1e26;
             border-radius: 12px;
@@ -405,13 +404,13 @@ def render():
             color: #f23645;
         }
 
-        /* Tooltip - Posicionado para evitar solapamientos */
-        .tooltip-container {
+        /* Tooltip */
+        .tip-wrap {
             position: relative;
             cursor: help;
         }
 
-        .tooltip-icon {
+        .tip-icon {
             width: 22px;
             height: 22px;
             border-radius: 50%;
@@ -425,7 +424,7 @@ def render():
             font-weight: bold;
         }
 
-        .tooltip-text {
+        .tip-text {
             visibility: hidden;
             width: 260px;
             background: #1e222d;
@@ -444,7 +443,7 @@ def render():
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
 
-        .tooltip-container:hover .tooltip-text {
+        .tip-wrap:hover .tip-text {
             visibility: visible;
             opacity: 1;
         }
@@ -590,21 +589,21 @@ def render():
     change_color = "#00ffad" if price_change >= 0 else "#f23645"
 
     st.markdown(f"""
-        <div class="header-box">
+        <div class="ticker-box">
             <div>
-                <div class="header-title">{info.get('longName', t_in)}</div>
-                <div class="header-meta">{info.get('sector', 'N/A')} • {info.get('industry', 'N/A')} • Market Cap: ${info.get('marketCap', 0)/1e9:.2f}B</div>
+                <div class="ticker-name">{info.get('longName', t_in)}</div>
+                <div class="ticker-meta">{info.get('sector', 'N/A')} • {info.get('industry', 'N/A')} • Market Cap: ${info.get('marketCap', 0)/1e9:.2f}B</div>
             </div>
-            <div class="header-price-box">
-                <div class="header-price">${current_price:.2f}</div>
-                <div class="header-change" style="color: {change_color};">
+            <div class="ticker-price-box">
+                <div class="ticker-price">${current_price:.2f}</div>
+                <div class="ticker-change" style="color: {change_color};">
                     {'+' if price_change >= 0 else ''}{price_change:.2f}%
                 </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    # ─── GRÁFICO TRADINGVIEW - TODO EN UN SOLO CONTENEDOR ───
+    # ─── GRÁFICO TRADINGVIEW - CONTENEDOR COMPLETO ───
     chart_html = f"""
     <!DOCTYPE html>
     <html>
@@ -635,34 +634,34 @@ def render():
     </html>
     """
 
-    # Header del gráfico
+    # Contenedor completo del gráfico
     st.markdown(f"""
-        <div class="module-box">
-            <div class="module-header">
-                <span class="module-title">📈 Gráfico Avanzado - {t_in}</span>
-                <div class="tooltip-container">
-                    <div class="tooltip-icon">?</div>
-                    <div class="tooltip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
+        <div class="box-container">
+            <div class="box-header">
+                <span class="box-title">📈 Gráfico Avanzado - {t_in}</span>
+                <div class="tip-wrap">
+                    <div class="tip-icon">?</div>
+                    <div class="tip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
                 </div>
             </div>
+            <div style="height: 480px; background: #0c0e12;">
     """, unsafe_allow_html=True)
 
-    # Gráfico dentro del mismo contenedor
     components.html(chart_html, height=480)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
     # ─── SECCIÓN ABOUT - EN ESPAÑOL ───
     st.markdown(f"""
-        <div class="module-box">
-            <div class="module-header">
-                <span class="module-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
-                <div class="tooltip-container">
-                    <div class="tooltip-icon">?</div>
-                    <div class="tooltip-text">Descripción de la empresa traducida al español.</div>
+        <div class="box-container">
+            <div class="box-header">
+                <span class="box-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
+                <div class="tip-wrap">
+                    <div class="tip-icon">?</div>
+                    <div class="tip-text">Descripción de la empresa traducida al español.</div>
                 </div>
             </div>
-            <div class="module-body">
+            <div class="box-content">
                 <p style="color: #cccccc; line-height: 1.6; font-size: 14px; margin: 0;">{translated_summary}</p>
             </div>
         </div>
@@ -671,20 +670,22 @@ def render():
     # ─── PESTAÑAS DE ANÁLISIS ───
     tabs = st.tabs(["📊 Visión General", "💰 Precio Objetivo", "📋 Recomendaciones", "📑 Estados Financieros"])
 
-    # TAB 1: OVERVIEW
+    # TAB 1: OVERVIEW - TODO DENTRO DEL CONTENEDOR
     with tabs[0]:
+        # Inicio del contenedor
         st.markdown("""
-            <div class="module-box">
-                <div class="module-header">
-                    <span class="module-title">💵 Múltiplos de Valoración</span>
-                    <div class="tooltip-container">
-                        <div class="tooltip-icon">?</div>
-                        <div class="tooltip-text">Métricas clave para evaluar la valoración de la empresa.</div>
+            <div class="box-container">
+                <div class="box-header">
+                    <span class="box-title">💵 Múltiplos de Valoración</span>
+                    <div class="tip-wrap">
+                        <div class="tip-icon">?</div>
+                        <div class="tip-text">Métricas clave para evaluar la valoración de la empresa.</div>
                     </div>
                 </div>
-                <div class="module-body">
+                <div class="box-content">
         """, unsafe_allow_html=True)
 
+        # Contenido dentro del contenedor
         c1, c2, c3 = st.columns(3)
 
         valuation_data = [
@@ -700,7 +701,7 @@ def render():
             with target_col:
                 v = f"{m['val']:.2f}x" if isinstance(m['val'], (int, float)) else "N/A"
                 st.markdown(f"""
-                    <div class="metric-card">
+                    <div class="metric-box">
                         <span class="metric-tag">{m['tag']}</span>
                         <div class="metric-label">{m['label']}</div>
                         <div class="metric-value">{v}</div>
@@ -708,7 +709,8 @@ def render():
                     </div>
                 """, unsafe_allow_html=True)
 
-        st.markdown('</div></div>', unsafe_allow_html=True)
+        # Cierre del contenedor
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
     # TAB 2: PRECIO OBJETIVO
     with tabs[1]:
@@ -717,13 +719,14 @@ def render():
             upside_class = "target-up" if upside >= 0 else "target-down"
             upside_symbol = "▲" if upside >= 0 else "▼"
 
-            st.markdown('<div class="module-box"><div class="module-body">', unsafe_allow_html=True)
+            # Inicio del contenedor
+            st.markdown('<div class="box-container"><div class="box-content">', unsafe_allow_html=True)
 
             col1, col2 = st.columns([1, 1])
 
             with col1:
                 st.markdown(f"""
-                    <div class="target-card">
+                    <div class="target-box">
                         <div class="target-label">Precio Objetivo Medio</div>
                         <div class="target-price">${target_data['mean']:.2f}</div>
                         <div class="target-badge {upside_class}">
@@ -759,6 +762,7 @@ def render():
 
                     st.markdown('</div>', unsafe_allow_html=True)
 
+            # Cierre del contenedor
             st.markdown('</div></div>', unsafe_allow_html=True)
         else:
             st.info("No hay datos de precio objetivo disponibles.")
@@ -766,7 +770,8 @@ def render():
     # TAB 3: RECOMENDACIONES
     with tabs[2]:
         if recommendations and recommendations['total'] > 0:
-            st.markdown('<div class="module-box"><div class="module-body">', unsafe_allow_html=True)
+            # Inicio del contenedor
+            st.markdown('<div class="box-container"><div class="box-content">', unsafe_allow_html=True)
 
             col1, col2 = st.columns([1, 1])
 
@@ -819,7 +824,7 @@ def render():
                     consensus_pct = (hold_count / recommendations['total']) * 100
 
                 st.markdown(f"""
-                    <div class="target-card" style="height: auto;">
+                    <div class="target-box" style="height: auto;">
                         <div style="color: #888888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
                             Consenso de Analistas
                         </div>
@@ -836,6 +841,7 @@ def render():
                     </div>
                 """, unsafe_allow_html=True)
 
+            # Cierre del contenedor
             st.markdown('</div></div>', unsafe_allow_html=True)
         else:
             st.info("No hay recomendaciones de analistas disponibles.")
@@ -866,7 +872,8 @@ def render():
                     'Current Liabilities': 'Pasivos Corrientes',
                 }
 
-                table_html = '<div class="module-box"><div class="module-header"><span class="module-title">📑 Estado de Resultados</span></div><div class="module-body"><table class="fin-table">'
+                # Inicio del contenedor
+                table_html = '<div class="box-container"><div class="box-header"><span class="box-title">📑 Estado de Resultados</span></div><div class="box-content"><table class="fin-table">'
 
                 table_html += '<thead><tr><th>Métrica</th>'
                 for col in financials.columns:
@@ -883,6 +890,7 @@ def render():
                         table_html += f'<td>{formatted}</td>'
                     table_html += '</tr>'
 
+                # Cierre del contenedor
                 table_html += '</tbody></table></div></div>'
 
                 st.markdown(table_html, unsafe_allow_html=True)
@@ -929,11 +937,11 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
                     res = model_ia.generate_content(prompt_final)
 
                     st.markdown(f"""
-                        <div class="module-box" style="margin-top: 20px;">
-                            <div class="module-header">
-                                <span class="module-title">📋 Informe RSU: {t_in}</span>
+                        <div class="box-container" style="margin-top: 20px;">
+                            <div class="box-header">
+                                <span class="box-title">📋 Informe RSU: {t_in}</span>
                             </div>
-                            <div class="module-body" style="background: #0c0e12; border-left: 3px solid #00ffad;">
+                            <div class="box-content" style="background: #0c0e12; border-left: 3px solid #00ffad;">
                                 <div style="color: #e0e0e0; line-height: 1.8; font-size: 14px; white-space: pre-wrap;">
                                     {res.text}
                                 </div>
@@ -951,18 +959,20 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
     # ─── SUGERENCIAS - TODO DENTRO DEL CONTENEDOR ───
     suggestions = get_suggestions(t_in, info, recommendations, target_data)
 
+    # Inicio del contenedor
     st.markdown("""
-        <div class="module-box">
-            <div class="module-header">
-                <span class="module-title">💡 Sugerencias de Inversión</span>
-                <div class="tooltip-container">
-                    <div class="tooltip-icon">?</div>
-                    <div class="tooltip-text">Análisis automatizado basado en métricas fundamentales y técnicas actuales.</div>
+        <div class="box-container">
+            <div class="box-header">
+                <span class="box-title">💡 Sugerencias de Inversión</span>
+                <div class="tip-wrap">
+                    <div class="tip-icon">?</div>
+                    <div class="tip-text">Análisis automatizado basado en métricas fundamentales y técnicas actuales.</div>
                 </div>
             </div>
-            <div class="module-body">
+            <div class="box-content">
     """, unsafe_allow_html=True)
 
+    # Contenido dentro del contenedor
     for i, suggestion in enumerate(suggestions, 1):
         st.markdown(f"""
             <div class="suggestion-item">
@@ -970,8 +980,10 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
             </div>
         """, unsafe_allow_html=True)
 
+    # Cierre del contenedor
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 # Ejecutar render
 if __name__ == "__main__":
     render()
+

@@ -82,22 +82,41 @@ def get_target_price(ticker):
         return None
 
 def translate_text(text, target_lang='es'):
-    """Traduce texto usando una API gratuita (MyMemory)"""
+    """Traduce texto usando una API gratuita (MyMemory) - SIN TRUNCAR"""
     if not text or text == 'Descripción no disponible.':
         return text
 
     try:
-        text_to_translate = text[:500] if len(text) > 500 else text
-        url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text_to_translate)}&langpair=en|{target_lang}"
-        response = requests.get(url, timeout=5)
+        # Dividir texto en chunks de 500 caracteres y traducir cada uno
+        if len(text) > 500:
+            chunks = [text[i:i+500] for i in range(0, len(text), 500)]
+            translated_chunks = []
 
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('responseStatus') == 200:
-                translated = data['responseData']['translatedText']
-                if len(text) > 500:
-                    translated += "... [Texto truncado para traducción]"
-                return translated
+            for chunk in chunks:
+                url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(chunk)}&langpair=en|{target_lang}"
+                response = requests.get(url, timeout=5)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('responseStatus') == 200:
+                        translated_chunks.append(data['responseData']['translatedText'])
+                    else:
+                        translated_chunks.append(chunk)
+                else:
+                    translated_chunks.append(chunk)
+
+                time.sleep(0.1)  # Pequeña pausa entre peticiones
+
+            return ' '.join(translated_chunks)
+        else:
+            # Texto corto, traducir directamente
+            url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text)}&langpair=en|{target_lang}"
+            response = requests.get(url, timeout=5)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('responseStatus') == 200:
+                    return data['responseData']['translatedText']
     except Exception:
         pass
 
@@ -184,8 +203,8 @@ def render():
         }
 
         .main .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
             max-width: 100%;
         }
 
@@ -204,13 +223,13 @@ def render():
             --text-muted: #555555;
         }
 
-        /* Contenedores */
+        /* Contenedores principales */
         .group-container {
             border: 1px solid var(--border);
             border-radius: 12px;
             overflow: hidden;
             background: var(--bg-card);
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
 
@@ -237,9 +256,9 @@ def render():
             padding: 16px;
         }
 
-        /* Input compacto */
+        /* Input */
         .stTextInput > div {
-            margin-bottom: 0 !important;
+            margin-bottom: 8px !important;
         }
 
         .stTextInput > div > div > input {
@@ -260,7 +279,7 @@ def render():
             background: var(--bg-card);
             border-radius: 12px;
             border: 1px solid var(--border);
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .ticker-info h1 {
@@ -443,7 +462,7 @@ def render():
             border: 2px solid var(--accent);
             border-radius: 12px;
             padding: 20px;
-            margin: 20px 0;
+            margin: 16px 0;
         }
 
         .rsu-title {
@@ -475,7 +494,7 @@ def render():
             padding: 8px;
             border-radius: 8px;
             border: 1px solid var(--border);
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .stTabs [data-baseweb="tab"] {
@@ -489,11 +508,6 @@ def render():
         .stTabs [aria-selected="true"] {
             background: var(--accent) !important;
             color: #000 !important;
-        }
-
-        /* Dataframe */
-        .stDataFrame {
-            background: var(--bg-dark);
         }
 
         /* Botón */
@@ -523,6 +537,29 @@ def render():
         .element-container {
             margin-bottom: 0 !important;
         }
+
+        /* Contenedor del gráfico */
+        .chart-wrapper {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .chart-header {
+            background: var(--bg-header);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-content {
+            height: 550px;
+            background: #0c0e12;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -546,7 +583,7 @@ def render():
         target_data = get_target_price(t_in)
         metrics = get_valuation_metrics(info)
 
-        # Traducir descripción
+        # Traducir descripción completa (sin truncar)
         business_summary = info.get('longBusinessSummary', 'Descripción no disponible.')
         translated_summary = translate_text(business_summary)
 
@@ -573,15 +610,15 @@ def render():
 
     # ─── GRÁFICO EN CONTENEDOR ───
     chart_html = f"""
-    <div class="group-container" style="margin-bottom: 16px;">
-        <div class="group-header">
+    <div class="chart-wrapper">
+        <div class="chart-header">
             <span class="group-title">📈 Gráfico Avanzado - {t_in}</span>
             <div class="tooltip-container">
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-text">Gráfico interactivo de TradingView con datos en tiempo real.</div>
             </div>
         </div>
-        <div style="height: 550px; background: #0c0e12;">
+        <div class="chart-content">
             <div id="tradingview_chart" style="height: 100%; width: 100%;"></div>
             <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
             <script type="text/javascript">
@@ -619,7 +656,7 @@ def render():
                 </div>
             </div>
             <div class="group-content">
-                <p style="color: #cccccc; line-height: 1.5; font-size: 14px; margin: 0;">{translated_summary}</p>
+                <p style="color: #cccccc; line-height: 1.6; font-size: 14px; margin: 0;">{translated_summary}</p>
             </div>
         </div>
     """, unsafe_allow_html=True)

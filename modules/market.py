@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import get_market_index, get_cnn_fear_greed
 import requests
 import streamlit.components.v1 as components
@@ -1101,4 +1098,5 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 

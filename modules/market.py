@@ -11,26 +11,24 @@ import pandas as pd
 import re
 from collections import Counter
 
-# Intentar importar investpy (opcional)
 try:
     import investpy
     INVESTPY_AVAILABLE = True
 except ImportError:
     INVESTPY_AVAILABLE = False
 
-# ────────────────────────────────────────────────
-# FUNCIONS AUXILIARS - DATOS REALES
-# ────────────────────────────────────────────────
+# ============================================================
+# FUNCIONES AUXILIARES - DATOS REALES
+# ============================================================
 
 def get_economic_calendar():
-    """Obtiene el calendario economico de hoy y manana."""
     if not INVESTPY_AVAILABLE:
         return get_fallback_economic_calendar()
-    
+
     try:
         from_date = datetime.now().strftime('%d/%m/%Y')
         to_date = (datetime.now() + timedelta(days=1)).strftime('%d/%m/%Y')
-        
+
         calendar = investpy.economic_calendar(
             time_zone='GMT',
             time_filter='time_only',
@@ -39,7 +37,7 @@ def get_economic_calendar():
             countries=['united states', 'euro zone'],
             importances=['high', 'medium', 'low']
         )
-        
+
         events = []
         for _, row in calendar.head(10).iterrows():
             time_str = row['time']
@@ -52,14 +50,10 @@ def get_economic_calendar():
                     time_es = time_str
             else:
                 time_es = "TBD"
-            
-            importance_map = {
-                'high': 'High',
-                'medium': 'Medium', 
-                'low': 'Low'
-            }
+
+            importance_map = {'high': 'High', 'medium': 'Medium', 'low': 'Low'}
             impact = importance_map.get(row['importance'].lower(), 'Medium')
-            
+
             events.append({
                 "time": time_es,
                 "event": row['event'],
@@ -67,9 +61,9 @@ def get_economic_calendar():
                 "val": row.get('actual', '-'),
                 "prev": row.get('previous', '-')
             })
-        
+
         return events if events else get_fallback_economic_calendar()
-        
+
     except Exception as e:
         return get_fallback_economic_calendar()
 
@@ -81,13 +75,8 @@ def get_fallback_economic_calendar():
         {"time": "20:00", "event": "FOMC Meeting Minutes", "imp": "High", "val": "-", "prev": "-"},
     ]
 
-# ─── CRIPTOMONEDAS REALES CON YFINANCE ───
 @st.cache_data(ttl=300)
 def get_crypto_prices():
-    """
-    Obtiene precios reales de criptomonedas usando yfinance.
-    Mas estable que CoinGecko API.
-    """
     try:
         crypto_symbols = {
             'BTC-USD': 'Bitcoin',
@@ -96,29 +85,29 @@ def get_crypto_prices():
             'SOL-USD': 'Solana',
             'XRP-USD': 'XRP'
         }
-        
+
         cryptos = []
-        
+
         for symbol, name in crypto_symbols.items():
             try:
                 ticker = yf.Ticker(symbol)
                 hist = ticker.history(period="2d")
-                
+
                 if len(hist) >= 2:
                     current_price = hist['Close'].iloc[-1]
                     prev_price = hist['Close'].iloc[-2]
                     change_pct = ((current_price - prev_price) / prev_price) * 100
-                    
+
                     if current_price >= 1000:
                         price_str = f"{current_price:,.2f}"
                     elif current_price >= 1:
                         price_str = f"{current_price:,.2f}"
                     else:
                         price_str = f"{current_price:.4f}"
-                    
+
                     change_str = f"{change_pct:+.2f}%"
                     is_positive = change_pct >= 0
-                    
+
                     cryptos.append({
                         'symbol': symbol.replace('-USD', ''),
                         'name': name,
@@ -126,24 +115,21 @@ def get_crypto_prices():
                         'change': change_str,
                         'is_positive': is_positive
                     })
-                    
+
                     time.sleep(0.2)
-                    
+
             except Exception as e:
-                print(f"Error en {symbol}: {e}")
                 continue
-        
+
         if not cryptos:
             return get_fallback_crypto_prices()
-            
+
         return cryptos
-        
+
     except Exception as e:
-        print(f"Error general crypto: {e}")
         return get_fallback_crypto_prices()
 
 def get_fallback_crypto_prices():
-    """Datos simulados como fallback"""
     return [
         {"symbol": "BTC", "name": "Bitcoin", "price": "104,231.50", "change": "+2.4%", "is_positive": True},
         {"symbol": "ETH", "name": "Ethereum", "price": "3,120.12", "change": "-1.1%", "is_positive": False},
@@ -152,29 +138,23 @@ def get_fallback_crypto_prices():
         {"symbol": "XRP", "name": "XRP", "price": "3.15", "change": "-2.3%", "is_positive": False},
     ]
 
-# ─── REDDIT REAL - SCRAPING DESDE BUZZTICKR ───
 @st.cache_data(ttl=300)
 def get_reddit_buzz():
-    """
-    Scrapea la tabla 'Overall Top 10' de tickers mas mencionados en Reddit
-    desde https://www.buzztickr.com/reddit-buzz/
-    """
     try:
         url = "https://www.buzztickr.com/reddit-buzz/"
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
         }
-        
+
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
-        
+
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         top_10_tickers = []
-        
-        # Estrategia 1: Buscar por texto "Overall Top 10"
+
         headers_elements = soup.find_all(['h2', 'h3', 'h4', 'div', 'span'])
         for header in headers_elements:
             header_text = header.get_text(strip=True).lower()
@@ -186,8 +166,7 @@ def get_reddit_buzz():
                         ticker = link.get_text(strip=True).upper()
                         if ticker and ticker not in top_10_tickers and len(ticker) <= 5:
                             top_10_tickers.append(ticker)
-        
-        # Estrategia 2: Buscar todos los enlaces de ticker
+
         if not top_10_tickers:
             all_links = soup.find_all('a', href=re.compile(r'/reddit-buzz/\?ticker=[A-Z]+'))
             seen = set()
@@ -199,8 +178,7 @@ def get_reddit_buzz():
                     seen.add(ticker)
                     if len(top_10_tickers) >= 10:
                         break
-        
-        # Estrategia 3: Extraer tickers del texto completo
+
         if not top_10_tickers:
             text = soup.get_text()
             ticker_matches = re.findall(r'\$([A-Z]{1,5})\b', text)
@@ -208,42 +186,30 @@ def get_reddit_buzz():
             exclude = {'A', 'I', 'EL', 'LA', 'DE', 'EN', 'ES', 'SE', 'AL', 'DEL', 'LAS', 'LOS', 'USD', 'CEO', 'CFO', 'CTO', 'AI', 'IPO', 'ETF', 'EPS', 'GDP', 'FED', 'SPY', 'QQQ'}
             filtered = [(t, c) for t, c in ticker_counts.most_common(20) if t not in exclude and len(t) >= 1]
             top_10_tickers = [t for t, c in filtered[:10]]
-        
+
         if not top_10_tickers:
             return get_fallback_reddit_tickers()
-        
+
         return {
             'tickers': top_10_tickers[:10],
             'source': 'BuzzTickr',
             'timestamp': datetime.now().strftime('%H:%M:%S')
         }
-        
+
     except Exception as e:
-        print(f"Error scraping Reddit Buzz: {e}")
         return get_fallback_reddit_tickers()
 
 def get_fallback_reddit_tickers():
-    """Tickers fallback cuando falla el scraping"""
     return {
         'tickers': ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD", "PLTR", "GME"],
         'source': 'Fallback',
         'timestamp': datetime.now().strftime('%H:%M:%S')
     }
 
-# ─── TICKER FINANCIERO CON FUTUROS Y DATOS EN TIEMPO REAL ───
 @st.cache_data(ttl=60)
 def get_financial_ticker_data():
-    """
-    Obtiene datos para el ticker/prompter financiero:
-    - Indices: SPX, NDX, DJI, RUT, N225, DAX
-    - Commodities: Oro, Plata, Petroleo
-    - FX: EUR/USD, USD/JPY
-    - MAG7 Futuros
-    - Crypto: BTC, ETH
-    """
     ticker_data = []
-    
-    # Indices principales
+
     indices = {
         'ES=F': 'S&P 500 FUT',
         'NQ=F': 'NASDAQ FUT',
@@ -253,16 +219,14 @@ def get_financial_ticker_data():
         '^GDAXI': 'DAX',
         '^FTSE': 'FTSE 100',
     }
-    
-    # Commodities
+
     commodities = {
         'GC=F': 'GOLD',
         'SI=F': 'SILVER',
         'CL=F': 'CRUDE OIL',
         'NG=F': 'NAT GAS',
     }
-    
-    # MAG7 para futuros (usando acciones como proxy)
+
     mag7 = {
         'AAPL': 'AAPL',
         'MSFT': 'MSFT',
@@ -272,53 +236,49 @@ def get_financial_ticker_data():
         'META': 'META',
         'TSLA': 'TSLA',
     }
-    
-    # Crypto
+
     cryptos = {
         'BTC-USD': 'BTC',
         'ETH-USD': 'ETH',
     }
-    
+
     all_symbols = {**indices, **commodities, **mag7, **cryptos}
-    
+
     for symbol, name in all_symbols.items():
         try:
             ticker = yf.Ticker(symbol)
             hist = ticker.history(period="2d")
-            
+
             if len(hist) >= 2:
                 current = hist['Close'].iloc[-1]
                 prev = hist['Close'].iloc[-2]
                 change_pct = ((current - prev) / prev) * 100
-                
-                # Formatear precio
+
                 if current >= 1000:
                     price_str = f"{current:,.2f}"
                 elif current >= 100:
                     price_str = f"{current:,.2f}"
                 else:
                     price_str = f"{current:.3f}"
-                
+
                 ticker_data.append({
                     'name': name,
                     'price': price_str,
                     'change': change_pct,
                     'is_positive': change_pct >= 0
                 })
-                
-            time.sleep(0.05)  # Rate limiting suave
-            
+
+            time.sleep(0.05)
+
         except Exception as e:
             continue
-    
+
     return ticker_data
 
 def generate_ticker_html():
-    """Genera el HTML del ticker financiero animado"""
     data = get_financial_ticker_data()
-    
+
     if not data:
-        # Fallback data
         data = [
             {'name': 'S&P 500 FUT', 'price': '5,890.25', 'change': 0.45, 'is_positive': True},
             {'name': 'NASDAQ FUT', 'price': '21,150.80', 'change': -0.23, 'is_positive': False},
@@ -335,14 +295,13 @@ def generate_ticker_html():
             {'name': 'NVDA', 'price': '138.25', 'change': 3.45, 'is_positive': True},
             {'name': 'TSLA', 'price': '380.50', 'change': -2.15, 'is_positive': False},
         ]
-    
-    # Crear items del ticker
+
     ticker_items = []
     for item in data:
         color = "#00ffad" if item['is_positive'] else "#f23645"
         arrow = "▲" if item['is_positive'] else "▼"
         change_str = f"{item['change']:+.2f}%"
-        
+
         ticker_items.append(
             f'<span style="margin-right: 40px; white-space: nowrap;">'
             f'<span style="color: #fff; font-weight: bold;">{item["name"]}</span> '
@@ -350,12 +309,11 @@ def generate_ticker_html():
             f'<span style="color: {color};">{arrow} {change_str}</span>'
             f'</span>'
         )
-    
-    # Duplicar items para loop infinito suave
+
     items_html = "".join(ticker_items)
-    all_items = items_html + items_html  # Duplicar para animacion continua
-    
-    ticker_html = f'''
+    all_items = items_html + items_html
+
+    ticker_html = f"""
     <div style="
         background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 50%, #0c0e12 100%);
         border-bottom: 2px solid #2a3f5f;
@@ -375,79 +333,379 @@ def generate_ticker_html():
     </div>
     <style>
         @keyframes ticker-scroll {{
-            0% {{
-                transform: translateX(0);
-            }}
-            100% {{
-                transform: translateX(-50%);
-            }}
+            0% {{ transform: translateX(0); }}
+            100% {{ transform: translateX(-50%); }}
         }}
     </style>
-    '''
-    
+    """
+
     return ticker_html
 
-# ─── SECTORES REALES CON YFINANCE ───
-@st.cache_data(ttl=600)
-def get_sector_performance():
+# ============================================================
+# FUNCIONES MEJORADAS - SECTORES CON TIMEFRAME
+# ============================================================
+
+@st.cache_data(ttl=300)
+def get_sector_performance(timeframe="1D"):
     """
     Obtiene rendimiento real de sectores usando ETFs representativos.
+    Timeframes: 1D, 3D, 1W, 1M
     """
     try:
         sector_etfs = {
-            'TECH': 'XLK',
-            'FINL': 'XLF',
-            'HLTH': 'XLV',
-            'ENER': 'XLE',
-            'CONS': 'XLY',
-            'UTIL': 'XLU',
-            'INDU': 'XLI',
-            'MATR': 'XLB',
-            'STPL': 'XLP',
-            'REAL': 'XLRE',
-            'TELE': 'XLC',
+            'XLK': ('TECH', 'Tecnología'),
+            'XLF': ('FINL', 'Financieros'),
+            'XLV': ('HLTH', 'Salud'),
+            'XLE': ('ENER', 'Energía'),
+            'XLY': ('CONS', 'Consumo'),
+            'XLU': ('UTIL', 'Utilidades'),
+            'XLI': ('INDU', 'Industriales'),
+            'XLB': ('MATR', 'Materiales'),
+            'XLP': ('STPL', 'Consumo Básico'),
+            'XLRE': ('REAL', 'Bienes Raíces'),
+            'XLC': ('TELE', 'Comunicaciones'),
         }
-        
+
+        period_map = {
+            "1D": "2d",
+            "3D": "5d",
+            "1W": "10d",
+            "1M": "1mo"
+        }
+
+        period = period_map.get(timeframe, "2d")
         sectors_data = []
-        
-        for name, symbol in sector_etfs.items():
+
+        for symbol, (code, full_name) in sector_etfs.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period=period)
+
+                if len(hist) >= 2:
+                    if timeframe == "1D":
+                        current = hist['Close'].iloc[-1]
+                        prev = hist['Close'].iloc[-2]
+                    elif timeframe == "3D":
+                        current = hist['Close'].iloc[-1]
+                        prev = hist['Close'].iloc[-4] if len(hist) >= 4 else hist['Close'].iloc[0]
+                    elif timeframe == "1W":
+                        current = hist['Close'].iloc[-1]
+                        prev = hist['Close'].iloc[-6] if len(hist) >= 6 else hist['Close'].iloc[0]
+                    else:  # 1M
+                        current = hist['Close'].iloc[-1]
+                        prev = hist['Close'].iloc[0]
+
+                    change = ((current - prev) / prev) * 100
+
+                    sectors_data.append({
+                        'code': code,
+                        'name': full_name,
+                        'change': change,
+                        'current': current,
+                        'previous': prev
+                    })
+
+                time.sleep(0.05)
+
+            except Exception as e:
+                continue
+
+        if not sectors_data:
+            return get_fallback_sectors(timeframe)
+
+        return sectors_data
+
+    except Exception as e:
+        return get_fallback_sectors(timeframe)
+
+def get_fallback_sectors(timeframe="1D"):
+    base_values = [
+        ("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), 
+        ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25),
+        ("INDU", +0.65), ("MATR", -0.30), ("STPL", +0.45), 
+        ("REAL", +1.10), ("TELE", -0.15)
+    ]
+
+    multipliers = {"1D": 1, "3D": 2.5, "1W": 4, "1M": 8}
+    mult = multipliers.get(timeframe, 1)
+
+    return [
+        {'code': code, 'name': code, 'change': val * mult, 'current': 100, 'previous': 100}
+        for code, val in base_values
+    ]
+
+# ============================================================
+# NUEVAS FUNCIONES - FILA 5
+# ============================================================
+
+@st.cache_data(ttl=600)
+def get_market_breadth():
+    """Obtiene datos de amplitud del mercado: SMAs, Golden Cross, RSI"""
+    try:
+        spy = yf.Ticker("SPY")
+        spy_hist = spy.history(period="6mo")
+
+        if len(spy_hist) > 50:
+            current_price = spy_hist['Close'].iloc[-1]
+            sma50 = spy_hist['Close'].rolling(50).mean().iloc[-1]
+            sma200 = spy_hist['Close'].rolling(200).mean().iloc[-1]
+
+            above_sma50 = current_price > sma50
+            above_sma200 = current_price > sma200
+            golden_cross = sma50 > sma200
+
+            # RSI simplificado
+            deltas = spy_hist['Close'].diff()
+            gains = deltas.where(deltas > 0, 0).rolling(14).mean()
+            losses = (-deltas.where(deltas < 0, 0)).rolling(14).mean()
+            rs = gains / losses
+            rsi = 100 - (100 / (1 + rs.iloc[-1])) if not pd.isna(rs.iloc[-1]) else 50
+
+            return {
+                'price': current_price,
+                'sma50': sma50,
+                'sma200': sma200,
+                'above_sma50': above_sma50,
+                'above_sma200': above_sma200,
+                'golden_cross': golden_cross,
+                'rsi': rsi,
+                'trend': 'ALCISTA' if golden_cross else 'BAJISTA',
+                'strength': 'FUERTE' if (above_sma50 and above_sma200) else 'DÉBIL'
+            }
+
+        return get_fallback_market_breadth()
+
+    except Exception as e:
+        return get_fallback_market_breadth()
+
+def get_fallback_market_breadth():
+    return {
+        'price': 589.25,
+        'sma50': 575.40,
+        'sma200': 545.80,
+        'above_sma50': True,
+        'above_sma200': True,
+        'golden_cross': True,
+        'rsi': 62.5,
+        'trend': 'ALCISTA',
+        'strength': 'FUERTE'
+    }
+
+# ─── VIX FUTURES TERM STRUCTURE ───
+@st.cache_data(ttl=300)
+def get_vix_term_structure():
+    """
+    Obtiene la estructura temporal de futuros del VIX.
+    Combina VIX spot con curva sintética basada en contango/backwardation.
+    """
+    try:
+        # Obtener VIX spot
+        try:
+            vix = yf.Ticker("^VIX")
+            vix_hist = vix.history(period="2d")
+            if len(vix_hist) >= 1:
+                spot = vix_hist['Close'].iloc[-1]
+            else:
+                spot = 19.15
+        except:
+            spot = 19.15
+
+        base_date = datetime.now()
+        months = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct']
+
+        vix_data = [{'month': 'Spot', 'vix_level': spot, 'days': 0}]
+
+        # Detectar si estamos en backwardation (VIX > 25 suele indicar estrés)
+        is_stressed = spot > 25
+
+        for i, month in enumerate(months):
+            days_ahead = (i + 1) * 30
+
+            if is_stressed:
+                # Backwardation: curva descendente
+                decay = 0.4 * (i + 1)
+                future_level = spot - decay
+            else:
+                # Contango: curva ascendente típica 0.8-1.2 puntos/mes
+                contango = 0.9 * (i + 1) + (i * 0.15)
+                future_level = spot + contango
+
+            year_offset = 0
+            if month in ['Nov', 'Dec'] and base_date.month > 10:
+                year_offset = 1
+
+            vix_data.append({
+                'month': f"{month} {base_date.year + year_offset}",
+                'vix_level': round(future_level, 2),
+                'days': days_ahead
+            })
+
+        # Determinar estado
+        if len(vix_data) >= 2:
+            if vix_data[-1]['vix_level'] > vix_data[0]['vix_level']:
+                market_state = "Contango"
+                state_desc = "Typical in calm markets - Conducive to dip buying"
+                state_color = "#00ffad"
+            else:
+                market_state = "Backwardation"
+                state_desc = "Market stress detected - Caution advised"
+                state_color = "#f23645"
+        else:
+            market_state = "Neutral"
+            state_desc = "Flat term structure"
+            state_color = "#ff9800"
+
+        return {
+            'data': vix_data,
+            'state': market_state,
+            'state_desc': state_desc,
+            'state_color': state_color,
+            'spot': spot
+        }
+
+    except Exception as e:
+        return get_fallback_vix_structure()
+
+def get_fallback_vix_structure():
+    return {
+        'data': [
+            {'month': 'Spot', 'vix_level': 19.15, 'days': 0},
+            {'month': 'Mar 2026', 'vix_level': 19.75, 'days': 30},
+            {'month': 'Apr 2026', 'vix_level': 20.45, 'days': 60},
+            {'month': 'May 2026', 'vix_level': 20.85, 'days': 90},
+            {'month': 'Jun 2026', 'vix_level': 21.25, 'days': 120},
+            {'month': 'Jul 2026', 'vix_level': 21.65, 'days': 150},
+            {'month': 'Aug 2026', 'vix_level': 22.05, 'days': 180},
+        ],
+        'state': 'Contango',
+        'state_desc': 'Typical in calm markets - Conducive to dip buying',
+        'state_color': '#00ffad',
+        'spot': 19.15
+    }
+
+def generate_vix_chart_html(vix_data):
+    """Genera gráfico SVG para VIX Term Structure"""
+
+    data = vix_data['data']
+    months = [d['month'] for d in data]
+    levels = [d['vix_level'] for d in data]
+
+    chart_width = 320
+    chart_height = 180
+    padding = 35
+
+    min_level = min(levels) - 0.5
+    max_level = max(levels) + 0.5
+    level_range = max_level - min_level
+
+    points = []
+    for i, level in enumerate(levels):
+        x = padding + (i / (len(levels) - 1)) * (chart_width - 2 * padding)
+        y = chart_height - padding - ((level - min_level) / level_range) * (chart_height - 2 * padding)
+        points.append(f"{x},{y}")
+
+    polyline_points = " ".join(points)
+
+    circles = ""
+    for i, (x_y, level) in enumerate(zip(points, levels)):
+        x, y = x_y.split(',')
+        circles += f'<circle cx="{x}" cy="{y}" r="4" fill="#3b82f6" stroke="white" stroke-width="2"/>'
+        if i % 2 == 0:
+            circles += f'<text x="{x}" y="{float(y)-10}" text-anchor="middle" fill="#888" font-size="9">{level:.1f}</text>'
+
+    y_axis_labels = ""
+    for i in range(5):
+        val = min_level + (level_range * i / 4)
+        y_pos = chart_height - padding - (i / 4) * (chart_height - 2 * padding)
+        y_axis_labels += f'<text x="{padding-5}" y="{y_pos+3}" text-anchor="end" fill="#666" font-size="9">{val:.1f}</text>'
+        y_axis_labels += f'<line x1="{padding}" y1="{y_pos}" x2="{chart_width-padding}" y2="{y_pos}" stroke="#1a1e26" stroke-width="1"/>'
+
+    x_labels = ""
+    for i, month in enumerate(months):
+        x = padding + (i / (len(months) - 1)) * (chart_width - 2 * padding)
+        display_month = month.replace(' 2026', '') if '2026' in month else month
+        x_labels += f'<text x="{x}" y="{chart_height-8}" text-anchor="end" fill="#666" font-size="8" transform="rotate(-35, {x}, {chart_height-8})">{display_month}</text>'
+
+    html = f"""
+    <div style="width: 100%; height: 200px; background: #0c0e12; border-radius: 8px; padding: 8px; position: relative;">
+        <svg width="100%" height="100%" viewBox="0 0 {chart_width} {chart_height}" preserveAspectRatio="xMidYMid meet">
+            {y_axis_labels}
+            <polyline points="{polyline_points}" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            {circles}
+            {x_labels}
+            <text x="12" y="{chart_height/2}" text-anchor="middle" fill="#888" font-size="9" transform="rotate(-90, 12, {chart_height/2})">VIX Level</text>
+        </svg>
+    </div>
+    """
+
+    return html
+
+@st.cache_data(ttl=300)
+def get_global_markets():
+    """Obtiene rendimiento de índices globales principales"""
+    try:
+        indices = {
+            '^GSPC': ('S&P 500', 'USA'),
+            '^IXIC': ('NASDAQ', 'USA'),
+            '^FTSE': ('FTSE 100', 'UK'),
+            '^GDAXI': ('DAX 40', 'Germany'),
+            '^FCHI': ('CAC 40', 'France'),
+            '^N225': ('NIKKEI 225', 'Japan'),
+            '^HSI': ('HANG SENG', 'Hong Kong'),
+            '^AXJO': ('ASX 200', 'Australia'),
+            '^BSESN': ('SENSEX', 'India'),
+            '^MXX': ('IPC', 'Mexico'),
+        }
+
+        markets_data = []
+
+        for symbol, (name, country) in indices.items():
             try:
                 ticker = yf.Ticker(symbol)
                 hist = ticker.history(period="2d")
-                
+
                 if len(hist) >= 2:
                     current = hist['Close'].iloc[-1]
                     prev = hist['Close'].iloc[-2]
                     change = ((current - prev) / prev) * 100
-                    
-                    sectors_data.append((name, change))
-                    
-                time.sleep(0.1)
-                
+
+                    markets_data.append({
+                        'name': name,
+                        'country': country,
+                        'price': current,
+                        'change': change,
+                        'is_positive': change >= 0
+                    })
+
+                time.sleep(0.05)
+
             except Exception as e:
                 continue
-        
-        if not sectors_data:
-            return get_fallback_sectors()
-            
-        return sectors_data
-        
-    except Exception as e:
-        return get_fallback_sectors()
 
-def get_fallback_sectors():
-    """Datos de sectores simulados"""
+        return markets_data if markets_data else get_fallback_global()
+
+    except Exception as e:
+        return get_fallback_global()
+
+def get_fallback_global():
     return [
-        ("TECH", +1.24), ("FINL", -0.45), ("HLTH", +0.12), 
-        ("ENER", +2.10), ("CONS", -0.80), ("UTIL", -0.25)
+        {'name': 'S&P 500', 'country': 'USA', 'price': 5890.25, 'change': +0.45, 'is_positive': True},
+        {'name': 'NASDAQ', 'country': 'USA', 'price': 21150.80, 'change': -0.23, 'is_positive': False},
+        {'name': 'FTSE 100', 'country': 'UK', 'price': 8745.50, 'change': +0.65, 'is_positive': True},
+        {'name': 'DAX 40', 'country': 'Germany', 'price': 21340.75, 'change': -0.15, 'is_positive': False},
+        {'name': 'NIKKEI 225', 'country': 'Japan', 'price': 38750.50, 'change': +1.24, 'is_positive': True},
+        {'name': 'HANG SENG', 'country': 'Hong Kong', 'price': 19875.25, 'change': -0.85, 'is_positive': False},
     ]
 
+# ============================================================
+# FUNCIONES EXISTENTES (Earnings, Insider, News, FED)
+# ============================================================
+
 def get_earnings_calendar():
-    """Obtiene earnings reales usando yfinance si es posible"""
     try:
         earnings_tickers = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'TSLA', 'NVDA', 'META', 'NFLX']
         earnings_data = []
-        
+
         for ticker in earnings_tickers[:4]:
             try:
                 stock = yf.Ticker(ticker)
@@ -459,13 +717,13 @@ def get_earnings_calendar():
                         earnings_data.append((ticker, date_str, "TBD", "High"))
             except:
                 continue
-                
+
         if earnings_data:
             return earnings_data
-            
+
     except Exception as e:
-        print(f"Error earnings: {e}")
-    
+        pass
+
     return [
         ("AAPL", "Feb 05", "After Market", "High"),
         ("AMZN", "Feb 05", "After Market", "High"),
@@ -493,7 +751,7 @@ def get_fallback_news():
 @st.cache_data(ttl=300)
 def fetch_finnhub_news():
     api_key = st.secrets.get("FINNHUB_API_KEY", None)
-    
+
     if not api_key:
         return get_fallback_news()
 
@@ -529,13 +787,12 @@ def fetch_finnhub_news():
     except Exception as e:
         return get_fallback_news()
 
-
 def get_fed_liquidity():
     api_key = st.secrets.get("FRED_API_KEY", None)
-    
+
     if not api_key:
         return "ERROR", "#888", "API Key no configurada", "N/A", "N/A"
-    
+
     url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
     try:
         response = requests.get(url, timeout=10)
@@ -564,10 +821,9 @@ def get_fed_liquidity():
     except:
         return "N/A", "#888", "Sense connexio a FRED", "N/A", "N/A"
 
-
-# ────────────────────────────────────────────────
-# RENDER DEL DASHBOARD
-# ────────────────────────────────────────────────
+# ============================================================
+# RENDER DEL DASHBOARD COMPLETO
+# ============================================================
 
 def render():
     # CSS global
@@ -651,7 +907,7 @@ def render():
         .news-link:hover {
             text-decoration: underline;
         }
-        
+
         .group-container {
             border: 1px solid #1a1e26;
             border-radius: 10px;
@@ -676,18 +932,28 @@ def render():
         .group-content {
             padding: 0;
         }
+
+        div[data-baseweb="select"] {
+            background-color: #1a1e26 !important;
+            border-radius: 6px;
+            border: 1px solid #2a3f5f;
+        }
+        div[data-baseweb="select"] > div {
+            background-color: #1a1e26 !important;
+            color: white;
+        }
     </style>
     """, unsafe_allow_html=True)
 
-    # TICKER FINANCIERO ANIMADO EN LA PARTE SUPERIOR
+    # TICKER FINANCIERO ANIMADO
     ticker_html = generate_ticker_html()
     components.html(ticker_html, height=50, scrolling=False)
-    
+
     st.markdown('<h1 style="margin-top:20px; text-align:center;">Market Dashboard</h1>', unsafe_allow_html=True)
-    
+
     H = "340px"
 
-    # FILA 1
+    # FILA 1: Market Indices, Calendario Económico, Reddit
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -695,51 +961,43 @@ def render():
         for t, n in [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]:
             idx_val, idx_change = get_market_index(t)
             color = "#00ffad" if idx_change >= 0 else "#f23645"
-            indices_html += f'''
-            <div style="background:#0c0e12; padding:12px 15px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+            indices_html += f'''<div style="background:#0c0e12; padding:12px 15px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
                 <div><div style="font-weight:bold; color:white; font-size:13px;">{n}</div><div style="color:#555; font-size:10px;">INDEX</div></div>
                 <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:13px;">{idx_val:,.2f}</div><div style="color:{color}; font-size:11px; font-weight:bold;">{idx_change:+.2f}%</div></div>
             </div>'''
-        
+
         tooltip = "Rendiment en temps real dels principals indexs borsaris dels EUA."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{indices_html}</div></div>', unsafe_allow_html=True)
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Market Indices</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{indices_html}</div></div>''', unsafe_allow_html=True)
 
     with col2:
         events = get_economic_calendar()
-        
-        impact_colors = {
-            'High': '#f23645',
-            'Medium': '#ff9800',
-            'Low': '#4caf50'
-        }
-        
+
+        impact_colors = {'High': '#f23645', 'Medium': '#ff9800', 'Low': '#4caf50'}
+
         events_html = ""
         for ev in events:
             imp_color = impact_colors.get(ev['imp'], '#888')
-            events_html += f'''
-            <div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
+            events_html += f'''<div style="padding:10px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
                 <div style="color:#888; font-size:10px; width:45px; font-family:monospace;">{ev["time"]}</div>
                 <div style="flex-grow:1; margin-left:10px;">
                     <div style="color:white; font-size:11px; font-weight:500; line-height:1.3;">{ev["event"]}</div>
-                    <div style="color:{imp_color}; font-size:8px; font-weight:bold; text-transform:uppercase; margin-top:3px;">
-                        ● {ev["imp"]} IMPACT
-                    </div>
+                    <div style="color:{imp_color}; font-size:8px; font-weight:bold; text-transform:uppercase; margin-top:3px;">● {ev["imp"]} IMPACT</div>
                 </div>
                 <div style="text-align:right; min-width:50px;">
                     <div style="color:white; font-size:11px; font-weight:bold;">{ev["val"]}</div>
                     <div style="color:#444; font-size:9px;">P: {ev["prev"]}</div>
                 </div>
             </div>'''
-            
-        tooltip = "Calendari economic en temps real (hora espanyola CET/CEST). Dades d'investpy."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Calendari Economic</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>', unsafe_allow_html=True)
+
+        tooltip = "Calendari economic en temps real (hora espanyola CET/CEST)."
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Calendari Economic</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; overflow-y:auto;">{events_html}</div></div>''', unsafe_allow_html=True)
 
     with col3:
         reddit_data = get_reddit_buzz()
         tickers = reddit_data.get('tickers', [])
-        
+
         reddit_html_items = []
         for i, ticker in enumerate(tickers[:10], 1):
             rank_bg = "#f23645" if i <= 3 else "#1a1e26"
@@ -747,112 +1005,35 @@ def render():
             trend_text = "HOT 🔥" if i <= 3 else "Trending"
             trend_bg = "rgba(242, 54, 69, 0.2)" if i <= 3 else "rgba(0, 255, 173, 0.1)"
             trend_color = "#f23645" if i <= 3 else "#00ffad"
-            
-            item_html = f'''
-            <div style="display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #1a1e26; transition: background 0.2s;">
+
+            item_html = f'''<div style="display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #1a1e26;">
                 <div style="width: 28px; height: 28px; border-radius: 50%; background: {rank_bg}; display: flex; align-items: center; justify-content: center; color: {rank_color}; font-weight: bold; font-size: 12px; margin-right: 12px;">{i}</div>
                 <div style="flex: 1;">
                     <div style="color: #00ffad; font-weight: bold; font-size: 14px;">${ticker}</div>
                     <div style="color: #666; font-size: 10px; margin-top: 2px;">Buzzing on Reddit</div>
                 </div>
                 <div style="color: {trend_color}; font-size: 11px; font-weight: bold; background: {trend_bg}; padding: 4px 8px; border-radius: 4px;">{trend_text}</div>
-            </div>
-            '''
+            </div>'''
             reddit_html_items.append(item_html)
-        
+
         reddit_content = "".join(reddit_html_items)
         badge_text = f"Top {len(tickers)}"
-        tooltip_text = f"Top 10 tickers mes mencionats a Reddit (scraping de BuzzTickr). Actualitzat: {reddit_data.get('timestamp', 'now')}"
-        
+        tooltip_text = f"Top 10 tickers mes mencionats a Reddit. Actualitzat: {reddit_data.get('timestamp', 'now')}"
+
         reddit_html_full = f'''<!DOCTYPE html>
-<html>
-<head>
-<style>
+<html><head><style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-
-.container {{
-    border: 1px solid #1a1e26;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #11141a;
-    width: 100%;
-}}
-
-.header {{
-    background: #0c0e12;
-    padding: 12px 15px;
-    border-bottom: 1px solid #1a1e26;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}}
-
-.title {{
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-}}
-
-.badge {{
-    background: #2a3f5f;
-    color: #00ffad;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: bold;
-}}
-
-.tooltip-container {{
-    position: relative;
-    cursor: help;
-}}
-
-.tooltip-icon {{
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: #1a1e26;
-    border: 2px solid #555;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    font-size: 16px;
-    font-weight: bold;
-}}
-
-.tooltip-text {{
-    visibility: hidden;
-    width: 260px;
-    background-color: #1e222d;
-    color: #eee;
-    text-align: left;
-    padding: 10px 12px;
-    border-radius: 6px;
-    position: absolute;
-    z-index: 999;
-    top: 35px;
-    right: -10px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    font-size: 12px;
-    border: 1px solid #444;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}}
-
-.tooltip-container:hover .tooltip-text {{
-    visibility: visible;
-    opacity: 1;
-}}
-
-.content {{
-    background: #11141a;
-    height: 340px;
-    overflow-y: auto;
-}}
-</style>
-</head>
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; }}
+.header {{ background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }}
+.title {{ color: white; font-size: 14px; font-weight: bold; }}
+.badge {{ background: #2a3f5f; color: #00ffad; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }}
+.tooltip-container {{ position: relative; cursor: help; }}
+.tooltip-icon {{ width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 16px; font-weight: bold; }}
+.tooltip-text {{ visibility: hidden; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; position: absolute; z-index: 999; top: 35px; right: -10px; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }}
+.tooltip-container:hover .tooltip-text {{ visibility: visible; opacity: 1; }}
+.content {{ background: #11141a; height: 340px; overflow-y: auto; }}
+</style></head>
 <body>
 <div class="container">
     <div class="header">
@@ -865,16 +1046,13 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             </div>
         </div>
     </div>
-    <div class="content">
-        {reddit_content}
-    </div>
+    <div class="content">{reddit_content}</div>
 </div>
-</body>
-</html>'''
-        
+</body></html>'''
+
         components.html(reddit_html_full, height=400, scrolling=False)
 
-    # FILA 2
+    # FILA 2: Fear & Greed, Sector Heatmap (mejorado), Crypto
     st.write("")
     c1, c2, c3 = st.columns(3)
 
@@ -902,7 +1080,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             extra = ""
 
         tooltip = "Index CNN Fear & Greed – mesura el sentiment del mercat."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
 
         st.markdown(f'''<div class="group-container">
             <div class="group-header">
@@ -925,27 +1103,62 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             </div>
         </div>''', unsafe_allow_html=True)
 
+    # SECTOR HEATMAP MEJORADO CON TIMEFRAME
     with c2:
-        sectors = get_sector_performance()
+        timeframe = st.selectbox("Període", ["1D", "3D", "1W", "1M"], index=0, key="sector_timeframe")
+
+        sectors = get_sector_performance(timeframe)
+
         sectors_html = ""
-        for n, p in sectors:
-            bg_color = "#00ffad11" if p >= 0 else "#f2364511"
-            border_color = "#00ffad44" if p >= 0 else "#f2364544"
-            text_color = "#00ffad" if p >= 0 else "#f23645"
-            sectors_html += f'<div style="background:{bg_color}; border:1px solid {border_color}; padding:10px; border-radius:6px; text-align:center;"><div style="color:white; font-size:9px; font-weight:bold;">{n}</div><div style="color:{text_color}; font-size:11px; font-weight:bold;">{p:+.2f}%</div></div>'
-        
-        tooltip = "Rendiment diari dels principals sectors del mercat (ETFs) via yfinance."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Market Sectors Heatmap</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">{sectors_html}</div></div>', unsafe_allow_html=True)
+        for sector in sectors:
+            code = sector['code']
+            name = sector['name']
+            change = sector['change']
+
+            if change >= 2:
+                bg_color = "#00ffad33"
+                border_color = "#00ffad"
+                text_color = "#00ffad"
+            elif change >= 0:
+                bg_color = "#00ffad11"
+                border_color = "#00ffad88"
+                text_color = "#00ffad"
+            elif change >= -2:
+                bg_color = "#f2364511"
+                border_color = "#f2364588"
+                text_color = "#f23645"
+            else:
+                bg_color = "#f2364533"
+                border_color = "#f23645"
+                text_color = "#f23645"
+
+            sectors_html += f'''<div style="background:{bg_color}; border:1px solid {border_color}; padding:12px 8px; border-radius:8px; text-align:center; transition: all 0.3s;">
+                <div style="color:#888; font-size:8px; font-weight:bold; margin-bottom:4px;">{code}</div>
+                <div style="color:white; font-size:10px; font-weight:bold; margin-bottom:4px;">{name}</div>
+                <div style="color:{text_color}; font-size:12px; font-weight:bold;">{change:+.2f}%</div>
+            </div>'''
+
+        tooltip = f"Rendiment dels sectors ({timeframe}) via ETFs. Verds: alcista, Vermells: baixista."
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+
+        st.markdown(f'''<div class="group-container">
+            <div class="group-header">
+                <p class="group-title">Market Sectors Heatmap • {timeframe}</p>
+                {info_icon}
+            </div>
+            <div class="group-content" style="background:#11141a; height:{H}; padding:15px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
+                {sectors_html}
+            </div>
+        </div>''', unsafe_allow_html=True)
 
     with c3:
         try:
             cryptos = get_crypto_prices()
         except:
             cryptos = get_fallback_crypto_prices()
-        
-        tooltip_text = "Preus reals de criptomonedes via yfinance (Bitcoin, Ethereum, etc)."
-        
+
+        tooltip_text = "Preus reals de criptomonedes via yfinance."
+
         crypto_items_html = []
         for crypto in cryptos[:5]:
             try:
@@ -954,9 +1167,9 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
                 price = str(crypto.get('price', '0.00'))
                 change = str(crypto.get('change', '0%'))
                 is_positive = crypto.get('is_positive', True)
-                
+
                 color = "#00ffad" if is_positive else "#f23645"
-                
+
                 item_html = (
                     '<div style="background:#0c0e12; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">'
                     '<div style="display:flex; align-items:center; gap:10px;">'
@@ -972,90 +1185,22 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
                 crypto_items_html.append(item_html)
             except Exception as e:
                 continue
-        
+
         crypto_content = "".join(crypto_items_html)
-        
+
         crypto_html_full = '''<!DOCTYPE html>
-<html>
-<head>
-<style>
+<html><head><style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-
-.container {
-    border: 1px solid #1a1e26;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #11141a;
-    width: 100%;
-}
-
-.header {
-    background: #0c0e12;
-    padding: 12px 15px;
-    border-bottom: 1px solid #1a1e26;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.title {
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-}
-
-.tooltip-container {
-    position: relative;
-    cursor: help;
-}
-
-.tooltip-icon {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: #1a1e26;
-    border: 2px solid #555;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.tooltip-text {
-    visibility: hidden;
-    width: 260px;
-    background-color: #1e222d;
-    color: #eee;
-    text-align: left;
-    padding: 10px 12px;
-    border-radius: 6px;
-    position: absolute;
-    z-index: 999;
-    top: 35px;
-    right: -10px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    font-size: 12px;
-    border: 1px solid #444;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-
-.tooltip-container:hover .tooltip-text {
-    visibility: visible;
-    opacity: 1;
-}
-
-.content {
-    background: #11141a;
-    height: 340px;
-    overflow-y: auto;
-    padding: 15px;
-}
-</style>
-</head>
+.container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; }
+.header { background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }
+.title { color: white; font-size: 14px; font-weight: bold; }
+.tooltip-container { position: relative; cursor: help; }
+.tooltip-icon { width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 16px; font-weight: bold; }
+.tooltip-text { visibility: hidden; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; position: absolute; z-index: 999; top: 35px; right: -10px; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+.content { background: #11141a; height: 340px; overflow-y: auto; padding: 15px; }
+</style></head>
 <body>
 <div class="container">
     <div class="header">
@@ -1065,16 +1210,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             <div class="tooltip-text">''' + tooltip_text + '''</div>
         </div>
     </div>
-    <div class="content">
-        ''' + crypto_content + '''
-    </div>
+    <div class="content">''' + crypto_content + '''</div>
 </div>
-</body>
-</html>'''
-        
+</body></html>'''
+
         components.html(crypto_html_full, height=400, scrolling=False)
 
-    # FILA 3
+    # FILA 3: Earnings, Insider, Noticias
     st.write("")
     f3c1, f3c2, f3c3 = st.columns(3)
 
@@ -1087,10 +1229,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             <div><div style="color:#00ffad; font-weight:bold; font-size:12px;">{t}</div><div style="color:#444; font-size:9px; font-weight:bold;">{d}</div></div>
             <div style="text-align:right;"><div style="color:#888; font-size:9px;">{tm}</div><span style="color:{impact_color}; font-size:8px; font-weight:bold;">● {i}</span></div>
             </div>'''
-        
-        tooltip = "Calendari de publicacio de resultats d'empreses importants aquesta setmana."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{earn_html}</div></div>', unsafe_allow_html=True)
+
+        tooltip = "Calendari de publicacio de resultats d'empreses importants."
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Earnings Calendar</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{earn_html}</div></div>''', unsafe_allow_html=True)
 
     with f3c2:
         insiders = get_insider_trading()
@@ -1101,16 +1243,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             <div><div style="color:white; font-weight:bold; font-size:11px;">{t}</div><div style="color:#555; font-size:9px;">{p}</div></div>
             <div style="text-align:right;"><div style="color:{type_color}; font-weight:bold; font-size:10px;">{ty}</div><div style="color:#888; font-size:9px;">{a}</div></div>
             </div>'''
-        
+
         tooltip = "Compres i vendes recents d'accions per part de directius i insiders."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{insider_html}</div></div>', unsafe_allow_html=True)
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">Insider Tracker</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px; overflow-y:auto;">{insider_html}</div></div>''', unsafe_allow_html=True)
 
     with f3c3:
         news = fetch_finnhub_news()
-        
+
         tooltip_text = "Noticies d'alt impacte obtingudes via Finnhub API."
-        
+
         news_items_html = []
         for item in news:
             safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
@@ -1118,7 +1260,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             impact_val = item['impact']
             color_val = item['color']
             link_val = item['link']
-            
+
             news_item = (
                 '<div style="padding: 12px 15px; border-bottom: 1px solid #1a1e26;">'
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
@@ -1130,89 +1272,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
                 '</div>'
             )
             news_items_html.append(news_item)
-        
+
         news_content = "".join(news_items_html)
-        
+
         full_html = '''<!DOCTYPE html>
-<html>
-<head>
-<style>
+<html><head><style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-
-.container {
-    border: 1px solid #1a1e26;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #11141a;
-    width: 100%;
-}
-
-.header {
-    background: #0c0e12;
-    padding: 12px 15px;
-    border-bottom: 1px solid #1a1e26;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.title {
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-}
-
-.tooltip-container {
-    position: relative;
-    cursor: help;
-}
-
-.tooltip-icon {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: #1a1e26;
-    border: 2px solid #555;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.tooltip-text {
-    visibility: hidden;
-    width: 260px;
-    background-color: #1e222d;
-    color: #eee;
-    text-align: left;
-    padding: 10px 12px;
-    border-radius: 6px;
-    position: absolute;
-    z-index: 999;
-    top: 35px;
-    right: -10px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    font-size: 12px;
-    border: 1px solid #444;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-
-.tooltip-container:hover .tooltip-text {
-    visibility: visible;
-    opacity: 1;
-}
-
-.content {
-    background: #11141a;
-    height: 340px;
-    overflow-y: auto;
-}
-</style>
-</head>
+.container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; }
+.header { background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }
+.title { color: white; font-size: 14px; font-weight: bold; }
+.tooltip-container { position: relative; cursor: help; }
+.tooltip-icon { width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 16px; font-weight: bold; }
+.tooltip-text { visibility: hidden; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; position: absolute; z-index: 999; top: 35px; right: -10px; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+.content { background: #11141a; height: 340px; overflow-y: auto; }
+</style></head>
 <body>
 <div class="container">
     <div class="header">
@@ -1222,16 +1297,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             <div class="tooltip-text">''' + tooltip_text + '''</div>
         </div>
     </div>
-    <div class="content">
-        ''' + news_content + '''
-    </div>
+    <div class="content">''' + news_content + '''</div>
 </div>
-</body>
-</html>'''
-        
+</body></html>'''
+
         components.html(full_html, height=400, scrolling=False)
 
-    # FILA 4
+    # FILA 4: VIX Index, FED Liquidity, 10Y Treasury
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
 
@@ -1247,8 +1319,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             </div>
         '''
         tooltip = "Index de volatilitat CBOE (VIX) – mesura la por esperada al mercat."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">VIX Index</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{vix_html}</div></div>', unsafe_allow_html=True)
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">VIX Index</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{vix_html}</div></div>''', unsafe_allow_html=True)
 
     with f4c2:
         status, color, desc, assets, date = get_fed_liquidity()
@@ -1264,8 +1336,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             </div>
         '''
         tooltip = "Politica de liquiditat de la FED: expansio (QE) / contraccio (QT) segons balanc."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">FED Liquidity Policy</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{fed_html}</div></div>', unsafe_allow_html=True)
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">FED Liquidity Policy</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{fed_html}</div></div>''', unsafe_allow_html=True)
 
     with f4c3:
         tnx = get_market_index("^TNX")
@@ -1279,8 +1351,290 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
             </div>
         '''
         tooltip = "Rendiment del bo del Tresor dels EUA a 10 anys."
-        info_icon = f'<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'
-        st.markdown(f'<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>', unsafe_allow_html=True)
+        info_icon = f'''<div class="tooltip-container"><div style="width:26px;height:26px;border-radius:50%;background:#1a1e26;border:2px solid #555;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:16px;font-weight:bold;">?</div><div class="tooltip-text">{tooltip}</div></div>'''
+        st.markdown(f'''<div class="group-container"><div class="group-header"><p class="group-title">10Y Treasury Yield</p>{info_icon}</div><div class="group-content" style="background:#11141a; height:{H}; padding:15px;">{tnx_html}</div></div>''', unsafe_allow_html=True)
 
+    # ============================================================
+    # FILA 5 NUEVA: Market Breadth, VIX Term Structure, Global Markets
+    # ============================================================
+    st.write("")
+    st.markdown("---")
+    st.write("")
 
-# Final del fitxer market.py
+    f5c1, f5c2, f5c3 = st.columns(3)
+
+    # MÓDULO 1: MARKET BREADTH (Amplitud del Mercado)
+    with f5c1:
+        breadth = get_market_breadth()
+
+        # Colores según estado
+        trend_color = "#00ffad" if breadth['trend'] == 'ALCISTA' else "#f23645"
+        strength_color = "#00ffad" if breadth['strength'] == 'FUERTE' else "#ff9800"
+
+        # Indicadores visuales
+        sma50_status = "✓ ABOVE" if breadth['above_sma50'] else "✗ BELOW"
+        sma50_color = "#00ffad" if breadth['above_sma50'] else "#f23645"
+
+        sma200_status = "✓ ABOVE" if breadth['above_sma200'] else "✗ BELOW"
+        sma200_color = "#00ffad" if breadth['above_sma200'] else "#f23645"
+
+        golden_color = "#00ffad" if breadth['golden_cross'] else "#f23645"
+        golden_text = "GOLDEN CROSS ✓" if breadth['golden_cross'] else "DEATH CROSS ✗"
+
+        # RSI color
+        rsi = breadth['rsi']
+        if rsi > 70:
+            rsi_color = "#f23645"  # Sobrecomprado
+            rsi_text = "OVERBOUGHT"
+        elif rsi < 30:
+            rsi_color = "#00ffad"  # Sobrevendido
+            rsi_text = "OVERSOLD"
+        else:
+            rsi_color = "#ff9800"  # Neutral
+            rsi_text = "NEUTRAL"
+
+        tooltip_text = ("Market Breadth (Amplitud del Mercat) analitza la salut del mercat mitjançant indicadors tècnics: "
+                       "<b>SMA50/200</b>: Mitjanes mòbils de 50 i 200 dies. "
+                       "<b>Golden Cross</b>: SMA50 > SMA200 (tendència alcista). "
+                       "<b>Death Cross</b>: SMA50 < SMA200 (tendència baixista). "
+                       "<b>RSI</b>: Índex de força relativa (0-100, >70 sobrecomprat, <30 sobrevendut). "
+                       "Dades calculades sobre SPY (S&P 500 ETF).")
+
+        breadth_html = f'''<!DOCTYPE html>
+<html><head><style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; }}
+.header {{ background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }}
+.title {{ color: white; font-size: 14px; font-weight: bold; }}
+.tooltip-container {{ position: relative; cursor: help; }}
+.tooltip-icon {{ width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 16px; font-weight: bold; }}
+.tooltip-text {{ visibility: hidden; width: 320px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; position: absolute; z-index: 999; top: 35px; right: -10px; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); line-height: 1.4; }}
+.tooltip-container:hover .tooltip-text {{ visibility: visible; opacity: 1; }}
+.content {{ background: #11141a; height: 340px; overflow-y: auto; padding: 15px; }}
+.metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }}
+.metric-label {{ color: #888; font-size: 11px; }}
+.metric-value {{ font-size: 16px; font-weight: bold; }}
+.status-badge {{ padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; }}
+.rsi-gauge {{ width: 100%; height: 20px; background: linear-gradient(to right, #00ffad 0%, #ff9800 50%, #f23645 100%); border-radius: 10px; position: relative; margin: 10px 0; }}
+.rsi-marker {{ position: absolute; top: -5px; width: 4px; height: 30px; background: white; border-radius: 2px; transform: translateX(-50%); box-shadow: 0 0 5px rgba(0,0,0,0.5); }}
+</style></head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">Market Breadth</div>
+        <div class="tooltip-container">
+            <div class="tooltip-icon">?</div>
+            <div class="tooltip-text">{tooltip_text}</div>
+        </div>
+    </div>
+    <div class="content">
+        <div class="metric-box">
+            <span class="metric-label">SPY Price</span>
+            <span class="metric-value" style="color: white;">${breadth['price']:.2f}</span>
+        </div>
+
+        <div class="metric-box">
+            <span class="metric-label">SMA 50</span>
+            <span class="metric-value" style="color: {sma50_color};">${breadth['sma50']:.2f} <span style="font-size:9px;">({sma50_status})</span></span>
+        </div>
+
+        <div class="metric-box">
+            <span class="metric-label">SMA 200</span>
+            <span class="metric-value" style="color: {sma200_color};">${breadth['sma200']:.2f} <span style="font-size:9px;">({sma200_status})</span></span>
+        </div>
+
+        <div class="metric-box" style="border-color: {golden_color}44; background: {golden_color}11;">
+            <span class="metric-label">Signal</span>
+            <span class="metric-value" style="color: {golden_color};">{golden_text}</span>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span class="metric-label">RSI (14)</span>
+                <span style="color: {rsi_color}; font-size: 12px; font-weight: bold;">{rsi:.1f} - {rsi_text}</span>
+            </div>
+            <div class="rsi-gauge">
+                <div class="rsi-marker" style="left: {min(rsi, 100)}%;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 9px; color: #555; margin-top: 3px;">
+                <span>0</span><span>30</span><span>50</span><span>70</span><span>100</span>
+            </div>
+        </div>
+
+        <div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="metric-box" style="text-align: center; margin-bottom: 0;">
+                <div class="metric-label">Trend</div>
+                <div style="color: {trend_color}; font-size: 13px; font-weight: bold;">{breadth['trend']}</div>
+            </div>
+            <div class="metric-box" style="text-align: center; margin-bottom: 0;">
+                <div class="metric-label">Strength</div>
+                <div style="color: {strength_color}; font-size: 13px; font-weight: bold;">{breadth['strength']}</div>
+            </div>
+        </div>
+    </div>
+</div>
+</body></html>'''
+
+        components.html(breadth_html, height=400, scrolling=False)
+
+    # MÓDULO 2: VIX FUTURES TERM STRUCTURE (REEMPLAZA FOREX)
+    with f5c2:
+        vix_data = get_vix_term_structure()
+
+        state_color = vix_data['state_color']
+        state_bg = f"{state_color}22"
+
+        chart_html = generate_vix_chart_html(vix_data)
+
+        tooltip_text = ("<b>VIX Futures Term Structure</b> mostra la corba de preus dels futurs del VIX a diferents venciments. "
+                       "<br><br><b>Contango</b>: Futurs més cars que el spot (mercat calmat, favorable per comprar dips). "
+                       "<br><b>Backwardation</b>: Futurs més barats que el spot (estrès al mercat, precaució). "
+                       "<br><br>El VIX mesura la volatilitat esperada del S&P 500. Una estructura en contango és normal en mercats estables, mentre que backwardation indica pàric i potencial caiguda.")
+
+        # Generar filas de tabla
+        table_rows = ""
+        spot_level = vix_data['spot']
+        for item in vix_data['data'][1:]:
+            spread = item['vix_level'] - spot_level
+            spread_color = "#00ffad" if spread > 0 else "#f23645"
+            spread_str = f"+{spread:.2f}" if spread > 0 else f"{spread:.2f}"
+
+            table_rows += f"""
+                <tr>
+                    <td style="color: #888; font-size: 10px; padding: 6px; border-bottom: 1px solid #1a1e26;">{item['month']}</td>
+                    <td style="color: white; font-size: 11px; font-weight: bold; padding: 6px; border-bottom: 1px solid #1a1e26;">{item['vix_level']:.2f}</td>
+                    <td style="color: {spread_color}; font-size: 10px; font-weight: bold; padding: 6px; border-bottom: 1px solid #1a1e26;">{spread_str}</td>
+                </tr>
+            """
+
+        vix_html_full = f"""
+<!DOCTYPE html>
+<html><head><style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; }}
+.header {{ background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }}
+.title {{ color: white; font-size: 14px; font-weight: bold; }}
+.state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid {state_color}44; }}
+.tooltip-container {{ position: relative; cursor: help; margin-left: 8px; }}
+.tooltip-icon {{ width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 16px; font-weight: bold; }}
+.tooltip-text {{ visibility: hidden; width: 340px; background-color: #1e222d; color: #eee; text-align: left; padding: 14px 16px; border-radius: 8px; position: absolute; z-index: 999; top: 35px; right: -10px; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); line-height: 1.5; }}
+.tooltip-container:hover .tooltip-text {{ visibility: visible; opacity: 1; }}
+.content {{ background: #11141a; height: 340px; overflow-y: auto; padding: 15px; }}
+.spot-vix {{ display: flex; justify-content: space-between; align-items: center; background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px 15px; margin-bottom: 12px; }}
+.spot-label {{ color: #888; font-size: 11px; }}
+.spot-value {{ color: white; font-size: 20px; font-weight: bold; }}
+.chart-container {{ margin-bottom: 12px; }}
+.state-description {{ background: {state_bg}; border: 1px solid {state_color}44; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }}
+.state-title {{ color: {state_color}; font-weight: bold; font-size: 12px; margin-bottom: 3px; }}
+.state-desc {{ color: #ccc; font-size: 10px; line-height: 1.4; }}
+.data-table {{ width: 100%; border-collapse: collapse; }}
+.data-table th {{ color: #666; font-size: 9px; text-align: left; padding: 6px; border-bottom: 1px solid #2a3f5f; text-transform: uppercase; }}
+</style></head>
+<body>
+<div class="container">
+    <div class="header">
+        <div style="display: flex; align-items: center;">
+            <div class="title">VIX Futures Term Structure</div>
+            <div class="tooltip-container">
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-text">{tooltip_text}</div>
+            </div>
+        </div>
+        <span class="state-badge">{vix_data['state']}</span>
+    </div>
+    <div class="content">
+        <div class="spot-vix">
+            <span class="spot-label">VIX Spot</span>
+            <span class="spot-value">{vix_data['spot']:.2f}</span>
+        </div>
+
+        <div class="chart-container">
+            {chart_html}
+        </div>
+
+        <div class="state-description">
+            <div class="state-title">{vix_data['state']}</div>
+            <div class="state-desc">{vix_data['state_desc']}</div>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Level</th>
+                    <th>Spread</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+    </div>
+</div>
+</body></html>
+"""
+
+        components.html(vix_html_full, height=400, scrolling=False)
+
+    # MÓDULO 3: GLOBAL MARKETS
+    with f5c3:
+        markets = get_global_markets()
+
+        tooltip_text = "Mercats globals en temps real via Yahoo Finance. Mostra els principals índexs borsaris mundials amb els seus rendiments diaris."
+
+        # Generar items de mercados
+        market_items = ""
+        for market in markets[:6]:
+            color = "#00ffad" if market['is_positive'] else "#f23645"
+            arrow = "▲" if market['is_positive'] else "▼"
+
+            market_items += f"""
+                <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="color: white; font-weight: bold; font-size: 12px;">{market['name']}</div>
+                        <div style="color: #555; font-size: 9px;">{market['country']}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: white; font-size: 13px; font-weight: bold;">{market['price']:,.2f}</div>
+                        <div style="color: {color}; font-size: 10px; font-weight: bold;">{arrow} {market['change']:+.2f}%</div>
+                    </div>
+                </div>
+            """
+
+        global_html = f"""
+<!DOCTYPE html>
+<html><head><style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; }}
+.header {{ background: #0c0e12; padding: 12px 15px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }}
+.title {{ color: white; font-size: 14px; font-weight: bold; }}
+.tooltip-container {{ position: relative; cursor: help; }}
+.tooltip-icon {{ width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 16px; font-weight: bold; }}
+.tooltip-text {{ visibility: hidden; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; position: absolute; z-index: 999; top: 35px; right: -10px; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 12px rgba(0,0,0,0.4); line-height: 1.4; }}
+.tooltip-container:hover .tooltip-text {{ visibility: visible; opacity: 1; }}
+.content {{ background: #11141a; height: 340px; overflow-y: auto; padding: 15px; }}
+</style></head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">Global Markets</div>
+        <div class="tooltip-container">
+            <div class="tooltip-icon">?</div>
+            <div class="tooltip-text">{tooltip_text}</div>
+        </div>
+    </div>
+    <div class="content">
+        {market_items}
+    </div>
+</div>
+</body></html>
+"""
+
+        components.html(global_html, height=400, scrolling=False)
+
+# Final del fitxer
+if __name__ == "__main__":
+    render()

@@ -1047,47 +1047,6 @@ def render():
         """, unsafe_allow_html=True)
 
 
-    with c3:
-        crypto_fg = get_crypto_fear_greed()
-
-        val = crypto_fg['value']
-        label = crypto_fg['label']
-        col = crypto_fg['color']
-        desc = crypto_fg['description']
-        bar_width = val
-
-        crypto_fg_html = f'''
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding:20px;">
-            <div style="font-size:3.5rem; font-weight:bold; color:{col}; margin-bottom:8px;">{val}</div>
-            <div style="color:white; font-size:1rem; letter-spacing:1px; font-weight:bold; margin-bottom:8px;">{label}</div>
-            <div style="color:#888; font-size:0.8rem; margin-bottom:16px; text-align:center; padding:0 10px;">{desc}</div>
-            <div style="width:90%; background:#0c0e12; height:12px; border-radius:6px; margin-bottom:16px; border:1px solid #1a1e26; overflow:hidden;">
-                <div style="width:{bar_width}%; background:linear-gradient(to right, {col}, {col}aa); height:100%;"></div>
-            </div>
-            <div style="display:flex; justify-content:space-between; width:90%; font-size:0.6rem; color:#666; text-align:center;">
-                <div style="flex:1;"><div style="background:#d32f2f; height:3px; border-radius:2px; margin-bottom:4px;"></div>Fear</div>
-                <div style="flex:1;"><div style="background:#ff9800; height:3px; border-radius:2px; margin-bottom:4px;"></div>Neutral</div>
-                <div style="flex:1;"><div style="background:{ACCENT_GREEN}; height:3px; border-radius:2px; margin-bottom:4px;"></div>Greed</div>
-            </div>
-            <div style="margin-top:12px; font-size:0.7rem; color:#555;">Source: {crypto_fg['source']}</div>
-        </div>
-        '''
-
-        tooltip = "Crypto Fear & Greed Index de Alternative.me. Mesura el sentiment del mercat de criptomonedes (0-100)."
-
-        st.markdown(f'''
-        <div class="module-container" style="height:{MODULE_HEIGHT};">
-            <div class="module-header">
-                <span class="module-title">Crypto Fear & Greed</span>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-icon">?</div>
-                    <div class="tooltip-content">{tooltip}</div>
-                </div>
-            </div>
-            <div class="module-content" style="display:flex; align-items:center; justify-content:center;">{crypto_fg_html}</div>
-            <div class="module-footer">Updated: {crypto_fg['update_time']}</div>
-        </div>
-        ''', unsafe_allow_html=True)
 
     # FILA 2
     st.write("")
@@ -1401,6 +1360,84 @@ def render():
             <div class="module-footer">Updated: {format_timestamp()}</div>
         </div>
         ''', unsafe_allow_html=True)
+
+    # FILA 5
+    st.write("")
+    f5c1, f5c2, f5c3 = st.columns(3)
+
+    with f5c1:
+        # Market Breadth
+        breadth = get_market_breadth()
+        trend_color = ACCENT_GREEN if breadth['trend'] == 'ALCISTA' else ACCENT_RED
+        strength_color = ACCENT_GREEN if breadth['strength'] == 'FUERTE' else '#ff9800'
+        sma50_color = ACCENT_GREEN if breadth['above_sma50'] else ACCENT_RED
+        sma200_color = ACCENT_GREEN if breadth['above_sma200'] else ACCENT_RED
+        golden_color = ACCENT_GREEN if breadth['golden_cross'] else ACCENT_RED
+        golden_text = "GOLDEN CROSS ✓" if breadth['golden_cross'] else "DEATH CROSS ✗"
+
+        rsi = breadth['rsi']
+        if rsi > 70: rsi_color, rsi_text = ACCENT_RED, "OVERBOUGHT"
+        elif rsi < 30: rsi_color, rsi_text = ACCENT_GREEN, "OVERSOLD"
+        else: rsi_color, rsi_text = '#ff9800', "NEUTRAL"
+
+        breadth_html = f"""
+        <div style="padding:8px;">
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:8px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:11px;">SPY Price</span>
+                <span style="color:white; font-size:14px; font-weight:bold;">${breadth['price']:.2f}</span>
+            </div>
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:8px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:11px;">SMA 50</span>
+                <span style="color:{sma50_color}; font-size:14px; font-weight:bold;">${breadth['sma50']:.2f}</span>
+            </div>
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:8px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:11px;">SMA 200</span>
+                <span style="color:{sma200_color}; font-size:14px; font-weight:bold;">${breadth['sma200']:.2f}</span>
+            </div>
+            <div style="background:{golden_color}11; border:1px solid {golden_color}44; border-radius:8px; padding:12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:11px;">Signal</span>
+                <span style="color:{golden_color}; font-size:13px; font-weight:bold;">{golden_text}</span>
+            </div>
+            <div style="margin-top:12px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                    <span style="color:#888; font-size:11px;">RSI (14)</span>
+                    <span style="color:{rsi_color}; font-size:12px; font-weight:bold;">{rsi:.1f} - {rsi_text}</span>
+                </div>
+                <div style="width:100%; height:8px; background:linear-gradient(to right, #00ffad 0%, #ff9800 50%, #f23645 100%); border-radius:4px; position:relative;">
+                    <div style="position:absolute; top:-2px; left:{min(rsi, 100)}%; width:3px; height:12px; background:white; border-radius:2px; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:8px; color:#555; margin-top:4px;">
+                    <span>0</span><span>30</span><span>50</span><span>70</span><span>100</span>
+                </div>
+            </div>
+            <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="color:#888; font-size:10px; margin-bottom:2px;">Trend</div>
+                    <div style="color:{trend_color}; font-size:12px; font-weight:bold;">{breadth['trend']}</div>
+                </div>
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="color:#888; font-size:10px; margin-bottom:2px;">Strength</div>
+                    <div style="color:{strength_color}; font-size:12px; font-weight:bold;">{breadth['strength']}</div>
+                </div>
+            </div>
+        </div>
+        """
+
+        tooltip = "<b>Market Breadth</b> analitza la salut del mercat via SPY."
+
+        st.markdown(f"""
+        <div class="module-container" style="height:{MODULE_HEIGHT};">
+            <div class="module-header">
+                <span class="module-title">Market Breadth</span>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-icon">?</div>
+                    <div class="tooltip-content">{tooltip}</div>
+                </div>
+            </div>
+            <div class="module-content">{breadth_html}</div>
+            <div class="module-footer">Updated: {breadth.get('timestamp', format_timestamp())}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     with f5c2:
         vix_data = get_vix_term_structure_real()

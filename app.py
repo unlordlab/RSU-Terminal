@@ -28,6 +28,8 @@ from modules import rsu_club as rsu_club_module
 from modules import rsrw as rsrw_module
 from modules import rsu_algoritmo as rsu_algoritmo_module
 from modules import ema_edge as ema_edge_module
+from modules import canslim as canslim_module
+from modules import rsudb as rsudb_module
 from modules import earnings as earnings_module
 from modules import cartera as cartera_module
 from modules import tesis as tesis_module
@@ -398,7 +400,7 @@ with st.sidebar:
     # MENÚ ESTÉTICO COMPACTO
     menu = st.radio("", [
         "📊 DASHBOARD", "📜 MANIFEST", "♣️ RSU CLUB", "📈 SCANNER RS/RW", 
-        "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "📅 EARNINGS", "💼 CARTERA", 
+        "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "🎯 CAN SLIM", "🗄️ RSU DB", "📅 EARNINGS", "💼 CARTERA", 
         "📝 TESIS", "🤖 AI REPORT", "🎓 ACADEMY", "🏆 TRADE GRADER",
         "🚀 SPXL STRATEGY", "🗺️ ROADMAP 2026", "🇺🇸 TRUMP PLAYBOOK",
         "👥 COMUNIDAD", "⚠️ DISCLAIMER"
@@ -418,6 +420,8 @@ modules = {
     "📈 SCANNER RS/RW": rsrw_module,
     "🤖 ALGORITMO RSU": rsu_algoritmo_module,
     "⚡ EMA EDGE": ema_edge_module,
+    "🎯 CAN SLIM": canslim_module,
+    "🗄️ RSU DB": rsudb_module,
     "📅 EARNINGS": earnings_module,
     "💼 CARTERA": cartera_module,
     "📝 TESIS": tesis_module,
@@ -436,3 +440,4 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
+

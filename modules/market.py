@@ -931,6 +931,10 @@ def get_module_css():
 
 # RENDER PRINCIPAL
 def render():
+    # Inicializar session_state para sector timeframe
+    if "sector_tf" not in st.session_state:
+        st.session_state.sector_tf = "1D"
+
     st.markdown(get_module_css(), unsafe_allow_html=True)
 
     ticker_html = generate_ticker_html()
@@ -1042,13 +1046,6 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-        tf_cols = st.columns([1,1,1,1])
-        for i, tf in enumerate(["1D", "3D", "1W", "1M"]):
-            with tf_cols[i]:
-                if st.button(tf, key=f"tf_btn_{tf}", use_container_width=True, 
-                           type="primary" if st.session_state.sector_tf == tf else "secondary"):
-                    st.session_state.sector_tf = tf
-                    st.rerun()
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
@@ -1091,6 +1088,106 @@ def render():
             <div class="module-footer">Updated: {crypto_fg['update_time']}</div>
         </div>
         ''', unsafe_allow_html=True)
+
+    # FILA 2
+    st.write("")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        # Fear & Greed Index
+        val = get_cnn_fear_greed()
+        if val is None:
+            val_display, label, col, bar_width = "N/D", "ERROR", "#888", 50
+        else:
+            val_display = val
+            bar_width = val
+            if val <= 24: label, col = "EXTREME FEAR", "#d32f2f"
+            elif val <= 44: label, col = "FEAR", "#f57c00"
+            elif val <= 55: label, col = "NEUTRAL", "#ff9800"
+            elif val <= 75: label, col = "GREED", "#4caf50"
+            else: label, col = "EXTREME GREED", ACCENT_GREEN
+
+        tooltip = "Index CNN Fear & Greed"
+        st.markdown(f"""
+        <div class="module-container" style="height:{MODULE_HEIGHT};">
+            <div class="module-header">
+                <span class="module-title">Fear & Greed</span>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-icon">?</div>
+                    <div class="tooltip-content">{tooltip}</div>
+                </div>
+            </div>
+            <div class="module-content" style="display:flex; align-items:center; justify-content:center;">
+                <div style="text-align:center;">
+                    <div style="font-size:4rem; font-weight:bold; color:{col};">{val_display}</div>
+                    <div style="color:white; font-size:1.1rem; font-weight:bold;">{label}</div>
+                </div>
+            </div>
+            <div class="module-footer">Updated: {format_timestamp()}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        # Sector Heatmap
+        timeframe = st.session_state.sector_tf
+        sectors = get_sector_performance(timeframe)
+
+        sectors_sorted = sorted(sectors, key=lambda x: x['change'], reverse=True)
+        leaders = [s for s in sectors_sorted if s['change'] >= 0]
+        laggards = [s for s in sectors_sorted if s['change'] < 0]
+
+        sectors_html = ""
+        if leaders:
+            sectors_html += '<div style="color:#00ffad; font-size:10px; font-weight:bold; margin-bottom:8px;">LEADING</div>'
+            for sector in leaders[:5]:
+                sectors_html += f"<div>{sector['name']}: {sector['change']:+.2f}%</div>"
+
+        tooltip = f"Sectors ({timeframe})"
+        st.markdown(f"""
+        <div class="module-container" style="height:{MODULE_HEIGHT};">
+            <div class="module-header">
+                <span class="module-title">Sector Rotation</span>
+                <span style="background:#2a3f5f; color:#00ffad; padding:3px 8px; border-radius:4px; font-size:11px;">{timeframe}</span>
+            </div>
+            <div class="module-content">{sectors_html}</div>
+            <div class="module-footer">Updated: {format_timestamp()}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Botones de timeframe
+        tf_cols = st.columns([1,1,1,1])
+        for i, tf in enumerate(["1D", "3D", "1W", "1M"]):
+            with tf_cols[i]:
+                if st.button(tf, key=f"tf_btn_{tf}", use_container_width=True):
+                    st.session_state.sector_tf = tf
+                    st.rerun()
+
+    with c3:
+        # Crypto Fear & Greed
+        crypto_fg = get_crypto_fear_greed()
+        val = crypto_fg['value']
+        label = crypto_fg['label']
+        col = crypto_fg['color']
+
+        tooltip = "Crypto Fear & Greed"
+        st.markdown(f"""
+        <div class="module-container" style="height:{MODULE_HEIGHT};">
+            <div class="module-header">
+                <span class="module-title">Crypto F&G</span>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-icon">?</div>
+                    <div class="tooltip-content">{tooltip}</div>
+                </div>
+            </div>
+            <div class="module-content" style="display:flex; align-items:center; justify-content:center;">
+                <div style="text-align:center;">
+                    <div style="font-size:3.5rem; font-weight:bold; color:{col};">{val}</div>
+                    <div style="color:white;">{label}</div>
+                </div>
+            </div>
+            <div class="module-footer">Updated: {crypto_fg['update_time']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # FILA 3
     st.write("")

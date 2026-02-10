@@ -23,7 +23,6 @@ except ImportError:
 # ============================================================
 
 def get_timestamp():
-    """Devuelve timestamp formateado para mostrar última actualización"""
     return datetime.now().strftime('%H:%M:%S')
 
 def get_economic_calendar():
@@ -218,6 +217,9 @@ def generate_ticker_html():
     <style>@keyframes ticker-scroll {{ 0% {{ transform: translateX(0); }} 100% {{ transform: translateX(-50%); }} }}</style>
     """
 
+
+
+
 # ============================================================
 # FUNCIONES DE SECTORES
 # ============================================================
@@ -238,11 +240,11 @@ def get_sector_performance(timeframe="1D"):
             'XLRE': ('Real Estate', 'Bienes Raíces'),
             'XLC': ('Communication', 'Comunicaciones')
         }
-        
+
         period_map = {"1D": "2d", "3D": "5d", "1W": "10d", "1M": "1mo"}
         period = period_map.get(timeframe, "2d")
         sectors_data = []
-        
+
         for symbol, (name_en, name_es) in sector_etfs.items():
             try:
                 ticker = yf.Ticker(symbol)
@@ -258,7 +260,7 @@ def get_sector_performance(timeframe="1D"):
                         prev = hist['Close'].iloc[-6] if len(hist) >= 6 else hist['Close'].iloc[0]
                     else:
                         current, prev = hist['Close'].iloc[-1], hist['Close'].iloc[0]
-                    
+
                     change = ((current - prev) / prev) * 100
                     sectors_data.append({
                         'code': symbol, 
@@ -269,7 +271,7 @@ def get_sector_performance(timeframe="1D"):
                 time.sleep(0.05)
             except:
                 continue
-                
+
         return sectors_data if sectors_data else get_fallback_sectors(timeframe)
     except:
         return get_fallback_sectors(timeframe)
@@ -287,7 +289,7 @@ def get_fallback_sectors(timeframe="1D"):
     return [{'code': c, 'name': n, 'name_es': n, 'change': v * mult} for c, n, v in base]
 
 # ============================================================
-# VIX TERM STRUCTURE CON DATOS REALES
+# VIX TERM STRUCTURE
 # ============================================================
 
 @st.cache_data(ttl=300)
@@ -311,13 +313,13 @@ def get_vix_term_structure():
 
         months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct']
         base_year = datetime.now().year
-        
+
         current_curve = [current_spot]
         prev_curve = [prev_spot]
         two_days_curve = [spot_2days]
-        
+
         is_contango = current_spot < 20
-        
+
         for i in range(1, 9):
             if is_contango:
                 current_curve.append(current_spot + (i * 0.9) + (i * i * 0.08))
@@ -327,7 +329,7 @@ def get_vix_term_structure():
                 current_curve.append(current_spot - (i * 0.3))
                 prev_curve.append(prev_spot - (i * 0.25))
                 two_days_curve.append(spot_2days - (i * 0.2))
-        
+
         vix_data = []
         for i, month in enumerate(months):
             year = base_year if i < 10 else base_year + 1
@@ -337,7 +339,7 @@ def get_vix_term_structure():
                 'previous': round(prev_curve[i], 2),
                 'two_days': round(two_days_curve[i], 2)
             })
-        
+
         if current_curve[-1] > current_curve[0]:
             state = "Contango"
             state_desc = "Typical in calm markets - Conducive to dip buying"
@@ -397,58 +399,58 @@ def generate_vix_chart_html(vix_data):
     current_levels = [d['current'] for d in data]
     prev_levels = [d['previous'] for d in data]
     two_days_levels = [d['two_days'] for d in data]
-    
+
     chart_width, chart_height, padding = 340, 180, 35
-    
+
     all_values = current_levels + prev_levels + two_days_levels
     min_level, max_level = min(all_values) - 0.5, max(all_values) + 0.5
     level_range = max_level - min_level
-    
+
     def get_coords(values, color, is_dashed=False):
         points = []
         for i, level in enumerate(values):
             x = padding + (i / (len(values) - 1)) * (chart_width - 2 * padding)
             y = chart_height - padding - ((level - min_level) / level_range) * (chart_height - 2 * padding)
             points.append((x, y, level))
-        
+
         points_str = " ".join([f"{x},{y}" for x, y, _ in points])
         dash_attr = 'stroke-dasharray="4,3"' if is_dashed else ''
-        
+
         circles = ""
         for x, y, level in points:
             circles += f'<circle cx="{x}" cy="{y}" r="3" fill="{color}" stroke="white" stroke-width="1"/>'
-        
+
         return f'<polyline points="{points_str}" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {dash_attr}/>{circles}'
-    
+
     current_line = get_coords(current_levels, "#3b82f6", False)
     prev_line = get_coords(prev_levels, "#f97316", True)
     two_days_line = get_coords(two_days_levels, "#6b7280", True)
-    
+
     y_axis = ""
     for i in range(5):
         val = min_level + (level_range * i / 4)
         y_pos = chart_height - padding - (i / 4) * (chart_height - 2 * padding)
         y_axis += f'<text x="{padding-8}" y="{y_pos+3}" text-anchor="end" fill="#666" font-size="9">{val:.1f}</text>'
         y_axis += f'<line x1="{padding}" y1="{y_pos}" x2="{chart_width-padding}" y2="{y_pos}" stroke="#1a1e26" stroke-width="1"/>'
-    
+
     x_labels = ""
     for i, month in enumerate(months):
         x = padding + (i / (len(months) - 1)) * (chart_width - 2 * padding)
         x_labels += f'<text x="{x}" y="{chart_height-8}" text-anchor="middle" fill="#666" font-size="8">{month}</text>'
-    
+
     legend_y = 15
-    legend = f'''
+    legend = f"""
     <rect x="{chart_width-175}" y="5" width="170" height="50" fill="#0c0e12" stroke="#1a1e26" rx="4"/>
     <line x1="{chart_width-170}" y1="{legend_y+5}" x2="{chart_width-155}" y2="{legend_y+5}" stroke="#3b82f6" stroke-width="2"/>
     <text x="{chart_width-150}" y="{legend_y+8}" fill="#888" font-size="8">Current (2/10): {vix_data['current_spot']:.2f}</text>
-    
+
     <line x1="{chart_width-170}" y1="{legend_y+20}" x2="{chart_width-155}" y2="{legend_y+20}" stroke="#f97316" stroke-width="2" stroke-dasharray="4,3"/>
     <text x="{chart_width-150}" y="{legend_y+23}" fill="#888" font-size="8">Previous (2/9): {vix_data['prev_spot']:.2f}</text>
-    
+
     <line x1="{chart_width-170}" y1="{legend_y+35}" x2="{chart_width-155}" y2="{legend_y+35}" stroke="#6b7280" stroke-width="2" stroke-dasharray="4,3"/>
     <text x="{chart_width-150}" y="{legend_y+38}" fill="#888" font-size="8">2 Days Ago (2/8): {vix_data['spot_2days']:.2f}</text>
-    '''
-    
+    """
+
     return f"""
     <div style="width: 100%; height: 200px; background: #0c0e12; border-radius: 8px; padding: 8px;">
         <svg width="100%" height="100%" viewBox="0 0 {chart_width} {chart_height}" preserveAspectRatio="xMidYMid meet">
@@ -463,6 +465,9 @@ def generate_vix_chart_html(vix_data):
     </div>
     """
 
+
+
+
 # ============================================================
 # CRYPTO FEAR & GREED
 # ============================================================
@@ -473,7 +478,7 @@ def get_crypto_fear_greed():
         url = "https://api.alternative.me/fng/?limit=1"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data and 'data' in data and len(data['data']) > 0:
@@ -482,14 +487,14 @@ def get_crypto_fear_greed():
                 classification = item['value_classification']
                 timestamp = int(item['timestamp'])
                 update_time = datetime.fromtimestamp(timestamp).strftime('%H:%M')
-                
+
                 return {
                     'value': value,
                     'classification': classification,
                     'timestamp': update_time,
                     'source': 'alternative.me'
                 }
-        
+
         return get_fallback_crypto_fear_greed()
     except:
         return get_fallback_crypto_fear_greed()
@@ -515,25 +520,25 @@ def get_earnings_calendar():
             'PG', 'JNJ', 'BAC', 'LLY', 'MRK', 'KO', 'PEP', 'ABBV',
             'COST', 'TMO', 'ADBE', 'NFLX', 'AMD', 'CRM', 'ACN'
         ]
-        
+
         earnings_list = []
-        
+
         for ticker in mega_caps[:15]:
             try:
                 stock = yf.Ticker(ticker)
                 calendar = stock.calendar
-                
+
                 if calendar is not None and not calendar.empty:
                     info = stock.info
                     market_cap = info.get('marketCap', 0) / 1e9
-                    
+
                     if market_cap >= 100:
                         next_earnings = calendar.index[0]
                         hour = next_earnings.hour if hasattr(next_earnings, 'hour') else 16
                         time_str = "Before Bell" if hour < 12 else "After Market"
-                        
+
                         days_until = (next_earnings - pd.Timestamp.now()).days
-                        
+
                         if days_until >= -1 and days_until <= 30:
                             earnings_list.append({
                                 'ticker': ticker,
@@ -543,16 +548,16 @@ def get_earnings_calendar():
                                 'market_cap': f"${market_cap:.0f}B",
                                 'days': days_until
                             })
-                
+
                 time.sleep(0.1)
             except:
                 continue
-        
+
         earnings_list.sort(key=lambda x: x['days'])
-        
+
         if earnings_list:
             return earnings_list[:6]
-            
+
         return get_fallback_earnings()
     except:
         return get_fallback_earnings()
@@ -566,29 +571,25 @@ def get_fallback_earnings():
     ]
 
 # ============================================================
-# INSIDER TRACKING CON FMP (DATOS REALES)
+# INSIDER TRACKING
 # ============================================================
 
 @st.cache_data(ttl=600)
 def get_insider_trading():
-    """
-    Obtiene datos reales de insider trading usando FMP API
-    """
     try:
         api_key = st.secrets.get("FMP_API_KEY", None)
-        
+
         if not api_key:
             return get_fallback_insider()
-        
-        # Obtener trades recientes de mega-caps
+
         symbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'META', 'GOOGL', 'AMZN', 'NFLX', 'AMD', 'CRM']
         all_trades = []
-        
+
         for symbol in symbols:
             try:
                 url = f"https://financialmodelingprep.com/api/v4/insider-trading?symbol={symbol}&limit=3&apikey={api_key}"
                 response = requests.get(url, timeout=10)
-                
+
                 if response.status_code == 200:
                     data = response.json()
                     for trade in data:
@@ -599,12 +600,12 @@ def get_insider_trading():
                             trans = "SELL"
                         else:
                             continue
-                        
+
                         shares = trade.get('securitiesTransacted', 0)
                         price = trade.get('price', 0)
                         amount = shares * price
-                        
-                        if amount > 50000:  # Solo transacciones > $50k
+
+                        if amount > 50000:
                             all_trades.append({
                                 'ticker': symbol,
                                 'insider': trade.get('reportingName', 'Executive')[:20],
@@ -615,14 +616,13 @@ def get_insider_trading():
                             })
             except Exception as e:
                 continue
-        
+
         if all_trades:
-            # Ordenar por monto descendente
             all_trades.sort(key=lambda x: float(x['amount'].replace('$','').replace('M','').replace('K','').replace(',','')), reverse=True)
             return all_trades[:6]
-        
+
         return get_fallback_insider()
-        
+
     except Exception as e:
         return get_fallback_insider()
 
@@ -673,7 +673,7 @@ def get_fallback_market_breadth():
     }
 
 # ============================================================
-# NOTICIAS - CON SCROLL
+# NOTICIAS
 # ============================================================
 
 def get_fallback_news():
@@ -735,15 +735,18 @@ def get_fed_liquidity():
     except:
         return "N/A", "#888", "Sense connexio", "N/A", "N/A"
 
+
+
+
 # ============================================================
-# RENDER PRINCIPAL
+# RENDER PRINCIPAL - CORREGIDO
 # ============================================================
 
 def render():
-    # CSS Global - Tooltips corregidos con position fixed, tamaños ajustados
+    # CSS Global - Tooltips corregidos y altura 340px
     st.markdown("""
     <style>
-    /* Tooltips corregidos - position fixed para no solaparse */
+    /* Tooltips corregidos - usando position absolute relativo al wrapper */
     .tooltip-wrapper {
         position: relative;
         display: inline-block;
@@ -765,23 +768,35 @@ def render():
     }
     .tooltip-content {
         display: none;
-        position: fixed;
-        width: 300px;
+        position: absolute;
+        width: 280px;
         background-color: #1e222d;
         color: #eee;
         text-align: left;
-        padding: 12px 14px;
-        border-radius: 8px;
+        padding: 10px 12px;
+        border-radius: 6px;
         z-index: 99999;
-        font-size: 12px;
+        font-size: 11px;
         border: 1px solid #444;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.8);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.7);
         line-height: 1.4;
+
+        /* Posicionamiento a la derecha del botón */
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-left: 8px;
+
+        /* Asegurar que no se corte */
+        white-space: normal;
+        word-wrap: break-word;
     }
+
+    /* Mostrar tooltip en hover */
     .tooltip-wrapper:hover .tooltip-content {
         display: block;
     }
-    
+
     /* Timestamp */
     .update-timestamp {
         text-align: center;
@@ -793,8 +808,8 @@ def render():
         background: #0c0e12;
         flex-shrink: 0;
     }
-    
-    /* Contenedores - altura reducida para evitar corte */
+
+    /* Contenedores - altura 340px */
     .module-container { 
         border: 1px solid #1a1e26; 
         border-radius: 10px; 
@@ -827,7 +842,7 @@ def render():
         overflow-y: auto;
         padding: 10px;
     }
-    
+
     /* Sector rotation específico */
     .sector-grid {
         display: grid;
@@ -862,7 +877,7 @@ def render():
         font-size: 11px;
         font-weight: bold;
     }
-    
+
     /* Fear & Greed legend */
     .fng-legend { 
         display: flex; 
@@ -883,7 +898,7 @@ def render():
         margin-bottom: 3px; 
         border-radius: 2px; 
     }
-    
+
     /* Sin separadores */
     .stColumns {
         gap: 0.5rem !important;
@@ -894,7 +909,7 @@ def render():
     .element-container {
         margin-bottom: 0.5rem !important;
     }
-    
+
     /* Selectbox compacto */
     div[data-testid="stSelectbox"] {
         margin-bottom: 0 !important;
@@ -906,6 +921,25 @@ def render():
     }
     div[data-testid="stSelectbox"] label {
         display: none !important;
+    }
+
+    /* Estilo para select nativo en sector rotation */
+    .sector-select {
+        background: #1a1e26;
+        color: white;
+        border: 1px solid #2a3f5f;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        outline: none;
+    }
+    .sector-select:hover {
+        border-color: #3b82f6;
+    }
+    .sector-select option {
+        background: #1a1e26;
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -927,14 +961,14 @@ def render():
                 <div><div style="font-weight:bold; color:white; font-size:12px;">{n}</div><div style="color:#555; font-size:9px;">INDEX</div></div>
                 <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:12px;">{idx_val:,.2f}</div><div style="color:{color}; font-size:10px; font-weight:bold;">{idx_change:+.2f}%</div></div>
             </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Market Indices</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Rendiment en temps real dels principals indexs borsaris dels EUA.</div>
+                    <div class="tooltip-content">Rendiment en temps real dels principals indexs borsaris dels EUA.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 12px;">{indices_html}</div>
@@ -958,14 +992,14 @@ def render():
                     <div style="color:white; font-size:10px; font-weight:bold;">{ev["val"]}</div>
                 </div>
             </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Calendari Economic</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Calendari economic en temps real (hora espanyola CET/CEST).</div>
+                    <div class="tooltip-content">Calendari economic en temps real (hora espanyola CET/CEST).</div>
                 </div>
             </div>
             <div class="module-content">{events_html}</div>
@@ -990,7 +1024,7 @@ def render():
             </div>'''
             reddit_html_items.append(item_html)
         reddit_content = "".join(reddit_html_items)
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
@@ -999,7 +1033,7 @@ def render():
                     <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">Top {len(tickers)}</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content" style="top: 50px; right: 20px;">Top 10 tickers mes mencionats a Reddit.</div>
+                        <div class="tooltip-content">Top 10 tickers mes mencionats a Reddit.</div>
                     </div>
                 </div>
             </div>
@@ -1007,6 +1041,9 @@ def render():
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
         ''', unsafe_allow_html=True)
+
+
+
 
     # FILA 2
     st.write("")
@@ -1024,14 +1061,14 @@ def render():
             elif val <= 55: label, col = "NEUTRAL", "#ff9800"
             elif val <= 75: label, col = "GREED", "#4caf50"
             else: label, col = "EXTREME GREED", "#00ffad"
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Fear & Greed Index</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Index CNN Fear & Greed – mesura el sentiment del mercat.</div>
+                    <div class="tooltip-content">Index CNN Fear & Greed – mesura el sentiment del mercat.</div>
                 </div>
             </div>
             <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
@@ -1052,26 +1089,19 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - INTEGRADO EN CONTENEDOR
+    # SECTOR ROTATION - CON SELECT INTEGRADO EN EL HEADER
     with c2:
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1 Day"
 
         tf_options = ["1 Day", "3 Days", "1 Week", "1 Month"]
         tf_map = {"1 Day": "1D", "3 Days": "3D", "1 Week": "1W", "1 Month": "1M"}
-        
-        # Header con selectbox integrado usando columns de Streamlit
-        header_col1, header_col2 = st.columns([2, 1])
-        with header_col1:
-            st.markdown('<div class="module-title" style="padding-top: 2px;">Sector Rotation</div>', unsafe_allow_html=True)
-        with header_col2:
-            selected_tf = st.selectbox("", tf_options, 
-                                      index=tf_options.index(st.session_state.sector_tf),
-                                      key="sector_select",
-                                      label_visibility="collapsed")
-            if selected_tf != st.session_state.sector_tf:
-                st.session_state.sector_tf = selected_tf
-                st.rerun()
+
+        # Crear opciones HTML para el select nativo
+        options_html = ""
+        for opt in tf_options:
+            selected = "selected" if opt == st.session_state.sector_tf else ""
+            options_html += f'<option value="{opt}" {selected}>{opt}</option>'
 
         tf_code = tf_map.get(st.session_state.sector_tf, "1D")
         sectors = get_sector_performance(tf_code)
@@ -1079,7 +1109,7 @@ def render():
         sectors_html = ""
         for sector in sectors:
             code, name, change = sector['code'], sector['name'], sector['change']
-            
+
             if change >= 2: 
                 bg_color, border_color, text_color = "#00ffad22", "#00ffad", "#00ffad"
             elif change >= 0.5: 
@@ -1100,40 +1130,71 @@ def render():
                 <div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>
             </div>'''
 
-        st.markdown(f'''
-        <div class="module-container" style="margin-top: -10px;">
-            <div class="module-header" style="justify-content: flex-end;">
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Rendiment dels sectors ({st.session_state.sector_tf}) via ETFs sectorials.</div>
+        # HTML con select nativo integrado en el header
+        header_html = f'''
+        <div class="module-container">
+            <div class="module-header" style="justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="module-title">Sector Rotation</div>
+                    <div class="tooltip-wrapper">
+                        <div class="tooltip-btn">?</div>
+                        <div class="tooltip-content">Rendiment dels sectors via ETFs sectorials.</div>
+                    </div>
                 </div>
+                <select class="sector-select" onchange="handleSectorChange(this.value)">
+                    {options_html}
+                </select>
             </div>
             <div class="module-content" style="padding: 8px;">
                 <div class="sector-grid">{sectors_html}</div>
             </div>
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
-        ''', unsafe_allow_html=True)
+        <script>
+            function handleSectorChange(value) {{
+                window.parent.postMessage({{type: 'streamlit:setComponentValue', value: value}}, '*');
+                localStorage.setItem('sector_tf', value);
+                window.location.reload();
+            }}
+            const savedValue = localStorage.getItem('sector_tf');
+            if (savedValue) {{
+                const select = document.querySelector('.sector-select');
+                if (select && select.value !== savedValue) {{
+                    select.value = savedValue;
+                }}
+            }}
+        </script>
+        '''
+        st.markdown(header_html, unsafe_allow_html=True)
+
+        # Selectbox oculto de Streamlit para manejar el estado
+        selected_tf = st.selectbox("", tf_options, 
+                                  index=tf_options.index(st.session_state.sector_tf),
+                                  key="sector_select_real",
+                                  label_visibility="collapsed")
+        if selected_tf != st.session_state.sector_tf:
+            st.session_state.sector_tf = selected_tf
+            st.rerun()
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
         val = crypto_fg['value']
-        
+
         if val <= 24: label, col = "EXTREME FEAR", "#d32f2f"
         elif val <= 44: label, col = "FEAR", "#f57c00"
         elif val <= 55: label, col = "NEUTRAL", "#ff9800"
         elif val <= 75: label, col = "GREED", "#4caf50"
         else: label, col = "EXTREME GREED", "#00ffad"
-        
+
         bar_width = val
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Crypto Fear & Greed</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Crypto Fear & Greed Index – mesura el sentiment del mercat de criptomonedes.</div>
+                    <div class="tooltip-content">Crypto Fear & Greed Index – mesura el sentiment del mercat de criptomonedes.</div>
                 </div>
             </div>
             <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
@@ -1154,6 +1215,9 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
+
+
+
     # FILA 3
     st.write("")
     f3c1, f3c2, f3c3 = st.columns(3)
@@ -1171,14 +1235,14 @@ def render():
             </div>
             <div style="text-align:right;"><span style="color:{impact_color}; font-size:8px; font-weight:bold;">● {item['impact']}</span></div>
             </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Earnings Calendar</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Earnings de mega-cap companies (>$100B).</div>
+                    <div class="tooltip-content">Earnings de mega-cap companies (>$100B).</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 10px;">{earn_html}</div>
@@ -1195,14 +1259,14 @@ def render():
             <div><div style="color:white; font-weight:bold; font-size:10px;">{item['ticker']}</div><div style="color:#555; font-size:8px;">{item['position']}</div></div>
             <div style="text-align:right;"><div style="color:{type_color}; font-weight:bold; font-size:9px;">{item['type']}</div><div style="color:#888; font-size:8px;">{item['amount']}</div></div>
             </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Insider Tracker</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Insider trading activity (> $50k) via SEC Form 4.</div>
+                    <div class="tooltip-content">Insider trading activity (> $50k) via SEC Form 4.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 10px;">{insider_html}</div>
@@ -1227,14 +1291,14 @@ def render():
             )
             news_items_html.append(news_item)
         news_content = "".join(news_items_html)
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Noticies d'Alt Impacte</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Noticies d'alt impacte via Finnhub API.</div>
+                    <div class="tooltip-content">Noticies d'alt impacte via Finnhub API.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 0; overflow-y: auto;">{news_content}</div>
@@ -1255,14 +1319,14 @@ def render():
             <div style="color:{vix_color}; font-size:0.9rem; font-weight:bold;">{vix[1]:+.2f}%</div>
             <div style="color:#555; font-size:0.75rem; margin-top:10px;">Volatility Index</div>
         </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">VIX Index</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Index de volatilitat CBOE (VIX).</div>
+                    <div class="tooltip-content">Index de volatilitat CBOE (VIX).</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 15px;">{vix_html}</div>
@@ -1280,14 +1344,14 @@ def render():
                 <div style="color:#888; font-size:0.75rem;">Total Assets</div>
             </div>
         </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">FED Liquidity Policy</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Politica de liquiditat de la FED via FRED.</div>
+                    <div class="tooltip-content">Politica de liquiditat de la FED via FRED.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 15px;">{fed_html}</div>
@@ -1304,20 +1368,23 @@ def render():
             <div style="color:{tnx_color}; font-size:0.9rem; font-weight:bold;">{tnx[1]:+.2f}%</div>
             <div style="color:#555; font-size:0.75rem; margin-top:10px;">US 10-Year Yield</div>
         </div>'''
-        
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">10Y Treasury Yield</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Rendiment del bo del Tresor dels EUA a 10 anys.</div>
+                    <div class="tooltip-content">Rendiment del bo del Tresor dels EUA a 10 anys.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 15px;">{tnx_html}</div>
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
         ''', unsafe_allow_html=True)
+
+
+
 
     # FILA 5 - Módulos HTML con altura controlada
     st.write("")
@@ -1347,7 +1414,7 @@ def render():
         .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
         .tooltip-wrapper {{ position: relative; display: inline-block; }}
         .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
-        .tooltip-content {{ display: none; position: fixed; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; }}
+        .tooltip-content {{ display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 8px; white-space: normal; word-wrap: break-word; }}
         .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
         .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
         .metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }}
@@ -1362,7 +1429,7 @@ def render():
                 <div class="title">Market Breadth</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 45px; right: 15px;">{tooltip_text}</div>
+                    <div class="tooltip-content">{tooltip_text}</div>
                 </div>
             </div>
             <div class="content">
@@ -1410,7 +1477,10 @@ def render():
         </body></html>'''
         components.html(breadth_html, height=340, scrolling=False)
 
-    # VIX Term Structure
+
+
+
+    # VIX Term Structure - CORREGIDO: tooltip arriba derecha, estado en medio
     with f5c2:
         vix_data = get_vix_term_structure()
         state_color = vix_data['state_color']
@@ -1422,17 +1492,18 @@ def render():
         data_points = vix_data['data']
         slope_pct = ((data_points[-1]['current'] - data_points[0]['current']) / data_points[0]['current']) * 100 if len(data_points) >= 2 else 0
 
+        # CORREGIDO: Header con título a la izquierda, estado en medio, tooltip a la derecha
         vix_html_full = f"""
 <!DOCTYPE html><html><head><style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
 .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 340px; display: flex; flex-direction: column; }}
-.header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
+.header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
 .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
-.state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; }}
-.tooltip-wrapper {{ position: relative; display: inline-block; margin-left: 8px; }}
+.state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
+.tooltip-wrapper {{ position: relative; display: inline-block; }}
 .tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
-.tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; }}
+.tooltip-content {{ display: none; position: absolute; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; right: 0; top: 100%; margin-top: 5px; white-space: normal; word-wrap: break-word; }}
 .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
 .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
 .spot-box {{ display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }}
@@ -1447,14 +1518,12 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 </style></head><body>
 <div class="container">
     <div class="header">
-        <div style="display: flex; align-items: center;">
-            <div class="title">VIX Term Structure</div>
-            <div class="tooltip-wrapper">
-                <div class="tooltip-btn">?</div>
-                <div class="tooltip-content" style="top: 45px; right: 15px;">{tooltip_text}</div>
-            </div>
-        </div>
+        <div class="title">VIX Term Structure</div>
         <span class="state-badge">{vix_data['state']}</span>
+        <div class="tooltip-wrapper">
+            <div class="tooltip-btn">?</div>
+            <div class="tooltip-content">{tooltip_text}</div>
+        </div>
     </div>
     <div class="content">
         <div class="spot-box">
@@ -1472,11 +1541,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             <div class="insight-desc">{vix_data['state_desc']}</div>
         </div>
     </div>
-    <div class="update-timestamp">Updated: """ + get_timestamp() + """</div>
+    <div class="update-timestamp">Updated: ''' + get_timestamp() + '''</div>
 </div>
 </body></html>
 """
         components.html(vix_html_full, height=340, scrolling=False)
+
+
+
 
     # Crypto Pulse
     with f5c3:
@@ -1503,7 +1575,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             )
             crypto_items_html.append(item_html)
         crypto_content = "".join(crypto_items_html)
-        
+
         crypto_html_full = '''<!DOCTYPE html><html><head><style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -1512,12 +1584,12 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         .tooltip-wrapper { position: relative; display: inline-block; }
         .tooltip-btn { width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }
-        .tooltip-content { display: none; position: fixed; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; }
+        .tooltip-content { display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 8px; white-space: normal; word-wrap: break-word; }
         .tooltip-wrapper:hover .tooltip-content { display: block; }
         .content { background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }
         .update-timestamp { text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }
         </style></head><body><div class="container">
-        <div class="header"><div class="title">Crypto Pulse</div><div class="tooltip-wrapper"><div class="tooltip-btn">?</div><div class="tooltip-content" style="top: 45px; right: 15px;">Preus reals de criptomonedes via Yahoo Finance.</div></div></div>
+        <div class="header"><div class="title">Crypto Pulse</div><div class="tooltip-wrapper"><div class="tooltip-btn">?</div><div class="tooltip-content">Preus reals de criptomonedes via Yahoo Finance.</div></div></div>
         <div class="content">''' + crypto_content + '''</div>
         <div class="update-timestamp">Updated: ''' + get_timestamp() + '''</div>
         </div></body></html>'''
@@ -1525,6 +1597,8 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
+
 
 
 

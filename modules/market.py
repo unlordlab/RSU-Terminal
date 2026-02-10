@@ -745,7 +745,7 @@ def render():
     # CSS Global - Tooltips corregidos y altura 340px
     st.markdown("""
     <style>
-    /* Tooltips corregidos - mostrando DEBAJO del botón para que se vea dentro del módulo */
+    /* Tooltips SOBREPUESTOS (overlay) - flotan sobre el contenido del módulo */
     .tooltip-wrapper {
         position: relative;
         display: inline-block;
@@ -768,39 +768,45 @@ def render():
     .tooltip-content {
         display: none;
         position: absolute;
-        width: 260px;
+        width: 280px;
         background-color: #1e222d;
         color: #eee;
         text-align: left;
-        padding: 10px 12px;
-        border-radius: 6px;
+        padding: 12px 14px;
+        border-radius: 8px;
         z-index: 99999;
-        font-size: 11px;
-        border: 1px solid #444;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.8);
-        line-height: 1.4;
+        font-size: 12px;
+        border: 1px solid #555;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+        line-height: 1.5;
 
-        /* Posicionamiento DEBAJO del botón (dentro del módulo) */
+        /* Posicionamiento SOBREPUESTO - flota sobre el contenido */
         left: 50%;
-        top: 100%;
+        top: 130%;
         transform: translateX(-50%);
-        margin-top: 8px;
 
-        /* Asegurar que no se corte */
+        /* Asegurar visibilidad */
         white-space: normal;
         word-wrap: break-word;
+        pointer-events: none;
     }
 
     /* Mostrar tooltip en hover */
     .tooltip-wrapper:hover .tooltip-content {
         display: block;
+        pointer-events: auto;
     }
 
-    /* Para tooltips en el borde derecho, mostrar a la izquierda */
-    .tooltip-wrapper.align-right .tooltip-content {
-        left: auto;
-        right: 0;
-        transform: none;
+    /* Flecha del tooltip */
+    .tooltip-content::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 6px;
+        border-style: solid;
+        border-color: transparent transparent #555 transparent;
     }
 
     /* Timestamp */
@@ -1410,8 +1416,8 @@ def render():
         .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
         .tooltip-wrapper {{ position: relative; display: inline-block; }}
         .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
-        .tooltip-content {{ display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.8); line-height: 1.4; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 8px; white-space: normal; word-wrap: break-word; }}
-        .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
+        .tooltip-content {{ display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; z-index: 99999; font-size: 12px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 130%; transform: translateX(-50%); white-space: normal; word-wrap: break-word; pointer-events: none; }}
+        .tooltip-wrapper:hover .tooltip-content {{ display: block; pointer-events: auto; }}
         .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
         .metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }}
         .metric-label {{ color: #888; font-size: 10px; }}
@@ -1499,8 +1505,8 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
 .tooltip-wrapper {{ position: relative; display: inline-block; }}
 .tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
-.tooltip-content {{ display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.8); line-height: 1.4; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 8px; white-space: normal; word-wrap: break-word; }}
-.tooltip-wrapper:hover .tooltip-content {{ display: block; }}
+.tooltip-content {{ display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; z-index: 99999; font-size: 12px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 130%; transform: translateX(-50%); white-space: normal; word-wrap: break-word; pointer-events: none; }}
+.tooltip-wrapper:hover .tooltip-content {{ display: block; pointer-events: auto; }}
 .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
 .spot-box {{ display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }}
 .spot-label {{ color: #888; font-size: 10px; font-weight: 500; }}
@@ -1584,8 +1590,8 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         .tooltip-wrapper { position: relative; display: inline-block; }
         .tooltip-btn { width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }
-        .tooltip-content { display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.8); line-height: 1.4; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 8px; white-space: normal; word-wrap: break-word; }
-        .tooltip-wrapper:hover .tooltip-content { display: block; }
+        .tooltip-content { display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; z-index: 99999; font-size: 12px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 130%; transform: translateX(-50%); white-space: normal; word-wrap: break-word; pointer-events: none; }
+        .tooltip-wrapper:hover .tooltip-content { display: block; pointer-events: auto; }
         .content { background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }
         .update-timestamp { text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }
         </style></head><body><div class="container">
@@ -1597,6 +1603,8 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
+
 
 
 

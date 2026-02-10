@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -991,83 +992,61 @@ def render():
         tf_options = ["1 Day", "3 Days", "1 Week", "1 Month"]
         tf_map = {"1 Day": "1D", "3 Days": "3D", "1 Week": "1W", "1 Month": "1M"}
 
-        # Crear opciones HTML
-        options_html = ""
-        for opt in tf_options:
-            selected = "selected" if opt == st.session_state.sector_tf else ""
-            options_html += f'<option value="{opt}" {selected}>{opt}</option>'
-
-        tf_code = tf_map.get(st.session_state.sector_tf, "1D")
+        current_tf = st.session_state.sector_tf
+        tf_code = tf_map.get(current_tf, "1D")
         sectors = get_sector_performance(tf_code)
 
+        # Generar HTML de sectores
         sectors_html = ""
         for sector in sectors:
             code, name, change = sector['code'], sector['name'], sector['change']
 
             if change >= 2: 
-                bg_color, border_color, text_color = "#00ffad22", "#00ffad", "#00ffad"
+                bg_color, text_color = "#00ffad22", "#00ffad"
             elif change >= 0.5: 
-                bg_color, border_color, text_color = "#00ffad18", "#00ffad", "#00ffad"
+                bg_color, text_color = "#00ffad18", "#00ffad"
             elif change >= 0: 
-                bg_color, border_color, text_color = "#00ffad10", "#00ffad88", "#00ffad"
+                bg_color, text_color = "#00ffad10", "#00ffad"
             elif change >= -0.5: 
-                bg_color, border_color, text_color = "#f2364510", "#f2364588", "#f23645"
+                bg_color, text_color = "#f2364510", "#f23645"
             elif change >= -2: 
-                bg_color, border_color, text_color = "#f2364518", "#f23645", "#f23645"
+                bg_color, text_color = "#f2364518", "#f23645"
             else: 
-                bg_color, border_color, text_color = "#f2364522", "#f23645", "#f23645"
+                bg_color, text_color = "#f2364522", "#f23645"
 
-            sectors_html += f'''
-            <div class="sector-item" style="background:{bg_color}; border-color:{border_color};">
-                <div class="sector-code">{code}</div>
-                <div class="sector-name">{name}</div>
-                <div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>
-            </div>'''
+            sectors_html += f'<div class="sector-item" style="background:{bg_color};"><div class="sector-code">{code}</div><div class="sector-name">{name}</div><div class="sector-change" style="color:{text_color};">{change:+.2f}%</div></div>'
 
-        # HTML con select nativo - USANDO st.query_params PARA FUNCIONALIDAD
-        header_html = f'''
+        # HTML del módulo
+        st.markdown(f'''
         <div class="module-container">
             <div class="module-header" style="justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div class="module-title">Sector Rotation</div>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Rendiment dels sectors via ETFs sectorials.</div>
+                        <div class="tooltip-content">Rendiment dels sectors ({current_tf}) via ETFs sectorials.</div>
                     </div>
                 </div>
-                <select class="sector-select" id="sector-select" onchange="updateSector(this.value)">
-                    {options_html}
-                </select>
             </div>
             <div class="module-content" style="padding: 8px;">
                 <div class="sector-grid">{sectors_html}</div>
             </div>
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
-        <script>
-            function updateSector(value) {{
-                // Enviar a Streamlit usando query params
-                const url = new URL(window.location);
-                url.searchParams.set('sector_tf', value);
-                window.history.pushState({{}}, '', url);
-                window.location.reload();
-            }}
-            // Restaurar selección
-            const urlParams = new URLSearchParams(window.location.search);
-            const savedValue = urlParams.get('sector_tf');
-            if (savedValue) {{
-                document.getElementById('sector-select').value = savedValue;
-            }}
-        </script>
-        '''
-        st.markdown(header_html, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
 
-        # Manejar el cambio desde query params
-        if 'sector_tf' in st.query_params:
-            new_tf = st.query_params['sector_tf']
-            if new_tf != st.session_state.sector_tf and new_tf in tf_options:
-                st.session_state.sector_tf = new_tf
-                st.rerun()
+        # Selectbox funcional de Streamlit - oculto visualmente pero funcional
+        selected_tf = st.selectbox(
+            "Timeframe", 
+            tf_options, 
+            index=tf_options.index(current_tf),
+            key="sector_tf_select",
+            label_visibility="collapsed"
+        )
+
+        if selected_tf != current_tf:
+            st.session_state.sector_tf = selected_tf
+            st.rerun()
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
@@ -1481,8 +1460,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
 
 
 

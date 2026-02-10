@@ -337,7 +337,7 @@ def render():
     """, unsafe_allow_html=True)
 
     st.markdown('<h1 style="margin-top:15px; text-align:center; margin-bottom:5px; font-size: 1.8rem;">🎯 CAN SLIM Scanner</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align:center; color:#888; font-size:12px; margin-bottom:20px;">Estrategia de Inversión de William O'Neil</p>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center; color:#888; font-size:12px; margin-bottom:20px;">Estrategia de Inversión de William O\'Neil</p>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
 
@@ -362,7 +362,7 @@ def render():
                 <div class="module-title">CAN SLIM Guide</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content" style="top: 50px; right: 20px;">Sistema de selección de acciones de William ONeil para encontrar growth stocks en mercados alcistas.</div>
+                    <div class="tooltip-content" style="top: 50px; right: 20px;">Sistema de selección de acciones de William O\'Neil para encontrar growth stocks en mercados alcistas.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 12px;">{canslim_explained}</div>

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -746,7 +745,7 @@ def render():
     # CSS Global - Tooltips corregidos y altura 340px
     st.markdown("""
     <style>
-    /* Tooltips corregidos - usando position absolute relativo al wrapper */
+    /* Tooltips corregidos - mostrando DEBAJO del botón para que se vea dentro del módulo */
     .tooltip-wrapper {
         position: relative;
         display: inline-block;
@@ -769,7 +768,7 @@ def render():
     .tooltip-content {
         display: none;
         position: absolute;
-        width: 280px;
+        width: 260px;
         background-color: #1e222d;
         color: #eee;
         text-align: left;
@@ -778,14 +777,14 @@ def render():
         z-index: 99999;
         font-size: 11px;
         border: 1px solid #444;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.8);
         line-height: 1.4;
 
-        /* Posicionamiento a la derecha del botón */
-        left: 100%;
-        top: 50%;
-        transform: translateY(-50%);
-        margin-left: 8px;
+        /* Posicionamiento DEBAJO del botón (dentro del módulo) */
+        left: 50%;
+        top: 100%;
+        transform: translateX(-50%);
+        margin-top: 8px;
 
         /* Asegurar que no se corte */
         white-space: normal;
@@ -795,6 +794,13 @@ def render():
     /* Mostrar tooltip en hover */
     .tooltip-wrapper:hover .tooltip-content {
         display: block;
+    }
+
+    /* Para tooltips en el borde derecho, mostrar a la izquierda */
+    .tooltip-wrapper.align-right .tooltip-content {
+        left: auto;
+        right: 0;
+        transform: none;
     }
 
     /* Timestamp */
@@ -1130,7 +1136,7 @@ def render():
                 <div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>
             </div>'''
 
-        # HTML con select nativo integrado en el header
+        # HTML con select nativo integrado en el header - SOLO HTML, sin st.selectbox
         header_html = f'''
         <div class="module-container">
             <div class="module-header" style="justify-content: space-between;">
@@ -1152,29 +1158,19 @@ def render():
         </div>
         <script>
             function handleSectorChange(value) {{
-                window.parent.postMessage({{type: 'streamlit:setComponentValue', value: value}}, '*');
-                localStorage.setItem('sector_tf', value);
+                // Guardar en sessionStorage y recargar
+                sessionStorage.setItem('sector_tf', value);
                 window.location.reload();
             }}
-            const savedValue = localStorage.getItem('sector_tf');
+            // Restaurar valor al cargar
+            const savedValue = sessionStorage.getItem('sector_tf');
             if (savedValue) {{
                 const select = document.querySelector('.sector-select');
-                if (select && select.value !== savedValue) {{
-                    select.value = savedValue;
-                }}
+                if (select) select.value = savedValue;
             }}
         </script>
         '''
         st.markdown(header_html, unsafe_allow_html=True)
-
-        # Selectbox oculto de Streamlit para manejar el estado
-        selected_tf = st.selectbox("", tf_options, 
-                                  index=tf_options.index(st.session_state.sector_tf),
-                                  key="sector_select_real",
-                                  label_visibility="collapsed")
-        if selected_tf != st.session_state.sector_tf:
-            st.session_state.sector_tf = selected_tf
-            st.rerun()
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
@@ -1414,7 +1410,7 @@ def render():
         .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
         .tooltip-wrapper {{ position: relative; display: inline-block; }}
         .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
-        .tooltip-content {{ display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 8px; white-space: normal; word-wrap: break-word; }}
+        .tooltip-content {{ display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.8); line-height: 1.4; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 8px; white-space: normal; word-wrap: break-word; }}
         .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
         .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
         .metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }}
@@ -1503,7 +1499,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
 .tooltip-wrapper {{ position: relative; display: inline-block; }}
 .tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
-.tooltip-content {{ display: none; position: absolute; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; right: 0; top: 100%; margin-top: 5px; white-space: normal; word-wrap: break-word; }}
+.tooltip-content {{ display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.8); line-height: 1.4; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 8px; white-space: normal; word-wrap: break-word; }}
 .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
 .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
 .spot-box {{ display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }}
@@ -1518,11 +1514,15 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 </style></head><body>
 <div class="container">
     <div class="header">
-        <div class="title">VIX Term Structure</div>
+        <div style="display: flex; align-items: center; flex: 1;">
+            <div class="title">VIX Term Structure</div>
+        </div>
         <span class="state-badge">{vix_data['state']}</span>
-        <div class="tooltip-wrapper">
-            <div class="tooltip-btn">?</div>
-            <div class="tooltip-content">{tooltip_text}</div>
+        <div style="display: flex; align-items: center; justify-content: flex-end; flex: 1;">
+            <div class="tooltip-wrapper">
+                <div class="tooltip-btn">?</div>
+                <div class="tooltip-content">{tooltip_text}</div>
+            </div>
         </div>
     </div>
     <div class="content">
@@ -1584,7 +1584,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         .tooltip-wrapper { position: relative; display: inline-block; }
         .tooltip-btn { width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }
-        .tooltip-content { display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); line-height: 1.4; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 8px; white-space: normal; word-wrap: break-word; }
+        .tooltip-content { display: none; position: absolute; width: 260px; background-color: #1e222d; color: #eee; text-align: left; padding: 10px 12px; border-radius: 6px; z-index: 99999; font-size: 11px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.8); line-height: 1.4; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 8px; white-space: normal; word-wrap: break-word; }
         .tooltip-wrapper:hover .tooltip-content { display: block; }
         .content { background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }
         .update-timestamp { text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }
@@ -1597,6 +1597,9 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
+
+
 
 
 

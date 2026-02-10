@@ -17,10 +17,6 @@ try:
 except ImportError:
     INVESTPY_AVAILABLE = False
 
-# ============================================================
-# FUNCIONES AUXILIARES
-# ============================================================
-
 def get_timestamp():
     return datetime.now().strftime('%H:%M:%S')
 
@@ -216,13 +212,6 @@ def generate_ticker_html():
     <style>@keyframes ticker-scroll {{ 0% {{ transform: translateX(0); }} 100% {{ transform: translateX(-50%); }} }}</style>
     """
 
-
-
-
-# ============================================================
-# FUNCIONES DE SECTORES
-# ============================================================
-
 @st.cache_data(ttl=300)
 def get_sector_performance(timeframe="1D"):
     try:
@@ -286,10 +275,6 @@ def get_fallback_sectors(timeframe="1D"):
     ]
     mult = {"1D": 1, "3D": 2.5, "1W": 4, "1M": 8}.get(timeframe, 1)
     return [{'code': c, 'name': n, 'name_es': n, 'change': v * mult} for c, n, v in base]
-
-# ============================================================
-# VIX TERM STRUCTURE
-# ============================================================
 
 @st.cache_data(ttl=300)
 def get_vix_term_structure():
@@ -464,13 +449,6 @@ def generate_vix_chart_html(vix_data):
     </div>
     """
 
-
-
-
-# ============================================================
-# CRYPTO FEAR & GREED
-# ============================================================
-
 @st.cache_data(ttl=300)
 def get_crypto_fear_greed():
     try:
@@ -505,10 +483,6 @@ def get_fallback_crypto_fear_greed():
         'timestamp': get_timestamp(),
         'source': 'alternative.me'
     }
-
-# ============================================================
-# EARNINGS CALENDAR
-# ============================================================
 
 @st.cache_data(ttl=600)
 def get_earnings_calendar():
@@ -568,10 +542,6 @@ def get_fallback_earnings():
         {"ticker": "GOOGL", "date": "Feb 06", "time": "Before Bell", "impact": "High", "market_cap": "$2.3T"},
         {"ticker": "META", "date": "Feb 07", "time": "After Market", "impact": "High", "market_cap": "$1.8T"},
     ]
-
-# ============================================================
-# INSIDER TRACKING
-# ============================================================
 
 @st.cache_data(ttl=600)
 def get_insider_trading():
@@ -635,10 +605,6 @@ def get_fallback_insider():
         {"ticker": "AMZN", "insider": "Andy Jassy", "position": "CEO", "type": "SELL", "amount": "$3.1M"},
     ]
 
-# ============================================================
-# MARKET BREADTH
-# ============================================================
-
 @st.cache_data(ttl=600)
 def get_market_breadth():
     try:
@@ -670,10 +636,6 @@ def get_fallback_market_breadth():
         'above_sma50': True, 'above_sma200': False, 'golden_cross': False,
         'rsi': 59.2, 'trend': 'BAJISTA', 'strength': 'DÉBIL'
     }
-
-# ============================================================
-# NOTICIAS
-# ============================================================
 
 def get_fallback_news():
     return [
@@ -735,19 +697,13 @@ def get_fed_liquidity():
         return "N/A", "#888", "Sense connexio", "N/A", "N/A"
 
 
-
-
-# ============================================================
-# RENDER PRINCIPAL - CORREGIDO
-# ============================================================
-
 def render():
-    # CSS Global - Tooltips corregidos y altura 340px
+    # CSS Global - Tooltips CENTRADOS en el módulo
     st.markdown("""
     <style>
-    /* Tooltips SOBREPUESTOS (overlay) - flotan sobre el contenido del módulo */
+    /* Tooltips CENTRADOS - flotan en el centro del módulo */
     .tooltip-wrapper {
-        position: relative;
+        position: static;
         display: inline-block;
     }
     .tooltip-btn {
@@ -763,50 +719,34 @@ def render():
         font-size: 14px;
         font-weight: bold;
         cursor: help;
-        position: relative;
     }
     .tooltip-content {
         display: none;
-        position: absolute;
-        width: 280px;
+        position: fixed;
+        width: 300px;
         background-color: #1e222d;
         color: #eee;
         text-align: left;
-        padding: 12px 14px;
-        border-radius: 8px;
+        padding: 15px;
+        border-radius: 10px;
         z-index: 99999;
         font-size: 12px;
-        border: 1px solid #555;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+        border: 2px solid #3b82f6;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.9);
         line-height: 1.5;
 
-        /* Posicionamiento SOBREPUESTO - flota sobre el contenido */
+        /* CENTRADO EN LA PANTALLA */
         left: 50%;
-        top: 130%;
-        transform: translateX(-50%);
+        top: 50%;
+        transform: translate(-50%, -50%);
 
-        /* Asegurar visibilidad */
         white-space: normal;
         word-wrap: break-word;
-        pointer-events: none;
     }
 
     /* Mostrar tooltip en hover */
     .tooltip-wrapper:hover .tooltip-content {
         display: block;
-        pointer-events: auto;
-    }
-
-    /* Flecha del tooltip */
-    .tooltip-content::before {
-        content: "";
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border-width: 6px;
-        border-style: solid;
-        border-color: transparent transparent #555 transparent;
     }
 
     /* Timestamp */
@@ -855,7 +795,7 @@ def render():
         padding: 10px;
     }
 
-    /* Sector rotation específico */
+    /* Sector rotation */
     .sector-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -872,70 +812,11 @@ def render():
         flex-direction: column;
         justify-content: center;
     }
-    .sector-code {
-        color: #666;
-        font-size: 9px;
-        font-weight: bold;
-        margin-bottom: 2px;
-    }
-    .sector-name {
-        color: white;
-        font-size: 10px;
-        font-weight: 600;
-        margin-bottom: 4px;
-        line-height: 1.2;
-    }
-    .sector-change {
-        font-size: 11px;
-        font-weight: bold;
-    }
+    .sector-code { color: #666; font-size: 9px; font-weight: bold; margin-bottom: 2px; }
+    .sector-name { color: white; font-size: 10px; font-weight: 600; margin-bottom: 4px; line-height: 1.2; }
+    .sector-change { font-size: 11px; font-weight: bold; }
 
-    /* Fear & Greed legend */
-    .fng-legend { 
-        display: flex; 
-        justify-content: space-between; 
-        width: 100%; 
-        margin-top: 10px; 
-        font-size: 0.6rem; 
-        color: #888; 
-        text-align: center; 
-    }
-    .fng-legend-item { 
-        flex: 1; 
-        padding: 0 2px; 
-    }
-    .fng-color-box { 
-        width: 100%; 
-        height: 4px; 
-        margin-bottom: 3px; 
-        border-radius: 2px; 
-    }
-
-    /* Sin separadores */
-    .stColumns {
-        gap: 0.5rem !important;
-    }
-    .stColumn {
-        padding: 0 0.25rem !important;
-    }
-    .element-container {
-        margin-bottom: 0.5rem !important;
-    }
-
-    /* Selectbox compacto */
-    div[data-testid="stSelectbox"] {
-        margin-bottom: 0 !important;
-    }
-    div[data-testid="stSelectbox"] > div > div {
-        background: #1a1e26 !important;
-        border-color: #2a3f5f !important;
-        min-height: 32px !important;
-    }
-    div[data-testid="stSelectbox"] label {
-        display: none !important;
-    }
-
-    /* Estilo para select nativo en sector rotation */
+    /* Select nativo */
     .sector-select {
         background: #1a1e26;
         color: white;
@@ -944,15 +825,18 @@ def render():
         padding: 4px 8px;
         font-size: 11px;
         cursor: pointer;
-        outline: none;
     }
-    .sector-select:hover {
-        border-color: #3b82f6;
-    }
-    .sector-select option {
-        background: #1a1e26;
-        color: white;
-    }
+    .sector-select:hover { border-color: #3b82f6; }
+
+    /* Fear & Greed */
+    .fng-legend { display: flex; justify-content: space-between; width: 100%; margin-top: 10px; font-size: 0.6rem; color: #888; text-align: center; }
+    .fng-legend-item { flex: 1; padding: 0 2px; }
+    .fng-color-box { width: 100%; height: 4px; margin-bottom: 3px; border-radius: 2px; }
+
+    /* Columnas */
+    .stColumns { gap: 0.5rem !important; }
+    .stColumn { padding: 0 0.25rem !important; }
+    .element-container { margin-bottom: 0.5rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1055,8 +939,6 @@ def render():
         ''', unsafe_allow_html=True)
 
 
-
-
     # FILA 2
     st.write("")
     c1, c2, c3 = st.columns(3)
@@ -1101,7 +983,7 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - CON SELECT INTEGRADO EN EL HEADER
+    # SECTOR ROTATION - CON SELECT FUNCIONAL
     with c2:
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1 Day"
@@ -1109,7 +991,7 @@ def render():
         tf_options = ["1 Day", "3 Days", "1 Week", "1 Month"]
         tf_map = {"1 Day": "1D", "3 Days": "3D", "1 Week": "1W", "1 Month": "1M"}
 
-        # Crear opciones HTML para el select nativo
+        # Crear opciones HTML
         options_html = ""
         for opt in tf_options:
             selected = "selected" if opt == st.session_state.sector_tf else ""
@@ -1142,7 +1024,7 @@ def render():
                 <div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>
             </div>'''
 
-        # HTML con select nativo integrado en el header - SOLO HTML, sin st.selectbox
+        # HTML con select nativo - USANDO st.query_params PARA FUNCIONALIDAD
         header_html = f'''
         <div class="module-container">
             <div class="module-header" style="justify-content: space-between;">
@@ -1153,7 +1035,7 @@ def render():
                         <div class="tooltip-content">Rendiment dels sectors via ETFs sectorials.</div>
                     </div>
                 </div>
-                <select class="sector-select" onchange="handleSectorChange(this.value)">
+                <select class="sector-select" id="sector-select" onchange="updateSector(this.value)">
                     {options_html}
                 </select>
             </div>
@@ -1163,20 +1045,29 @@ def render():
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
         <script>
-            function handleSectorChange(value) {{
-                // Guardar en sessionStorage y recargar
-                sessionStorage.setItem('sector_tf', value);
+            function updateSector(value) {{
+                // Enviar a Streamlit usando query params
+                const url = new URL(window.location);
+                url.searchParams.set('sector_tf', value);
+                window.history.pushState({{}}, '', url);
                 window.location.reload();
             }}
-            // Restaurar valor al cargar
-            const savedValue = sessionStorage.getItem('sector_tf');
+            // Restaurar selección
+            const urlParams = new URLSearchParams(window.location.search);
+            const savedValue = urlParams.get('sector_tf');
             if (savedValue) {{
-                const select = document.querySelector('.sector-select');
-                if (select) select.value = savedValue;
+                document.getElementById('sector-select').value = savedValue;
             }}
         </script>
         '''
         st.markdown(header_html, unsafe_allow_html=True)
+
+        # Manejar el cambio desde query params
+        if 'sector_tf' in st.query_params:
+            new_tf = st.query_params['sector_tf']
+            if new_tf != st.session_state.sector_tf and new_tf in tf_options:
+                st.session_state.sector_tf = new_tf
+                st.rerun()
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
@@ -1216,8 +1107,6 @@ def render():
             <div class="update-timestamp">Updated: {crypto_fg['timestamp']} • {crypto_fg['source']}</div>
         </div>
         ''', unsafe_allow_html=True)
-
-
 
 
     # FILA 3
@@ -1386,9 +1275,7 @@ def render():
         ''', unsafe_allow_html=True)
 
 
-
-
-    # FILA 5 - Módulos HTML con altura controlada
+    # FILA 5 - Módulos HTML
     st.write("")
     f5c1, f5c2, f5c3 = st.columns(3)
 
@@ -1407,6 +1294,7 @@ def render():
         else: rsi_color, rsi_text = "#ff9800", "NEUTRAL"
 
         tooltip_text = "Market Breadth: SMA50/200, Golden/Death Cross, RSI(14)"
+        timestamp_str = get_timestamp()
 
         breadth_html = f'''<!DOCTYPE html><html><head><style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -1414,10 +1302,10 @@ def render():
         .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 340px; display: flex; flex-direction: column; }}
         .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
         .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
-        .tooltip-wrapper {{ position: relative; display: inline-block; }}
+        .tooltip-wrapper {{ position: static; display: inline-block; }}
         .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
-        .tooltip-content {{ display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; z-index: 99999; font-size: 12px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 130%; transform: translateX(-50%); white-space: normal; word-wrap: break-word; pointer-events: none; }}
-        .tooltip-wrapper:hover .tooltip-content {{ display: block; pointer-events: auto; }}
+        .tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
+        .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
         .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
         .metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }}
         .metric-label {{ color: #888; font-size: 10px; }}
@@ -1474,27 +1362,23 @@ def render():
                     </div>
                 </div>
             </div>
-            <div class="update-timestamp">Updated: ''' + get_timestamp() + '''</div>
+            <div class="update-timestamp">Updated: {timestamp_str}</div>
         </div>
         </body></html>'''
         components.html(breadth_html, height=340, scrolling=False)
 
 
-
-
-    # VIX Term Structure - CORREGIDO: tooltip arriba derecha, estado en medio
+    # VIX Term Structure
     with f5c2:
         vix_data = get_vix_term_structure()
         state_color = vix_data['state_color']
         state_bg = f"{state_color}15"
         chart_html = generate_vix_chart_html(vix_data)
-
-        tooltip_text = (f"VIX Term Structure: {vix_data['state']}. {vix_data['explanation']}")
-
+        tooltip_text = f"VIX Term Structure: {vix_data['state']}. {vix_data['explanation']}"
         data_points = vix_data['data']
         slope_pct = ((data_points[-1]['current'] - data_points[0]['current']) / data_points[0]['current']) * 100 if len(data_points) >= 2 else 0
+        timestamp_str = get_timestamp()
 
-        # CORREGIDO: Header con título a la izquierda, estado en medio, tooltip a la derecha
         vix_html_full = f"""
 <!DOCTYPE html><html><head><style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -1503,10 +1387,10 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
 .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
-.tooltip-wrapper {{ position: relative; display: inline-block; }}
+.tooltip-wrapper {{ position: static; display: inline-block; }}
 .tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
-.tooltip-content {{ display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; z-index: 99999; font-size: 12px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 130%; transform: translateX(-50%); white-space: normal; word-wrap: break-word; pointer-events: none; }}
-.tooltip-wrapper:hover .tooltip-content {{ display: block; pointer-events: auto; }}
+.tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
+.tooltip-wrapper:hover .tooltip-content {{ display: block; }}
 .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
 .spot-box {{ display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }}
 .spot-label {{ color: #888; font-size: 10px; font-weight: 500; }}
@@ -1520,15 +1404,11 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 </style></head><body>
 <div class="container">
     <div class="header">
-        <div style="display: flex; align-items: center; flex: 1;">
-            <div class="title">VIX Term Structure</div>
-        </div>
+        <div class="title">VIX Term Structure</div>
         <span class="state-badge">{vix_data['state']}</span>
-        <div style="display: flex; align-items: center; justify-content: flex-end; flex: 1;">
-            <div class="tooltip-wrapper">
-                <div class="tooltip-btn">?</div>
-                <div class="tooltip-content">{tooltip_text}</div>
-            </div>
+        <div class="tooltip-wrapper">
+            <div class="tooltip-btn">?</div>
+            <div class="tooltip-content">{tooltip_text}</div>
         </div>
     </div>
     <div class="content">
@@ -1547,14 +1427,11 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             <div class="insight-desc">{vix_data['state_desc']}</div>
         </div>
     </div>
-    <div class="update-timestamp">Updated: ''' + get_timestamp() + '''</div>
+    <div class="update-timestamp">Updated: {timestamp_str}</div>
 </div>
 </body></html>
 """
         components.html(vix_html_full, height=340, scrolling=False)
-
-
-
 
     # Crypto Pulse
     with f5c3:
@@ -1581,6 +1458,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             )
             crypto_items_html.append(item_html)
         crypto_content = "".join(crypto_items_html)
+        timestamp_str = get_timestamp()
 
         crypto_html_full = '''<!DOCTYPE html><html><head><style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1588,22 +1466,21 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         .container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 340px; display: flex; flex-direction: column; }
         .header { background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
-        .tooltip-wrapper { position: relative; display: inline-block; }
+        .tooltip-wrapper { position: static; display: inline-block; }
         .tooltip-btn { width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }
-        .tooltip-content { display: none; position: absolute; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px 14px; border-radius: 8px; z-index: 99999; font-size: 12px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 130%; transform: translateX(-50%); white-space: normal; word-wrap: break-word; pointer-events: none; }
-        .tooltip-wrapper:hover .tooltip-content { display: block; pointer-events: auto; }
+        .tooltip-content { display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }
+        .tooltip-wrapper:hover .tooltip-content { display: block; }
         .content { background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }
         .update-timestamp { text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }
         </style></head><body><div class="container">
         <div class="header"><div class="title">Crypto Pulse</div><div class="tooltip-wrapper"><div class="tooltip-btn">?</div><div class="tooltip-content">Preus reals de criptomonedes via Yahoo Finance.</div></div></div>
         <div class="content">''' + crypto_content + '''</div>
-        <div class="update-timestamp">Updated: ''' + get_timestamp() + '''</div>
+        <div class="update-timestamp">Updated: ''' + timestamp_str + '''</div>
         </div></body></html>'''
         components.html(crypto_html_full, height=340, scrolling=False)
 
 if __name__ == "__main__":
     render()
-
 
 
 

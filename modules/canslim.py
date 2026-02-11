@@ -1,536 +1,634 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
-import pandas as pd
-import numpy as np
-import sqlite3
-from datetime import datetime, timedelta
-import plotly.graph_objects as go
-import json
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import warnings
-warnings.filterwarnings('ignore')
-
-# ============================================================
-# CONFIGURACIÓN Y BASE DE DATOS SQLITE
-# ============================================================
-
-DB_PATH = "can_slim_data.db"
-
-def init_database():
-    """Inicializa la base de datos SQLite"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS stocks (
-                ticker TEXT PRIMARY KEY,
-                name TEXT,
-                sector TEXT,
-                industry TEXT,
-                market_cap REAL,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS scores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ticker TEXT,
-                score INTEGER,
-                grades TEXT,
-                metrics TEXT,
-                scan_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS price_cache (
-                ticker TEXT,
-                date TEXT,
-                open REAL,
-                high REAL,
-                low REAL,
-                close REAL,
-                volume INTEGER,
-                updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (ticker, date)
-            )
-        """)
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Error inicializando DB: {e}")
-
-def get_db_connection():
-    return sqlite3.connect(DB_PATH)
-
-def cache_price_data(ticker, df):
-    try:
-        conn = get_db_connection()
-        df_reset = df.reset_index()
-        df_reset['ticker'] = ticker
-        df_reset.rename(columns={'Date': 'date', 'Open': 'open', 'High': 'high', 
-                                'Low': 'low', 'Close': 'close', 'Volume': 'volume'}, inplace=True)
-
-        for _, row in df_reset.iterrows():
-            try:
-                conn.execute("""
-                    INSERT OR REPLACE INTO price_cache (ticker, date, open, high, low, close, volume)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (ticker, str(row['date']), row['open'], row['high'], 
-                      row['low'], row['close'], row['volume']))
-            except:
-                continue
-
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Error cacheando {ticker}: {e}")
-
-def get_cached_prices(ticker, period="1y"):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT MAX(updated) FROM price_cache WHERE ticker = ?", (ticker,))
-        result = cursor.fetchone()
-
-        if result[0] is None:
-            conn.close()
-            return None
-
-        last_update = datetime.fromisoformat(result[0])
-        if datetime.now() - last_update > timedelta(hours=6):
-            conn.close()
-            return None
-
-        limit = 252 if period == "1y" else 63
-        cursor.execute("""
-            SELECT date, open, high, low, close, volume 
-            FROM price_cache 
-            WHERE ticker = ? 
-            ORDER BY date DESC 
-            LIMIT ?
-        """, (ticker, limit))
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        if not rows:
-            return None
-
-        df = pd.DataFrame(rows, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
-        df['Date'] = pd.to_datetime(df['Date'])
-        df.set_index('Date', inplace=True)
-        df.sort_index(inplace=True)
-        return df
-    except:
-        return None
-
-def save_score(ticker, data):
-    try:
-        conn = get_db_connection()
-        conn.execute("""
-            INSERT INTO scores (ticker, score, grades, metrics)
-            VALUES (?, ?, ?, ?)
-        """, (ticker, data['score'], json.dumps(data['grades']), json.dumps(data['metrics'])))
-        conn.commit()
-        conn.close()
-    except:
-        pass
-
-# ============================================================
-# CACHÉ EN MEMORIA SIMPLE
-# ============================================================
-
-class SimpleCache:
-    def __init__(self):
-        self._cache = {}
-        self._ttl = {}
-
-    def get(self, key):
-        if key in self._cache:
-            if datetime.now() < self._ttl.get(key, datetime.min):
-                return self._cache[key]
-            else:
-                del self._cache[key]
-                if key in self._ttl:
-                    del self._ttl[key]
-        return None
-
-    def set(self, key, value, ttl_seconds=3600):
-        self._cache[key] = value
-        self._ttl[key] = datetime.now() + timedelta(seconds=ttl_seconds)
-
-    def clear(self):
-        self._cache.clear()
-        self._ttl.clear()
-
-cache = SimpleCache()
-
-# ============================================================
-# OBTENER UNIVERSO DE STOCKS
-# ============================================================
-
-@st.cache_data(ttl=3600)
-def get_sp500_tickers():
-    try:
-        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        tables = pd.read_html(url)
-        df = tables[0]
-        return df['Symbol'].tolist()
-    except:
-        return ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'AVGO', 'WMT']
-
-@st.cache_data(ttl=3600)
-def get_nasdaq100_tickers():
-    try:
-        url = 'https://en.wikipedia.org/wiki/NASDAQ-100'
-        tables = pd.read_html(url)
-        for table in tables:
-            if 'Ticker' in table.columns:
-                return table['Ticker'].tolist()
-    except:
-        pass
-    return ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO', 'PEP', 'COST']
-
-@st.cache_data(ttl=3600)
-def get_russell2000_tickers():
-    return [
-        'PLTR', 'SNOW', 'CRWD', 'OKTA', 'ZS', 'NET', 'DDOG', 'S', 'PANW', 'FTNT',
-        'CYBR', 'QLYS', 'VRNS', 'TENB', 'SPLK', 'ESTC', 'FSLY', 'CFLT', 'SUMO', 'ZUO',
-        'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'FSR', 'GOEV', 'WKHS', 'BLNK', 'CHPT',
-        'ENPH', 'SEDG', 'RUN', 'NOVA', 'SPWR', 'BE', 'PLUG', 'FCEL', 'BLDP', 'GPRE',
-        'MRNA', 'BNTX', 'NVAX', 'CRSP', 'EDIT', 'NTLA', 'BEAM', 'BLUE', 'SRPT', 'VRTX',
-        'SQ', 'PYPL', 'SOFI', 'AFRM', 'UPST', 'HOOD', 'COIN', 'RBLX', 'U', 'DOCN',
-        'MSTR', 'RIOT', 'MARA', 'HUT', 'BITF', 'CLSK', 'ARBK', 'CORZ', 'BTBT', 'WULF',
-        'TTWO', 'EA', 'MTTR', 'VRM', 'W', 'CHWY', 'PTON', 'DASH',
-        'ARKK', 'ARKQ', 'ARKW', 'ARKG', 'ARKF', 'ICLN', 'QCLN', 'PBW', 'TAN', 'LIT'
-    ]
-
-def get_all_universe_tickers(include_sp500=True, include_nasdaq=True, include_russell=True):
-    all_tickers = []
-
-    if include_sp500:
-        sp500 = get_sp500_tickers()
-        all_tickers.extend(sp500)
-        print(f"S&P 500: {len(sp500)}")
-
-    if include_nasdaq:
-        nasdaq = get_nasdaq100_tickers()
-        nasdaq_unique = [t for t in nasdaq if t not in all_tickers]
-        all_tickers.extend(nasdaq_unique)
-        print(f"NASDAQ 100: {len(nasdaq_unique)} nuevos")
-
-    if include_russell:
-        russell = get_russell2000_tickers()
-        russell_unique = [t for t in russell if t not in all_tickers]
-        all_tickers.extend(russell_unique)
-        print(f"Russell/Growth: {len(russell_unique)} nuevos")
-
-    print(f"Total únicos: {len(all_tickers)}")
-    return all_tickers
-
-# ============================================================
-# CÁLCULO CAN SLIM (PARALELO CON THREADS)
-# ============================================================
-
-def calculate_can_slim_metrics(ticker):
-    try:
-        # Verificar cache
-        cache_key = f"metrics_{ticker}"
-        cached = cache.get(cache_key)
-        if cached:
-            return cached
-
-        # Intentar cache de precios
-        hist = get_cached_prices(ticker)
-
-        if hist is None:
-            stock = yf.Ticker(ticker)
-            info = stock.info
-            hist = stock.history(period="1y")
-            if not hist.empty:
-                cache_price_data(ticker, hist)
-        else:
-            stock = yf.Ticker(ticker)
-            info = stock.info
-
-        if hist.empty or len(hist) < 50:
-            return None
-
-        market_cap = info.get('marketCap', 0) / 1e9
-        current_price = hist['Close'].iloc[-1]
-
-        # Métricas
-        earnings_growth = info.get('earningsGrowth', 0) * 100 if info.get('earningsGrowth') else 0
-        revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
-        eps_growth = info.get('earningsQuarterlyGrowth', 0) * 100 if info.get('earningsQuarterlyGrowth') else 0
-
-        high_52w = hist['High'].max()
-        pct_from_high = ((current_price - high_52w) / high_52w) * 100
-        is_new_high = pct_from_high > -5
-
-        avg_volume_20 = hist['Volume'].rolling(20).mean().iloc[-1]
-        current_volume = hist['Volume'].iloc[-1]
-        volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 1
-
-        # RS Rating
-        try:
-            spy_data = cache.get('spy_history')
-            if spy_data is None:
-                spy = yf.Ticker("SPY").history(period="1y")
-                cache.set('spy_history', spy, ttl_seconds=1800)
-            else:
-                spy = spy_data
-
-            stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
-            spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
-            rs_rating = 50 + (stock_return - spy_return) * 2
-            rs_rating = max(0, min(100, rs_rating))
-        except:
-            rs_rating = 50
-
-        inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
-
-        # Market direction
-        market_bullish = cache.get('market_bullish')
-        if market_bullish is None:
-            try:
-                spy_current = yf.Ticker("SPY").history(period="5d")
-                sma20 = spy_current['Close'].rolling(20).mean().iloc[-1] if len(spy_current) >= 20 else spy_current['Close'].mean()
-                market_bullish = spy_current['Close'].iloc[-1] > sma20
-                cache.set('market_bullish', market_bullish, ttl_seconds=3600)
-            except:
-                market_bullish = True
-
-        # Scoring
-        score = 0
-        grades = {}
-
-        if earnings_growth > 50: score += 15; grades['C'] = 'A'
-        elif earnings_growth > 25: score += 12; grades['C'] = 'A'
-        elif earnings_growth > 15: score += 8; grades['C'] = 'B'
-        elif earnings_growth > 0: score += 4; grades['C'] = 'C'
-        else: grades['C'] = 'D'
-
-        if eps_growth > 50: score += 15; grades['A'] = 'A'
-        elif eps_growth > 25: score += 12; grades['A'] = 'A'
-        elif eps_growth > 15: score += 8; grades['A'] = 'B'
-        elif eps_growth > 0: score += 4; grades['A'] = 'C'
-        else: grades['A'] = 'D'
-
-        if pct_from_high > -3: score += 15; grades['N'] = 'A'
-        elif pct_from_high > -10: score += 12; grades['N'] = 'A'
-        elif pct_from_high > -20: score += 8; grades['N'] = 'B'
-        else: grades['N'] = 'C'
-
-        if volume_ratio > 2: score += 15; grades['S'] = 'A'
-        elif volume_ratio > 1.5: score += 12; grades['S'] = 'A'
-        elif volume_ratio > 1: score += 8; grades['S'] = 'B'
-        else: grades['S'] = 'C'
-
-        if rs_rating > 85: score += 15; grades['L'] = 'A'
-        elif rs_rating > 75: score += 12; grades['L'] = 'A'
-        elif rs_rating > 65: score += 8; grades['L'] = 'B'
-        else: grades['L'] = 'C'
-
-        if inst_ownership > 60: score += 10; grades['I'] = 'A'
-        elif inst_ownership > 40: score += 8; grades['I'] = 'B'
-        elif inst_ownership > 20: score += 4; grades['I'] = 'C'
-        else: grades['I'] = 'D'
-
-        if market_bullish: score += 15; grades['M'] = 'A'
-        else: score += 5; grades['M'] = 'C'
-
-        result = {
-            'ticker': ticker,
-            'name': info.get('shortName', ticker),
-            'sector': info.get('sector', 'N/A'),
-            'market_cap': market_cap,
-            'price': current_price,
-            'score': score,
-            'grades': grades,
-            'metrics': {
-                'earnings_growth': earnings_growth,
-                'revenue_growth': revenue_growth,
-                'eps_growth': eps_growth,
-                'pct_from_high': pct_from_high,
-                'volume_ratio': volume_ratio,
-                'rs_rating': rs_rating,
-                'inst_ownership': inst_ownership,
-                'is_new_high': is_new_high
-            }
-        }
-
-        cache.set(cache_key, result, ttl_seconds=1800)
-        save_score(ticker, result)
-        return result
-    except Exception as e:
-        return None
-
-def scan_with_threads(tickers, min_score, progress_bar, status_text, max_workers=10):
-    """Escaneo paralelo usando ThreadPoolExecutor (no requiere aiohttp)"""
-    results = []
-    completed = 0
-    total = len(tickers)
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_ticker = {executor.submit(calculate_can_slim_metrics, t): t for t in tickers}
-
-        for future in as_completed(future_to_ticker):
-            ticker = future_to_ticker[future]
-            completed += 1
-
-            try:
-                result = future.result()
-                if result and result['score'] >= min_score:
-                    results.append(result)
-            except:
-                pass
-
-            if progress_bar:
-                progress_bar.progress(completed / total)
-            if status_text:
-                status_text.text(f"Procesados {completed}/{total} ({completed/total*100:.1f}%) - Encontrados: {len(results)}")
-
-    return results
-
-# ============================================================
-# VISUALIZACIONES
-# ============================================================
-
-def create_score_gauge(score):
-    color = "#00ffad" if score >= 80 else "#ff9800" if score >= 60 else "#f23645"
-
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=score,
-        domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': "Score", 'font': {'size': 14, 'color': 'white'}},
-        number={'font': {'size': 36, 'color': color}},
-        gauge={
-            'axis': {'range': [0, 100]},
-            'bar': {'color': color},
-            'bgcolor': "#0c0e12",
-            'steps': [
-                {'range': [0, 60], 'color': "rgba(242, 54, 69, 0.2)"},
-                {'range': [60, 80], 'color': "rgba(255, 152, 0, 0.2)"},
-                {'range': [80, 100], 'color': "rgba(0, 255, 173, 0.2)"}
-            ]
-        }
-    ))
-
-    fig.update_layout(paper_bgcolor="#0c0e12", font={'color': "white"}, height=200, margin=dict(l=20, r=20, t=50, b=20))
-    return fig
-
-# ============================================================
-# RENDER PRINCIPAL
-# ============================================================
+from datetime import datetime
+from config import get_ia_model, obtener_prompt_github
 
 def render():
-    init_database()
-
+    # ═══════════════════════════════════════════════════════════
+    # CSS GLOBAL - Estética Market.py (Dark/Professional)
+    # ═══════════════════════════════════════════════════════════
     st.markdown("""
     <style>
-    .main { background: #0c0e12; color: white; }
-    .stApp { background: #0c0e12; }
-    h1, h2, h3 { color: white !important; }
-    .stProgress > div > div > div > div { background-color: #00ffad; }
-    .stButton>button { background-color: #00ffad; color: #0c0e12; font-weight: bold; }
+        /* Reset y base */
+        .main > div { padding-top: 0; }
+        
+        /* Contenedores estilo market.py */
+        .rsu-container {
+            border: 1px solid #1a1e26;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #11141a;
+            margin-bottom: 20px;
+        }
+        .rsu-header {
+            background: #0c0e12;
+            padding: 12px 15px;
+            border-bottom: 1px solid #1a1e26;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .rsu-title {
+            margin: 0;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .rsu-content {
+            padding: 15px;
+            background: #11141a;
+        }
+        
+        /* Cards de métricas estilo market.py */
+        .metric-card {
+            background: #0c0e12;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #1a1e26;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            border-color: #2a3f5f;
+            transform: translateY(-2px);
+        }
+        .metric-label {
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .metric-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: bold;
+            background: #2a3f5f;
+            color: #00ffad;
+            margin-bottom: 8px;
+        }
+        .metric-delta {
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .positive { color: #00ffad; }
+        .negative { color: #f23645; }
+        
+        /* Input estilizado */
+        .ticker-input-container {
+            background: #0c0e12;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #1a1e26;
+            margin-bottom: 20px;
+        }
+        div[data-testid="stTextInput"] input {
+            background: #11141a !important;
+            color: white !important;
+            border: 1px solid #2a3f5f !important;
+            border-radius: 8px !important;
+            font-size: 1.2rem !important;
+            font-weight: bold !important;
+            text-transform: uppercase !important;
+        }
+        div[data-testid="stTextInput"] input:focus {
+            border-color: #00ffad !important;
+            box-shadow: 0 0 0 2px rgba(0, 255, 173, 0.2) !important;
+        }
+        
+        /* TradingView container */
+        .chart-container {
+            border: 1px solid #1a1e26;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #0c0e12;
+        }
+        
+        /* Tabs estilo market.py */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0;
+            background: #0c0e12;
+            padding: 0 15px;
+            border-bottom: 1px solid #1a1e26;
+        }
+        .stTabs [data-baseweb="tab"] {
+            color: #888;
+            border: none;
+            padding: 12px 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stTabs [data-baseweb="tab"]:hover {
+            color: white;
+            background: #1a1e26;
+        }
+        .stTabs [aria-selected="true"] {
+            color: #00ffad !important;
+            border-bottom: 2px solid #00ffad !important;
+            background: #11141a !important;
+        }
+        
+        /* Sección RSU PROMPT - Hero Section */
+        .rsu-hero {
+            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
+            border: 2px solid #00ffad;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        .rsu-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00ffad, #00ffad44, #00ffad);
+            animation: shimmer 3s infinite;
+        }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .rsu-hero-title {
+            color: #00ffad;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .rsu-hero-subtitle {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .rsu-button {
+            background: linear-gradient(135deg, #00ffad 0%, #00cc8a 100%) !important;
+            color: #0c0e12 !important;
+            border: none !important;
+            padding: 15px 30px !important;
+            border-radius: 10px !important;
+            font-weight: bold !important;
+            font-size: 1.1rem !important;
+            width: 100% !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 4px 15px rgba(0, 255, 173, 0.3) !important;
+        }
+        .rsu-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 173, 0.4) !important;
+        }
+        .rsu-button:active {
+            transform: translateY(0);
+        }
+        
+        /* Contenedor de resultado del prompt */
+        .prompt-result {
+            background: #0c0e12;
+            border: 1px solid #2a3f5f;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            color: #eee;
+            line-height: 1.6;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #1a1e26;
+        }
+        .prompt-badge {
+            background: #00ffad22;
+            color: #00ffad;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        /* Tooltips */
+        .tooltip-container {
+            position: relative;
+            cursor: help;
+        }
+        .tooltip-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #1a1e26;
+            border: 2px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #aaa;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            width: 260px;
+            background-color: #1e222d;
+            color: #eee;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 999;
+            top: 35px;
+            right: -10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            border: 1px solid #444;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Grid de métricas */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        /* Loading animation */
+        .loading-pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ffad;
+            animation: pulse 1.5s infinite;
+            margin-right: 10px;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #00ffad;">🎯 CAN SLIM Scanner Pro v2.1</h1>
-        <p style="color: #888;">SQLite + ThreadPool | Sin dependencias externas</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.header("⚙️ Configuración")
-
-        st.subheader("Universos")
-        include_sp500 = st.checkbox("S&P 500", value=True)
-        include_nasdaq = st.checkbox("NASDAQ 100", value=True)
-        include_russell = st.checkbox("Russell 2000 + Growth", value=True)
-
-        st.subheader("Filtros")
-        min_score = st.slider("Score mínimo", 0, 100, 40)
-        max_results = st.number_input("Máx resultados", 5, 100, 20)
-
-        st.subheader("Rendimiento")
-        max_workers = st.slider("Workers paralelos", 1, 20, 10, 
-                               help="Más workers = más rápido pero más riesgo de rate limiting")
-        use_cache = st.checkbox("Usar Cache", value=True)
-
-        if st.button("🗑️ Limpiar Cache"):
-            cache.clear()
-            st.success("Cache limpiado")
-
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # ═══════════════════════════════════════════════════════════
+    # 1. HEADER Y INPUT DE TICKER
+    # ═══════════════════════════════════════════════════════════
+    st.markdown('<h1 style="text-align:center; margin-bottom:30px; color:white;">RSU Intelligence Terminal</h1>', unsafe_allow_html=True)
+    
+    # Input container estilizado
+    st.markdown('<div class="ticker-input-container">', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([2, 1, 2])
     with col1:
-        st.write(f"DB: {DB_PATH} | Última actualización: {datetime.now().strftime('%H:%M:%S')}")
+        st.write("")
+    with col2:
+        t_in = st.text_input("🔍 TICKER SYMBOL", "NVDA", key="ticker_input").upper()
     with col3:
-        scan_button = st.button("🔍 ESCANEAR UNIVERSO", use_container_width=True)
+        st.write("")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if not t_in:
+        st.warning("⚠️ Introdueix un ticker per començar l'anàlisi")
+        return
 
-    if scan_button:
-        tickers = get_all_universe_tickers(include_sp500, include_nasdaq, include_russell)
-        st.info(f"📊 Universo total: **{len(tickers)}** activos únicos")
+    # ═══════════════════════════════════════════════════════════
+    # 2. GRÀFIC TRADINGVIEW (Full Width)
+    # ═══════════════════════════════════════════════════════════
+    st.markdown('<div class="rsu-container">', unsafe_allow_html=True)
+    st.markdown('<div class="rsu-header"><p class="rsu-title">📈 Technical Chart - TradingView Pro</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    
+    tradingview_widget = f"""
+    <div style="height:600px;">
+      <div id="tradingview_chart" style="height:100%;"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "autosize": true,
+        "symbol": "{t_in}",
+        "interval": "D",
+        "timezone": "Etc/UTC",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": true,
+        "container_id": "tradingview_chart",
+        "studies": ["RSI@tv-basicstudies", "MASimple@tv-basicstudies"]
+      }});
+      </script>
+    </div>
+    """
+    components.html(tradingview_widget, height=600)
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        start_time = datetime.now()
-
-        candidates = scan_with_threads(tickers[:500], min_score, progress_bar, status_text, max_workers)  # Limitar a 500
-
-        elapsed = (datetime.now() - start_time).total_seconds()
-        progress_bar.empty()
-        status_text.empty()
-
-        candidates.sort(key=lambda x: x['score'], reverse=True)
-
-        st.success(f"✅ Escaneo completado en {elapsed:.1f}s | {len(candidates)} candidatos encontrados")
-
-        if candidates:
-            st.subheader("🏆 Top Candidatos")
-            cols = st.columns(min(3, len(candidates)))
-            for i, col in enumerate(cols):
-                if i < len(candidates):
-                    c = candidates[i]
-                    with col:
-                        st.plotly_chart(create_score_gauge(c['score']), use_container_width=True, key=f"gauge_{i}")
-                        st.markdown(f"**{c['ticker']}** - {c['name'][:20]}")
-                        grades_str = ''.join([f"{k}:{v}" for k, v in c['grades'].items()])
-                        st.markdown(f"Grades: {grades_str}")
-
-            st.subheader("📋 Resultados Detallados")
-            df_data = []
-            for c in candidates[:max_results]:
-                df_data.append({
-                    'Ticker': c['ticker'],
-                    'Nombre': c['name'][:25],
-                    'Score': c['score'],
-                    **c['grades'],
-                    'EPS Growth': f"{c['metrics']['earnings_growth']:.1f}%",
-                    'RS Rating': f"{c['metrics']['rs_rating']:.0f}",
-                    'Sector': c['sector']
-                })
-
-            df = pd.DataFrame(df_data)
-            st.dataframe(df, use_container_width=True, height=400)
-
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Descargar CSV", csv, "can_slim_results.csv", "text/csv")
+    # Obtenir dades de yfinance
+    try:
+        ticker_data = yf.Ticker(t_in)
+        info = ticker_data.info
+        hist = ticker_data.history(period="2d")
+        
+        # Calcular canvi diari
+        if len(hist) >= 2:
+            current_price = hist['Close'].iloc[-1]
+            prev_price = hist['Close'].iloc[-2]
+            price_change = ((current_price - prev_price) / prev_price) * 100
         else:
-            st.warning("No se encontraron candidatos. Intenta reducir el score mínimo.")
-            st.info("💡 Tip: Prueba con score mínimo = 30")
+            current_price = info.get('currentPrice', 0)
+            price_change = 0
+            
+    except Exception as e:
+        st.error(f"Error carregant dades de {t_in}: {e}")
+        return
 
-if __name__ == "__main__":
-    render()
+    # ═══════════════════════════════════════════════════════════
+    # 3. SECCIÓ ABOUT (Collapsible)
+    # ═══════════════════════════════════════════════════════════
+    with st.expander(f"📋 About {info.get('longName', t_in)}", expanded=True):
+        st.markdown(f"""
+        <div style="background:#0c0e12; padding:20px; border-radius:10px; border:1px solid #1a1e26;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div>
+                    <h3 style="color:#00ffad; margin:0;">{info.get('longName', t_in)}</h3>
+                    <p style="color:#888; margin:5px 0; font-size:0.9rem;">{info.get('sector', 'Sector N/A')} | {info.get('industry', 'Industry N/A')}</p>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:2rem; font-weight:bold; color:white;">${current_price:,.2f}</div>
+                    <div style="color:{'#00ffad' if price_change >= 0 else '#f23645'}; font-weight:bold;">
+                        {'▲' if price_change >= 0 else '▼'} {price_change:+.2f}%
+                    </div>
+                </div>
+            </div>
+            <p style="color:#ccc; line-height:1.6;">{info.get('longBusinessSummary', 'Descripció no disponible.')}</p>
+            <div style="display:flex; gap:20px; margin-top:15px; font-size:0.85rem; color:#666;">
+                <span>🏢 {info.get('fullTimeEmployees', 'N/A')} empleats</span>
+                <span>📍 {info.get('country', 'N/A')}</span>
+                <span>💱 {info.get('currency', 'USD')}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════
+    # 4. PESTANYES D'ANÀLISI (Estilo market.py)
+    # ═══════════════════════════════════════════════════════════
+    tabs = st.tabs(["📊 Overview", "💰 Earnings", "📅 Seasonality", "👤 Insider", "📈 Financials", "⚖️ Valuation"])
+    
+    # TAB 1: OVERVIEW (Métricas clave en grid)
+    with tabs[0]:
+        st.markdown('<div class="metrics-grid">', unsafe_allow_html=True)
+        
+        metrics = [
+            {"label": "Market Cap", "val": info.get('marketCap'), "format": "B", "tag": "Size"},
+            {"label": "P/E Ratio", "val": info.get('trailingPE'), "format": "x", "tag": "Valuation"},
+            {"label": "Forward P/E", "val": info.get('forwardPE'), "format": "x", "tag": "Future"},
+            {"label": "PEG Ratio", "val": info.get('pegRatio'), "format": "x", "tag": "Growth"},
+            {"label": "Price/Sales", "val": info.get('priceToSalesTrailing12Months'), "format": "x", "tag": "Sales"},
+            {"label": "EV/EBITDA", "val": info.get('enterpriseToEbitda'), "format": "x", "tag": "Enterprise"},
+            {"label": "Profit Margin", "val": info.get('profitMargins'), "format": "%", "tag": "Efficiency"},
+            {"label": "Revenue Growth", "val": info.get('revenueGrowth'), "format": "%", "tag": "YoY"},
+        ]
+        
+        cols = st.columns(4)
+        for i, m in enumerate(metrics):
+            with cols[i % 4]:
+                val = m['val']
+                if val is None or val == 0:
+                    display_val = "N/A"
+                elif m['format'] == "B":
+                    display_val = f"${val/1e9:.2f}B"
+                elif m['format'] == "%":
+                    display_val = f"{val*100:.2f}%"
+                else:
+                    display_val = f"{val:.2f}{m['format']}"
+                
+                st.markdown(f"""
+                <div class="metric-card">
+                    <span class="metric-tag">{m['tag']}</span>
+                    <div class="metric-label">{m['label']}</div>
+                    <div class="metric-value">{display_val}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Additional stats row
+        st.write("")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            beta = info.get('beta', 'N/A')
+            st.metric("Beta", f"{beta:.2f}" if isinstance(beta, (int, float)) else beta)
+        with c2:
+            div_yield = info.get('dividendYield', 0)
+            st.metric("Div Yield", f"{div_yield*100:.2f}%" if div_yield else "N/A")
+        with c3:
+            st.metric("52W High", f"${info.get('fiftyTwoWeekHigh', 0):,.2f}")
+        with c4:
+            st.metric("52W Low", f"${info.get('fiftyTwoWeekLow', 0):,.2f}")
+
+    # TAB 2: EARNINGS
+    with tabs[1]:
+        st.markdown('<div class="rsu-container"><div class="rsu-content">', unsafe_allow_html=True)
+        try:
+            earnings = ticker_data.earnings
+            if earnings is not None and not earnings.empty:
+                st.dataframe(earnings, use_container_width=True)
+            else:
+                st.info("📭 Dades d'earnings no disponibles")
+        except:
+            st.info("📭 Dades d'earnings no disponibles")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    # TAB 3: SEASONALITY (Placeholder para futuro desarrollo)
+    with tabs[2]:
+        st.markdown('<div class="rsu-container"><div class="rsu-content">', unsafe_allow_html=True)
+        st.info("🗓️ Anàlisi de seasonality en desenvolupament...")
+        # Aquí puedes integrar datos históricos de seasonality
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    # TAB 4: INSIDER
+    with tabs[3]:
+        st.markdown('<div class="rsu-container"><div class="rsu-content">', unsafe_allow_html=True)
+        try:
+            insider = ticker_data.insider_transactions
+            if insider is not None and not insider.empty:
+                st.dataframe(insider.head(10), use_container_width=True)
+            else:
+                st.info("📭 Dades d'insider trading no disponibles")
+        except:
+            st.info("📭 Dades d'insider trading no disponibles")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    # TAB 5: FINANCIALS
+    with tabs[4]:
+        st.markdown('<div class="rsu-container"><div class="rsu-content">', unsafe_allow_html=True)
+        try:
+            financials = ticker_data.financials
+            if financials is not None and not financials.empty:
+                st.dataframe(financials, use_container_width=True)
+            else:
+                st.info("📭 Estats financers no disponibles")
+        except Exception as e:
+            st.info(f"📭 Estats financers no disponibles")
+        st.markdown('</div></div>', unsafe_allow_html=True)
+        
+    # TAB 6: VALUATION (Detallado)
+    with tabs[5]:
+        st.markdown('<div class="metrics-grid">', unsafe_allow_html=True)
+        
+        valuation_metrics = [
+            ("Enterprise Value", info.get('enterpriseValue'), "B"),
+            ("EV/Revenue", info.get('enterpriseToRevenue'), "x"),
+            ("EV/EBITDA", info.get('enterpriseToEbitda'), "x"),
+            ("Book Value", info.get('bookValue'), "$"),
+            ("Price/Book", info.get('priceToBook'), "x"),
+            ("Trailing EPS", info.get('trailingEps'), "$"),
+            ("Forward EPS", info.get('forwardEps'), "$"),
+        ]
+        
+        cols = st.columns(4)
+        for i, (label, val, fmt) in enumerate(valuation_metrics):
+            with cols[i % 4]:
+                if val is None:
+                    display = "N/A"
+                elif fmt == "B":
+                    display = f"${val/1e9:.2f}B"
+                elif fmt == "$":
+                    display = f"${val:.2f}"
+                else:
+                    display = f"{val:.2f}{fmt}"
+                
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">{label}</div>
+                    <div class="metric-value">{display}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. SECCIÓ HERO: RSU PROMPT GENERATOR (Énfasis máximo)
+    # ═══════════════════════════════════════════════════════════
+    st.write("")
+    st.markdown("""
+    <div class="rsu-hero">
+        <div class="rsu-hero-title">
+            🤖 RSU Artificial Intelligence
+            <span style="font-size:0.8rem; background:#00ffad22; padding:4px 10px; border-radius:20px;">v2.0</span>
+        </div>
+        <div class="rsu-hero-subtitle">
+            Genera un informe complet d'anàlisi fonamental i tècnic utilitzant el prompt personalitzat RSU. 
+            L'IA analitzarà {ticker} seguint la metodologia proprietària RSU.
+        </div>
+    """.replace("{ticker}", t_in), unsafe_allow_html=True)
+    
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn2:
+        generate_clicked = st.button(
+            "✨ GENERAR INFORME RSU COMPLET", 
+            key="generate_rsu",
+            use_container_width=True
+        )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. LÓGICA DE GENERACIÓN DEL INFORME
+    # ═══════════════════════════════════════════════════════════
+    if generate_clicked:
+        model_ia, modelo_nombre, error_ia = get_ia_model()
+        
+        if error_ia:
+            st.error(f"❌ Error de connexió amb l'IA: {error_ia}")
+        else:
+            with st.spinner(""):
+                # Animación de carga personalizada
+                st.markdown("""
+                <div style="text-align:center; padding:40px;">
+                    <div class="loading-pulse"></div>
+                    <div class="loading-pulse" style="animation-delay:0.2s"></div>
+                    <div class="loading-pulse" style="animation-delay:0.4s"></div>
+                    <p style="color:#888; margin-top:20px; font-size:1.1rem;">
+                        L'RSU AI està analitzant {ticker}...<br>
+                        <span style="font-size:0.9rem; color:#555;">Processant mètriques, tendències i fondària de mercat</span>
+                    </p>
+                </div>
+                """.replace("{ticker}", t_in), unsafe_allow_html=True)
+                
+                try:
+                    template = obtener_prompt_github()
+                    prompt_final = f"""
+                    Analitza l'empresa amb ticker {t_in} seguint aquesta metodologia RSU:
+                    
+                    {template.replace('[TICKER]', t_in)}
+                    
+                    Dades actuals del ticker:
+                    - Preu actual: ${current_price:.2f}
+                    - Canvi diari: {price_change:+.2f}%
+                    - Market Cap: ${info.get('marketCap', 0)/1e9:.2f}B
+                    - P/E: {info.get('trailingPE', 'N/A')}
+                    - Sector: {info.get('sector', 'N/A')}
+                    """
+                    
+                    res = model_ia.generate_content(prompt_final)
+                    
+                    # Mostrar resultado con formato premium
+                    st.markdown(f"""
+                    <div class="prompt-result">
+                        <div class="prompt-header">
+                            <div>
+                                <span style="color:white; font-weight:bold; font-size:1.2rem;">📋 Informe RSU: {t_in}</span>
+                                <span class="prompt-badge">{modelo_nombre}</span>
+                            </div>
+                            <div style="color:#666; font-size:0.85rem;">
+                                {datetime.now().strftime('%d/%m/%Y %H:%M')}
+                            </div>
+                        </div>
+                        <div style="color:#ddd; line-height:1.8;">
+                            {res.text}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Botones de acción post-generación
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.download_button(
+                            "📥 Descarregar TXT",
+                            res.text,
+                            file_name=f"RSU_Report_{t_in}_{datetime.now().strftime('%Y%m%d')}.txt",
+                            use_container_width=True
+                        )
+                    with c2:
+                        if st.button("🔄 Regenerar", use_container_width=True):
+                            st.rerun()
+                    with c3:
+                        st.button("📤 Compartir", disabled=True, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error en la generació de l'informe: {str(e)}")
+                    st.info("💡 Consell: Verifica que el prompt de GitHub sigui accessible i el model d'IA estigui configurat correctament.")

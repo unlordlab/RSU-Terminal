@@ -42,7 +42,7 @@ def generate_mock_options_flow():
             strike_offset = np.random.uniform(-0.2, 0.5)
             strike = round(base_price * (1 + strike_offset), 2)
             days_to_exp = np.random.choice([2, 7, 14, 21, 30, 60, 90, 180, 365])
-            exp_date = base_date + timedelta(days=days_to_exp)
+            exp_date = base_date + timedelta(days=int(days_to_exp))
             rand = np.random.random()
             if rand < 0.4:
                 premium = np.random.uniform(50, 300) * 1000

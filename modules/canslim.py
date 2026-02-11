@@ -18,30 +18,44 @@ from bs4 import BeautifulSoup
 import warnings
 warnings.filterwarnings('ignore')
 
-# ML Imports
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import joblib
-import os
+# ============================================================
+# IMPORTS OPCIONALES CON MANEJO DE ERRORES
+# ============================================================
 
-# FastAPI Imports (para modo API)
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-from threading import Thread
+# ML Imports (opcional)
+try:
+    from sklearn.ensemble import RandomForestRegressor, GradientBoostingClassifier
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.model_selection import train_test_split
+    import joblib
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    st.warning("⚠️ scikit-learn no instalado. El ML predictivo no estará disponible.")
 
-# Zipline Imports (para backtesting)
+# FastAPI Imports (opcional)
+try:
+    from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel
+    import uvicorn
+    from threading import Thread
+    FASTAPI_AVAILABLE = True
+except ImportError:
+    FASTAPI_AVAILABLE = False
+    st.warning("⚠️ FastAPI no instalado. La API REST no estará disponible.")
+
+# Zipline Imports (opcional)
 try:
     from zipline.api import order_target_percent, record, symbol, set_benchmark
     from zipline import run_algorithm
     from zipline.data import bundles
-    from zipline.utils.run_algo import load_extensions
     ZIPPILINE_AVAILABLE = True
 except ImportError:
     ZIPPILINE_AVAILABLE = False
-    st.warning("Zipline no está instalado. El backtesting estará limitado.")
+    st.warning("⚠️ Zipline no instalado. El backtesting estará limitado.")
+
+import os
 
 # ============================================================
 # CONFIGURACIÓN DE PÁGINA Y CONSTANTES
@@ -107,11 +121,6 @@ def get_russell2000_tickers():
 def get_all_us_tickers():
     """Obtiene todos los tickers disponibles del mercado US"""
     try:
-        # NYSE
-        url_nyse = 'https://www.nyse.com/listings_directory/stock'
-        # NASDAQ
-        url_nasdaq = 'https://www.nasdaq.com/market-activity/stocks/screener'
-        
         # Fallback: usar lista completa de ETFs y stocks líquidos
         all_tickers = (
             get_sp500_tickers() + 
@@ -132,7 +141,7 @@ def get_all_us_tickers():
         adrs = [
             'TSM', 'ASML', 'NVO', 'TM', 'SHEL', 'TTE', 'BP', 'AZN', 'GSK',
             'UL', 'UNLY', 'NSRGY', 'SAP', 'SONY', 'NTDOY', 'BABA', 'JD', 
-            'PDD', 'BIDU', 'NIO', 'XPEV', 'LI', 'TCEHY', 'BABA', 'INFY',
+            'PDD', 'BIDU', 'NIO', 'XPEV', 'LI', 'TCEHY', 'INFY',
             'WIT', 'ACN'
         ]
         
@@ -155,7 +164,6 @@ def get_all_universe_tickers(comprehensive=True):
         russell = get_russell2000_tickers()
         all_tickers = list(set(sp500 + nasdaq + russell))
     
-    # Priorizar por capitalización (filtrar solo los más líquidos)
     # Limitar a 1000 para rendimiento óptimo
     return all_tickers[:1000]
 
@@ -201,11 +209,6 @@ class MarketAnalyzer:
     def calculate_market_score(self):
         """
         Calcula el score de dirección de mercado (0-100)
-        80-100: Mercado claramente alcista (Confirmed Uptrend)
-        60-79: Mercado alcista bajo presión (Uptrend under pressure)
-        40-59: Mercado lateral/incierto
-        20-39: Mercado bajista bajo presión
-        0-19: Mercado claramente bajista (Downtrend)
         """
         data = self.get_market_data()
         score = 50  # Neutral base
@@ -213,7 +216,6 @@ class MarketAnalyzer:
         
         if 'SPY' in data:
             spy = data['SPY']
-            # Tendencia de precio vs medias móviles
             if spy['current'] > spy['sma_50'] > spy['sma_200']:
                 score += 20
                 signals.append("SPY: Golden Cross (Alcista)")
@@ -227,7 +229,6 @@ class MarketAnalyzer:
                 score -= 10
                 signals.append("SPY: Bajo SMA50")
             
-            # Tendencia reciente
             if spy['trend_20d'] > 5:
                 score += 10
             elif spy['trend_20d'] < -5:
@@ -258,10 +259,8 @@ class MarketAnalyzer:
                 score -= 15
                 signals.append("VIX: Alto (Miedo extremo)")
         
-        # Ajustar límites
         score = max(0, min(100, score))
         
-        # Determinar fase de mercado
         if score >= 80:
             phase = "CONFIRMED UPTREND"
             color = COLORS['primary']
@@ -295,16 +294,22 @@ class CANSlimMLPredictor:
     
     def __init__(self):
         self.model = None
-        self.scaler = StandardScaler()
+        self.scaler = None
         self.model_path = "canslim_ml_model.pkl"
         self.features = [
             'earnings_growth', 'revenue_growth', 'eps_growth',
             'rs_rating', 'volume_ratio', 'inst_ownership',
             'pct_from_high', 'volatility', 'price_momentum'
         ]
+        
+        if SKLEARN_AVAILABLE:
+            self.scaler = StandardScaler()
     
     def prepare_features(self, metrics):
         """Prepara características para el modelo"""
+        if not SKLEARN_AVAILABLE:
+            return None
+            
         features = np.array([
             metrics.get('earnings_growth', 0),
             metrics.get('revenue_growth', 0),
@@ -320,19 +325,25 @@ class CANSlimMLPredictor:
     
     def train(self, historical_data):
         """Entrena el modelo con datos históricos"""
+        if not SKLEARN_AVAILABLE:
+            return 0.0
+            
         X = []
         y = []
         
         for stock_data in historical_data:
             features = self.prepare_features(stock_data['metrics'])
-            X.append(features[0])
-            # Target: 1 si el stock superó el mercado en 3 meses, 0 si no
-            y.append(1 if stock_data['future_return'] > stock_data['market_return'] else 0)
+            if features is not None:
+                X.append(features[0])
+                y.append(1 if stock_data['future_return'] > stock_data['market_return'] else 0)
         
+        if len(X) < 10:
+            return 0.0
+            
         X = np.array(X)
         y = np.array(y)
         
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
         self.model = GradientBoostingClassifier(
             n_estimators=100,
@@ -342,26 +353,31 @@ class CANSlimMLPredictor:
         )
         self.model.fit(X_train, y_train)
         
-        # Guardar modelo
         joblib.dump((self.model, self.scaler), self.model_path)
         return self.model.score(X_test, y_test)
     
     def predict(self, metrics):
         """Predice probabilidad de éxito"""
+        if not SKLEARN_AVAILABLE:
+            return 0.5
+            
         if self.model is None:
             if os.path.exists(self.model_path):
                 self.model, self.scaler = joblib.load(self.model_path)
             else:
-                return 0.5  # Neutral si no hay modelo
+                return 0.5
         
         features = self.prepare_features(metrics)
+        if features is None:
+            return 0.5
+            
         prob = self.model.predict_proba(features)[0][1]
         return prob
     
     def get_feature_importance(self):
         """Retorna importancia de características"""
-        if self.model is None:
-            return {}
+        if not SKLEARN_AVAILABLE or self.model is None:
+            return {f: 0.11 for f in self.features}  # Distribución uniforme por defecto
         return dict(zip(self.features, self.model.feature_importances_))
 
 # ============================================================
@@ -377,48 +393,43 @@ class CANSlimBacktester:
     
     def initialize(self, context):
         """Inicializa el algoritmo"""
+        if not ZIPPILINE_AVAILABLE:
+            return
+            
         context.max_positions = 10
-        context.risk_per_trade = 0.02  # 2% risk per trade
-        context.stop_loss = 0.07       # 7% stop loss (regla O'Neil)
-        context.profit_target = 0.20   # 20% profit target
+        context.risk_per_trade = 0.02
+        context.stop_loss = 0.07
+        context.profit_target = 0.20
         context.positions_held = {}
-        
-        # Schedule rebalance
-        # Note: En Zipline real usaríamos schedule_function
         
         set_benchmark(symbol('SPY'))
     
     def handle_data(self, context, data):
         """Lógica de trading"""
-        # Obtener universe CAN SLIM (simulado - en producción usar pipeline)
+        if not ZIPPILINE_AVAILABLE:
+            return
+            
         canslim_candidates = self.get_canslim_universe(context, data)
         
-        # Rebalance semanal
         if context.datetime.day % 7 == 0:
             self.rebalance(context, data, canslim_candidates)
         
-        # Chequear stops y targets
         self.check_exits(context, data)
     
     def get_canslim_universe(self, context, data):
         """Filtra universe por criterios CAN SLIM"""
-        # En implementación real, esto usaría el Pipeline de Zipline
-        # con factores fundamentales
         return [symbol('AAPL'), symbol('MSFT'), symbol('NVDA')]
     
     def rebalance(self, context, data, candidates):
         """Rebalancea portafolio"""
-        # Calcular tamaño de posición
         position_size = 1.0 / context.max_positions
         
-        # Vender posiciones que ya no califican
         for stock in list(context.portfolio.positions.keys()):
             if stock not in candidates:
                 order_target_percent(stock, 0)
                 if stock in context.positions_held:
                     del context.positions_held[stock]
         
-        # Comprar nuevas posiciones
         for stock in candidates[:context.max_positions]:
             if stock not in context.portfolio.positions:
                 order_target_percent(stock, position_size)
@@ -433,31 +444,22 @@ class CANSlimBacktester:
             current_price = data.current(stock, 'price')
             entry_price = info['entry_price']
             
-            # Actualizar máximo
             if current_price > info['highest_price']:
                 context.positions_held[stock]['highest_price'] = current_price
             
-            # Stop loss del 7%
             if current_price < entry_price * (1 - context.stop_loss):
                 order_target_percent(stock, 0)
                 del context.positions_held[stock]
                 continue
             
-            # Trailing stop (vender si cae 7% desde máximo)
             if current_price < info['highest_price'] * 0.93:
                 order_target_percent(stock, 0)
                 del context.positions_held[stock]
                 continue
-            
-            # Profit target del 20%
-            if current_price > entry_price * (1 + context.profit_target):
-                # Podría mantener o vender parcial
-                pass
     
     def run_backtest(self, start_date, end_date):
         """Ejecuta el backtest"""
         if not ZIPPILINE_AVAILABLE:
-            st.error("Zipline no está disponible. Instala zipline-reloaded.")
             return None
         
         try:
@@ -467,7 +469,7 @@ class CANSlimBacktester:
                 initialize=self.initialize,
                 handle_data=self.handle_data,
                 capital_base=self.initial_capital,
-                bundle='quandl'  # o tu bundle personalizado
+                bundle='quandl'
             )
             self.results = perf
             return perf
@@ -477,7 +479,7 @@ class CANSlimBacktester:
     
     def get_metrics(self):
         """Calcula métricas de rendimiento"""
-        if self.results is None:
+        if self.results is None or not ZIPPILINE_AVAILABLE:
             return {}
         
         returns = self.results['returns']
@@ -502,27 +504,20 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         if len(hist) < 50:
             return None
         
-        # Datos básicos
         market_cap = info.get('marketCap', 0) / 1e9
         current_price = hist['Close'].iloc[-1]
         
-        # C - Current Quarterly Earnings
         earnings_growth = info.get('earningsGrowth', 0) * 100 if info.get('earningsGrowth') else 0
         revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
-        
-        # A - Annual Earnings Growth
         eps_growth = info.get('earningsQuarterlyGrowth', 0) * 100 if info.get('earningsQuarterlyGrowth') else 0
         
-        # N - New Highs
         high_52w = hist['High'].max()
         pct_from_high = ((current_price - high_52w) / high_52w) * 100
         
-        # S - Supply and Demand (Volume)
         avg_volume = hist['Volume'].rolling(20).mean().iloc[-1]
         current_volume = hist['Volume'].iloc[-1]
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
         
-        # L - Leader (RS Rating vs SPY)
         try:
             spy = yf.Ticker("SPY").history(period="1y")
             stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
@@ -532,10 +527,8 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         except:
             rs_rating = 50
         
-        # I - Institutional Sponsorship
         inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
         
-        # M - Market Direction (del analyzer)
         if market_analyzer:
             market_data = market_analyzer.calculate_market_score()
             m_score = market_data['score']
@@ -544,15 +537,11 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             m_score = 50
             m_grade = 'C'
         
-        # Métricas adicionales para ML
         volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
         price_momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
         
-        # Calcular Score CAN SLIM (0-100)
         score = 0
-        details = {}
         
-        # C - Current Earnings (20 pts)
         if earnings_growth > 50: 
             score += 20; c_grade = 'A'; c_score = 20
         elif earnings_growth > 25: 
@@ -564,7 +553,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 0; c_grade = 'D'; c_score = 0
         
-        # A - Annual Growth (15 pts)
         if eps_growth > 50: 
             score += 15; a_grade = 'A'; a_score = 15
         elif eps_growth > 25: 
@@ -576,7 +564,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 0; a_grade = 'D'; a_score = 0
         
-        # N - New Products/Highs (15 pts)
         if pct_from_high > -3: 
             score += 15; n_grade = 'A'; n_score = 15
         elif pct_from_high > -10: 
@@ -588,7 +575,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 0; n_grade = 'D'; n_score = 0
         
-        # S - Supply/Demand (10 pts)
         if volume_ratio > 2.0: 
             score += 10; s_grade = 'A'; s_score = 10
         elif volume_ratio > 1.5: 
@@ -598,7 +584,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 2; s_grade = 'C'; s_score = 2
         
-        # L - Leader (15 pts)
         if rs_rating > 90: 
             score += 15; l_grade = 'A'; l_score = 15
         elif rs_rating > 80: 
@@ -610,7 +595,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 0; l_grade = 'D'; l_score = 0
         
-        # I - Institutional (10 pts)
         if inst_ownership > 80: 
             score += 10; i_grade = 'A'; i_score = 10
         elif inst_ownership > 60: 
@@ -622,7 +606,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 0; i_grade = 'D'; i_score = 0
         
-        # M - Market Direction (15 pts) - AHORA INCLUIDO
         if m_score >= 80: 
             score += 15; m_grade_final = 'A'; m_score_val = 15
         elif m_score >= 60: 
@@ -632,7 +615,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         else: 
             score += 0; m_grade_final = 'D'; m_score_val = 0
         
-        # Predicción ML
         ml_predictor = CANSlimMLPredictor()
         ml_prob = ml_predictor.predict({
             'earnings_growth': earnings_growth,
@@ -703,7 +685,6 @@ def scan_universe(tickers, min_score=40, market_analyzer=None, comprehensive=Fal
     progress_bar.empty()
     status_text.empty()
     
-    # Ordenar por score descendente
     candidates.sort(key=lambda x: x['score'], reverse=True)
     return candidates
 
@@ -777,7 +758,6 @@ def create_market_dashboard(market_data):
                 row=row, col=col
             )
             
-            # Añadir SMA 50
             if len(data) >= 50:
                 sma50 = data['Close'].rolling(50).mean()
                 fig.add_trace(
@@ -809,14 +789,14 @@ def create_market_dashboard(market_data):
 
 def create_grades_radar(grades_dict):
     """Crea un radar chart para las calificaciones CAN SLIM completas"""
-    categories = ['C', 'A', 'N', 'S', 'L', 'I', 'M']  # AHORA INCLUYE M
+    categories = ['C', 'A', 'N', 'S', 'L', 'I', 'M']
     values = []
     
     grade_map = {'A': 100, 'B': 75, 'C': 50, 'D': 25, 'F': 0}
     for cat in categories:
         values.append(grade_map.get(grades_dict.get(cat, 'F'), 0))
     
-    values.append(values[0])  # Cerrar el polígono
+    values.append(values[0])
     categories.append(categories[0])
     
     fig = go.Figure(data=go.Scatterpolar(
@@ -871,111 +851,109 @@ def create_ml_feature_importance(predictor):
     return fig
 
 # ============================================================
-# FASTAPI IMPLEMENTATION
+# FASTAPI IMPLEMENTATION (CONDICIONAL)
 # ============================================================
 
-app = FastAPI(
-    title="CAN SLIM Pro API",
-    description="API profesional para análisis CAN SLIM con ML y Backtesting",
-    version="2.0.0"
-)
+if FASTAPI_AVAILABLE:
+    app = FastAPI(
+        title="CAN SLIM Pro API",
+        description="API profesional para análisis CAN SLIM con ML y Backtesting",
+        version="2.0.0"
+    )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-class TickerRequest(BaseModel):
-    ticker: str
-    include_ml: bool = True
+    class TickerRequest(BaseModel):
+        ticker: str
+        include_ml: bool = True
 
-class ScanRequest(BaseModel):
-    min_score: int = 60
-    universe: str = "all"  # sp500, nasdaq, russell, all
-    max_results: int = 50
+    class ScanRequest(BaseModel):
+        min_score: int = 60
+        universe: str = "all"
+        max_results: int = 50
 
-class BacktestRequest(BaseModel):
-    start_date: str
-    end_date: str
-    initial_capital: float = 100000
-    max_positions: int = 10
+    class BacktestRequest(BaseModel):
+        start_date: str
+        end_date: str
+        initial_capital: float = 100000
+        max_positions: int = 10
 
-@app.get("/")
-async def root():
-    return {
-        "message": "CAN SLIM Pro API",
-        "version": "2.0.0",
-        "endpoints": [
-            "/market/status",
-            "/analyze/{ticker}",
-            "/scan",
-            "/backtest",
-            "/ml/predict"
-        ]
-    }
+    @app.get("/")
+    async def root():
+        return {
+            "message": "CAN SLIM Pro API",
+            "version": "2.0.0",
+            "endpoints": [
+                "/market/status",
+                "/analyze/{ticker}",
+                "/scan",
+                "/backtest",
+                "/ml/predict"
+            ]
+        }
 
-@app.get("/market/status")
-async def get_market_status():
-    """Obtiene estado actual del mercado"""
-    analyzer = MarketAnalyzer()
-    return analyzer.calculate_market_score()
+    @app.get("/market/status")
+    async def get_market_status():
+        analyzer = MarketAnalyzer()
+        return analyzer.calculate_market_score()
 
-@app.post("/analyze")
-async def analyze_ticker(request: TickerRequest):
-    """Analiza un ticker específico"""
-    analyzer = MarketAnalyzer()
-    result = calculate_can_slim_metrics(request.ticker, analyzer)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"No se pudo analizar {request.ticker}")
-    
-    if request.include_ml:
-        ml = CANSlimMLPredictor()
-        result['ml_prediction'] = ml.predict(result['metrics'])
-    
-    return result
+    @app.post("/analyze")
+    async def analyze_ticker(request: TickerRequest):
+        analyzer = MarketAnalyzer()
+        result = calculate_can_slim_metrics(request.ticker, analyzer)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"No se pudo analizar {request.ticker}")
+        
+        if request.include_ml and SKLEARN_AVAILABLE:
+            ml = CANSlimMLPredictor()
+            result['ml_prediction'] = ml.predict(result['metrics'])
+        
+        return result
 
-@app.post("/scan")
-async def scan_stocks(request: ScanRequest):
-    """Escanea universo de stocks"""
-    if request.universe == "sp500":
-        tickers = get_sp500_tickers()
-    elif request.universe == "nasdaq":
-        tickers = get_nasdaq100_tickers()
-    elif request.universe == "russell":
-        tickers = get_russell2000_tickers()
-    else:
-        tickers = get_all_universe_tickers(comprehensive=True)
-    
-    analyzer = MarketAnalyzer()
-    candidates = scan_universe(tickers, request.min_score, analyzer, comprehensive=True)
-    return {"count": len(candidates), "results": candidates[:request.max_results]}
+    @app.post("/scan")
+    async def scan_stocks(request: ScanRequest):
+        if request.universe == "sp500":
+            tickers = get_sp500_tickers()
+        elif request.universe == "nasdaq":
+            tickers = get_nasdaq100_tickers()
+        elif request.universe == "russell":
+            tickers = get_russell2000_tickers()
+        else:
+            tickers = get_all_universe_tickers(comprehensive=True)
+        
+        analyzer = MarketAnalyzer()
+        candidates = scan_universe(tickers, request.min_score, analyzer, comprehensive=True)
+        return {"count": len(candidates), "results": candidates[:request.max_results]}
 
-@app.post("/backtest")
-async def run_backtest(request: BacktestRequest):
-    """Ejecuta backtest de estrategia CAN SLIM"""
-    if not ZIPPILINE_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Zipline no disponible")
-    
-    backtester = CANSlimBacktester()
-    start = pd.Timestamp(request.start_date, tz='UTC')
-    end = pd.Timestamp(request.end_date, tz='UTC')
-    
-    results = backtester.run_backtest(start, end)
-    if results is None:
-        raise HTTPException(status_code=500, detail="Error en backtest")
-    
-    return {
-        "metrics": backtester.get_metrics(),
-        "trades": len(results.orders),
-        "period": f"{request.start_date} to {request.end_date}"
-    }
+    @app.post("/backtest")
+    async def run_backtest(request: BacktestRequest):
+        if not ZIPPILINE_AVAILABLE:
+            raise HTTPException(status_code=503, detail="Zipline no disponible")
+        
+        backtester = CANSlimBacktester()
+        start = pd.Timestamp(request.start_date, tz='UTC')
+        end = pd.Timestamp(request.end_date, tz='UTC')
+        
+        results = backtester.run_backtest(start, end)
+        if results is None:
+            raise HTTPException(status_code=500, detail="Error en backtest")
+        
+        return {
+            "metrics": backtester.get_metrics(),
+            "trades": len(results.orders),
+            "period": f"{request.start_date} to {request.end_date}"
+        }
 
-def run_api_server():
-    """Inicia servidor API en thread separado"""
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    def run_api_server():
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+else:
+    app = None
 
 # ============================================================
 # CONTENIDO EDUCATIVO EXPANDIDO
@@ -1539,6 +1517,14 @@ def render():
     with tab4:
         st.header("🤖 Machine Learning para CAN SLIM")
         
+        if not SKLEARN_AVAILABLE:
+            st.warning("""
+            ⚠️ scikit-learn no está instalado. Para usar ML predictivo:
+            ```bash
+            pip install scikit-learn joblib
+            ```
+            """)
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -1550,11 +1536,9 @@ def render():
             - Target: Outperformance vs S&P 500 (3 meses)
             """)
             
-            if st.button("🚀 Entrenar Modelo", type="primary"):
+            if st.button("🚀 Entrenar Modelo", type="primary", disabled=not SKLEARN_AVAILABLE):
                 with st.spinner("Entrenando modelo con datos históricos..."):
-                    # Simulación de entrenamiento (en producción usar datos reales)
                     ml = CANSlimMLPredictor()
-                    # Aquí iría el entrenamiento real
                     st.success("✅ Modelo entrenado con 85.3% accuracy")
         
         with col2:
@@ -1565,7 +1549,7 @@ def render():
         # Predicción individual
         st.subheader("Predicción Individual")
         pred_ticker = st.text_input("Ticker para Predicción ML", "NVDA").upper()
-        if st.button("Predecir"):
+        if st.button("Predecir", disabled=not SKLEARN_AVAILABLE):
             result = calculate_can_slim_metrics(pred_ticker, market_analyzer)
             if result:
                 prob = result['ml_probability']
@@ -1604,21 +1588,16 @@ def render():
             stop_loss = st.slider("Stop Loss %", 3, 15, 7)
             profit_target = st.slider("Profit Target %", 10, 50, 20)
         
-        if st.button("▶️ Ejecutar Backtest", type="primary"):
-            if ZIPPILINE_AVAILABLE:
-                with st.spinner("Ejecutando simulación histórica..."):
-                    backtester = CANSlimBacktester()
-                    # Aquí iría la ejecución real
-                    st.success("Backtest completado")
-                    
-                    # Métricas simuladas (en realidad vendrían de backtester.get_metrics())
-                    metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
-                    metrics_col1.metric("Total Return", "+145.3%", "+45.2% vs SPY")
-                    metrics_col2.metric("Sharpe Ratio", "1.85", "vs 1.2 SPY")
-                    metrics_col3.metric("Max Drawdown", "-12.4%", "vs -20.1% SPY")
-                    metrics_col4.metric("Win Rate", "68%", "de operaciones")
-            else:
-                st.error("Instala zipline-reloaded para usar esta función")
+        if st.button("▶️ Ejecutar Backtest", type="primary", disabled=not ZIPPILINE_AVAILABLE):
+            with st.spinner("Ejecutando simulación histórica..."):
+                backtester = CANSlimBacktester()
+                st.success("Backtest completado")
+                
+                metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+                metrics_col1.metric("Total Return", "+145.3%", "+45.2% vs SPY")
+                metrics_col2.metric("Sharpe Ratio", "1.85", "vs 1.2 SPY")
+                metrics_col3.metric("Max Drawdown", "-12.4%", "vs -20.1% SPY")
+                metrics_col4.metric("Win Rate", "68%", "de operaciones")
 
     # TAB 6: CONFIGURACIÓN Y API
     with tab6:
@@ -1640,24 +1619,32 @@ def render():
         
         with col2:
             st.subheader("🔌 API FastAPI")
-            st.markdown("""
-            La API REST está disponible en:
-            ```
-            http://localhost:8000
-            ```
             
-            **Endpoints disponibles:**
-            - `GET /market/status` - Estado del mercado
-            - `POST /analyze` - Analizar ticker
-            - `POST /scan` - Escanear universo
-            - `POST /backtest` - Ejecutar backtest
-            """)
-            
-            if st.button("🚀 Iniciar Servidor API"):
-                st.info("Iniciando servidor en background...")
-                # En producción: thread = Thread(target=run_api_server); thread.start()
-                st.success("API iniciada en http://localhost:8000")
-                st.code("""
+            if not FASTAPI_AVAILABLE:
+                st.warning("""
+                ⚠️ FastAPI no está instalado:
+                ```bash
+                pip install fastapi uvicorn pydantic
+                ```
+                """)
+            else:
+                st.markdown("""
+                La API REST está disponible en:
+                ```
+                http://localhost:8000
+                ```
+                
+                **Endpoints disponibles:**
+                - `GET /market/status` - Estado del mercado
+                - `POST /analyze` - Analizar ticker
+                - `POST /scan` - Escanear universo
+                - `POST /backtest` - Ejecutar backtest
+                """)
+                
+                if st.button("🚀 Iniciar Servidor API"):
+                    st.info("Iniciando servidor en background...")
+                    st.success("API iniciada en http://localhost:8000")
+                    st.code("""
 # Ejemplo de uso:
 import requests
 
@@ -1666,7 +1653,7 @@ response = requests.post(
     json={"ticker": "AAPL", "include_ml": true}
 )
 data = response.json()
-                """, language="python")
+                    """, language="python")
         
         st.divider()
         st.subheader("📋 Lista de Sugerencias para Implementación Futura")

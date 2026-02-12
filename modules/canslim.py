@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - Versión Mejorada
@@ -18,6 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 import warnings
 import os
+import re as re_module
 warnings.filterwarnings('ignore')
 
 # ============================================================
@@ -81,14 +81,9 @@ COLORS = {
     'text_secondary': '#aaaaaa' # Texto secundario
 }
 
-# Ruta al archivo de tickers
-
 # ============================================================
 # GESTIÓN DE UNIVERSO DESDE ARCHIVO CSV (tickers.csv en directorio raíz)
 # ============================================================
-
-import pandas as pd
-import re as re_module
 
 CSV_TICKERS_PATH = "tickers.csv"  # Archivo en directorio raíz
 
@@ -141,6 +136,9 @@ def get_all_universe_tickers(comprehensive=True):
     else:
         # Limitar a primeros 500 para modo no comprehensive
         return tickers[:500]
+
+# Variable global para mantener compatibilidad con código existente
+tickers = load_tickers_from_csv()
 
 # ============================================================
 # ANÁLISIS DE MERCADO (M - Market Direction)
@@ -641,16 +639,19 @@ def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False):
     """Escanea el universo de tickers y devuelve candidatos CAN SLIM"""
     candidates = []
     
+    # Usar la función correcta para cargar tickers
+    current_tickers = load_tickers_from_csv()
+    
     if comprehensive:
-        st.info(f"Modo completo activado: Escaneando {len(tickers)} activos...")
+        st.info(f"Modo completo activado: Escaneando {len(current_tickers)} activos...")
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    for i, ticker in enumerate(tickers):
-        progress = (i + 1) / len(tickers)
+    for i, ticker in enumerate(current_tickers):
+        progress = (i + 1) / len(current_tickers)
         progress_bar.progress(progress)
-        status_text.text(f"Analizando {ticker}... ({i+1}/{len(tickers)})")
+        status_text.text(f"Analizando {ticker}... ({i+1}/{len(current_tickers)})")
         
         result = calculate_can_slim_metrics(ticker, None)
         if result and result['score'] >= min_score:
@@ -892,7 +893,7 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/scan")
     async def scan_stocks(request: ScanRequest):
-        tickers = load_tickers_from_file()
+        tickers = load_tickers_from_csv()
         
         analyzer = MarketAnalyzer()
         candidates = scan_universe(tickers, request.min_score, analyzer, comprehensive=True)
@@ -1252,19 +1253,18 @@ def render():
             for signal in market_status['signals']:
                 st.markdown(f"- {signal}")
         
-        # Info del archivo de tickers
-        tickers = load_tickers_from_file()
-        st.info(f"📁 Archivo {TICKERS_FILE}: {len(tickers)} tickers cargados")
+        # Info del archivo de tickers - USAR FUNCIÓN CORRECTA
+        current_tickers = load_tickers_from_csv()
+        st.info(f"📁 Archivo {CSV_TICKERS_PATH}: {len(current_tickers)} tickers cargados")
         
         if scan_button:
-            tickers = load_tickers_from_file()
             if not comprehensive:
-                tickers = tickers[:500]  # Limitar si no es modo completo
+                current_tickers = current_tickers[:500]  # Limitar si no es modo completo
             
-            candidates = scan_universe(tickers, min_score, None, comprehensive)
+            candidates = scan_universe(min_score, None, comprehensive)
             
             if candidates:
-                st.success(f"✅ Se encontraron {len(candidates)} candidatos CAN SLIM de {len(tickers)} analizados")
+                st.success(f"✅ Se encontraron {len(candidates)} candidatos CAN SLIM de {len(current_tickers)} analizados")
                 
                 # Top 3 destacados con badges completos C-A-N-S-L-I-M
                 st.subheader("🏆 Top Candidatos CAN SLIM")
@@ -1573,79 +1573,7 @@ def render():
                 metrics_col3.metric("Max Drawdown", "-12.4%", "vs -20.1% SPY")
                 metrics_col4.metric("Win Rate", "68%", "de operaciones")
 
-    # TAB 6: GESTIÓN DE TICKERS (NUEVO)
-    with tab6:
-        st.header("📁 Gestión de Tickers")
-        
-        # Cargar tickers actuales
-        current_tickers = load_tickers_from_file()
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.subheader(f"Lista Actual: {len(current_tickers)} tickers")
-            
-            # Mostrar tickers en textarea editable
-            tickers_text = st.text_area(
-                "Editar tickers (uno por línea):",
-                value="\n".join(current_tickers),
-                height=400
-            )
-            
-            if st.button("💾 Guardar Cambios", type="primary"):
-                new_tickers = [t.strip().upper() for t in tickers_text.split("\n") if t.strip()]
-                save_tickers_to_file(new_tickers)
-                st.success(f"✅ Guardados {len(new_tickers)} tickers")
-                st.rerun()
-        
-        with col2:
-            st.subheader("Acciones Rápidas")
-            
-            # Añadir ticker individual
-            new_ticker = st.text_input("Añadir Ticker:", "").upper()
-            if st.button("➕ Añadir"):
-                if new_ticker and add_ticker_to_file(new_ticker):
-                    st.success(f"✅ {new_ticker} añadido")
-                    st.rerun()
-                else:
-                    st.warning(f"⚠️ {new_ticker} ya existe o error")
-            
-            # Eliminar ticker
-            del_ticker = st.selectbox("Eliminar Ticker:", [""] + current_tickers)
-            if st.button("➖ Eliminar", type="secondary"):
-                if del_ticker and remove_ticker_from_file(del_ticker):
-                    st.success(f"✅ {del_ticker} eliminado")
-                    st.rerun()
-            
-            st.divider()
-            
-            # Regenerar archivo por defecto
-            if st.button("🔄 Regenerar Default", type="secondary"):
-                if os.path.exists(TICKERS_FILE):
-                    os.remove(TICKERS_FILE)
-                create_default_tickers_file()
-                st.success("✅ Archivo regenerado")
-                st.rerun()
-            
-            # Descargar archivo
-            with open(TICKERS_FILE, 'r') as f:
-                st.download_button(
-                    label="📥 Descargar tickers.txt",
-                    data=f.read(),
-                    file_name="tickers.txt",
-                    mime="text/plain"
-                )
-            
-            # Subir archivo
-            uploaded_file = st.file_uploader("📤 Subir tickers.txt", type="txt")
-            if uploaded_file is not None:
-                content = uploaded_file.read().decode('utf-8')
-                tickers = [t.strip().upper() for t in content.split("\n") if t.strip() and not t.startswith('#')]
-                save_tickers_to_file(tickers)
-                st.success(f"✅ {len(tickers)} tickers cargados desde archivo")
-                st.rerun()
-
-    # TAB 7: CONFIGURACIÓN Y API
+    # TAB 6: CONFIGURACIÓN Y API
     with tab6:
         st.header("⚙️ Configuración del Sistema")
         
@@ -1727,3 +1655,4 @@ data = response.json()
 
 if __name__ == "__main__":
     render()
+

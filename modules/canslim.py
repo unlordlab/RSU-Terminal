@@ -82,134 +82,65 @@ COLORS = {
 }
 
 # Ruta al archivo de tickers
-TICKERS_FILE = "tickers.txt"
 
 # ============================================================
-# GESTIÓN DE UNIVERSO DESDE ARCHIVO TXT
+# GESTIÓN DE UNIVERSO DESDE ARCHIVO CSV (tickers.csv en directorio raíz)
 # ============================================================
 
-def create_default_tickers_file():
-    """Crea el archivo tickers.txt con todos los activos por defecto si no existe"""
-    if os.path.exists(TICKERS_FILE):
-        return
-    
-    default_tickers = [
-        # S&P 500 - Top 100
-        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'AVGO', 'WMT',
-        'JPM', 'V', 'MA', 'UNH', 'HD', 'PG', 'JNJ', 'BAC', 'LLY', 'MRK', 'KO', 'PEP',
-        'ABBV', 'COST', 'TMO', 'ADBE', 'NFLX', 'AMD', 'CRM', 'ACN', 'LIN', 'PM', 'DIS',
-        'ABT', 'VZ', 'NKE', 'TXN', 'RTX', 'NEE', 'BMY', 'QCOM', 'CVX', 'PFE', 'T',
-        'SBUX', 'LOW', 'GS', 'UPS', 'HON', 'MS', 'UNP', 'BA', 'CAT', 'IBM', 'GE',
-        'LMT', 'DE', 'SPGI', 'MDT', 'GILD', 'CVS', 'AMGN', 'C', 'BLK', 'AXP', 'MO',
-        'BKNG', 'SYK', 'COP', 'ADI', 'USB', 'MMC', 'EL', 'LRCX', 'SO', 'BDX', 'CI',
-        'PNC', 'TJX', 'ITW', 'APD', 'NOC', 'ETN', 'CME', 'CSX', 'DUK', 'FDX', 'CL',
-        'GM', 'AON', 'TGT', 'NSC', 'WM', 'SLB', 'EOG', 'PXD', 'HUM', 'MET',
-        
-        # NASDAQ 100 - Adicionales
-        'TMUS', 'INTC', 'INTU', 'AMAT', 'ISRG', 'VRTX', 'MU', 'REGN', 'PANW', 'SNOW',
-        'CSX', 'ADP', 'KLAC', 'ABNB', 'MELI', 'NXPI', 'MAR', 'FTNT', 'WDAY', 'JD',
-        'ORLY', 'CTAS', 'MRVL', 'DXCM', 'CPRT', 'CEG', 'AZN', 'TEAM', 'CHTR', 'KDP',
-        'MRNA', 'PAYX', 'ROST', 'ODFL', 'PCAR', 'MNST', 'KHC', 'AEP', 'EXC', 'IDXX',
-        'DDOG', 'FAST', 'VRSK', 'CSGP', 'EA', 'XEL', 'LULU', 'ILMN', 'DLTR', 'CTSH',
-        'BIIB', 'WBD', 'GFS', 'TTD', 'ON', 'ANSS', 'MCHP', 'CDNS', 'TTWO', 'FTV',
-        'WBA', 'SIRI', 'ZM', 'DOCU', 'OKTA', 'CRWD', 'ZS', 'NET', 'PLTR', 'SOFI',
-        'LCID', 'RIVN',
-        
-        # ETFs Populares
-        'SPY', 'QQQ', 'IWM', 'VTI', 'VOO', 'VEA', 'VWO', 'BND', 'AGG',
-        'XLF', 'XLK', 'XLE', 'XLI', 'XLP', 'XLU', 'XLB', 'XRT', 'XBI',
-        'ARKK', 'ARKG', 'ARKF', 'ARKW', 'ARKQ',
-        'SOXX', 'SMH', 'IBB', 'KRE', 'GDX', 'GDXJ', 'USO', 'GLD', 'SLV',
-        'TQQQ', 'SQQQ', 'UPRO', 'SPXU', 'UVXY', 'SVXY', 'VIXY',
-        
-        # ADRs Internacionales
-        'TSM', 'ASML', 'NVO', 'TM', 'SHEL', 'TTE', 'BP', 'AZN', 'GSK',
-        'UL', 'SAP', 'SONY', 'NTDOY', 'BABA', 'JD', 'PDD', 'BIDU', 'NIO', 
-        'XPEV', 'LI', 'TCEHY', 'INFY', 'WIT', 'ACN',
-        
-        # Russell 2000 - Muestra representativa
-        'IWM', 'RUT', 'TNA', 'TZA', 'UWM', 'SRTY', 'VTWO', 'IWO', 'IWN',
-        'AMC', 'GME', 'BB', 'NOK', 'PLTR', 'SOFI', 'LCID', 'RIVN', 'SPCE', 'NKLA',
-        'HOOD', 'AFRM', 'UPST', 'RBLX', 'U', 'DOCN', 'ASAN', 'MDB', 'NET',
-        'CRWD', 'OKTA', 'ZS', 'PANW', 'FTNT', 'CYBR', 'QLYS', 'VRNS', 'TENB',
-        'SPLK', 'DDOG', 'ESTC', 'FSLY', 'CLOV', 'WISH', 'ROOT', 'METC',
-        'HUT', 'RIOT', 'MARA', 'BITF', 'CLSK', 'ARBK', 'CORZ', 'BTBT', 'SDIG', 'WULF',
-        'COIN', 'HOOD', 'LMND', 'HIPO', 'OSCR', 'PLTK', 'PLAY', 'CHUY', 'BOJA',
-        'TAST', 'FRGI', 'GTIM', 'PBPB', 'LOCO', 'SHAK', 'CMG', 'MCD', 'YUM', 'DRI',
-        'TXRH', 'CBRL', 'EAT', 'BJRI',
-    ]
-    
-    # Eliminar duplicados y ordenar
-    unique_tickers = sorted(list(set(default_tickers)))
-    
-    with open(TICKERS_FILE, 'w') as f:
-        f.write("# CAN SLIM Scanner Pro - Lista de Tickers\n")
-        f.write(f"# Total: {len(unique_tickers)} activos\n")
-        f.write("# Formato: Un ticker por línea, líneas que empiezan con # son comentarios\n\n")
-        for ticker in unique_tickers:
-            f.write(f"{ticker}\n")
-    
-    print(f"✅ Archivo {TICKERS_FILE} creado con {len(unique_tickers)} tickers")
+import pandas as pd
+import re as re_module
 
-def load_tickers_from_file():
-    """Carga los tickers desde el archivo tickers.txt"""
-    if not os.path.exists(TICKERS_FILE):
-        create_default_tickers_file()
-    
-    tickers = []
-    with open(TICKERS_FILE, 'r') as f:
-        for line in f:
-            line = line.strip()
-            # Ignorar líneas vacías y comentarios
-            if line and not line.startswith('#'):
-                tickers.append(line.upper())
-    
-    return tickers
+CSV_TICKERS_PATH = "tickers.csv"  # Archivo en directorio raíz
 
-def save_tickers_to_file(tickers):
-    """Guarda una lista de tickers en el archivo"""
-    with open(TICKERS_FILE, 'w') as f:
-        f.write("# CAN SLIM Scanner Pro - Lista de Tickers\n")
-        f.write(f"# Total: {len(tickers)} activos\n")
-        f.write("# Actualizado: {}\n\n".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-        for ticker in sorted(list(set(tickers))):
-            f.write(f"{ticker}\n")
+def load_tickers_from_csv():
+    """Carga los tickers desde el archivo tickers.csv en el directorio raíz"""
+    try:
+        # Verificar si el archivo existe
+        if not os.path.exists(CSV_TICKERS_PATH):
+            st.error(f"❌ No se encontró el archivo {CSV_TICKERS_PATH} en el directorio raíz")
+            return []
 
-def get_all_universe_tickers(comprehensive=True, use_file=True):
+        # Leer CSV saltando las filas de metadata (las primeras 9 filas)
+        df = pd.read_csv(CSV_TICKERS_PATH, skiprows=9)
+
+        # La primera columna contiene los tickers
+        tickers = df.iloc[:, 0].dropna().tolist()
+
+        # Limpiar y formatear - solo mantener tickers válidos
+        valid_tickers = []
+        for t in tickers:
+            if pd.notna(t):
+                t_clean = str(t).strip().upper()
+                # Filtrar solo tickers válidos: alfanuméricos, 1-5 caracteres, empieza con letra
+                if re_module.match(r'^[A-Z][A-Z0-9]{0,4}$', t_clean):
+                    valid_tickers.append(t_clean)
+
+        # Eliminar duplicados manteniendo orden
+        seen = set()
+        unique_tickers = [t for t in valid_tickers if not (t in seen or seen.add(t))]
+
+        return unique_tickers
+
+    except Exception as e:
+        st.error(f"❌ Error al cargar tickers.csv: {str(e)}")
+        return []
+
+def get_all_universe_tickers(comprehensive=True):
     """
-    Obtiene todos los tickers disponibles
-    comprehensive=True incluye todos los activos del archivo
-    use_file=False fuerza la regeneración desde fuentes web
+    Obtiene todos los tickers disponibles desde tickers.csv
+    comprehensive=True incluye todos los activos
     """
-    if use_file and os.path.exists(TICKERS_FILE):
-        tickers = load_tickers_from_file()
-        if comprehensive:
-            return tickers
-        else:
-            # Limitar a primeros 500 para modo no comprehensive
-            return tickers[:500]
-    
-    # Fallback: crear archivo y devolver tickers
-    create_default_tickers_file()
-    return load_tickers_from_file()
+    tickers = load_tickers_from_csv()
 
-def add_ticker_to_file(ticker):
-    """Añade un ticker al archivo"""
-    tickers = load_tickers_from_file()
-    if ticker.upper() not in tickers:
-        tickers.append(ticker.upper())
-        save_tickers_to_file(tickers)
-        return True
-    return False
+    if not tickers:
+        st.warning("⚠️ No se pudieron cargar tickers. Verifica que tickers.csv exista en el directorio raíz.")
+        return []
 
-def remove_ticker_from_file(ticker):
-    """Elimina un ticker del archivo"""
-    tickers = load_tickers_from_file()
-    if ticker.upper() in tickers:
-        tickers.remove(ticker.upper())
-        save_tickers_to_file(tickers)
-        return True
-    return False
+    if comprehensive:
+        return tickers
+    else:
+        # Limitar a primeros 500 para modo no comprehensive
+        return tickers[:500]
 
 # ============================================================
 # ANÁLISIS DE MERCADO (M - Market Direction)
@@ -706,7 +637,7 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         return None
 
 @st.cache_data(ttl=600)
-def scan_universe(tickers, min_score=40, _market_analyzer=None, comprehensive=False):
+def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False):
     """Escanea el universo de tickers y devuelve candidatos CAN SLIM"""
     candidates = []
     
@@ -1287,13 +1218,12 @@ def render():
     """, unsafe_allow_html=True)
 
     # Tabs expandidos
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🚀 Scanner", 
         "📊 Análisis Detallado", 
         "📚 Metodología Completa",
         "🤖 ML Predictivo",
         "📈 Backtesting",
-        "📁 Gestión de Tickers",
         "⚙️ Configuración & API"
     ])
 
@@ -1716,7 +1646,7 @@ def render():
                 st.rerun()
 
     # TAB 7: CONFIGURACIÓN Y API
-    with tab7:
+    with tab6:
         st.header("⚙️ Configuración del Sistema")
         
         col1, col2 = st.columns(2)

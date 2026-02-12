@@ -31,7 +31,6 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
-    st.warning("⚠️ scikit-learn no instalado. El ML predictivo no estará disponible.")
 
 # FastAPI Imports (opcional)
 try:
@@ -43,7 +42,6 @@ try:
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
-    st.warning("⚠️ FastAPI no instalado. La API REST no estará disponible.")
 
 # Zipline Imports (opcional)
 try:
@@ -53,7 +51,6 @@ try:
     ZIPPILINE_AVAILABLE = True
 except ImportError:
     ZIPPILINE_AVAILABLE = False
-    st.warning("⚠️ Zipline no instalado. El backtesting estará limitado.")
 
 import os
 
@@ -121,14 +118,12 @@ def get_russell2000_tickers():
 def get_all_us_tickers():
     """Obtiene todos los tickers disponibles del mercado US"""
     try:
-        # Fallback: usar lista completa de ETFs y stocks líquidos
         all_tickers = (
             get_sp500_tickers() + 
             get_nasdaq100_tickers() + 
             get_russell2000_tickers()
         )
         
-        # Añadir ETFs populares y sectores
         etfs = [
             'SPY', 'QQQ', 'IWM', 'VTI', 'VOO', 'VEA', 'VWO', 'BND', 'AGG',
             'XLF', 'XLK', 'XLE', 'XLI', 'XLP', 'XLU', 'XLB', 'XRT', 'XBI',
@@ -137,7 +132,6 @@ def get_all_us_tickers():
             'TQQQ', 'SQQQ', 'UPRO', 'SPXU', 'UVXY', 'SVXY', 'VIXY'
         ]
         
-        # Añadir ADRs internacionales populares
         adrs = [
             'TSM', 'ASML', 'NVO', 'TM', 'SHEL', 'TTE', 'BP', 'AZN', 'GSK',
             'UL', 'UNLY', 'NSRGY', 'SAP', 'SONY', 'NTDOY', 'BABA', 'JD', 
@@ -164,7 +158,6 @@ def get_all_universe_tickers(comprehensive=True):
         russell = get_russell2000_tickers()
         all_tickers = list(set(sp500 + nasdaq + russell))
     
-    # Limitar a 1000 para rendimiento óptimo
     return all_tickers[:1000]
 
 # ============================================================
@@ -211,7 +204,7 @@ class MarketAnalyzer:
         Calcula el score de dirección de mercado (0-100)
         """
         data = self.get_market_data()
-        score = 50  # Neutral base
+        score = 50
         signals = []
         
         if 'SPY' in data:
@@ -377,7 +370,7 @@ class CANSlimMLPredictor:
     def get_feature_importance(self):
         """Retorna importancia de características"""
         if not SKLEARN_AVAILABLE or self.model is None:
-            return {f: 0.11 for f in self.features}  # Distribución uniforme por defecto
+            return {f: 0.11 for f in self.features}
         return dict(zip(self.features, self.model.feature_importances_))
 
 # ============================================================
@@ -529,13 +522,13 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         
         inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
         
-        if market_analyzer:
-            market_data = market_analyzer.calculate_market_score()
-            m_score = market_data['score']
-            m_grade = 'A' if m_score >= 80 else 'B' if m_score >= 60 else 'C' if m_score >= 40 else 'D'
-        else:
-            m_score = 50
-            m_grade = 'C'
+        # CORRECCIÓN: Usar el market_analyzer pasado o crear uno nuevo si es None
+        if market_analyzer is None:
+            market_analyzer = MarketAnalyzer()
+            
+        market_data = market_analyzer.calculate_market_score()
+        m_score = market_data['score']
+        m_grade = 'A' if m_score >= 80 else 'B' if m_score >= 60 else 'C' if m_score >= 40 else 'D'
         
         volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
         price_momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
@@ -654,7 +647,7 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
                 'rs_rating': rs_rating,
                 'inst_ownership': inst_ownership,
                 'market_score': m_score,
-                'market_phase': market_data.get('phase', 'N/A') if market_analyzer else 'N/A',
+                'market_phase': market_data.get('phase', 'N/A'),
                 'volatility': volatility,
                 'price_momentum': price_momentum
             }
@@ -662,8 +655,9 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
     except Exception as e:
         return None
 
+# CORRECCIÓN: Usar _market_analyzer para excluir del hash de cache
 @st.cache_data(ttl=600)
-def scan_universe(tickers, min_score=40, market_analyzer=None, comprehensive=False):
+def scan_universe(tickers, min_score=40, _market_analyzer=None, comprehensive=False):
     """Escanea el universo de tickers y devuelve candidatos CAN SLIM"""
     candidates = []
     
@@ -678,7 +672,9 @@ def scan_universe(tickers, min_score=40, market_analyzer=None, comprehensive=Fal
         progress_bar.progress(progress)
         status_text.text(f"Analizando {ticker}... ({i+1}/{len(tickers)})")
         
-        result = calculate_can_slim_metrics(ticker, market_analyzer)
+        # CORRECCIÓN: No pasar _market_analyzer a calculate_can_slim_metrics
+        # porque la función creará uno internamente si es None
+        result = calculate_can_slim_metrics(ticker, None)
         if result and result['score'] >= min_score:
             candidates.append(result)
     
@@ -1286,8 +1282,9 @@ def render():
                 st.markdown(f"- {signal}")
         
         if scan_button:
+            # CORRECCIÓN: Pasar None en lugar de market_analyzer
             tickers = get_all_universe_tickers(comprehensive=comprehensive)
-            candidates = scan_universe(tickers, min_score, market_analyzer, comprehensive)
+            candidates = scan_universe(tickers, min_score, None, comprehensive)
             
             if candidates:
                 st.success(f"✅ Se encontraron {len(candidates)} candidatos CAN SLIM")

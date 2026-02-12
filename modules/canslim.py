@@ -3,7 +3,7 @@
 CAN SLIM Scanner Pro - Versión Mejorada
 Sistema completo de selección de acciones con ML, Backtesting y API
 Autor: CAN SLIM Pro Team
-Versión: 2.0.0
+Versión: 2.0.1 (Corregido)
 """
 
 import streamlit as st
@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 import warnings
 import os
 import re as re_module
+import traceback
 warnings.filterwarnings('ignore')
 
 # ============================================================
@@ -464,159 +465,305 @@ class CANSlimBacktester:
         }
 
 # ============================================================
-# CÁLCULOS CAN SLIM MEJORADOS
+# CÁLCULOS CAN SLIM MEJORADOS - VERSIÓN CORREGIDA
 # ============================================================
 
 def calculate_can_slim_metrics(ticker, market_analyzer=None):
-    """Calcula todas las métricas CAN SLIM para un ticker con ML"""
+    """Calcula todas las métricas CAN SLIM para un ticker con ML - VERSIÓN CORREGIDA"""
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        hist = stock.history(period="1y")
+        # Limpiar ticker (eliminar espacios y convertir a mayúsculas)
+        ticker = str(ticker).strip().upper()
         
-        if len(hist) < 50:
+        if not ticker or len(ticker) < 1:
+            st.error("❌ Ticker vacío o inválido")
+            return None
+            
+        # Obtener datos del stock con timeout y reintentos
+        try:
+            stock = yf.Ticker(ticker)
+        except Exception as e:
+            st.error(f"❌ No se pudo crear Ticker object para {ticker}: {str(e)}")
             return None
         
-        market_cap = info.get('marketCap', 0) / 1e9
-        current_price = hist['Close'].iloc[-1]
+        # Intentar obtener info con manejo de errores específico
+        info = {}
+        try:
+            info = stock.info
+            if not info or len(info) < 5:  # Si info está casi vacío
+                st.warning(f"⚠️ Datos limitados para {ticker} en Yahoo Finance")
+                # Intentar con .fast_info como fallback
+                try:
+                    fast_info = stock.fast_info
+                    info = {
+                        'marketCap': getattr(fast_info, 'market_cap', 0),
+                        'shortName': ticker,
+                        'longName': ticker,
+                        'sector': 'N/A',
+                        'industry': 'N/A',
+                        'earningsGrowth': None,
+                        'revenueGrowth': None,
+                        'earningsQuarterlyGrowth': None,
+                        'heldPercentInstitutions': 0
+                    }
+                except Exception as e2:
+                    st.warning(f"⚠️ Fast info también falló: {e2}")
+                    # Crear info mínima para continuar
+                    info = {
+                        'marketCap': 0,
+                        'shortName': ticker,
+                        'longName': ticker,
+                        'sector': 'N/A',
+                        'industry': 'N/A',
+                        'earningsGrowth': None,
+                        'revenueGrowth': None,
+                        'earningsQuarterlyGrowth': None,
+                        'heldPercentInstitutions': 0
+                    }
+        except Exception as e:
+            st.error(f"❌ Error obteniendo info de {ticker}: {str(e)}")
+            # Intentar continuar con info mínima
+            info = {
+                'marketCap': 0,
+                'shortName': ticker,
+                'longName': ticker,
+                'sector': 'N/A',
+                'industry': 'N/A',
+                'earningsGrowth': None,
+                'revenueGrowth': None,
+                'earningsQuarterlyGrowth': None,
+                'heldPercentInstitutions': 0
+            }
         
-        earnings_growth = info.get('earningsGrowth', 0) * 100 if info.get('earningsGrowth') else 0
-        revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
-        eps_growth = info.get('earningsQuarterlyGrowth', 0) * 100 if info.get('earningsQuarterlyGrowth') else 0
+        # Obtener historial de precios con validación
+        try:
+            hist = stock.history(period="1y")
+        except Exception as e:
+            st.error(f"❌ Error descargando historial para {ticker}: {str(e)}")
+            return None
         
-        high_52w = hist['High'].max()
-        pct_from_high = ((current_price - high_52w) / high_52w) * 100
+        if hist is None:
+            st.error(f"❌ Historial es None para {ticker}")
+            return None
+            
+        if hist.empty:
+            st.error(f"❌ No hay datos históricos para {ticker} (DataFrame vacío)")
+            return None
+            
+        if len(hist) < 50:
+            st.warning(f"⚠️ {ticker} tiene solo {len(hist)} días de datos (mínimo 50 requerido)")
+            return None
         
-        avg_volume = hist['Volume'].rolling(20).mean().iloc[-1]
-        current_volume = hist['Volume'].iloc[-1]
-        volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
+        # Extraer métricas con valores por defecto seguros
+        try:
+            market_cap = info.get('marketCap', 0) / 1e9 if info.get('marketCap') else 0
+        except:
+            market_cap = 0
+            
+        try:
+            current_price = float(hist['Close'].iloc[-1]) if not hist['Close'].empty else 0
+        except:
+            current_price = 0
+        
+        if current_price == 0:
+            st.error(f"❌ Precio actual no disponible para {ticker}")
+            return None
+        
+        # Manejar earnings growth (puede ser None o 0)
+        try:
+            earnings_growth_raw = info.get('earningsGrowth')
+            earnings_growth = (earnings_growth_raw * 100) if earnings_growth_raw is not None else 0
+        except:
+            earnings_growth = 0
         
         try:
-            spy = yf.Ticker("SPY").history(period="1y")
-            stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
-            spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
-            rs_rating = 50 + (stock_return - spy_return) * 2
-            rs_rating = max(0, min(100, rs_rating))
+            revenue_growth_raw = info.get('revenueGrowth')
+            revenue_growth = (revenue_growth_raw * 100) if revenue_growth_raw is not None else 0
         except:
-            rs_rating = 50
+            revenue_growth = 0
+            
+        try:
+            eps_growth_raw = info.get('earningsQuarterlyGrowth')
+            eps_growth = (eps_growth_raw * 100) if eps_growth_raw is not None else 0
+        except:
+            eps_growth = 0
         
-        inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
+        # Calcular distancia desde máximo de 52 semanas
+        try:
+            high_52w = hist['High'].max()
+            pct_from_high = ((current_price - high_52w) / high_52w) * 100 if high_52w > 0 else -100
+        except:
+            pct_from_high = -100
         
+        # Volumen con validación
+        try:
+            avg_volume = hist['Volume'].rolling(20).mean().iloc[-1]
+            current_volume = hist['Volume'].iloc[-1]
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
+        except:
+            volume_ratio = 1.0
+        
+        # Relative Strength vs SPY
+        rs_rating = 50  # Valor por defecto neutral
+        try:
+            spy = yf.Ticker("SPY").history(period="1y")
+            if not spy.empty and len(spy) > 0 and not hist.empty and len(hist) > 0:
+                if hist['Close'].iloc[0] != 0 and spy['Close'].iloc[0] != 0:
+                    stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
+                    spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
+                    rs_rating = 50 + (stock_return - spy_return) * 2
+                    rs_rating = max(0, min(100, rs_rating))
+        except Exception as e:
+            pass  # Mantener valor por defecto
+        
+        # Ownership institucional
+        inst_ownership = 0
+        try:
+            inst_raw = info.get('heldPercentInstitutions')
+            if inst_raw is not None:
+                inst_ownership = inst_raw * 100
+        except:
+            pass
+        
+        # Análisis de mercado
         if market_analyzer is None:
             market_analyzer = MarketAnalyzer()
             
-        market_data = market_analyzer.calculate_market_score()
-        m_score = market_data['score']
-        m_grade = 'A' if m_score >= 80 else 'B' if m_score >= 60 else 'C' if m_score >= 40 else 'D'
+        try:
+            market_data = market_analyzer.calculate_market_score()
+            m_score = market_data['score']
+            m_phase = market_data.get('phase', 'N/A')
+        except:
+            m_score = 50
+            m_phase = 'N/A'
         
-        volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
-        price_momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
+        # Volatilidad y momentum
+        try:
+            volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
+            if np.isnan(volatility):
+                volatility = 20.0
+        except:
+            volatility = 20.0
+            
+        try:
+            price_momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
+        except:
+            price_momentum = 0
         
+        # Calcular Score CAN SLIM
         score = 0
+        grades = {}
+        scores = {}
         
+        # C - Current Quarterly Earnings (20 pts)
         if earnings_growth > 50: 
-            score += 20; c_grade = 'A'; c_score = 20
+            score += 20; grades['C'] = 'A'; scores['C'] = 20
         elif earnings_growth > 25: 
-            score += 15; c_grade = 'A'; c_score = 15
+            score += 15; grades['C'] = 'A'; scores['C'] = 15
         elif earnings_growth > 15: 
-            score += 10; c_grade = 'B'; c_score = 10
+            score += 10; grades['C'] = 'B'; scores['C'] = 10
         elif earnings_growth > 0: 
-            score += 5; c_grade = 'C'; c_score = 5
+            score += 5; grades['C'] = 'C'; scores['C'] = 5
         else: 
-            score += 0; c_grade = 'D'; c_score = 0
+            grades['C'] = 'D'; scores['C'] = 0
         
+        # A - Annual Earnings Growth (15 pts)
         if eps_growth > 50: 
-            score += 15; a_grade = 'A'; a_score = 15
+            score += 15; grades['A'] = 'A'; scores['A'] = 15
         elif eps_growth > 25: 
-            score += 12; a_grade = 'A'; a_score = 12
+            score += 12; grades['A'] = 'A'; scores['A'] = 12
         elif eps_growth > 15: 
-            score += 8; a_grade = 'B'; a_score = 8
+            score += 8; grades['A'] = 'B'; scores['A'] = 8
         elif eps_growth > 0: 
-            score += 4; a_grade = 'C'; a_score = 4
+            score += 4; grades['A'] = 'C'; scores['A'] = 4
         else: 
-            score += 0; a_grade = 'D'; a_score = 0
+            grades['A'] = 'D'; scores['A'] = 0
         
+        # N - New Highs (15 pts)
         if pct_from_high > -3: 
-            score += 15; n_grade = 'A'; n_score = 15
+            score += 15; grades['N'] = 'A'; scores['N'] = 15
         elif pct_from_high > -10: 
-            score += 12; n_grade = 'A'; n_score = 12
+            score += 12; grades['N'] = 'A'; scores['N'] = 12
         elif pct_from_high > -20: 
-            score += 8; n_grade = 'B'; n_score = 8
+            score += 8; grades['N'] = 'B'; scores['N'] = 8
         elif pct_from_high > -30: 
-            score += 4; n_grade = 'C'; n_score = 4
+            score += 4; grades['N'] = 'C'; scores['N'] = 4
         else: 
-            score += 0; n_grade = 'D'; n_score = 0
+            grades['N'] = 'D'; scores['N'] = 0
         
+        # S - Supply and Demand (10 pts)
         if volume_ratio > 2.0: 
-            score += 10; s_grade = 'A'; s_score = 10
+            score += 10; grades['S'] = 'A'; scores['S'] = 10
         elif volume_ratio > 1.5: 
-            score += 8; s_grade = 'A'; s_score = 8
+            score += 8; grades['S'] = 'A'; scores['S'] = 8
         elif volume_ratio > 1.0: 
-            score += 5; s_grade = 'B'; s_score = 5
+            score += 5; grades['S'] = 'B'; scores['S'] = 5
         else: 
-            score += 2; s_grade = 'C'; s_score = 2
+            score += 2; grades['S'] = 'C'; scores['S'] = 2
         
+        # L - Leader or Laggard (15 pts)
         if rs_rating > 90: 
-            score += 15; l_grade = 'A'; l_score = 15
+            score += 15; grades['L'] = 'A'; scores['L'] = 15
         elif rs_rating > 80: 
-            score += 12; l_grade = 'A'; l_score = 12
+            score += 12; grades['L'] = 'A'; scores['L'] = 12
         elif rs_rating > 70: 
-            score += 8; l_grade = 'B'; l_score = 8
+            score += 8; grades['L'] = 'B'; scores['L'] = 8
         elif rs_rating > 60: 
-            score += 4; l_grade = 'C'; l_score = 4
+            score += 4; grades['L'] = 'C'; scores['L'] = 4
         else: 
-            score += 0; l_grade = 'D'; l_score = 0
+            grades['L'] = 'D'; scores['L'] = 0
         
+        # I - Institutional Sponsorship (10 pts)
         if inst_ownership > 80: 
-            score += 10; i_grade = 'A'; i_score = 10
+            score += 10; grades['I'] = 'A'; scores['I'] = 10
         elif inst_ownership > 60: 
-            score += 8; i_grade = 'A'; i_score = 8
+            score += 8; grades['I'] = 'A'; scores['I'] = 8
         elif inst_ownership > 40: 
-            score += 5; i_grade = 'B'; i_score = 5
+            score += 5; grades['I'] = 'B'; scores['I'] = 5
         elif inst_ownership > 20: 
-            score += 3; i_grade = 'C'; i_score = 3
+            score += 3; grades['I'] = 'C'; scores['I'] = 3
         else: 
-            score += 0; i_grade = 'D'; i_score = 0
+            grades['I'] = 'D'; scores['I'] = 0
         
+        # M - Market Direction (15 pts)
         if m_score >= 80: 
-            score += 15; m_grade_final = 'A'; m_score_val = 15
+            score += 15; grades['M'] = 'A'; scores['M'] = 15
         elif m_score >= 60: 
-            score += 10; m_grade_final = 'B'; m_score_val = 10
+            score += 10; grades['M'] = 'B'; scores['M'] = 10
         elif m_score >= 40: 
-            score += 5; m_grade_final = 'C'; m_score_val = 5
+            score += 5; grades['M'] = 'C'; scores['M'] = 5
         else: 
-            score += 0; m_grade_final = 'D'; m_score_val = 0
+            grades['M'] = 'D'; scores['M'] = 0
         
-        ml_predictor = CANSlimMLPredictor()
-        ml_prob = ml_predictor.predict({
-            'earnings_growth': earnings_growth,
-            'revenue_growth': revenue_growth,
-            'eps_growth': eps_growth,
-            'rs_rating': rs_rating,
-            'volume_ratio': volume_ratio,
-            'inst_ownership': inst_ownership,
-            'pct_from_high': pct_from_high,
-            'volatility': volatility / 100,
-            'price_momentum': price_momentum
-        })
+        # ML Prediction
+        ml_prob = 0.5
+        try:
+            ml_predictor = CANSlimMLPredictor()
+            ml_prob = ml_predictor.predict({
+                'earnings_growth': earnings_growth,
+                'revenue_growth': revenue_growth,
+                'eps_growth': eps_growth,
+                'rs_rating': rs_rating,
+                'volume_ratio': volume_ratio,
+                'inst_ownership': inst_ownership,
+                'pct_from_high': pct_from_high,
+                'volatility': volatility / 100 if volatility else 0.2,
+                'price_momentum': price_momentum
+            })
+        except Exception as e:
+            pass  # Mantener valor por defecto
         
-        return {
+        # Construir resultado
+        result = {
             'ticker': ticker,
-            'name': info.get('shortName', ticker),
+            'name': info.get('shortName') or info.get('longName') or ticker,
             'sector': info.get('sector', 'N/A'),
             'industry': info.get('industry', 'N/A'),
             'market_cap': market_cap,
             'price': current_price,
             'score': score,
             'ml_probability': ml_prob,
-            'grades': {
-                'C': c_grade, 'A': a_grade, 'N': n_grade, 
-                'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade_final
-            },
-            'scores': {
-                'C': c_score, 'A': a_score, 'N': n_score,
-                'S': s_score, 'L': l_score, 'I': i_score, 'M': m_score_val
-            },
+            'grades': grades,
+            'scores': scores,
             'metrics': {
                 'earnings_growth': earnings_growth,
                 'revenue_growth': revenue_growth,
@@ -626,12 +773,17 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
                 'rs_rating': rs_rating,
                 'inst_ownership': inst_ownership,
                 'market_score': m_score,
-                'market_phase': market_data.get('phase', 'N/A'),
-                'volatility': volatility,
+                'market_phase': m_phase,
+                'volatility': volatility if not np.isnan(volatility) else 0,
                 'price_momentum': price_momentum
             }
         }
+        
+        return result
+        
     except Exception as e:
+        st.error(f"❌ Error inesperado analizando {ticker}: {str(e)}")
+        st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
 @st.cache_data(ttl=600)
@@ -1353,103 +1505,150 @@ def render():
             else:
                 st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
-    # TAB 2: ANÁLISIS DETALLADO
+    # TAB 2: ANÁLISIS DETALLADO - CORREGIDO
     with tab2:
-        ticker_input = st.text_input("Ingresar Ticker para Análisis Detallado", "AAPL").upper()
+        st.subheader("📊 Análisis Individual de Ticker")
         
-        if st.button("Analizar", type="primary"):
-            with st.spinner(f"Analizando {ticker_input}..."):
-                result = calculate_can_slim_metrics(ticker_input, market_analyzer)
-                
-                if result:
-                    col1, col2 = st.columns([1, 2])
+        # Input con valor por defecto y validación
+        ticker_input = st.text_input(
+            "Ingresar Ticker para Análisis Detallado", 
+            value="AAPL",
+            help="Ejemplos: AAPL, MSFT, NVDA, TSLA"
+        ).strip().upper()
+        
+        col_btn1, col_btn2 = st.columns([1, 3])
+        with col_btn1:
+            analyze_button = st.button("🔍 Analizar", type="primary", use_container_width=True)
+        with col_btn2:
+            if analyze_button:
+                st.info(f"Procesando: {ticker_input}")
+        
+        if analyze_button:
+            if not ticker_input:
+                st.error("❌ Por favor ingresa un ticker válido")
+            else:
+                with st.spinner(f"Analizando {ticker_input}..."):
+                    result = calculate_can_slim_metrics(ticker_input, market_analyzer)
                     
-                    with col1:
-                        st.plotly_chart(create_score_gauge(result['score']), use_container_width=True)
-                        st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True)
+                    if result:
+                        st.success(f"✅ Análisis completado para {ticker_input}")
                         
-                        # Métricas clave
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h4>RS Rating</h4>
-                            <h2 style="color: {COLORS['primary'] if result['metrics']['rs_rating'] > 80 else COLORS['warning'] if result['metrics']['rs_rating'] > 60 else COLORS['danger']};">
-                                {result['metrics']['rs_rating']:.0f}
-                            </h2>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        col1, col2 = st.columns([1, 2])
                         
-                        st.markdown(f"""
-                        <div class="metric-card" style="margin-top: 10px;">
-                            <h4>ML Probability</h4>
-                            <h2 style="color: {COLORS['primary'] if result['ml_probability'] > 0.7 else COLORS['warning'] if result['ml_probability'] > 0.5 else COLORS['danger']};">
-                                {result['ml_probability']:.1%}
-                            </h2>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with col2:
-                        # Gráfico de precios
-                        stock = yf.Ticker(ticker_input)
-                        hist = stock.history(period="1y")
+                        with col1:
+                            st.plotly_chart(create_score_gauge(result['score']), use_container_width=True)
+                            st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True)
+                            
+                            # Métricas clave
+                            st.markdown(f"""
+                            <div class="metric-card">
+                                <h4>RS Rating</h4>
+                                <h2 style="color: {COLORS['primary'] if result['metrics']['rs_rating'] > 80 else COLORS['warning'] if result['metrics']['rs_rating'] > 60 else COLORS['danger']};">
+                                    {result['metrics']['rs_rating']:.0f}
+                                </h2>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown(f"""
+                            <div class="metric-card" style="margin-top: 10px;">
+                                <h4>ML Probability</h4>
+                                <h2 style="color: {COLORS['primary'] if result['ml_probability'] > 0.7 else COLORS['warning'] if result['ml_probability'] > 0.5 else COLORS['danger']};">
+                                    {result['ml_probability']:.1%}
+                                </h2>
+                            </div>
+                            """, unsafe_allow_html=True)
                         
-                        fig = go.Figure()
-                        fig.add_trace(go.Candlestick(
-                            x=hist.index,
-                            open=hist['Open'],
-                            high=hist['High'],
-                            low=hist['Low'],
-                            close=hist['Close'],
-                            name='Price'
-                        ))
+                        with col2:
+                            # Gráfico de precios
+                            try:
+                                stock = yf.Ticker(ticker_input)
+                                hist = stock.history(period="1y")
+                                
+                                if not hist.empty:
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Candlestick(
+                                        x=hist.index,
+                                        open=hist['Open'],
+                                        high=hist['High'],
+                                        low=hist['Low'],
+                                        close=hist['Close'],
+                                        name='Price'
+                                    ))
+                                    
+                                    # Añadir SMAs
+                                    sma50 = hist['Close'].rolling(50).mean()
+                                    sma200 = hist['Close'].rolling(200).mean()
+                                    
+                                    fig.add_trace(go.Scatter(
+                                        x=hist.index,
+                                        y=sma50,
+                                        name='SMA 50',
+                                        line=dict(color=COLORS['warning'], width=1)
+                                    ))
+                                    fig.add_trace(go.Scatter(
+                                        x=hist.index,
+                                        y=sma200,
+                                        name='SMA 200',
+                                        line=dict(color=COLORS['primary'], width=1)
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
+                                        paper_bgcolor=COLORS['bg_dark'],
+                                        plot_bgcolor=COLORS['bg_dark'],
+                                        font=dict(color='white'),
+                                        xaxis=dict(gridcolor=COLORS['bg_card']),
+                                        yaxis=dict(gridcolor=COLORS['bg_card']),
+                                        height=500
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.warning("No se pudieron cargar datos históricos para el gráfico")
+                            except Exception as e:
+                                st.error(f"Error cargando gráfico: {e}")
+                            
+                            # Tabla de métricas
+                            metrics_df = pd.DataFrame({
+                                'Métrica': [
+                                    'Market Cap', 'EPS Growth', 'Revenue Growth',
+                                    'Inst. Ownership', 'Volume Ratio', 'From 52W High',
+                                    'Volatility', 'Price Momentum', 'Market Score'
+                                ],
+                                'Valor': [
+                                    f"${result['market_cap']:.1f}B",
+                                    f"{result['metrics']['earnings_growth']:.1f}%",
+                                    f"{result['metrics']['revenue_growth']:.1f}%",
+                                    f"{result['metrics']['inst_ownership']:.1f}%",
+                                    f"{result['metrics']['volume_ratio']:.2f}x",
+                                    f"{result['metrics']['pct_from_high']:.1f}%",
+                                    f"{result['metrics']['volatility']:.1f}%",
+                                    f"{result['metrics']['price_momentum']:.1f}%",
+                                    f"{result['metrics']['market_score']:.0f}/100"
+                                ]
+                            })
+                            st.table(metrics_df)
+                    else:
+                        st.error(f"❌ No se pudo obtener datos para {ticker_input}")
                         
-                        # Añadir SMAs
-                        fig.add_trace(go.Scatter(
-                            x=hist.index,
-                            y=hist['Close'].rolling(50).mean(),
-                            name='SMA 50',
-                            line=dict(color=COLORS['warning'], width=1)
-                        ))
-                        fig.add_trace(go.Scatter(
-                            x=hist.index,
-                            y=hist['Close'].rolling(200).mean(),
-                            name='SMA 200',
-                            line=dict(color=COLORS['primary'], width=1)
-                        ))
-                        
-                        fig.update_layout(
-                            title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
-                            paper_bgcolor=COLORS['bg_dark'],
-                            plot_bgcolor=COLORS['bg_dark'],
-                            font=dict(color='white'),
-                            xaxis=dict(gridcolor=COLORS['bg_card']),
-                            yaxis=dict(gridcolor=COLORS['bg_card']),
-                            height=500
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Tabla de métricas
-                        metrics_df = pd.DataFrame({
-                            'Métrica': [
-                                'Market Cap', 'EPS Growth', 'Revenue Growth',
-                                'Inst. Ownership', 'Volume Ratio', 'From 52W High',
-                                'Volatility', 'Price Momentum', 'Market Score'
-                            ],
-                            'Valor': [
-                                f"${result['market_cap']:.1f}B",
-                                f"{result['metrics']['earnings_growth']:.1f}%",
-                                f"{result['metrics']['revenue_growth']:.1f}%",
-                                f"{result['metrics']['inst_ownership']:.1f}%",
-                                f"{result['metrics']['volume_ratio']:.2f}x",
-                                f"{result['metrics']['pct_from_high']:.1f}%",
-                                f"{result['metrics']['volatility']:.1f}%",
-                                f"{result['metrics']['price_momentum']:.1f}%",
-                                f"{result['metrics']['market_score']:.0f}/100"
-                            ]
-                        })
-                        st.table(metrics_df)
-                else:
-                    st.error(f"No se pudo obtener datos para {ticker_input}")
+                        # Sugerencias de troubleshooting
+                        with st.expander("🔧 Posibles causas y soluciones"):
+                            st.markdown("""
+                            **Causas comunes:**
+                            1. **Ticker incorrecto**: Verifica el símbolo en [Yahoo Finance](https://finance.yahoo.com)
+                            2. **Ticker con prefijo**: Algunos tickers necesitan sufijo (ej: `BABA` vs `9988.HK`)
+                            3. **Datos no disponibles**: Algunos tickers tienen datos limitados
+                            4. **Problema de conexión**: Verifica tu conexión a internet
+                            5. **Rate limiting**: Yahoo Finance puede bloquear requests frecuentes
+                            
+                            **Ejemplos de tickers válidos:**
+                            - `AAPL` (Apple)
+                            - `MSFT` (Microsoft)
+                            - `NVDA` (NVIDIA)
+                            - `TSLA` (Tesla)
+                            - `AMZN` (Amazon)
+                            - `GOOGL` (Alphabet)
+                            """)
 
     # TAB 3: METODOLOGÍA COMPLETA
     with tab3:
@@ -1655,4 +1854,3 @@ data = response.json()
 
 if __name__ == "__main__":
     render()
-

@@ -12,7 +12,6 @@ def render():
             font-family: 'JetBrains Mono', monospace;
         }
         
-        /* Glitch effect para títulos */
         .glitch {
             position: relative;
             color: #00ffad;
@@ -63,7 +62,6 @@ def render():
             100% { clip: rect(34px, 9999px, 12px, 0); }
         }
         
-        /* Terminal window styling */
         .terminal-window {
             background: #0c0e12;
             border: 1px solid #1a1e26;
@@ -105,7 +103,6 @@ def render():
             line-height: 1.8;
         }
         
-        /* Section headers */
         .section-header {
             background: linear-gradient(90deg, #00ffad22 0%, transparent 100%);
             border-left: 3px solid #00ffad;
@@ -119,7 +116,6 @@ def render():
             letter-spacing: 2px;
         }
         
-        /* Quote blocks */
         .quote-block {
             background: #1a1e26;
             border-left: 3px solid #f23645;
@@ -148,7 +144,6 @@ def render():
             font-family: 'JetBrains Mono', monospace;
         }
         
-        /* Code blocks inline */
         code {
             background: #1a1e26;
             color: #00ffad;
@@ -158,7 +153,6 @@ def render():
             font-size: 0.9em;
         }
         
-        /* Warning boxes */
         .warning-box {
             background: linear-gradient(135deg, #1a0f0f 0%, #261a1a 100%);
             border: 1px solid #f23645;
@@ -175,13 +169,11 @@ def render():
             letter-spacing: 1px;
         }
         
-        /* Highlight text */
         .highlight-red { color: #f23645; font-weight: bold; }
         .highlight-green { color: #00ffad; font-weight: bold; }
         .highlight-orange { color: #ff9800; font-weight: bold; }
         .highlight-blue { color: #00d9ff; font-weight: bold; }
         
-        /* Blinking cursor */
         .cursor {
             display: inline-block;
             width: 10px;
@@ -197,19 +189,6 @@ def render():
             51%, 100% { opacity: 0; }
         }
         
-        /* Matrix rain effect container */
-        .matrix-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: -1;
-            opacity: 0.03;
-        }
-        
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -224,25 +203,6 @@ def render():
             background: #00ffad;
         }
         
-        /* Typing effect */
-        .typing {
-            overflow: hidden;
-            white-space: nowrap;
-            border-right: 2px solid #00ffad;
-            animation: typing 3s steps(40, end), blink-caret 0.75s step-end infinite;
-        }
-        
-        @keyframes typing {
-            from { width: 0 }
-            to { width: 100% }
-        }
-        
-        @keyframes blink-caret {
-            from, to { border-color: transparent }
-            50% { border-color: #00ffad }
-        }
-        
-        /* Section divider */
         .section-divider {
             text-align: center;
             margin: 40px 0;
@@ -260,7 +220,7 @@ def render():
             >> MANIFESTO_RSU.exe
         </h1>
         <p style="color: #666; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">
-            <span class="highlight-green">root@rsu-terminal</span>:<span class="highlight-blue">~/manifest</span># cat MANIFESTO.txt<span class="cursor"></span>
+            <span style="color: #00ffad;">root@rsu-terminal</span>:<span style="color: #00d9ff;">~/manifest</span># cat MANIFESTO.txt<span class="cursor"></span>
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -271,18 +231,16 @@ def render():
         <h4>⚠️ ADVERTENCIA DE SEGURIDAD</h4>
         <p style="color: #aaa; margin: 0; font-size: 0.9rem;">
             Este documento contiene información clasificada. La lectura puede provocar 
-            <span class="highlight-green">despertar de clase</span>, 
-            <span class="highlight-orange">síndrome de impostor invertido</span> y 
-            <span class="highlight-red">deseo irrefrenable de leer gráficos de velas</span>.
+            <span style="color: #00ffad; font-weight: bold;">despertar de clase</span>, 
+            <span style="color: #ff9800; font-weight: bold;">síndrome de impostor invertido</span> y 
+            <span style="color: #f23645; font-weight: bold;">deseo irrefrenable de leer gráficos de velas</span>.
         </p>
     </div>
     """, unsafe_allow_html=True)
     
     # SECCIÓN 0
     st.markdown("""
-    <div class="section-header">
-        0. LA LENTA CANCELACIÓN DEL FUTURO
-    </div>
+    <div class="section-header">0. LA LENTA CANCELACIÓN DEL FUTURO</div>
     """, unsafe_allow_html=True)
     
     st.markdown("""
@@ -295,7 +253,7 @@ def render():
         </div>
         <div class="terminal-content">
             <p style="color: #ccc; margin: 0;">
-                Vivimos en el <span class="highlight-red">Realismo Capitalista</span>: la atmósfera mental que nos impide imaginar un final para este sistema que no sea el colapso total. El neoliberalismo no es solo un modelo económico; es una <span class="highlight-orange">tanatopolítica</span> que nos precariza, nos enferma con ansiedad y luego nos vende el ansiolítico para que sigamos siendo productivos.
+                Vivimos en el <span style="color: #f23645; font-weight: bold;">Realismo Capitalista</span>: la atmósfera mental que nos impide imaginar un final para este sistema que no sea el colapso total. El neoliberalismo no es solo un modelo económico; es una <span style="color: #ff9800; font-weight: bold;">tanatopolítica</span> que nos precariza, nos enferma con ansiedad y luego nos vende el ansiolítico para que sigamos siendo productivos.
             </p>
             <br>
             <p style="color: #ccc; margin: 0;">
@@ -327,9 +285,7 @@ def render():
     st.markdown('<div class="section-divider">▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬</div>', unsafe_allow_html=True)
     
     st.markdown("""
-    <div class="section-header">
-        1. EL MERCADO COMO CAMPO DE BATALLA (Y EXPLOIT)
-    </div>
+    <div class="section-header">1. EL MERCADO COMO CAMPO DE BATALLA (Y EXPLOIT)</div>
     """, unsafe_allow_html=True)
     
     col1, col2 = st.columns([3, 2])
@@ -345,15 +301,15 @@ def render():
             </div>
             <div class="terminal-content">
                 <p style="color: #ccc;">
-                    El mercado financiero no es un templo de libertad; es una <span class="highlight-red">picadora de carne</span> diseñada para extraer valor de la base y concentrarlo en la cúspide.
+                    El mercado financiero no es un templo de libertad; es una <span style="color: #f23645; font-weight: bold;">picadora de carne</span> diseñada para extraer valor de la base y concentrarlo en la cúspide.
                 </p>
                 <br>
                 <p style="color: #888; font-size: 0.85rem;">
-                    Como señala <span class="highlight-orange">Gary Stevenson</span>, la desigualdad no es un error del sistema, es su <span class="highlight-red">función principal</span>.
+                    Como señala <span style="color: #ff9800; font-weight: bold;">Gary Stevenson</span>, la desigualdad no es un error del sistema, es su <span style="color: #f23645; font-weight: bold;">función principal</span>.
                 </p>
                 <br>
                 <p style="color: #ccc;">
-                    Mientras la inflación monetaria de <span class="highlight-blue">Jose Luis Cava</span> devora tus ahorros y tu tiempo de vida, las élites operan con información privilegiada y herramientas que tú no tienes.
+                    Mientras la inflación monetaria de <span style="color: #00d9ff; font-weight: bold;">Jose Luis Cava</span> devora tus ahorros y tu tiempo de vida, las élites operan con información privilegiada y herramientas que tú no tienes.
                 </p>
             </div>
         </div>
@@ -366,14 +322,14 @@ def render():
                 ⚡ VULNERABILIDAD DETECTADA
             </h4>
             <p style="color: #ccc; font-size: 0.9rem;">
-                Sin embargo, el mercado posee una vulnerabilidad: <span class="highlight-green">su propia infraestructura</span>.
+                Sin embargo, el mercado posee una vulnerabilidad: <span style="color: #00ffad; font-weight: bold;">su propia infraestructura</span>.
             </p>
             <br>
             <div style="background: #0c0e12; padding: 15px; border-radius: 5px; border-left: 2px solid #00ffad;">
                 <p style="color: #00ffad; font-family: 'Fira Code', monospace; font-size: 0.8rem; margin: 0;">
-                    > El Rastro de la Liquidez<br>
-                    > Los gigantes no pueden moverse sin dejar huellas<br>
-                    > Sus órdenes alteran el tejido de la realidad gráfica
+                    &gt; El Rastro de la Liquidez<br>
+                    &gt; Los gigantes no pueden moverse sin dejar huellas<br>
+                    &gt; Sus órdenes alteran el tejido de la realidad gráfica
                 </p>
             </div>
         </div>
@@ -385,13 +341,13 @@ def render():
         <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: #00ffad; opacity: 0.05; border-radius: 50%;"></div>
         
         <h3 style="color: #00ffad; font-family: 'Fira Code', monospace; margin-top: 0;">
-            > LA METODOLOGÍA RSU
+            &gt; LA METODOLOGÍA RSU
         </h3>
         
         <p style="color: #ccc; line-height: 1.8;">
-            No somos inversores pasivos esperando migajas. Somos <span class="highlight-green">hackers del flujo de capital</span>. 
+            No somos inversores pasivos esperando migajas. Somos <span style="color: #00ffad; font-weight: bold;">hackers del flujo de capital</span>. 
             Buscamos el rastro de las <code>"manos fuertes"</code>, identificamos sus zonas de manipulación y 
-            ejecutamos un <span class="highlight-orange">exploit</span> sobre su propia avaricia.
+            ejecutamos un <span style="color: #ff9800; font-weight: bold;">exploit</span> sobre su propia avaricia.
         </p>
         
         <div style="margin-top: 20px; padding: 15px; background: #0c0e12; border-radius: 5px; border-left: 3px solid #ff9800;">
@@ -407,9 +363,7 @@ def render():
     st.markdown('<div class="section-divider">▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬</div>', unsafe_allow_html=True)
     
     st.markdown("""
-    <div class="section-header">
-        2. MERITOCRACIA RADICAL VS. PRECARIEDAD
-    </div>
+    <div class="section-header">2. MERITOCRACIA RADICAL VS. PRECARIEDAD</div>
     """, unsafe_allow_html=True)
     
     st.markdown("""
@@ -428,7 +382,7 @@ def render():
             <h4 style="color: #00ffad; font-family: 'Fira Code', monospace; margin-top: 0;">💻 TERMINAL RSU</h4>
             <p style="color: #ccc; margin: 0;">
                 El gráfico no sabe quién eres. El mercado es un entorno hostil, sí, pero es uno de los pocos lugares donde 
-                <span class="highlight-green">el conocimiento técnico y la disciplina pueden superar a la herencia</span>.
+                <span style="color: #00ffad; font-weight: bold;">el conocimiento técnico y la disciplina pueden superar a la herencia</span>.
             </p>
         </div>
     </div>
@@ -443,7 +397,7 @@ def render():
                 🧠 DESPRIVATIZAR LA SALUD MENTAL
             </h4>
             <p style="color: #aaa; font-size: 0.9rem; line-height: 1.6;">
-                Operar no es una terapia, pero la <span class="highlight-green">libertad financiera</span> es la única cura real 
+                Operar no es una terapia, pero la <span style="color: #00ffad; font-weight: bold;">libertad financiera</span> es la única cura real 
                 para la ansiedad estructural de la precariedad.
             </p>
         </div>
@@ -457,7 +411,7 @@ def render():
             </h4>
             <p style="color: #aaa; font-size: 0.9rem; line-height: 1.6;">
                 Operamos con los ricos, pero no somos como ellos. No buscamos la explotación del prójimo, sino la 
-                <span class="highlight-orange">extracción de liquidez</span> de un sistema amañado que lleva décadas robándonos el futuro.
+                <span style="color: #ff9800; font-weight: bold;">extracción de liquidez</span> de un sistema amañado que lleva décadas robándonos el futuro.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -466,9 +420,7 @@ def render():
     st.markdown('<div class="section-divider">▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬</div>', unsafe_allow_html=True)
     
     st.markdown("""
-    <div class="section-header">
-        3. EL CÓDIGO DE RSU
-    </div>
+    <div class="section-header">3. EL CÓDIGO DE RSU</div>
     """, unsafe_allow_html=True)
     
     st.markdown("""
@@ -540,8 +492,8 @@ def render():
         </h2>
         
         <p style="color: #ccc; font-size: 1.1rem; line-height: 1.8; max-width: 800px; margin: 0 auto 30px auto;">
-            El neoliberalismo controla tus deseos para que desees rendir. <span class="highlight-green">RSU hackea ese deseo</span>. 
-            No queremos Lamborghinis; queremos <span class="highlight-orange">nuestro tiempo de vuelta</span>. 
+            El neoliberalismo controla tus deseos para que desees rendir. <span style="color: #00ffad; font-weight: bold;">RSU hackea ese deseo</span>. 
+            No queremos Lamborghinis; queremos <span style="color: #ff9800; font-weight: bold;">nuestro tiempo de vuelta</span>. 
             Queremos la soberanía que nos fue arrebatada.
         </p>
         
@@ -579,3 +531,4 @@ def render():
         </p>
     </div>
     """, unsafe_allow_html=True)
+

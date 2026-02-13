@@ -3,7 +3,7 @@
 CAN SLIM Scanner Pro - Versión Mejorada
 Sistema completo de selección de acciones con ML, Backtesting y API
 Autor: CAN SLIM Pro Team
-Versión: 2.0.0
+Versión: 2.0.2
 """
 
 import streamlit as st
@@ -18,7 +18,52 @@ from bs4 import BeautifulSoup
 import warnings
 import os
 import re as re_module
+import time
+import random
 warnings.filterwarnings('ignore')
+
+# ============================================================
+# CONFIGURACIÓN DE RATE LIMITING PARA YFINANCE
+# ============================================================
+
+class YFinanceRateLimiter:
+    """Gestiona rate limits de yfinance con delays y reintentos"""
+    
+    def __init__(self):
+        self.last_request_time = 0
+        self.min_delay = 0.5  # Delay mínimo entre requests en segundos
+        self.max_retries = 3
+        self.backoff_factor = 2
+    
+    def wait_if_needed(self):
+        """Espera si es necesario para respetar rate limits"""
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_delay:
+            sleep_time = self.min_delay - elapsed + random.uniform(0.1, 0.3)
+            time.sleep(sleep_time)
+        self.last_request_time = time.time()
+    
+    def get_ticker_with_retry(self, ticker_symbol):
+        """Obtiene ticker con reintentos exponenciales"""
+        for attempt in range(self.max_retries):
+            try:
+                self.wait_if_needed()
+                ticker = yf.Ticker(ticker_symbol)
+                # Verificar que podemos obtener datos
+                info = ticker.info
+                if info and len(info) > 0:
+                    return ticker
+                else:
+                    raise ValueError("No data returned")
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    raise e
+                wait_time = (self.backoff_factor ** attempt) + random.uniform(0, 1)
+                time.sleep(wait_time)
+        return None
+
+# Instancia global del rate limiter
+rate_limiter = YFinanceRateLimiter()
 
 # ============================================================
 # IMPORTS OPCIONALES CON MANEJO DE ERRORES
@@ -89,13 +134,10 @@ TICKERS_PATH = None  # Se determina dinámicamente
 
 def get_tickers_path():
     """Determina la ruta correcta de tickers.txt según el contexto de ejecución"""
-    # Si estamos en modules/canslim.py, subir un nivel al directorio raíz
     current_file = os.path.abspath(__file__)
     if 'modules' in os.path.dirname(current_file).split(os.sep):
-        # Estamos en modules/canslim.py
         return os.path.join(os.path.dirname(os.path.dirname(current_file)), "tickers.txt")
     else:
-        # Estamos en el directorio raíz (app.py)
         return os.path.join(os.path.dirname(current_file), "tickers.txt")
 
 def load_tickers_from_file():
@@ -103,30 +145,23 @@ def load_tickers_from_file():
     try:
         tickers_path = get_tickers_path()
         
-        # Verificar si el archivo existe
         if not os.path.exists(tickers_path):
-            # Fallback: intentar ruta relativa simple
             tickers_path = "tickers.txt"
             if not os.path.exists(tickers_path):
                 st.error(f"❌ No se encontró el archivo tickers.txt")
                 return []
 
-        # Leer archivo de texto línea por línea
         with open(tickers_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
-        # Limpiar y formatear - solo mantener tickers válidos
         valid_tickers = []
         for line in lines:
             t_clean = line.strip().upper()
-            # Saltar líneas vacías o comentarios
             if not t_clean or t_clean.startswith('#'):
                 continue
-            # Filtrar solo tickers válidos: alfanuméricos, 1-5 caracteres, empieza con letra
             if re_module.match(r'^[A-Z][A-Z0-9]{0,4}$', t_clean):
                 valid_tickers.append(t_clean)
 
-        # Eliminar duplicados manteniendo orden
         seen = set()
         unique_tickers = [t for t in valid_tickers if not (t in seen or seen.add(t))]
 
@@ -150,7 +185,6 @@ def get_all_universe_tickers(comprehensive=True):
     if comprehensive:
         return tickers
     else:
-        # Limitar a primeros 500 para modo no comprehensive
         return tickers[:500]
 
 # Variable global para mantener compatibilidad con código existente
@@ -177,9 +211,9 @@ class MarketAnalyzer:
         for ticker, name in self.indices.items():
             try:
                 if ticker == 'VIX':
-                    data = yf.Ticker('^VIX').history(period="6mo")
+                    data = rate_limiter.get_ticker_with_retry('^VIX').history(period="6mo")
                 else:
-                    data = yf.Ticker(ticker).history(period="6mo")
+                    data = rate_limiter.get_ticker_with_retry(ticker).history(period="6mo")
                 
                 if len(data) > 0:
                     market_data[ticker] = {
@@ -191,7 +225,8 @@ class MarketAnalyzer:
                         'trend_20d': (data['Close'].iloc[-1] / data['Close'].iloc[-20] - 1) * 100,
                         'trend_60d': (data['Close'].iloc[-1] / data['Close'].iloc[-60] - 1) * 100
                     }
-            except:
+            except Exception as e:
+                st.warning(f"⚠️ Error obteniendo datos de {ticker}: {str(e)}")
                 continue
         return market_data
     
@@ -284,7 +319,6 @@ class CANSlimMLPredictor:
     def __init__(self):
         self.model = None
         self.scaler = None
-        # Ruta al modelo ML (desde modules/, subir un nivel a raíz)
         self.model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "canslim_ml_model.pkl")
         self.features = [
             'earnings_growth', 'revenue_growth', 'eps_growth',
@@ -487,7 +521,11 @@ class CANSlimBacktester:
 def calculate_can_slim_metrics(ticker, market_analyzer=None):
     """Calcula todas las métricas CAN SLIM para un ticker con ML"""
     try:
-        stock = yf.Ticker(ticker)
+        # Usar rate limiter para obtener datos
+        stock = rate_limiter.get_ticker_with_retry(ticker)
+        if stock is None:
+            return None
+            
         info = stock.info
         hist = stock.history(period="1y")
         
@@ -509,7 +547,8 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
         
         try:
-            spy = yf.Ticker("SPY").history(period="1y")
+            spy_ticker = rate_limiter.get_ticker_with_retry("SPY")
+            spy = spy_ticker.history(period="1y")
             stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
             spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
             rs_rating = 50 + (stock_return - spy_return) * 2
@@ -649,6 +688,7 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             }
         }
     except Exception as e:
+        st.error(f"Error en calculate_can_slim_metrics para {ticker}: {str(e)}")
         return None
 
 @st.cache_data(ttl=600)
@@ -656,7 +696,6 @@ def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False):
     """Escanea el universo de tickers y devuelve candidatos CAN SLIM"""
     candidates = []
     
-    # Usar la función correcta para cargar tickers desde TXT
     current_tickers = load_tickers_from_file()
     
     if comprehensive:
@@ -941,7 +980,7 @@ else:
     app = None
 
 # ============================================================
-# CONTENIDO EDUCATIVO EXPANDIDO
+# CONTENIDO EDUCATIVO EXPANDIDO (SIN RECURSOS ADICIONALES)
 # ============================================================
 
 EDUCATIONAL_CONTENT = {
@@ -1088,52 +1127,12 @@ EDUCATIONAL_CONTENT = {
     16. **Cambiar reglas mid-game**: El sistema funciona, los emociones no
     17. **Resultado reciente sesga juicio**: Un trade no define el sistema
     18. **Buscar confirmación externa**: Tu análisis debe ser independiente
-    """,
-    
-    "recursos_adicionales": """
-    ### 📖 Recursos Adicionales
-    
-    **Libros Esenciales:**
-    - *How to Make Money in Stocks* - William J. O'Neil (Biblia CAN SLIM)
-    - *The Successful Investor* - William J. O'Neil
-    - *24 Essential Lessons for Investment Success* - William J. O'Neil
-    - *Reminiscences of a Stock Operator* - Edwin Lefèvre (Psicología)
-    - *Trading in the Zone* - Mark Douglas (Gestión emocional)
-    
-    **Herramientas Recomendadas:**
-    - **Investor's Business Daily (IBD)**: Clasificaciones IBD, RS Ratings
-    - **MarketSmith**: Plataforma de gráficos de O'Neil (costosa pero completa)
-    - **Finviz**: Screening gratuito con criterios técnicos
-    - **TradingView**: Mejores gráficos técnicos, comunidad activa
-    
-    **Webs y Newsletters:**
-    - investors.com (IBD oficial)
-    - barchart.com (Opinion leaders, highs/lows)
-    - seekingalpha.com (Análisis fundamental)
-    - earningswhispers.com (Calendario y expectativas)
-    
-    **Conceptos Avanzados a Estudiar:**
-    - **Chart Patterns**: Cup with Handle, Double Bottom, Flat Base, Ascending Base
-    - **Volume Analysis**: Accumulation vs Distribution, Pocket Pivots
-    - **Sector Analysis**: Sector rotation, industry groups
-    - **Market Timing**: Follow-Through Days, Distribution Days
-    - **Position Sizing**: Kelly Criterion, Optimal f
-    
-    **Comunidades:**
-    - IBD Meetup Groups (grupos locales de inversores)
-    - Reddit: r/CANSlim, r/StockMarket
-    - Twitter/X: Seguir a @IBDinvestors, @WilliamONeilCo
-    
-    **Datos Históricos Importantes:**
-    - Estudiar bull markets pasados: 1990s, 2003-2007, 2009-2020
-    - Analizar crashes: 1987, 2000, 2008, 2020, 2022
-    - Casos de éxito: MSFT 1986, AAPL 2004, NVDA 2016
-    - Casos de fracaso: Enron, WorldCom, Lehman Brothers
     """
+    # NOTA: Se eliminó "recursos_adicionales"
 }
 
 # ============================================================
-# RENDER PRINCIPAL MEJORADO
+# RENDER PRINCIPAL MEJORADO (SIN TAB 6 - CONFIGURACIÓN & API)
 # ============================================================
 
 def render():
@@ -1235,14 +1234,13 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # Tabs expandidos
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    # Tabs expandidos - SOLO 5 TABS (eliminado el 6º)
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🚀 Scanner", 
         "📊 Análisis Detallado", 
         "📚 Metodología Completa",
         "🤖 ML Predictivo",
-        "📈 Backtesting",
-        "⚙️ Configuración & API"
+        "📈 Backtesting"
     ])
 
     # TAB 1: SCANNER MEJORADO
@@ -1270,13 +1268,13 @@ def render():
             for signal in market_status['signals']:
                 st.markdown(f"- {signal}")
         
-        # Info del archivo de tickers - USAR FUNCIÓN CORRECTA
+        # Info del archivo de tickers
         current_tickers = load_tickers_from_file()
         st.info(f"📁 Archivo tickers.txt: {len(current_tickers)} tickers cargados")
         
         if scan_button:
             if not comprehensive:
-                current_tickers = current_tickers[:500]  # Limitar si no es modo completo
+                current_tickers = current_tickers[:500]
             
             candidates = scan_universe(min_score, None, comprehensive)
             
@@ -1370,105 +1368,118 @@ def render():
             else:
                 st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
-    # TAB 2: ANÁLISIS DETALLADO
+    # TAB 2: ANÁLISIS DETALLADO (MEJORADO CON MANEJO DE ERRORES)
     with tab2:
         ticker_input = st.text_input("Ingresar Ticker para Análisis Detallado", "AAPL").upper()
         
         if st.button("Analizar", type="primary"):
             with st.spinner(f"Analizando {ticker_input}..."):
-                result = calculate_can_slim_metrics(ticker_input, market_analyzer)
-                
-                if result:
-                    col1, col2 = st.columns([1, 2])
+                try:
+                    result = calculate_can_slim_metrics(ticker_input, market_analyzer)
                     
-                    with col1:
-                        st.plotly_chart(create_score_gauge(result['score']), use_container_width=True)
-                        st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True)
+                    if result is None:
+                        st.error(f"❌ No se pudieron obtener datos válidos para {ticker_input}")
+                        st.info("💡 Posibles causas:\n- Ticker no válido o delistado\n- Problemas de conexión con Yahoo Finance\n- Rate limit alcanzado (espera unos segundos e intenta de nuevo)")
+                    else:
+                        col1, col2 = st.columns([1, 2])
                         
-                        # Métricas clave
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h4>RS Rating</h4>
-                            <h2 style="color: {COLORS['primary'] if result['metrics']['rs_rating'] > 80 else COLORS['warning'] if result['metrics']['rs_rating'] > 60 else COLORS['danger']};">
-                                {result['metrics']['rs_rating']:.0f}
-                            </h2>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        with col1:
+                            st.plotly_chart(create_score_gauge(result['score']), use_container_width=True)
+                            st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True)
+                            
+                            # Métricas clave
+                            st.markdown(f"""
+                            <div class="metric-card">
+                                <h4>RS Rating</h4>
+                                <h2 style="color: {COLORS['primary'] if result['metrics']['rs_rating'] > 80 else COLORS['warning'] if result['metrics']['rs_rating'] > 60 else COLORS['danger']};">
+                                    {result['metrics']['rs_rating']:.0f}
+                                </h2>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown(f"""
+                            <div class="metric-card" style="margin-top: 10px;">
+                                <h4>ML Probability</h4>
+                                <h2 style="color: {COLORS['primary'] if result['ml_probability'] > 0.7 else COLORS['warning'] if result['ml_probability'] > 0.5 else COLORS['danger']};">
+                                    {result['ml_probability']:.1%}
+                                </h2>
+                            </div>
+                            """, unsafe_allow_html=True)
                         
-                        st.markdown(f"""
-                        <div class="metric-card" style="margin-top: 10px;">
-                            <h4>ML Probability</h4>
-                            <h2 style="color: {COLORS['primary'] if result['ml_probability'] > 0.7 else COLORS['warning'] if result['ml_probability'] > 0.5 else COLORS['danger']};">
-                                {result['ml_probability']:.1%}
-                            </h2>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with col2:
-                        # Gráfico de precios
-                        stock = yf.Ticker(ticker_input)
-                        hist = stock.history(period="1y")
-                        
-                        fig = go.Figure()
-                        fig.add_trace(go.Candlestick(
-                            x=hist.index,
-                            open=hist['Open'],
-                            high=hist['High'],
-                            low=hist['Low'],
-                            close=hist['Close'],
-                            name='Price'
-                        ))
-                        
-                        # Añadir SMAs
-                        fig.add_trace(go.Scatter(
-                            x=hist.index,
-                            y=hist['Close'].rolling(50).mean(),
-                            name='SMA 50',
-                            line=dict(color=COLORS['warning'], width=1)
-                        ))
-                        fig.add_trace(go.Scatter(
-                            x=hist.index,
-                            y=hist['Close'].rolling(200).mean(),
-                            name='SMA 200',
-                            line=dict(color=COLORS['primary'], width=1)
-                        ))
-                        
-                        fig.update_layout(
-                            title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
-                            paper_bgcolor=COLORS['bg_dark'],
-                            plot_bgcolor=COLORS['bg_dark'],
-                            font=dict(color='white'),
-                            xaxis=dict(gridcolor=COLORS['bg_card']),
-                            yaxis=dict(gridcolor=COLORS['bg_card']),
-                            height=500
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Tabla de métricas
-                        metrics_df = pd.DataFrame({
-                            'Métrica': [
-                                'Market Cap', 'EPS Growth', 'Revenue Growth',
-                                'Inst. Ownership', 'Volume Ratio', 'From 52W High',
-                                'Volatility', 'Price Momentum', 'Market Score'
-                            ],
-                            'Valor': [
-                                f"${result['market_cap']:.1f}B",
-                                f"{result['metrics']['earnings_growth']:.1f}%",
-                                f"{result['metrics']['revenue_growth']:.1f}%",
-                                f"{result['metrics']['inst_ownership']:.1f}%",
-                                f"{result['metrics']['volume_ratio']:.2f}x",
-                                f"{result['metrics']['pct_from_high']:.1f}%",
-                                f"{result['metrics']['volatility']:.1f}%",
-                                f"{result['metrics']['price_momentum']:.1f}%",
-                                f"{result['metrics']['market_score']:.0f}/100"
-                            ]
-                        })
-                        st.table(metrics_df)
-                else:
-                    st.error(f"No se pudo obtener datos para {ticker_input}")
+                        with col2:
+                            # Gráfico de precios
+                            try:
+                                stock = rate_limiter.get_ticker_with_retry(ticker_input)
+                                hist = stock.history(period="1y")
+                                
+                                if len(hist) == 0:
+                                    st.warning("No hay datos históricos disponibles")
+                                else:
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Candlestick(
+                                        x=hist.index,
+                                        open=hist['Open'],
+                                        high=hist['High'],
+                                        low=hist['Low'],
+                                        close=hist['Close'],
+                                        name='Price'
+                                    ))
+                                    
+                                    # Añadir SMAs
+                                    if len(hist) >= 50:
+                                        fig.add_trace(go.Scatter(
+                                            x=hist.index,
+                                            y=hist['Close'].rolling(50).mean(),
+                                            name='SMA 50',
+                                            line=dict(color=COLORS['warning'], width=1)
+                                        ))
+                                    if len(hist) >= 200:
+                                        fig.add_trace(go.Scatter(
+                                            x=hist.index,
+                                            y=hist['Close'].rolling(200).mean(),
+                                            name='SMA 200',
+                                            line=dict(color=COLORS['primary'], width=1)
+                                        ))
+                                    
+                                    fig.update_layout(
+                                        title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
+                                        paper_bgcolor=COLORS['bg_dark'],
+                                        plot_bgcolor=COLORS['bg_dark'],
+                                        font=dict(color='white'),
+                                        xaxis=dict(gridcolor=COLORS['bg_card']),
+                                        yaxis=dict(gridcolor=COLORS['bg_card']),
+                                        height=500
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Error cargando gráfico: {str(e)}")
+                            
+                            # Tabla de métricas
+                            metrics_df = pd.DataFrame({
+                                'Métrica': [
+                                    'Market Cap', 'EPS Growth', 'Revenue Growth',
+                                    'Inst. Ownership', 'Volume Ratio', 'From 52W High',
+                                    'Volatility', 'Price Momentum', 'Market Score'
+                                ],
+                                'Valor': [
+                                    f"${result['market_cap']:.1f}B",
+                                    f"{result['metrics']['earnings_growth']:.1f}%",
+                                    f"{result['metrics']['revenue_growth']:.1f}%",
+                                    f"{result['metrics']['inst_ownership']:.1f}%",
+                                    f"{result['metrics']['volume_ratio']:.2f}x",
+                                    f"{result['metrics']['pct_from_high']:.1f}%",
+                                    f"{result['metrics']['volatility']:.1f}%",
+                                    f"{result['metrics']['price_momentum']:.1f}%",
+                                    f"{result['metrics']['market_score']:.0f}/100"
+                                ]
+                            })
+                            st.table(metrics_df)
+                except Exception as e:
+                    st.error(f"❌ Error inesperado: {str(e)}")
+                    st.info("Por favor, verifica que el ticker sea válido e intenta de nuevo.")
 
-    # TAB 3: METODOLOGÍA COMPLETA
+    # TAB 3: METODOLOGÍA COMPLETA (SIN RECURSOS ADICIONALES)
     with tab3:
         st.markdown("""
         <style>
@@ -1499,8 +1510,7 @@ def render():
         # Errores Comunes
         st.markdown(EDUCATIONAL_CONTENT["errores_comunes"])
         
-        # Recursos Adicionales
-        st.markdown(EDUCATIONAL_CONTENT["recursos_adicionales"])
+        # NOTA: Se eliminó EDUCATIONAL_CONTENT["recursos_adicionales"]
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1541,17 +1551,22 @@ def render():
         st.subheader("Predicción Individual")
         pred_ticker = st.text_input("Ticker para Predicción ML", "NVDA").upper()
         if st.button("Predecir", disabled=not SKLEARN_AVAILABLE):
-            result = calculate_can_slim_metrics(pred_ticker, market_analyzer)
-            if result:
-                prob = result['ml_probability']
-                color = COLORS['primary'] if prob > 0.7 else COLORS['warning'] if prob > 0.5 else COLORS['danger']
-                st.markdown(f"""
-                <div style="background: {COLORS['bg_card']}; padding: 20px; border-radius: 10px; text-align: center;">
-                    <h3>Probabilidad de Outperformance</h3>
-                    <h1 style="color: {color}; font-size: 4rem; margin: 10px 0;">{prob:.1%}</h1>
-                    <p>Basado en características CAN SLIM históricas</p>
-                </div>
-                """, unsafe_allow_html=True)
+            try:
+                result = calculate_can_slim_metrics(pred_ticker, market_analyzer)
+                if result:
+                    prob = result['ml_probability']
+                    color = COLORS['primary'] if prob > 0.7 else COLORS['warning'] if prob > 0.5 else COLORS['danger']
+                    st.markdown(f"""
+                    <div style="background: {COLORS['bg_card']}; padding: 20px; border-radius: 10px; text-align: center;">
+                        <h3>Probabilidad de Outperformance</h3>
+                        <h1 style="color: {color}; font-size: 4rem; margin: 10px 0;">{prob:.1%}</h1>
+                        <p>Basado en características CAN SLIM históricas</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.error(f"No se pudo analizar {pred_ticker}")
+            except Exception as e:
+                st.error(f"Error en predicción: {str(e)}")
 
     # TAB 5: BACKTESTING
     with tab5:
@@ -1590,86 +1605,7 @@ def render():
                 metrics_col3.metric("Max Drawdown", "-12.4%", "vs -20.1% SPY")
                 metrics_col4.metric("Win Rate", "68%", "de operaciones")
 
-    # TAB 6: CONFIGURACIÓN Y API
-    with tab6:
-        st.header("⚙️ Configuración del Sistema")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Configuración de Scanner")
-            st.checkbox("Incluir Small Caps (<$2B)", value=True)
-            st.checkbox("Incluir ADRs Internacionales", value=True)
-            st.checkbox("Incluir ETFs Sectoriales", value=True)
-            st.slider("Umbral de Volumen Mínimo", 100000, 10000000, 500000)
-            
-            st.subheader("Notificaciones")
-            st.checkbox("Alertas de Breakouts", value=True)
-            st.checkbox("Alertas de Sell Signals", value=True)
-            st.text_input("Email para Alertas")
-        
-        with col2:
-            st.subheader("🔌 API FastAPI")
-            
-            if not FASTAPI_AVAILABLE:
-                st.warning("""
-                ⚠️ FastAPI no está instalado:
-                ```bash
-                pip install fastapi uvicorn pydantic
-                ```
-                """)
-            else:
-                st.markdown("""
-                La API REST está disponible en:
-                ```
-                http://localhost:8000
-                ```
-                
-                **Endpoints disponibles:**
-                - `GET /market/status` - Estado del mercado
-                - `POST /analyze` - Analizar ticker
-                - `POST /scan` - Escanear universo
-                - `POST /backtest` - Ejecutar backtest
-                """)
-                
-                if st.button("🚀 Iniciar Servidor API"):
-                    st.info("Iniciando servidor en background...")
-                    st.success("API iniciada en http://localhost:8000")
-                    st.code("""
-# Ejemplo de uso:
-import requests
-
-response = requests.post(
-    "http://localhost:8000/analyze",
-    json={"ticker": "AAPL", "include_ml": true}
-)
-data = response.json()
-                    """, language="python")
-        
-        st.divider()
-        st.subheader("📋 Lista de Sugerencias para Implementación Futura")
-        
-        sugerencias = [
-            "🔌 **Integración de Datos**: Conectar con IB TWS API para ejecución en vivo",
-            "📱 **App Móvil**: Desarrollar app React Native con notificaciones push",
-            "🧠 **Deep Learning**: Implementar LSTM para predicción de precios",
-            "📊 **Social Sentiment**: Análisis de sentimiento en Twitter/Reddit",
-            "🌐 **Web Scraping**: Automatizar lectura de IBD Ratings",
-            "💾 **Base de Datos**: PostgreSQL para histórico de operaciones",
-            "🤖 **Auto-Trading**: Bot de Telegram para alertas y ejecución",
-            "📈 **Paper Trading**: Integración con Alpaca o Interactive Brokers",
-            "🎯 **Portfolio Optimization**: Markowitz + Black-Litterman",
-            "📰 **News Analysis**: NLP para earnings calls y noticias",
-            "🕐 **Intraday Data**: Datos de 1min para scalping CAN SLIM",
-            "🌍 **Global Markets**: Expandir a Europa (DAX, FTSE) y Asia (NIKKEI)",
-            "📉 **Short Selling**: Implementar estrategias de venta corta en downtrends",
-            "💰 **Position Sizing**: Kelly Criterion dinámico basado en volatilidad",
-            "🔄 **Sector Rotation**: Detección automática de rotación sectorial"
-        ]
-        
-        for i, sug in enumerate(sugerencias, 1):
-            st.markdown(f"{i}. {sug}")
+    # NOTA: Se eliminó el TAB 6 (Configuración & API)
 
 if __name__ == "__main__":
     render()
-

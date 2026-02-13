@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-CAN SLIM Scanner Pro - Versión 2.1.1
-Correcciones: Datos fundamentales, Rate Limiting y Orden de definiciones
+CAN SLIM Scanner Pro - Versión 2.2.0
+S&P 500 Scanner - Lee tickers desde tickers.txt
 """
 
 import streamlit as st
@@ -23,7 +23,7 @@ from functools import lru_cache
 warnings.filterwarnings('ignore')
 
 # ============================================================
-# CONSTANTES Y CONFIGURACIÓN GLOBAL (PRIMERO)
+# CONSTANTES Y CONFIGURACIÓN GLOBAL
 # ============================================================
 
 def get_timestamp():
@@ -36,20 +36,20 @@ def hex_to_rgba(hex_color, alpha=1.0):
     b = int(hex_color[4:6], 16)
     return f"rgba({r}, {g}, {b}, {alpha})"
 
-# Paleta de colores CAN SLIM - DEFINIR ANTES DE TODO
+# Paleta de colores CAN SLIM
 COLORS = {
-    'primary': '#00ffad',      # Verde neón (A)
-    'warning': '#ff9800',      # Naranja (B)
-    'danger': '#f23645',       # Rojo (C/D)
-    'neutral': '#888888',      # Gris
-    'bg_dark': '#0c0e12',      # Fondo oscuro
-    'bg_card': '#1a1e26',      # Fondo tarjetas
-    'border': '#2a2e36',       # Bordes
-    'text': '#ffffff',         # Texto principal
-    'text_secondary': '#aaaaaa' # Texto secundario
+    'primary': '#00ffad',
+    'warning': '#ff9800',
+    'danger': '#f23645',
+    'neutral': '#888888',
+    'bg_dark': '#0c0e12',
+    'bg_card': '#1a1e26',
+    'border': '#2a2e36',
+    'text': '#ffffff',
+    'text_secondary': '#aaaaaa'
 }
 
-CSV_TICKERS_PATH = "tickers.csv"
+TICKERS_FILE = "tickers.txt"  # Archivo de tickers del S&P 500
 
 # ============================================================
 # CONFIGURACIÓN PARA EVITAR RATE LIMITING
@@ -58,7 +58,7 @@ CSV_TICKERS_PATH = "tickers.csv"
 class YFSession:
     """Maneja sesiones de yfinance con rate limiting integrado"""
     _last_request_time = 0
-    _min_delay = 0.5  # Segundos entre requests
+    _min_delay = 0.5
     _cache = {}
     
     @classmethod
@@ -66,19 +66,16 @@ class YFSession:
         """Obtiene ticker con retry logic y delays"""
         symbol = symbol.upper().strip()
         
-        # Verificar cache
         cache_key = f"{symbol}_{datetime.now().strftime('%Y-%m-%d_%H')}"
         if cache_key in cls._cache:
             return cls._cache[cache_key]
         
-        # Rate limiting
         elapsed = time.time() - cls._last_request_time
         if elapsed < cls._min_delay:
             time.sleep(cls._min_delay - elapsed)
         
         for attempt in range(max_retries):
             try:
-                # Agregar jitter aleatorio para evitar patrones
                 if attempt > 0:
                     sleep_time = (2 ** attempt) + random.uniform(0, 1)
                     st.warning(f"⏳ Rate limit detectado. Esperando {sleep_time:.1f}s... (intento {attempt + 1}/{max_retries})")
@@ -86,8 +83,6 @@ class YFSession:
                 
                 ticker = yf.Ticker(symbol)
                 cls._last_request_time = time.time()
-                
-                # Guardar en cache
                 cls._cache[cache_key] = ticker
                 return ticker
                 
@@ -130,42 +125,81 @@ except ImportError:
     ZIPPILINE_AVAILABLE = False
 
 # ============================================================
-# GESTIÓN DE UNIVERSO
+# GESTIÓN DE TICKERS S&P 500 DESDE ARCHIVO .TXT
 # ============================================================
 
-def load_tickers_from_csv():
-    """Carga los tickers desde el archivo tickers.csv"""
+def load_sp500_tickers():
+    """
+    Carga los tickers del S&P 500 desde tickers.txt
+    Formato esperado: un ticker por línea, o separados por comas
+    """
     try:
-        if not os.path.exists(CSV_TICKERS_PATH):
-            st.error(f"❌ No se encontró el archivo {CSV_TICKERS_PATH}")
-            return []
-
-        df = pd.read_csv(CSV_TICKERS_PATH, skiprows=9)
-        tickers = df.iloc[:, 0].dropna().tolist()
-
+        if not os.path.exists(TICKERS_FILE):
+            st.error(f"❌ No se encontró el archivo {TICKERS_FILE} en el directorio raíz")
+            st.info("💡 Crea un archivo tickers.txt con los tickers del S&P 500, uno por línea")
+            return get_default_sp500_tickers()  # Fallback a lista por defecto
+        
+        with open(TICKERS_FILE, 'r') as f:
+            content = f.read()
+        
+        # Intentar parsear: primero por líneas, luego por comas
+        tickers = []
+        
+        # Si hay saltos de línea, usar eso
+        if '\n' in content:
+            tickers = [line.strip() for line in content.split('\n') if line.strip()]
+        else:
+            # Si no, intentar separar por comas
+            tickers = [t.strip() for t in content.split(',') if t.strip()]
+        
+        # Limpiar y validar tickers
         valid_tickers = []
         for t in tickers:
-            if pd.notna(t):
-                t_clean = str(t).strip().upper()
-                if re_module.match(r'^[A-Z][A-Z0-9]{0,4}$', t_clean):
-                    valid_tickers.append(t_clean)
-
+            t_clean = str(t).strip().upper()
+            # Remover símbolos comunes de formato
+            t_clean = re_module.sub(r'[^\w\.\-]', '', t_clean)
+            if t_clean and len(t_clean) <= 5:
+                valid_tickers.append(t_clean)
+        
+        # Eliminar duplicados manteniendo orden
         seen = set()
         unique_tickers = [t for t in valid_tickers if not (t in seen or seen.add(t))]
-
+        
+        if len(unique_tickers) == 0:
+            st.warning("⚠️ No se encontraron tickers válidos en el archivo")
+            return get_default_sp500_tickers()
+        
         return unique_tickers
 
     except Exception as e:
-        st.error(f"❌ Error al cargar tickers.csv: {str(e)}")
-        return []
+        st.error(f"❌ Error al cargar {TICKERS_FILE}: {str(e)}")
+        return get_default_sp500_tickers()
 
-def get_all_universe_tickers(comprehensive=True):
-    tickers = load_tickers_from_csv()
-    if not tickers:
-        return []
-    return tickers if comprehensive else tickers[:500]
+def get_default_sp500_tickers():
+    """Lista por defecto de principales tickers del S&P 500 si no hay archivo"""
+    default_tickers = [
+        'AAPL', 'MSFT', 'AMZN', 'NVDA', 'GOOGL', 'META', 'GOOG', 'TSLA', 'BRK-B', 'UNH',
+        'JPM', 'XOM', 'JNJ', 'V', 'PG', 'HD', 'MA', 'CVX', 'LLY', 'MRK',
+        'PEP', 'KO', 'ABBV', 'AVGO', 'COST', 'TMO', 'DIS', 'ABT', 'WMT', 'ACN',
+        'MCD', 'VZ', 'DHR', 'NKE', 'TXN', 'CRM', 'ADBE', 'PM', 'NEE', 'BMY',
+        'RTX', 'HON', 'UNP', 'QCOM', 'UPS', 'LOW', 'LIN', 'AMGN', 'SPGI', 'MDT'
+    ]
+    st.warning(f"⚠️ Usando lista por defecto de {len(default_tickers)} tickers")
+    return default_tickers
 
-tickers = load_tickers_from_csv()
+def save_sp500_tickers(tickers_list):
+    """Guarda lista de tickers al archivo (útil para actualizar)"""
+    try:
+        with open(TICKERS_FILE, 'w') as f:
+            for ticker in tickers_list:
+                f.write(f"{ticker}\n")
+        return True
+    except Exception as e:
+        st.error(f"❌ Error guardando tickers: {e}")
+        return False
+
+# Variable global de tickers
+SP500_TICKERS = load_sp500_tickers()
 
 # ============================================================
 # SCRAPER ALTERNATIVO PARA DATOS FUNDAMENTALES
@@ -186,13 +220,12 @@ def get_fundamental_data_alternative(ticker):
     try:
         url = f"https://finance.yahoo.com/quote/{ticker}"
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Buscar datos en script de página
         scripts = soup.find_all('script')
         for script in scripts:
             if script.string and 'root.App.main' in script.string:
@@ -230,7 +263,7 @@ def get_fundamental_data_alternative(ticker):
                     label = cells[0].text.strip()
                     value = cells[1].text.strip()
                     
-                    if 'Market cap' in label or 'Market Cap' in label:
+                    if 'Market cap' in label:
                         try:
                             value = value.replace(',', '')
                             if 'T' in value:
@@ -248,7 +281,7 @@ def get_fundamental_data_alternative(ticker):
                         except:
                             pass
         
-    except Exception as e:
+    except:
         pass
     
     return data
@@ -260,11 +293,7 @@ def get_fundamental_data_alternative(ticker):
 def get_enhanced_stock_data(ticker):
     """Obtiene datos del stock combinando múltiples fuentes"""
     ticker = ticker.upper().strip()
-    result = {
-        'info': {},
-        'history': None,
-        'calculated': {}
-    }
+    result = {'info': {}, 'history': None, 'calculated': {}}
     
     try:
         stock = YFSession.get_ticker(ticker)
@@ -272,7 +301,6 @@ def get_enhanced_stock_data(ticker):
         st.error(f"❌ No se pudo conectar con Yahoo Finance para {ticker}: {e}")
         return None
     
-    # Obtener historial
     try:
         hist = stock.history(period="1y")
         if hist is not None and not hist.empty and len(hist) >= 50:
@@ -284,7 +312,7 @@ def get_enhanced_stock_data(ticker):
         st.error(f"❌ Error obteniendo historial: {e}")
         return None
     
-    # Obtener datos fundamentales
+    # Obtener datos fundamentales de múltiples fuentes
     info_sources = []
     
     try:
@@ -556,108 +584,7 @@ class CANSlimMLPredictor:
         return dict(zip(self.features, self.model.feature_importances_))
 
 # ============================================================
-# BACKTESTING
-# ============================================================
-
-class CANSlimBacktester:
-    def __init__(self):
-        self.initial_capital = 100000
-        self.results = None
-    
-    def initialize(self, context):
-        if not ZIPPILINE_AVAILABLE:
-            return
-            
-        context.max_positions = 10
-        context.risk_per_trade = 0.02
-        context.stop_loss = 0.07
-        context.profit_target = 0.20
-        context.positions_held = {}
-        
-        set_benchmark(symbol('SPY'))
-    
-    def handle_data(self, context, data):
-        if not ZIPPILINE_AVAILABLE:
-            return
-            
-        canslim_candidates = self.get_canslim_universe(context, data)
-        
-        if context.datetime.day % 7 == 0:
-            self.rebalance(context, data, canslim_candidates)
-        
-        self.check_exits(context, data)
-    
-    def get_canslim_universe(self, context, data):
-        return [symbol('AAPL'), symbol('MSFT'), symbol('NVDA')]
-    
-    def rebalance(self, context, data, candidates):
-        position_size = 1.0 / context.max_positions
-        
-        for stock in list(context.portfolio.positions.keys()):
-            if stock not in candidates:
-                order_target_percent(stock, 0)
-                if stock in context.positions_held:
-                    del context.positions_held[stock]
-        
-        for stock in candidates[:context.max_positions]:
-            if stock not in context.portfolio.positions:
-                order_target_percent(stock, position_size)
-                context.positions_held[stock] = {
-                    'entry_price': data.current(stock, 'price'),
-                    'highest_price': data.current(stock, 'price')
-                }
-    
-    def check_exits(self, context, data):
-        for stock, info in list(context.positions_held.items()):
-            current_price = data.current(stock, 'price')
-            entry_price = info['entry_price']
-            
-            if current_price > info['highest_price']:
-                context.positions_held[stock]['highest_price'] = current_price
-            
-            if current_price < entry_price * (1 - context.stop_loss):
-                order_target_percent(stock, 0)
-                del context.positions_held[stock]
-                continue
-            
-            if current_price < info['highest_price'] * 0.93:
-                order_target_percent(stock, 0)
-                del context.positions_held[stock]
-                continue
-    
-    def run_backtest(self, start_date, end_date):
-        if not ZIPPILINE_AVAILABLE:
-            return None
-        
-        try:
-            perf = run_algorithm(
-                start=start_date,
-                end=end_date,
-                initialize=self.initialize,
-                handle_data=self.handle_data,
-                capital_base=self.initial_capital,
-                bundle='quandl'
-            )
-            self.results = perf
-            return perf
-        except Exception as e:
-            st.error(f"Error en backtest: {str(e)}")
-            return None
-    
-    def get_metrics(self):
-        if self.results is None or not ZIPPILINE_AVAILABLE:
-            return {}
-        
-        returns = self.results['returns']
-        return {
-            'total_return': (returns.iloc[-1] + 1) / (returns.iloc[0] + 1) - 1,
-            'sharpe_ratio': returns.mean() / returns.std() * np.sqrt(252),
-            'max_drawdown': (returns.cummax() - returns).max(),
-            'volatility': returns.std() * np.sqrt(252)
-        }
-
-# ============================================================
-# CÁLCULOS CAN SLIM CORREGIDOS
+# CÁLCULOS CAN SLIM
 # ============================================================
 
 def calculate_can_slim_metrics(ticker, market_analyzer=None):
@@ -679,7 +606,6 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         
         current_price = float(hist['Close'].iloc[-1])
         
-        # Métricas fundamentales
         market_cap = info.get('marketCap', 0) / 1e9 if info.get('marketCap') else 0
         
         if market_cap == 0:
@@ -869,22 +795,19 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         return None
 
 @st.cache_data(ttl=600)
-def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False):
-    """Escanea el universo de tickers"""
+def scan_sp500(min_score=40, _market_analyzer=None, max_tickers=None):
+    """Escanea solo los tickers del S&P 500 desde el archivo"""
     candidates = []
     
-    current_tickers = load_tickers_from_csv()
-    
-    if comprehensive:
-        st.info(f"Modo completo: Escaneando {len(current_tickers)} activos...")
+    tickers_to_scan = SP500_TICKERS[:max_tickers] if max_tickers else SP500_TICKERS
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    for i, ticker in enumerate(current_tickers):
-        progress = (i + 1) / len(current_tickers)
+    for i, ticker in enumerate(tickers_to_scan):
+        progress = (i + 1) / len(tickers_to_scan)
         progress_bar.progress(progress)
-        status_text.text(f"Analizando {ticker}... ({i+1}/{len(current_tickers)})")
+        status_text.text(f"Analizando {ticker}... ({i+1}/{len(tickers_to_scan)}) [S&P 500]")
         
         result = calculate_can_slim_metrics(ticker, None)
         if result and result['score'] >= min_score:
@@ -1060,9 +983,9 @@ def create_ml_feature_importance(predictor):
 
 if FASTAPI_AVAILABLE:
     app = FastAPI(
-        title="CAN SLIM Pro API",
-        description="API profesional para análisis CAN SLIM",
-        version="2.1.1"
+        title="CAN SLIM Pro API - S&P 500",
+        description="API para análisis CAN SLIM del S&P 500",
+        version="2.2.0"
     )
 
     app.add_middleware(
@@ -1077,14 +1000,13 @@ if FASTAPI_AVAILABLE:
         ticker: str
         include_ml: bool = True
 
-    class ScanRequest(BaseModel):
-        min_score: int = 60
-        universe: str = "all"
-        max_results: int = 50
-
     @app.get("/")
     async def root():
-        return {"message": "CAN SLIM Pro API v2.1.1"}
+        return {
+            "message": "CAN SLIM Pro API - S&P 500 Scanner",
+            "version": "2.2.0",
+            "universe": f"S&P 500 ({len(SP500_TICKERS)} tickers)"
+        }
 
     @app.get("/market/status")
     async def get_market_status():
@@ -1098,6 +1020,10 @@ if FASTAPI_AVAILABLE:
         if result is None:
             raise HTTPException(status_code=404, detail=f"No se pudo analizar {request.ticker}")
         return result
+
+    @app.get("/sp500/list")
+    async def get_sp500_list():
+        return {"count": len(SP500_TICKERS), "tickers": SP500_TICKERS}
 
     def run_api_server():
         uvicorn.run(app, host="0.0.0.0", port=8000)
@@ -1188,7 +1114,7 @@ EDUCATIONAL_CONTENT = {
 }
 
 # ============================================================
-# RENDER PRINCIPAL
+# RENDER PRINCIPAL - S&P 500 FOCUSED
 # ============================================================
 
 def render():
@@ -1239,6 +1165,16 @@ def render():
         font-weight: bold;
         font-size: 0.9rem;
     }}
+    .sp500-badge {{
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        background: rgba(0, 255, 173, 0.2);
+        color: {COLORS['primary']};
+        border: 1px solid {COLORS['primary']};
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -1251,10 +1187,13 @@ def render():
         <h1 style="font-size: 2.5rem; margin-bottom: 10px; color: {COLORS['primary']};">
             🎯 CAN SLIM Scanner Pro
         </h1>
-        <p style="color: #888; font-size: 1.1rem;">v2.1.1 - Datos Mejorados + Rate Limiting</p>
+        <p style="color: #888; font-size: 1.1rem;">S&P 500 Edition - v2.2.0</p>
         <div style="margin-top: 15px;">
             <span class="market-badge" style="background: {hex_to_rgba(market_status['color'], 0.2)}; color: {market_status['color']}; border: 1px solid {market_status['color']};">
                 M-MARKET: {market_status['phase']} ({market_status['score']}/100)
+            </span>
+            <span class="sp500-badge" style="margin-left: 10px;">
+                S&P 500: {len(SP500_TICKERS)} stocks
             </span>
         </div>
     </div>
@@ -1263,21 +1202,49 @@ def render():
     # Info del sistema
     with st.expander("ℹ️ Información del Sistema"):
         st.markdown(f"""
-        **Versión 2.1.1 - Mejoras:**
-        - ✅ Rate limiting automático ({YFSession._min_delay}s entre requests)
-        - ✅ Múltiples fuentes de datos (yfinance + web scraping)
-        - ✅ Caching por hora para reducir llamadas
-        - ✅ Retry automático con exponential backoff
+        **S&P 500 Scanner v2.2.0**
         
-        **Estado de módulos:**
-        - scikit-learn: {'✅' if SKLEARN_AVAILABLE else '❌'} (ML Predictivo)
-        - FastAPI: {'✅' if FASTAPI_AVAILABLE else '❌'} (API REST)
-        - Zipline: {'✅' if ZIPPILINE_AVAILABLE else '❌'} (Backtesting)
+        - **Universo:** {len(SP500_TICKERS)} tickers del S&P 500
+        - **Archivo fuente:** `{TICKERS_FILE}`
+        - **Rate limiting:** {YFSession._min_delay}s entre requests
+        - **Cache:** {len(YFSession._cache)} tickers en memoria
+        
+        **Módulos opcionales:**
+        - scikit-learn: {'✅' if SKLEARN_AVAILABLE else '❌'}
+        - FastAPI: {'✅' if FASTAPI_AVAILABLE else '❌'}
+        - Zipline: {'✅' if ZIPPILINE_AVAILABLE else '❌'}
         """)
+        
+        # Gestión de archivo de tickers
+        st.subheader("📁 Gestión de Tickers S&P 500")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Recargar tickers.txt"):
+                global SP500_TICKERS
+                SP500_TICKERS = load_sp500_tickers()
+                st.success(f"✅ Recargados {len(SP500_TICKERS)} tickers")
+        
+        with col2:
+            with st.expander("👁️ Ver tickers cargados"):
+                st.write(SP500_TICKERS)
+        
+        # Editor de tickers
+        st.subheader("✏️ Editor de Tickers")
+        new_tickers = st.text_area(
+            "Editar lista de tickers (uno por línea)",
+            value="\n".join(SP500_TICKERS),
+            height=200
+        )
+        if st.button("💾 Guardar cambios a tickers.txt"):
+            tickers_list = [t.strip().upper() for t in new_tickers.split('\n') if t.strip()]
+            if save_sp500_tickers(tickers_list):
+                SP500_TICKERS = tickers_list
+                st.success(f"✅ Guardados {len(tickers_list)} tickers")
 
     # Tabs
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "🚀 Scanner", 
+        "🚀 Scanner S&P 500", 
         "📊 Análisis Detallado", 
         "📚 Metodología",
         "🤖 ML Predictivo",
@@ -1285,19 +1252,21 @@ def render():
         "⚙️ Configuración"
     ])
 
-    # TAB 1: SCANNER
+    # TAB 1: SCANNER S&P 500
     with tab1:
-        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+        st.subheader(f"🔍 Scanner del S&P 500 ({len(SP500_TICKERS)} stocks)")
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
         
         with col1:
-            min_score = st.slider("Score Mínimo", 0, 100, 60)
+            min_score = st.slider("Score Mínimo CAN SLIM", 0, 100, 60)
         with col2:
             max_results = st.number_input("Máx Resultados", 5, 100, 20)
         with col3:
-            comprehensive = st.checkbox("Universo Completo", value=False)
-        with col4:
-            st.markdown("<br>", unsafe_allow_html=True)
-            scan_button = st.button("🔍 ESCANEAR", use_container_width=True, type="primary")
+            limit_scan = st.checkbox("Limitar a 50", value=True,
+                                   help="Escanea solo los primeros 50 para pruebas rápidas")
+        
+        scan_button = st.button("🚀 ESCANEAR S&P 500", type="primary", use_container_width=True)
         
         with st.expander("📊 Condiciones de Mercado"):
             market_fig = create_market_dashboard(market_status)
@@ -1305,19 +1274,18 @@ def render():
             for signal in market_status['signals']:
                 st.markdown(f"- {signal}")
         
-        current_tickers = load_tickers_from_csv()
-        st.info(f"📁 {len(current_tickers)} tickers | Delay: {YFSession._min_delay}s | Cache: activo")
-        
         if scan_button:
-            if not comprehensive:
-                current_tickers = current_tickers[:100]
+            max_to_scan = 50 if limit_scan else None
             
-            st.warning("⏳ El scanner usa delays para evitar bloqueos. Por favor espera...")
-            candidates = scan_universe(min_score, None, comprehensive)
+            st.info(f"⏳ Escaneando {max_to_scan if max_to_scan else len(SP500_TICKERS)} stocks del S&P 500...")
+            st.warning("⚠️ Esto puede tomar varios minutos debido al rate limiting")
+            
+            candidates = scan_sp500(min_score, None, max_to_scan)
             
             if candidates:
-                st.success(f"✅ {len(candidates)} candidatos encontrados")
+                st.success(f"✅ {len(candidates)} candidatos CAN SLIM encontrados en S&P 500")
                 
+                # Top 3 destacados
                 cols = st.columns(min(3, len(candidates)))
                 for i, col in enumerate(cols):
                     if i < len(candidates):
@@ -1341,7 +1309,9 @@ def render():
                             </div>
                             """, unsafe_allow_html=True)
                 
-                # Tabla
+                # Tabla completa
+                st.subheader("📋 Resultados Detallados - S&P 500")
+                
                 table_data = []
                 for c in candidates[:max_results]:
                     table_data.append({
@@ -1356,8 +1326,8 @@ def render():
                         'L': c['grades']['L'],
                         'I': c['grades']['I'],
                         'M': c['grades']['M'],
-                        'EPS': f"{c['metrics']['earnings_growth']:.1f}%",
-                        'RS': f"{c['metrics']['rs_rating']:.0f}",
+                        'EPS Growth': f"{c['metrics']['earnings_growth']:.1f}%",
+                        'RS Rating': f"{c['metrics']['rs_rating']:.0f}",
                         'Sector': c['sector']
                     })
                 
@@ -1381,30 +1351,42 @@ def render():
                 
                 st.dataframe(styled_df, use_container_width=True, height=600)
                 
+                # Exportar
                 csv = df.to_csv(index=False)
-                st.download_button("📥 Descargar CSV", csv, f"canslim_scan_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+                st.download_button(
+                    "📥 Descargar CSV (S&P 500)",
+                    csv,
+                    f"sp500_canslim_{datetime.now().strftime('%Y%m%d')}.csv",
+                    "text/csv"
+                )
             else:
-                st.warning("⚠️ No se encontraron candidatos")
+                st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
     # TAB 2: ANÁLISIS DETALLADO
     with tab2:
-        st.subheader("📊 Análisis Individual")
+        st.subheader("📊 Análisis Individual - S&P 500")
         
-        ticker_input = st.text_input("Ticker", value="AAPL").strip().upper()
+        # Dropdown con tickers del S&P 500
+        ticker_input = st.selectbox(
+            "Seleccionar ticker del S&P 500",
+            options=SP500_TICKERS,
+            index=0 if SP500_TICKERS else None
+        )
         
-        col_btn1, col_btn2 = st.columns([1, 3])
-        with col_btn1:
-            analyze_button = st.button("🔍 Analizar", type="primary", use_container_width=True)
+        # O input manual como alternativa
+        ticker_manual = st.text_input("O ingresar manualmente", "").strip().upper()
         
-        if analyze_button:
-            if not ticker_input:
-                st.error("❌ Ingresa un ticker")
+        ticker_to_analyze = ticker_manual if ticker_manual else ticker_input
+        
+        if st.button("🔍 Analizar", type="primary"):
+            if not ticker_to_analyze:
+                st.error("❌ Selecciona o ingresa un ticker")
             else:
-                with st.spinner(f"Analizando {ticker_input}..."):
-                    result = calculate_can_slim_metrics(ticker_input, market_analyzer)
+                with st.spinner(f"Analizando {ticker_to_analyze}..."):
+                    result = calculate_can_slim_metrics(ticker_to_analyze, market_analyzer)
                     
                     if result:
-                        st.success(f"✅ {ticker_input} analizado")
+                        st.success(f"✅ {ticker_to_analyze} analizado")
                         
                         col1, col2 = st.columns([1, 2])
                         
@@ -1419,9 +1401,6 @@ def render():
                                     {result['metrics']['rs_rating']:.0f}
                                 </h2>
                             </div>
-                            """, unsafe_allow_html=True)
-                            
-                            st.markdown(f"""
                             <div class="metric-card" style="margin-top: 10px;">
                                 <h4>ML Probability</h4>
                                 <h2 style="color: {COLORS['primary'] if result['ml_probability'] > 0.7 else COLORS['warning'] if result['ml_probability'] > 0.5 else COLORS['danger']};">
@@ -1432,7 +1411,7 @@ def render():
                         
                         with col2:
                             try:
-                                data = get_enhanced_stock_data(ticker_input)
+                                data = get_enhanced_stock_data(ticker_to_analyze)
                                 if data and data['history'] is not None:
                                     hist = data['history']
                                     
@@ -1467,37 +1446,30 @@ def render():
                                 st.error(f"Error en gráfico: {e}")
                             
                             # Métricas
-                            metrics_data = {
+                            metrics_df = pd.DataFrame({
                                 'Métrica': [
                                     'Market Cap', 'EPS Growth', 'Revenue Growth',
                                     'Inst. Ownership', 'Volume Ratio', 'From 52W High',
                                     'Volatility', 'Price Momentum', 'Market Score'
                                 ],
                                 'Valor': [
-                                    f"${result['market_cap']:.2f}B" if result['market_cap'] > 0 else "N/A ⚠️",
-                                    f"{result['metrics']['earnings_growth']:.1f}%" if result['metrics']['earnings_growth'] != 0 else "N/A ⚠️",
-                                    f"{result['metrics']['revenue_growth']:.1f}%" if result['metrics']['revenue_growth'] != 0 else "N/A ⚠️",
-                                    f"{result['metrics']['inst_ownership']:.1f}%" if result['metrics']['inst_ownership'] != 0 else "N/A ⚠️",
+                                    f"${result['market_cap']:.2f}B" if result['market_cap'] > 0 else "N/A",
+                                    f"{result['metrics']['earnings_growth']:.1f}%" if result['metrics']['earnings_growth'] != 0 else "N/A",
+                                    f"{result['metrics']['revenue_growth']:.1f}%" if result['metrics']['revenue_growth'] != 0 else "N/A",
+                                    f"{result['metrics']['inst_ownership']:.1f}%" if result['metrics']['inst_ownership'] != 0 else "N/A",
                                     f"{result['metrics']['volume_ratio']:.2f}x",
                                     f"{result['metrics']['pct_from_high']:.1f}%",
                                     f"{result['metrics']['volatility']:.1f}%",
                                     f"{result['metrics']['price_momentum']:.1f}%",
                                     f"{result['metrics']['market_score']:.0f}/100"
                                 ]
-                            }
-                            st.table(pd.DataFrame(metrics_data))
+                            })
+                            st.table(metrics_df)
                             
                             if result['market_cap'] == 0 or result['metrics']['earnings_growth'] == 0:
-                                st.warning("""
-                                ⚠️ **Datos fundamentales limitados**
-                                
-                                Yahoo Finance restringió el acceso a datos fundamentales vía API.
-                                Se intentó obtener vía web scraping, pero algunos datos pueden no estar disponibles.
-                                
-                                **Los datos técnicos (precio, volumen, RS) son confiables.**
-                                """)
+                                st.info("ℹ️ Algunos datos fundamentales no están disponibles vía Yahoo Finance")
                     else:
-                        st.error(f"❌ No se pudo analizar {ticker_input}")
+                        st.error(f"❌ No se pudo analizar {ticker_to_analyze}")
 
     # TAB 3: METODOLOGÍA
     with tab3:
@@ -1516,7 +1488,7 @@ def render():
             ml = CANSlimMLPredictor()
             st.plotly_chart(create_ml_feature_importance(ml), use_container_width=True)
             
-            pred_ticker = st.text_input("Ticker para Predicción", "NVDA").upper()
+            pred_ticker = st.selectbox("Ticker del S&P 500 para predicción", SP500_TICKERS)
             if st.button("Predecir"):
                 result = calculate_can_slim_metrics(pred_ticker, market_analyzer)
                 if result:
@@ -1535,11 +1507,11 @@ def render():
         if not ZIPPILINE_AVAILABLE:
             st.warning("Instala: `pip install zipline-reloaded`")
         else:
-            st.info("Backtesting disponible")
+            st.info("Backtesting disponible con datos del S&P 500")
 
     # TAB 6: CONFIGURACIÓN
     with tab6:
-        st.header("⚙️ Configuración")
+        st.header("⚙️ Configuración del Scanner S&P 500")
         
         st.subheader("Rate Limiting")
         new_delay = st.slider("Delay entre requests (s)", 0.1, 5.0, float(YFSession._min_delay), 0.1)
@@ -1547,13 +1519,15 @@ def render():
         
         st.markdown(f"""
         **Configuración actual:**
+        - Archivo de tickers: `{TICKERS_FILE}`
+        - Tickers cargados: {len(SP500_TICKERS)}
         - Delay: {YFSession._min_delay}s
-        - Cache: {len(YFSession._cache)} tickers en memoria
+        - Cache: {len(YFSession._cache)} items
         
-        **Recomendaciones:**
-        - Si recibes "Too Many Requests": aumenta a 1.0-2.0s
-        - Para uso normal: 0.5s es suficiente
-        - Para scanner masivo: usa 1.0s+ y lotes pequeños
+        **Para actualizar el S&P 500:**
+        1. Edita el archivo `tickers.txt` en el directorio raíz
+        2. Agrega un ticker por línea
+        3. Usa el botón "Recargar tickers.txt" en el panel de información
         """)
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 """
 CAN SLIM Scanner Pro - Módulo para RSU Terminal
 Ubicación: modules/canslim.py
-Versión: 2.2.1
+Versión: 2.2.2
 """
 
 import streamlit as st
@@ -723,7 +723,7 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
     except Exception as e:
         return None
 
-def scan_sp500(min_score=40, max_tickers=None):
+def scan_sp500(min_score=40, max_tickers=None, progress_callback=None):
     """Escanea los tickers del S&P 500"""
     candidates = []
     
@@ -733,6 +733,10 @@ def scan_sp500(min_score=40, max_tickers=None):
         result = calculate_can_slim_metrics(ticker, None)
         if result and result['score'] >= min_score:
             candidates.append(result)
+        
+        # Callback para progreso si se proporciona
+        if progress_callback:
+            progress_callback((i + 1) / len(tickers_to_scan), ticker, i + 1, len(tickers_to_scan))
     
     candidates.sort(key=lambda x: x['score'], reverse=True)
     return candidates
@@ -808,13 +812,18 @@ def create_grades_radar(grades_dict):
     return fig
 
 # ============================================================
-# FUNCIÓN PRINCIPAL PARA STREAMLIT
+# FUNCIÓN PRINCIPAL RENDER - COMPATIBILIDAD CON RSU TERMINAL
 # ============================================================
+
+def render():
+    """
+    FUNCIÓN PRINCIPAL - Llámala desde app.py como: canslim.render()
+    """
+    render_canslim_tab()
 
 def render_canslim_tab():
     """
-    Función principal que renderiza la pestaña CAN SLIM.
-    Llámala desde app.py
+    Renderiza la pestaña CAN SLIM completa
     """
     
     # CSS
@@ -886,7 +895,7 @@ def render_canslim_tab():
         <h1 style="font-size: 2.5rem; margin-bottom: 10px; color: {COLORS['primary']};">
             🎯 CAN SLIM Scanner Pro
         </h1>
-        <p style="color: #888; font-size: 1.1rem;">S&P 500 Edition - v2.2.1</p>
+        <p style="color: #888; font-size: 1.1rem;">S&P 500 Edition - v2.2.2</p>
         <div style="margin-top: 15px;">
             <span class="market-badge" style="background: {hex_to_rgba(market_status['color'], 0.2)}; color: {market_status['color']}; border: 1px solid {market_status['color']};">
                 M-MARKET: {market_status['phase']} ({market_status['score']}/100)
@@ -927,22 +936,14 @@ def render_canslim_tab():
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
-                candidates = []
-                tickers_to_scan = SP500_TICKERS[:max_to_scan] if max_to_scan else SP500_TICKERS
-                
-                for i, ticker in enumerate(tickers_to_scan):
-                    progress = (i + 1) / len(tickers_to_scan)
+                def progress_callback(progress, ticker, current, total):
                     progress_bar.progress(progress)
-                    status_text.text(f"Analizando {ticker}... ({i+1}/{len(tickers_to_scan)})")
-                    
-                    result = calculate_can_slim_metrics(ticker, market_analyzer)
-                    if result and result['score'] >= min_score:
-                        candidates.append(result)
+                    status_text.text(f"Analizando {ticker}... ({current}/{total})")
+                
+                candidates = scan_sp500(min_score, max_to_scan, progress_callback)
                 
                 progress_bar.empty()
                 status_text.empty()
-                
-                candidates.sort(key=lambda x: x['score'], reverse=True)
             
             if candidates:
                 st.success(f"✅ {len(candidates)} candidatos CAN SLIM encontrados")
@@ -1117,4 +1118,4 @@ def render_canslim_tab():
 
 if __name__ == "__main__":
     # Si se ejecuta directamente, mostrar el módulo
-    render_canslim_tab()
+    render()

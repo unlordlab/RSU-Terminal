@@ -82,33 +82,49 @@ COLORS = {
 }
 
 # ============================================================
-# GESTIÓN DE UNIVERSO DESDE ARCHIVO CSV (tickers.csv en directorio raíz)
+# GESTIÓN DE UNIVERSO DESDE ARCHIVO TXT (tickers.txt en directorio raíz)
 # ============================================================
 
-CSV_TICKERS_PATH = "tickers.csv"  # Archivo en directorio raíz
+TICKERS_PATH = None  # Se determina dinámicamente
 
-def load_tickers_from_csv():
-    """Carga los tickers desde el archivo tickers.csv en el directorio raíz"""
+def get_tickers_path():
+    """Determina la ruta correcta de tickers.txt según el contexto de ejecución"""
+    # Si estamos en modules/canslim.py, subir un nivel al directorio raíz
+    current_file = os.path.abspath(__file__)
+    if 'modules' in os.path.dirname(current_file).split(os.sep):
+        # Estamos en modules/canslim.py
+        return os.path.join(os.path.dirname(os.path.dirname(current_file)), "tickers.txt")
+    else:
+        # Estamos en el directorio raíz (app.py)
+        return os.path.join(os.path.dirname(current_file), "tickers.txt")
+
+def load_tickers_from_file():
+    """Carga los tickers desde el archivo tickers.txt en el directorio raíz"""
     try:
+        tickers_path = get_tickers_path()
+        
         # Verificar si el archivo existe
-        if not os.path.exists(CSV_TICKERS_PATH):
-            st.error(f"❌ No se encontró el archivo {CSV_TICKERS_PATH} en el directorio raíz")
-            return []
+        if not os.path.exists(tickers_path):
+            # Fallback: intentar ruta relativa simple
+            tickers_path = "tickers.txt"
+            if not os.path.exists(tickers_path):
+                st.error(f"❌ No se encontró el archivo tickers.txt")
+                return []
 
-        # Leer CSV saltando las filas de metadata (las primeras 9 filas)
-        df = pd.read_csv(CSV_TICKERS_PATH, skiprows=9)
-
-        # La primera columna contiene los tickers
-        tickers = df.iloc[:, 0].dropna().tolist()
+        # Leer archivo de texto línea por línea
+        with open(tickers_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
 
         # Limpiar y formatear - solo mantener tickers válidos
         valid_tickers = []
-        for t in tickers:
-            if pd.notna(t):
-                t_clean = str(t).strip().upper()
-                # Filtrar solo tickers válidos: alfanuméricos, 1-5 caracteres, empieza con letra
-                if re_module.match(r'^[A-Z][A-Z0-9]{0,4}$', t_clean):
-                    valid_tickers.append(t_clean)
+        for line in lines:
+            t_clean = line.strip().upper()
+            # Saltar líneas vacías o comentarios
+            if not t_clean or t_clean.startswith('#'):
+                continue
+            # Filtrar solo tickers válidos: alfanuméricos, 1-5 caracteres, empieza con letra
+            if re_module.match(r'^[A-Z][A-Z0-9]{0,4}$', t_clean):
+                valid_tickers.append(t_clean)
 
         # Eliminar duplicados manteniendo orden
         seen = set()
@@ -117,18 +133,18 @@ def load_tickers_from_csv():
         return unique_tickers
 
     except Exception as e:
-        st.error(f"❌ Error al cargar tickers.csv: {str(e)}")
+        st.error(f"❌ Error al cargar tickers.txt: {str(e)}")
         return []
 
 def get_all_universe_tickers(comprehensive=True):
     """
-    Obtiene todos los tickers disponibles desde tickers.csv
+    Obtiene todos los tickers disponibles desde tickers.txt
     comprehensive=True incluye todos los activos
     """
-    tickers = load_tickers_from_csv()
+    tickers = load_tickers_from_file()
 
     if not tickers:
-        st.warning("⚠️ No se pudieron cargar tickers. Verifica que tickers.csv exista en el directorio raíz.")
+        st.warning("⚠️ No se pudieron cargar tickers. Verifica que tickers.txt exista en el directorio raíz.")
         return []
 
     if comprehensive:
@@ -138,7 +154,7 @@ def get_all_universe_tickers(comprehensive=True):
         return tickers[:500]
 
 # Variable global para mantener compatibilidad con código existente
-tickers = load_tickers_from_csv()
+tickers = load_tickers_from_file()
 
 # ============================================================
 # ANÁLISIS DE MERCADO (M - Market Direction)
@@ -268,7 +284,8 @@ class CANSlimMLPredictor:
     def __init__(self):
         self.model = None
         self.scaler = None
-        self.model_path = "canslim_ml_model.pkl"
+        # Ruta al modelo ML (desde modules/, subir un nivel a raíz)
+        self.model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "canslim_ml_model.pkl")
         self.features = [
             'earnings_growth', 'revenue_growth', 'eps_growth',
             'rs_rating', 'volume_ratio', 'inst_ownership',
@@ -639,8 +656,8 @@ def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False):
     """Escanea el universo de tickers y devuelve candidatos CAN SLIM"""
     candidates = []
     
-    # Usar la función correcta para cargar tickers
-    current_tickers = load_tickers_from_csv()
+    # Usar la función correcta para cargar tickers desde TXT
+    current_tickers = load_tickers_from_file()
     
     if comprehensive:
         st.info(f"Modo completo activado: Escaneando {len(current_tickers)} activos...")
@@ -893,7 +910,7 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/scan")
     async def scan_stocks(request: ScanRequest):
-        tickers = load_tickers_from_csv()
+        tickers = load_tickers_from_file()
         
         analyzer = MarketAnalyzer()
         candidates = scan_universe(tickers, request.min_score, analyzer, comprehensive=True)
@@ -1254,8 +1271,8 @@ def render():
                 st.markdown(f"- {signal}")
         
         # Info del archivo de tickers - USAR FUNCIÓN CORRECTA
-        current_tickers = load_tickers_from_csv()
-        st.info(f"📁 Archivo {CSV_TICKERS_PATH}: {len(current_tickers)} tickers cargados")
+        current_tickers = load_tickers_from_file()
+        st.info(f"📁 Archivo tickers.txt: {len(current_tickers)} tickers cargados")
         
         if scan_button:
             if not comprehensive:

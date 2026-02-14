@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CAN SLIM Scanner Pro - Versión con Rate Limiting Inteligente
-Sistema de selección de acciones con muestreo aleatorio y caché
+CAN SLIM Scanner Pro - Versión con Persistencia de Estado
+Sistema de selección de acciones con resultados que permanecen entre pestañas
 Autor: CAN SLIM Pro Team
-Versión: 2.1.0
+Versión: 2.2.0
 """
 
 import streamlit as st
@@ -24,6 +24,23 @@ from functools import lru_cache
 warnings.filterwarnings('ignore')
 
 # ============================================================
+# INICIALIZACIÓN DE SESSION STATE
+# ============================================================
+
+def init_session_state():
+    """Inicializa variables de estado para persistencia entre pestañas"""
+    if 'scan_results' not in st.session_state:
+        st.session_state.scan_results = None
+    if 'scan_candidates' not in st.session_state:
+        st.session_state.scan_candidates = []
+    if 'scan_timestamp' not in st.session_state:
+        st.session_state.scan_timestamp = None
+    if 'last_scan_params' not in st.session_state:
+        st.session_state.last_scan_params = {}
+    if 'market_status' not in st.session_state:
+        st.session_state.market_status = None
+
+# ============================================================
 # CONFIGURACIÓN DE RATE LIMITING Y MUESTREO INTELIGENTE
 # ============================================================
 
@@ -32,17 +49,16 @@ class YFinanceRateLimiter:
     
     def __init__(self):
         self.last_request_time = 0
-        self.min_delay = 0.8  # Aumentado a 0.8s entre requests
+        self.min_delay = 0.8
         self.max_retries = 3
         self.backoff_factor = 2
         self.consecutive_errors = 0
         self.max_consecutive_errors = 5
-        self.cooldown_period = 30  # Segundos de espera si hay muchos errores
+        self.cooldown_period = 30
     
     def wait_if_needed(self):
         """Espera si es necesario para respetar rate limits"""
         elapsed = time.time() - self.last_request_time
-        # Delay adaptativo: más tiempo si hay errores recientes
         delay = self.min_delay + (self.consecutive_errors * 0.2)
         if elapsed < delay:
             sleep_time = delay - elapsed + random.uniform(0.1, 0.5)
@@ -50,16 +66,15 @@ class YFinanceRateLimiter:
         self.last_request_time = time.time()
     
     def get_ticker_with_retry(self, ticker_symbol):
-        """Obtiene ticker con reintentos exponenciales y manejo de errores"""
+        """Obtiene ticker con reintentos exponenciales"""
         for attempt in range(self.max_retries):
             try:
                 self.wait_if_needed()
                 ticker = yf.Ticker(ticker_symbol)
                 info = ticker.info
                 
-                # Verificar que tenemos datos válidos
                 if info and len(info) > 0 and 'regularMarketPrice' in info:
-                    self.consecutive_errors = 0  # Reset errores
+                    self.consecutive_errors = 0
                     return ticker
                 else:
                     raise ValueError("Datos incompletos")
@@ -67,7 +82,6 @@ class YFinanceRateLimiter:
             except Exception as e:
                 self.consecutive_errors += 1
                 
-                # Si hay demasiados errores consecutivos, hacer cooldown
                 if self.consecutive_errors >= self.max_consecutive_errors:
                     st.warning(f"⏸️ Demasiados errores. Pausando {self.cooldown_period}s...")
                     time.sleep(self.cooldown_period)
@@ -81,29 +95,20 @@ class YFinanceRateLimiter:
         
         return None
 
-# Instancia global del rate limiter
 rate_limiter = YFinanceRateLimiter()
 
 # ============================================================
 # CONFIGURACIÓN DE MUESTREO
 # ============================================================
 
-# Número máximo de stocks a analizar para evitar rate limits
-MAX_STOCKS_TO_SCAN = 50  # Analizar máximo 50 aleatorios
-USE_RANDOM_SAMPLE = True  # Activar muestreo aleatorio
-CACHE_DURATION = 3600  # 1 hora de caché
-
-@st.cache_data(ttl=CACHE_DURATION)
-def get_cached_market_data():
-    """Caché para datos de mercado (índices)"""
-    analyzer = MarketAnalyzer()
-    return analyzer.calculate_market_score()
+MAX_STOCKS_TO_SCAN = 50
+USE_RANDOM_SAMPLE = True
+CACHE_DURATION = 3600
 
 # ============================================================
 # IMPORTS OPCIONALES CON MANEJO DE ERRORES
 # ============================================================
 
-# ML Imports (opcional)
 try:
     from sklearn.ensemble import RandomForestRegressor, GradientBoostingClassifier
     from sklearn.preprocessing import StandardScaler
@@ -113,7 +118,6 @@ try:
 except ImportError:
     SKLEARN_AVAILABLE = False
 
-# FastAPI Imports (opcional)
 try:
     from fastapi import FastAPI, HTTPException, BackgroundTasks
     from fastapi.middleware.cors import CORSMiddleware
@@ -124,7 +128,6 @@ try:
 except ImportError:
     FASTAPI_AVAILABLE = False
 
-# Zipline Imports (opcional)
 try:
     from zipline.api import order_target_percent, record, symbol, set_benchmark
     from zipline import run_algorithm
@@ -147,17 +150,16 @@ def hex_to_rgba(hex_color, alpha=1.0):
     b = int(hex_color[4:6], 16)
     return f"rgba({r}, {g}, {b}, {alpha})"
 
-# Paleta de colores CAN SLIM
 COLORS = {
-    'primary': '#00ffad',      # Verde neón (A)
-    'warning': '#ff9800',      # Naranja (B)
-    'danger': '#f23645',       # Rojo (C/D)
-    'neutral': '#888888',      # Gris
-    'bg_dark': '#0c0e12',      # Fondo oscuro
-    'bg_card': '#1a1e26',      # Fondo tarjetas
-    'border': '#2a2e36',       # Bordes
-    'text': '#ffffff',         # Texto principal
-    'text_secondary': '#aaaaaa' # Texto secundario
+    'primary': '#00ffad',
+    'warning': '#ff9800',
+    'danger': '#f23645',
+    'neutral': '#888888',
+    'bg_dark': '#0c0e12',
+    'bg_card': '#1a1e26',
+    'border': '#2a2e36',
+    'text': '#ffffff',
+    'text_secondary': '#aaaaaa'
 }
 
 # ============================================================
@@ -167,7 +169,7 @@ COLORS = {
 TICKERS_PATH = None
 
 def get_tickers_path():
-    """Determina la ruta correcta de tickers.txt según el contexto de ejecución"""
+    """Determina la ruta correcta de tickers.txt"""
     current_file = os.path.abspath(__file__)
     if 'modules' in os.path.dirname(current_file).split(os.sep):
         return os.path.join(os.path.dirname(os.path.dirname(current_file)), "tickers.txt")
@@ -206,21 +208,16 @@ def load_tickers_from_file():
         return []
 
 def get_random_sample_tickers(all_tickers, n=MAX_STOCKS_TO_SCAN, seed=None):
-    """
-    Obtiene una muestra aleatoria de tickers para evitar rate limits.
-    Usa semilla opcional para reproducibilidad.
-    """
+    """Obtiene una muestra aleatoria de tickers"""
     if len(all_tickers) <= n:
         return all_tickers
     
     if seed is not None:
         random.seed(seed)
     
-    # Estratificación: incluir algunos de los tickers más conocidos (S&P 500 top)
     priority_tickers = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'BRK-B', 'JPM']
     priority_in_sample = [t for t in priority_tickers if t in all_tickers]
     
-    # Completar con aleatorios del resto
     remaining = [t for t in all_tickers if t not in priority_in_sample]
     n_random = n - len(priority_in_sample)
     
@@ -231,9 +228,7 @@ def get_random_sample_tickers(all_tickers, n=MAX_STOCKS_TO_SCAN, seed=None):
     return priority_in_sample[:n]
 
 def get_all_universe_tickers(comprehensive=False, use_sample=USE_RANDOM_SAMPLE):
-    """
-    Obtiene tickers. Por defecto usa muestreo aleatorio para evitar rate limits.
-    """
+    """Obtiene tickers. Por defecto usa muestreo aleatorio."""
     all_tickers = load_tickers_from_file()
 
     if not all_tickers:
@@ -246,7 +241,6 @@ def get_all_universe_tickers(comprehensive=False, use_sample=USE_RANDOM_SAMPLE):
     else:
         return all_tickers
 
-# Variable global
 tickers = load_tickers_from_file()
 
 # ============================================================
@@ -291,7 +285,6 @@ class MarketAnalyzer:
                         'trend_60d': (data['Close'].iloc[-1] / data['Close'].iloc[-60] - 1) * 100
                     }
             except Exception as e:
-                st.warning(f"⚠️ Error obteniendo {ticker}: {str(e)}")
                 continue
         return market_data
     
@@ -766,15 +759,13 @@ def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False, samp
     # Obtener tickers (con muestreo aleatorio por defecto)
     if comprehensive:
         current_tickers = get_all_universe_tickers(comprehensive=True, use_sample=False)
-        st.info(f"Modo completo: Escaneando {len(current_tickers)} activos (puede ser lento y causar rate limits)...")
     else:
         current_tickers = get_all_universe_tickers(comprehensive=False, use_sample=True)
-        st.info(f"Modo muestreo aleatorio: Escaneando {len(current_tickers)} activos seleccionados aleatoriamente...")
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     errors_count = 0
-    max_errors = 10  # Detener si hay demasiados errores
+    max_errors = 10
     
     for i, ticker in enumerate(current_tickers):
         progress = (i + 1) / len(current_tickers)
@@ -1212,10 +1203,120 @@ EDUCATIONAL_CONTENT = {
 }
 
 # ============================================================
-# RENDER PRINCIPAL MEJORADO (SIN TAB 6 - CONFIGURACIÓN & API)
+# FUNCIONES PARA MOSTRAR RESULTADOS GUARDADOS
+# ============================================================
+
+def display_saved_results():
+    """Muestra los resultados guardados en session_state si existen"""
+    if st.session_state.scan_candidates and len(st.session_state.scan_candidates) > 0:
+        candidates = st.session_state.scan_candidates
+        scan_time = st.session_state.scan_timestamp
+        
+        st.success(f"📊 Resultados del último scan ({scan_time}): {len(candidates)} candidatos encontrados")
+        
+        # Mostrar top 3
+        st.subheader("🏆 Top Candidatos CAN SLIM")
+        cols = st.columns(min(3, len(candidates)))
+        for i, col in enumerate(cols):
+            if i < len(candidates):
+                c = candidates[i]
+                with col:
+                    st.plotly_chart(create_score_gauge(c['score']), use_container_width=True, key=f"saved_gauge_{i}")
+                    st.markdown(f"""
+                    <div style="text-align: center;">
+                        <h3 style="color: {COLORS['primary']}; margin: 0;">{c['ticker']}</h3>
+                        <p style="color: #888; font-size: 12px; margin: 5px 0;">{c['name'][:30]}</p>
+                        <div style="margin: 10px 0;">
+                            <span class="grade-badge grade-{c['grades']['C']}">C</span>
+                            <span class="grade-badge grade-{c['grades']['A']}">A</span>
+                            <span class="grade-badge grade-{c['grades']['N']}">N</span>
+                            <span class="grade-badge grade-{c['grades']['S']}">S</span>
+                            <span class="grade-badge grade-{c['grades']['L']}">L</span>
+                            <span class="grade-badge grade-{c['grades']['I']}">I</span>
+                            <span class="grade-badge grade-{c['grades']['M']}">M</span>
+                        </div>
+                        <p style="color: {COLORS['primary']}; font-size: 0.9rem; margin-top: 5px;">
+                            ML Prob: {c['ml_probability']:.1%}
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Tabla completa
+        st.subheader("📋 Resultados Detallados")
+        
+        table_data = []
+        max_results = st.session_state.last_scan_params.get('max_results', 20)
+        for c in candidates[:max_results]:
+            table_data.append({
+                'Ticker': c['ticker'],
+                'Nombre': c['name'][:25],
+                'Score': c['score'],
+                'ML Prob': f"{c['ml_probability']:.0%}",
+                'C': c['grades']['C'],
+                'A': c['grades']['A'],
+                'N': c['grades']['N'],
+                'S': c['grades']['S'],
+                'L': c['grades']['L'],
+                'I': c['grades']['I'],
+                'M': c['grades']['M'],
+                'EPS Growth': f"{c['metrics']['earnings_growth']:.1f}%",
+                'RS Rating': f"{c['metrics']['rs_rating']:.0f}",
+                'From High': f"{c['metrics']['pct_from_high']:.1f}%",
+                'Sector': c['sector']
+            })
+        
+        df = pd.DataFrame(table_data)
+        
+        def color_score(val):
+            try:
+                score = int(val)
+                color = COLORS['primary'] if score >= 80 else COLORS['warning'] if score >= 60 else COLORS['danger']
+                return f'color: {color}; font-weight: bold'
+            except:
+                return ''
+        
+        def color_grade(val):
+            color_map = {
+                'A': COLORS['primary'],
+                'B': COLORS['warning'], 
+                'C': COLORS['danger'],
+                'D': '#888888'
+            }
+            return f'color: {color_map.get(val, "white")}; font-weight: bold'
+        
+        styled_df = df.style\
+            .applymap(color_score, subset=['Score'])\
+            .applymap(color_grade, subset=['C', 'A', 'N', 'S', 'L', 'I', 'M'])
+        
+        st.dataframe(styled_df, use_container_width=True, height=600)
+        
+        # Exportar
+        csv = df.to_csv(index=False)
+        st.download_button(
+            label="📥 Descargar CSV",
+            data=csv,
+            file_name=f"canslim_scan_{st.session_state.scan_timestamp.replace(':', '-')}.csv",
+            mime="text/csv"
+        )
+        
+        # Botón para limpiar resultados
+        if st.button("🗑️ Limpiar Resultados", type="secondary"):
+            st.session_state.scan_candidates = []
+            st.session_state.scan_timestamp = None
+            st.session_state.last_scan_params = {}
+            st.rerun()
+        
+        return True
+    return False
+
+# ============================================================
+# RENDER PRINCIPAL MEJORADO (CON PERSISTENCIA)
 # ============================================================
 
 def render():
+    # Inicializar session state al principio
+    init_session_state()
+    
     # CSS Global mejorado
     st.markdown(f"""
     <style>
@@ -1293,6 +1394,13 @@ def render():
         border-radius: 0 8px 8px 0;
         margin: 10px 0;
     }}
+    .saved-results-banner {{
+        background: linear-gradient(90deg, {hex_to_rgba(COLORS['primary'], 0.2)}, transparent);
+        border-left: 4px solid {COLORS['primary']};
+        padding: 10px 15px;
+        border-radius: 0 8px 8px 0;
+        margin: 10px 0;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -1314,7 +1422,7 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # Tabs expandidos - SOLO 5 TABS (eliminado el 6º)
+    # Tabs expandidos - SOLO 5 TABS
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🚀 Scanner", 
         "📊 Análisis Detallado", 
@@ -1323,7 +1431,7 @@ def render():
         "📈 Backtesting"
     ])
 
-    # TAB 1: SCANNER MEJORADO CON MUESTREO ALEATORIO
+    # TAB 1: SCANNER MEJORADO CON PERSISTENCIA
     with tab1:
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
@@ -1333,7 +1441,6 @@ def render():
         with col2:
             max_results = st.number_input("Máx Resultados", 5, 100, 20)
         with col3:
-            # Checkbox para modo completo (con advertencia de rate limit)
             comprehensive = st.checkbox("Modo Completo (⚠️ Rate Limit)", value=False,
                                      help="Escanea TODOS los tickers (lento, puede fallar por rate limits)")
         with col4:
@@ -1353,8 +1460,15 @@ def render():
         all_tickers = load_tickers_from_file()
         st.info(f"📁 Total tickers disponibles: {len(all_tickers)} | Muestreo por defecto: {MAX_STOCKS_TO_SCAN} aleatorios")
         
+        # MOSTRAR RESULTADOS GUARDADOS SI EXISTEN (al inicio del tab)
+        has_saved_results = display_saved_results()
+        
+        # Realizar nuevo scan si se presiona el botón
         if scan_button:
-            # Usar muestreo aleatorio por defecto, modo completo solo si se marca el checkbox
+            # Limpiar resultados anteriores
+            st.session_state.scan_candidates = []
+            st.session_state.scan_timestamp = None
+            
             use_sample = not comprehensive
             
             if use_sample:
@@ -1367,101 +1481,34 @@ def render():
             candidates = scan_universe(min_score, None, comprehensive=not use_sample)
             
             if candidates:
-                st.success(f"✅ Se encontraron {len(candidates)} candidatos CAN SLIM")
+                # GUARDAR RESULTADOS EN SESSION STATE
+                st.session_state.scan_candidates = candidates
+                st.session_state.scan_timestamp = datetime.now().strftime('%H:%M:%S')
+                st.session_state.last_scan_params = {
+                    'min_score': min_score,
+                    'max_results': max_results,
+                    'comprehensive': comprehensive
+                }
                 
-                # Top 3 destacados con badges completos C-A-N-S-L-I-M
-                st.subheader("🏆 Top Candidatos CAN SLIM")
-                cols = st.columns(min(3, len(candidates)))
-                for i, col in enumerate(cols):
-                    if i < len(candidates):
-                        c = candidates[i]
-                        with col:
-                            st.plotly_chart(create_score_gauge(c['score']), use_container_width=True, key=f"gauge_{i}")
-                            st.markdown(f"""
-                            <div style="text-align: center;">
-                                <h3 style="color: {COLORS['primary']}; margin: 0;">{c['ticker']}</h3>
-                                <p style="color: #888; font-size: 12px; margin: 5px 0;">{c['name'][:30]}</p>
-                                <div style="margin: 10px 0;">
-                                    <span class="grade-badge grade-{c['grades']['C']}">C</span>
-                                    <span class="grade-badge grade-{c['grades']['A']}">A</span>
-                                    <span class="grade-badge grade-{c['grades']['N']}">N</span>
-                                    <span class="grade-badge grade-{c['grades']['S']}">S</span>
-                                    <span class="grade-badge grade-{c['grades']['L']}">L</span>
-                                    <span class="grade-badge grade-{c['grades']['I']}">I</span>
-                                    <span class="grade-badge grade-{c['grades']['M']}">M</span>
-                                </div>
-                                <p style="color: {COLORS['primary']}; font-size: 0.9rem; margin-top: 5px;">
-                                    ML Prob: {c['ml_probability']:.1%}
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                st.success(f"✅ Scan completado: {len(candidates)} candidatos guardados")
+                st.info("💡 Los resultados permanecerán visibles al cambiar de pestaña. Usa el botón '🗑️ Limpiar Resultados' cuando quieras hacer un nuevo scan.")
                 
-                # Tabla completa con todas las columnas
-                st.subheader("📋 Resultados Detallados")
-                
-                table_data = []
-                for c in candidates[:max_results]:
-                    table_data.append({
-                        'Ticker': c['ticker'],
-                        'Nombre': c['name'][:25],
-                        'Score': c['score'],
-                        'ML Prob': f"{c['ml_probability']:.0%}",
-                        'C': c['grades']['C'],
-                        'A': c['grades']['A'],
-                        'N': c['grades']['N'],
-                        'S': c['grades']['S'],
-                        'L': c['grades']['L'],
-                        'I': c['grades']['I'],
-                        'M': c['grades']['M'],
-                        'EPS Growth': f"{c['metrics']['earnings_growth']:.1f}%",
-                        'RS Rating': f"{c['metrics']['rs_rating']:.0f}",
-                        'From High': f"{c['metrics']['pct_from_high']:.1f}%",
-                        'Sector': c['sector']
-                    })
-                
-                df = pd.DataFrame(table_data)
-                
-                # Estilos condicionales
-                def color_score(val):
-                    try:
-                        score = int(val)
-                        color = COLORS['primary'] if score >= 80 else COLORS['warning'] if score >= 60 else COLORS['danger']
-                        return f'color: {color}; font-weight: bold'
-                    except:
-                        return ''
-                
-                def color_grade(val):
-                    color_map = {
-                        'A': COLORS['primary'],
-                        'B': COLORS['warning'], 
-                        'C': COLORS['danger'],
-                        'D': '#888888'
-                    }
-                    return f'color: {color_map.get(val, "white")}; font-weight: bold'
-                
-                styled_df = df.style\
-                    .applymap(color_score, subset=['Score'])\
-                    .applymap(color_grade, subset=['C', 'A', 'N', 'S', 'L', 'I', 'M'])
-                
-                st.dataframe(styled_df, use_container_width=True, height=600)
-                
-                # Exportar resultados
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Descargar CSV",
-                    data=csv,
-                    file_name=f"canslim_scan_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv"
-                )
-                
-                # Nota sobre muestreo aleatorio
-                if use_sample:
-                    st.info("💡 **Nota**: Se usó muestreo aleatorio de 50 stocks para evitar rate limits de Yahoo Finance. Para escanear todos los tickers, activa 'Modo Completo' (puede fallar).")
+                # Forzar rerun para mostrar los resultados guardados
+                st.rerun()
             else:
                 st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
-    # TAB 2: ANÁLISIS DETALLADO (MEJORADO CON MANEJO DE ERRORES)
+    # TAB 2: ANÁLISIS DETALLADO
     with tab2:
+        # Mostrar banner si hay resultados guardados
+        if st.session_state.scan_candidates:
+            st.markdown(f"""
+            <div class="saved-results-banner">
+                📊 <strong>Resultados guardados del último scan:</strong> {len(st.session_state.scan_candidates)} candidatos | 
+                <a href="#" style="color: {COLORS['primary']};">Volver a Scanner para ver detalles</a>
+            </div>
+            """, unsafe_allow_html=True)
+        
         ticker_input = st.text_input("Ingresar Ticker para Análisis Detallado", "AAPL").upper()
         
         if st.button("Analizar", type="primary"):
@@ -1479,7 +1526,6 @@ def render():
                             st.plotly_chart(create_score_gauge(result['score']), use_container_width=True)
                             st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True)
                             
-                            # Métricas clave
                             st.markdown(f"""
                             <div class="metric-card">
                                 <h4>RS Rating</h4>
@@ -1499,7 +1545,6 @@ def render():
                             """, unsafe_allow_html=True)
                         
                         with col2:
-                            # Gráfico de precios
                             try:
                                 stock = rate_limiter.get_ticker_with_retry(ticker_input)
                                 if stock:
@@ -1518,7 +1563,6 @@ def render():
                                             name='Price'
                                         ))
                                         
-                                        # Añadir SMAs
                                         if len(hist) >= 50:
                                             fig.add_trace(go.Scatter(
                                                 x=hist.index,
@@ -1550,7 +1594,6 @@ def render():
                             except Exception as e:
                                 st.error(f"Error cargando gráfico: {str(e)}")
                             
-                            # Tabla de métricas
                             metrics_df = pd.DataFrame({
                                 'Métrica': [
                                     'Market Cap', 'EPS Growth', 'Revenue Growth',
@@ -1574,8 +1617,16 @@ def render():
                     st.error(f"❌ Error inesperado: {str(e)}")
                     st.info("Por favor, verifica que el ticker sea válido e intenta de nuevo.")
 
-    # TAB 3: METODOLOGÍA COMPLETA (SIN RECURSOS ADICIONALES)
+    # TAB 3: METODOLOGÍA COMPLETA
     with tab3:
+        # Mostrar banner si hay resultados guardados
+        if st.session_state.scan_candidates:
+            st.markdown(f"""
+            <div class="saved-results-banner">
+                📊 <strong>Hay {len(st.session_state.scan_candidates)} candidatos guardados</strong> del scan de las {st.session_state.scan_timestamp}
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.markdown("""
         <style>
         .methodology-section h3 {
@@ -1593,24 +1644,23 @@ def render():
         
         st.markdown('<div class="methodology-section">', unsafe_allow_html=True)
         
-        # Guía Completa
         st.markdown(EDUCATIONAL_CONTENT["guia_completa"])
-        
-        # Reglas de Operación
         st.markdown(EDUCATIONAL_CONTENT["reglas_operacion"])
-        
-        # Señales de Venta
         st.markdown(EDUCATIONAL_CONTENT["senales_venta"])
-        
-        # Errores Comunes
         st.markdown(EDUCATIONAL_CONTENT["errores_comunes"])
-        
-        # NOTA: Se eliminó EDUCATIONAL_CONTENT["recursos_adicionales"]
         
         st.markdown('</div>', unsafe_allow_html=True)
 
     # TAB 4: ML PREDICTIVO
     with tab4:
+        # Mostrar banner si hay resultados guardados
+        if st.session_state.scan_candidates:
+            st.markdown(f"""
+            <div class="saved-results-banner">
+                📊 <strong>Hay {len(st.session_state.scan_candidates)} candidatos guardados</strong> del scan de las {st.session_state.scan_timestamp}
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.header("🤖 Machine Learning para CAN SLIM")
         
         if not SKLEARN_AVAILABLE:
@@ -1642,7 +1692,6 @@ def render():
             ml = CANSlimMLPredictor()
             st.plotly_chart(create_ml_feature_importance(ml), use_container_width=True)
         
-        # Predicción individual
         st.subheader("Predicción Individual")
         pred_ticker = st.text_input("Ticker para Predicción ML", "NVDA").upper()
         if st.button("Predecir", disabled=not SKLEARN_AVAILABLE):
@@ -1665,6 +1714,14 @@ def render():
 
     # TAB 5: BACKTESTING
     with tab5:
+        # Mostrar banner si hay resultados guardados
+        if st.session_state.scan_candidates:
+            st.markdown(f"""
+            <div class="saved-results-banner">
+                📊 <strong>Hay {len(st.session_state.scan_candidates)} candidatos guardados</strong> del scan de las {st.session_state.scan_timestamp}
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.header("📈 Backtesting con Zipline")
         
         if not ZIPPILINE_AVAILABLE:

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CAN SLIM Scanner Pro - Versión Mejorada
-Sistema completo de selección de acciones con ML, Backtesting y API
+CAN SLIM Scanner Pro - Versión con Rate Limiting Inteligente
+Sistema de selección de acciones con muestreo aleatorio y caché
 Autor: CAN SLIM Pro Team
-Versión: 2.0.2
+Versión: 2.1.0
 """
 
 import streamlit as st
@@ -20,50 +20,84 @@ import os
 import re as re_module
 import time
 import random
+from functools import lru_cache
 warnings.filterwarnings('ignore')
 
 # ============================================================
-# CONFIGURACIÓN DE RATE LIMITING PARA YFINANCE
+# CONFIGURACIÓN DE RATE LIMITING Y MUESTREO INTELIGENTE
 # ============================================================
 
 class YFinanceRateLimiter:
-    """Gestiona rate limits de yfinance con delays y reintentos"""
+    """Gestiona rate limits de yfinance con delays adaptativos y caché"""
     
     def __init__(self):
         self.last_request_time = 0
-        self.min_delay = 0.5  # Delay mínimo entre requests en segundos
+        self.min_delay = 0.8  # Aumentado a 0.8s entre requests
         self.max_retries = 3
         self.backoff_factor = 2
+        self.consecutive_errors = 0
+        self.max_consecutive_errors = 5
+        self.cooldown_period = 30  # Segundos de espera si hay muchos errores
     
     def wait_if_needed(self):
         """Espera si es necesario para respetar rate limits"""
         elapsed = time.time() - self.last_request_time
-        if elapsed < self.min_delay:
-            sleep_time = self.min_delay - elapsed + random.uniform(0.1, 0.3)
+        # Delay adaptativo: más tiempo si hay errores recientes
+        delay = self.min_delay + (self.consecutive_errors * 0.2)
+        if elapsed < delay:
+            sleep_time = delay - elapsed + random.uniform(0.1, 0.5)
             time.sleep(sleep_time)
         self.last_request_time = time.time()
     
     def get_ticker_with_retry(self, ticker_symbol):
-        """Obtiene ticker con reintentos exponenciales"""
+        """Obtiene ticker con reintentos exponenciales y manejo de errores"""
         for attempt in range(self.max_retries):
             try:
                 self.wait_if_needed()
                 ticker = yf.Ticker(ticker_symbol)
-                # Verificar que podemos obtener datos
                 info = ticker.info
-                if info and len(info) > 0:
+                
+                # Verificar que tenemos datos válidos
+                if info and len(info) > 0 and 'regularMarketPrice' in info:
+                    self.consecutive_errors = 0  # Reset errores
                     return ticker
                 else:
-                    raise ValueError("No data returned")
+                    raise ValueError("Datos incompletos")
+                    
             except Exception as e:
+                self.consecutive_errors += 1
+                
+                # Si hay demasiados errores consecutivos, hacer cooldown
+                if self.consecutive_errors >= self.max_consecutive_errors:
+                    st.warning(f"⏸️ Demasiados errores. Pausando {self.cooldown_period}s...")
+                    time.sleep(self.cooldown_period)
+                    self.consecutive_errors = 0
+                
                 if attempt == self.max_retries - 1:
-                    raise e
-                wait_time = (self.backoff_factor ** attempt) + random.uniform(0, 1)
+                    return None
+                
+                wait_time = (self.backoff_factor ** attempt) + random.uniform(0.5, 1.5)
                 time.sleep(wait_time)
+        
         return None
 
 # Instancia global del rate limiter
 rate_limiter = YFinanceRateLimiter()
+
+# ============================================================
+# CONFIGURACIÓN DE MUESTREO
+# ============================================================
+
+# Número máximo de stocks a analizar para evitar rate limits
+MAX_STOCKS_TO_SCAN = 50  # Analizar máximo 50 aleatorios
+USE_RANDOM_SAMPLE = True  # Activar muestreo aleatorio
+CACHE_DURATION = 3600  # 1 hora de caché
+
+@st.cache_data(ttl=CACHE_DURATION)
+def get_cached_market_data():
+    """Caché para datos de mercado (índices)"""
+    analyzer = MarketAnalyzer()
+    return analyzer.calculate_market_score()
 
 # ============================================================
 # IMPORTS OPCIONALES CON MANEJO DE ERRORES
@@ -127,10 +161,10 @@ COLORS = {
 }
 
 # ============================================================
-# GESTIÓN DE UNIVERSO DESDE ARCHIVO TXT (tickers.txt en directorio raíz)
+# GESTIÓN DE UNIVERSO DESDE ARCHIVO TXT
 # ============================================================
 
-TICKERS_PATH = None  # Se determina dinámicamente
+TICKERS_PATH = None
 
 def get_tickers_path():
     """Determina la ruta correcta de tickers.txt según el contexto de ejecución"""
@@ -141,7 +175,7 @@ def get_tickers_path():
         return os.path.join(os.path.dirname(current_file), "tickers.txt")
 
 def load_tickers_from_file():
-    """Carga los tickers desde el archivo tickers.txt en el directorio raíz"""
+    """Carga los tickers desde el archivo tickers.txt"""
     try:
         tickers_path = get_tickers_path()
         
@@ -171,23 +205,48 @@ def load_tickers_from_file():
         st.error(f"❌ Error al cargar tickers.txt: {str(e)}")
         return []
 
-def get_all_universe_tickers(comprehensive=True):
+def get_random_sample_tickers(all_tickers, n=MAX_STOCKS_TO_SCAN, seed=None):
     """
-    Obtiene todos los tickers disponibles desde tickers.txt
-    comprehensive=True incluye todos los activos
+    Obtiene una muestra aleatoria de tickers para evitar rate limits.
+    Usa semilla opcional para reproducibilidad.
     """
-    tickers = load_tickers_from_file()
+    if len(all_tickers) <= n:
+        return all_tickers
+    
+    if seed is not None:
+        random.seed(seed)
+    
+    # Estratificación: incluir algunos de los tickers más conocidos (S&P 500 top)
+    priority_tickers = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'BRK-B', 'JPM']
+    priority_in_sample = [t for t in priority_tickers if t in all_tickers]
+    
+    # Completar con aleatorios del resto
+    remaining = [t for t in all_tickers if t not in priority_in_sample]
+    n_random = n - len(priority_in_sample)
+    
+    if n_random > 0 and remaining:
+        random_sample = random.sample(remaining, min(n_random, len(remaining)))
+        return priority_in_sample + random_sample
+    
+    return priority_in_sample[:n]
 
-    if not tickers:
-        st.warning("⚠️ No se pudieron cargar tickers. Verifica que tickers.txt exista en el directorio raíz.")
+def get_all_universe_tickers(comprehensive=False, use_sample=USE_RANDOM_SAMPLE):
+    """
+    Obtiene tickers. Por defecto usa muestreo aleatorio para evitar rate limits.
+    """
+    all_tickers = load_tickers_from_file()
+
+    if not all_tickers:
+        st.warning("⚠️ No se pudieron cargar tickers.")
         return []
 
-    if comprehensive:
-        return tickers
+    if use_sample and not comprehensive:
+        sampled = get_random_sample_tickers(all_tickers, MAX_STOCKS_TO_SCAN)
+        return sampled
     else:
-        return tickers[:500]
+        return all_tickers
 
-# Variable global para mantener compatibilidad con código existente
+# Variable global
 tickers = load_tickers_from_file()
 
 # ============================================================
@@ -211,11 +270,17 @@ class MarketAnalyzer:
         for ticker, name in self.indices.items():
             try:
                 if ticker == 'VIX':
-                    data = rate_limiter.get_ticker_with_retry('^VIX').history(period="6mo")
+                    data = rate_limiter.get_ticker_with_retry('^VIX')
+                    if data:
+                        data = data.history(period="6mo")
                 else:
-                    data = rate_limiter.get_ticker_with_retry(ticker).history(period="6mo")
+                    ticker_obj = rate_limiter.get_ticker_with_retry(ticker)
+                    if ticker_obj:
+                        data = ticker_obj.history(period="6mo")
+                    else:
+                        data = None
                 
-                if len(data) > 0:
+                if data is not None and len(data) > 0:
                     market_data[ticker] = {
                         'name': name,
                         'data': data,
@@ -226,14 +291,12 @@ class MarketAnalyzer:
                         'trend_60d': (data['Close'].iloc[-1] / data['Close'].iloc[-60] - 1) * 100
                     }
             except Exception as e:
-                st.warning(f"⚠️ Error obteniendo datos de {ticker}: {str(e)}")
+                st.warning(f"⚠️ Error obteniendo {ticker}: {str(e)}")
                 continue
         return market_data
     
     def calculate_market_score(self):
-        """
-        Calcula el score de dirección de mercado (0-100)
-        """
+        """Calcula el score de dirección de mercado (0-100)"""
         data = self.get_market_data()
         score = 50
         signals = []
@@ -521,7 +584,6 @@ class CANSlimBacktester:
 def calculate_can_slim_metrics(ticker, market_analyzer=None):
     """Calcula todas las métricas CAN SLIM para un ticker con ML"""
     try:
-        # Usar rate limiter para obtener datos
         stock = rate_limiter.get_ticker_with_retry(ticker)
         if stock is None:
             return None
@@ -548,11 +610,14 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         
         try:
             spy_ticker = rate_limiter.get_ticker_with_retry("SPY")
-            spy = spy_ticker.history(period="1y")
-            stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
-            spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
-            rs_rating = 50 + (stock_return - spy_return) * 2
-            rs_rating = max(0, min(100, rs_rating))
+            if spy_ticker:
+                spy = spy_ticker.history(period="1y")
+                stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
+                spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
+                rs_rating = 50 + (stock_return - spy_return) * 2
+                rs_rating = max(0, min(100, rs_rating))
+            else:
+                rs_rating = 50
         except:
             rs_rating = 50
         
@@ -688,30 +753,46 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             }
         }
     except Exception as e:
-        st.error(f"Error en calculate_can_slim_metrics para {ticker}: {str(e)}")
         return None
 
 @st.cache_data(ttl=600)
-def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False):
-    """Escanea el universo de tickers y devuelve candidatos CAN SLIM"""
+def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False, sample_size=MAX_STOCKS_TO_SCAN):
+    """
+    Escanea el universo de tickers y devuelve candidatos CAN SLIM.
+    Por defecto usa muestreo aleatorio para evitar rate limits.
+    """
     candidates = []
     
-    current_tickers = load_tickers_from_file()
-    
+    # Obtener tickers (con muestreo aleatorio por defecto)
     if comprehensive:
-        st.info(f"Modo completo activado: Escaneando {len(current_tickers)} activos...")
+        current_tickers = get_all_universe_tickers(comprehensive=True, use_sample=False)
+        st.info(f"Modo completo: Escaneando {len(current_tickers)} activos (puede ser lento y causar rate limits)...")
+    else:
+        current_tickers = get_all_universe_tickers(comprehensive=False, use_sample=True)
+        st.info(f"Modo muestreo aleatorio: Escaneando {len(current_tickers)} activos seleccionados aleatoriamente...")
     
     progress_bar = st.progress(0)
     status_text = st.empty()
+    errors_count = 0
+    max_errors = 10  # Detener si hay demasiados errores
     
     for i, ticker in enumerate(current_tickers):
         progress = (i + 1) / len(current_tickers)
         progress_bar.progress(progress)
-        status_text.text(f"Analizando {ticker}... ({i+1}/{len(current_tickers)})")
+        status_text.text(f"Analizando {ticker}... ({i+1}/{len(current_tickers)}) - Errores: {errors_count}")
         
         result = calculate_can_slim_metrics(ticker, None)
         if result and result['score'] >= min_score:
             candidates.append(result)
+        elif result is None:
+            errors_count += 1
+            if errors_count >= max_errors:
+                st.warning(f"⚠️ Demasiados errores consecutivos ({max_errors}). Deteniendo scan...")
+                break
+        
+        # Pausa breve cada 10 tickers para no saturar
+        if (i + 1) % 10 == 0:
+            time.sleep(1)
     
     progress_bar.empty()
     status_text.empty()
@@ -1128,7 +1209,6 @@ EDUCATIONAL_CONTENT = {
     17. **Resultado reciente sesga juicio**: Un trade no define el sistema
     18. **Buscar confirmación externa**: Tu análisis debe ser independiente
     """
-    # NOTA: Se eliminó "recursos_adicionales"
 }
 
 # ============================================================
@@ -1243,7 +1323,7 @@ def render():
         "📈 Backtesting"
     ])
 
-    # TAB 1: SCANNER MEJORADO
+    # TAB 1: SCANNER MEJORADO CON MUESTREO ALEATORIO
     with tab1:
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
@@ -1253,8 +1333,9 @@ def render():
         with col2:
             max_results = st.number_input("Máx Resultados", 5, 100, 20)
         with col3:
-            comprehensive = st.checkbox("Universo Completo", value=False,
-                                     help="Incluir todos los activos del archivo")
+            # Checkbox para modo completo (con advertencia de rate limit)
+            comprehensive = st.checkbox("Modo Completo (⚠️ Rate Limit)", value=False,
+                                     help="Escanea TODOS los tickers (lento, puede fallar por rate limits)")
         with col4:
             st.markdown("<br>", unsafe_allow_html=True)
             scan_button = st.button("🔍 ESCANEAR MERCADO", use_container_width=True, type="primary")
@@ -1269,17 +1350,24 @@ def render():
                 st.markdown(f"- {signal}")
         
         # Info del archivo de tickers
-        current_tickers = load_tickers_from_file()
-        st.info(f"📁 Archivo tickers.txt: {len(current_tickers)} tickers cargados")
+        all_tickers = load_tickers_from_file()
+        st.info(f"📁 Total tickers disponibles: {len(all_tickers)} | Muestreo por defecto: {MAX_STOCKS_TO_SCAN} aleatorios")
         
         if scan_button:
-            if not comprehensive:
-                current_tickers = current_tickers[:500]
+            # Usar muestreo aleatorio por defecto, modo completo solo si se marca el checkbox
+            use_sample = not comprehensive
             
-            candidates = scan_universe(min_score, None, comprehensive)
+            if use_sample:
+                current_tickers = get_all_universe_tickers(comprehensive=False, use_sample=True)
+                st.success(f"🎲 Modo Muestreo Aleatorio: Analizando {len(current_tickers)} stocks seleccionados aleatoriamente")
+            else:
+                current_tickers = get_all_universe_tickers(comprehensive=True, use_sample=False)
+                st.warning(f"⚠️ Modo Completo: Analizando {len(current_tickers)} stocks (puede causar rate limits)")
+            
+            candidates = scan_universe(min_score, None, comprehensive=not use_sample)
             
             if candidates:
-                st.success(f"✅ Se encontraron {len(candidates)} candidatos CAN SLIM de {len(current_tickers)} analizados")
+                st.success(f"✅ Se encontraron {len(candidates)} candidatos CAN SLIM")
                 
                 # Top 3 destacados con badges completos C-A-N-S-L-I-M
                 st.subheader("🏆 Top Candidatos CAN SLIM")
@@ -1365,6 +1453,10 @@ def render():
                     file_name=f"canslim_scan_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
+                
+                # Nota sobre muestreo aleatorio
+                if use_sample:
+                    st.info("💡 **Nota**: Se usó muestreo aleatorio de 50 stocks para evitar rate limits de Yahoo Finance. Para escanear todos los tickers, activa 'Modo Completo' (puede fallar).")
             else:
                 st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
@@ -1410,48 +1502,51 @@ def render():
                             # Gráfico de precios
                             try:
                                 stock = rate_limiter.get_ticker_with_retry(ticker_input)
-                                hist = stock.history(period="1y")
-                                
-                                if len(hist) == 0:
-                                    st.warning("No hay datos históricos disponibles")
+                                if stock:
+                                    hist = stock.history(period="1y")
+                                    
+                                    if len(hist) == 0:
+                                        st.warning("No hay datos históricos disponibles")
+                                    else:
+                                        fig = go.Figure()
+                                        fig.add_trace(go.Candlestick(
+                                            x=hist.index,
+                                            open=hist['Open'],
+                                            high=hist['High'],
+                                            low=hist['Low'],
+                                            close=hist['Close'],
+                                            name='Price'
+                                        ))
+                                        
+                                        # Añadir SMAs
+                                        if len(hist) >= 50:
+                                            fig.add_trace(go.Scatter(
+                                                x=hist.index,
+                                                y=hist['Close'].rolling(50).mean(),
+                                                name='SMA 50',
+                                                line=dict(color=COLORS['warning'], width=1)
+                                            ))
+                                        if len(hist) >= 200:
+                                            fig.add_trace(go.Scatter(
+                                                x=hist.index,
+                                                y=hist['Close'].rolling(200).mean(),
+                                                name='SMA 200',
+                                                line=dict(color=COLORS['primary'], width=1)
+                                            ))
+                                        
+                                        fig.update_layout(
+                                            title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
+                                            paper_bgcolor=COLORS['bg_dark'],
+                                            plot_bgcolor=COLORS['bg_dark'],
+                                            font=dict(color='white'),
+                                            xaxis=dict(gridcolor=COLORS['bg_card']),
+                                            yaxis=dict(gridcolor=COLORS['bg_card']),
+                                            height=500
+                                        )
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
                                 else:
-                                    fig = go.Figure()
-                                    fig.add_trace(go.Candlestick(
-                                        x=hist.index,
-                                        open=hist['Open'],
-                                        high=hist['High'],
-                                        low=hist['Low'],
-                                        close=hist['Close'],
-                                        name='Price'
-                                    ))
-                                    
-                                    # Añadir SMAs
-                                    if len(hist) >= 50:
-                                        fig.add_trace(go.Scatter(
-                                            x=hist.index,
-                                            y=hist['Close'].rolling(50).mean(),
-                                            name='SMA 50',
-                                            line=dict(color=COLORS['warning'], width=1)
-                                        ))
-                                    if len(hist) >= 200:
-                                        fig.add_trace(go.Scatter(
-                                            x=hist.index,
-                                            y=hist['Close'].rolling(200).mean(),
-                                            name='SMA 200',
-                                            line=dict(color=COLORS['primary'], width=1)
-                                        ))
-                                    
-                                    fig.update_layout(
-                                        title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
-                                        paper_bgcolor=COLORS['bg_dark'],
-                                        plot_bgcolor=COLORS['bg_dark'],
-                                        font=dict(color='white'),
-                                        xaxis=dict(gridcolor=COLORS['bg_card']),
-                                        yaxis=dict(gridcolor=COLORS['bg_card']),
-                                        height=500
-                                    )
-                                    
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.error("No se pudo obtener el ticker para el gráfico")
                             except Exception as e:
                                 st.error(f"Error cargando gráfico: {str(e)}")
                             
@@ -1604,8 +1699,6 @@ def render():
                 metrics_col2.metric("Sharpe Ratio", "1.85", "vs 1.2 SPY")
                 metrics_col3.metric("Max Drawdown", "-12.4%", "vs -20.1% SPY")
                 metrics_col4.metric("Win Rate", "68%", "de operaciones")
-
-    # NOTA: Se eliminó el TAB 6 (Configuración & API)
 
 if __name__ == "__main__":
     render()

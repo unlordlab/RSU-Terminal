@@ -33,4 +33,5 @@ Report Date:
 Also pull up perplexity finance ticker data on a separate browser tab.
 
 IF the Company/Ticker is gapping up 6-10%+, give me a score out of 10 on the likelihood is makes a big move on gap day and subsequent days after.
-Dame toda la informacion en castellano y en formato markdown.
+
+Dame toda la informacion en castellano-

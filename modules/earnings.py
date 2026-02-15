@@ -26,13 +26,11 @@ def rate_limit_delay():
 def load_rsu_prompt():
     """Carga el prompt de análisis hedge fund desde earnings.txt en raíz."""
     try:
-        # earnings.py está en /modules/, subir un nivel para llegar a raíz
         prompt_path = os.path.join(os.path.dirname(__file__), '..', 'earnings.txt')
         with open(prompt_path, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
         print(f"Error cargando prompt RSU: {e}")
-        # Fallback al prompt original si no se encuentra el archivo
         return None
 
 def get_earnings_data_for_prompt(ticker):
@@ -41,10 +39,7 @@ def get_earnings_data_for_prompt(ticker):
         rate_limit_delay()
         ticker_obj = yf.Ticker(ticker)
         
-        # Calendario de earnings (próximos y pasados)
         calendar = ticker_obj.calendar
-        
-        # Earnings históricos trimestrales
         quarterly_earnings = None
         try:
             quarterly = ticker_obj.quarterly_earnings
@@ -53,7 +48,6 @@ def get_earnings_data_for_prompt(ticker):
         except:
             pass
             
-        # Recomendaciones de analistas
         recommendations = None
         try:
             recs = ticker_obj.recommendations
@@ -62,7 +56,6 @@ def get_earnings_data_for_prompt(ticker):
         except:
             pass
             
-        # Upgrade/Downgrade recientes
         upgrades = None
         try:
             up = ticker_obj.upgrades_downgrades
@@ -97,7 +90,6 @@ def get_yfinance_data(ticker_symbol):
         except:
             info = dict(ticker.fast_info) if hasattr(ticker, 'fast_info') else {}
         
-        # Obtener histórico
         try:
             hist = ticker.history(period="1y", auto_adjust=True)
             hist_dict = {
@@ -111,7 +103,6 @@ def get_yfinance_data(ticker_symbol):
         except:
             hist_dict = None
         
-        # Obtener earnings históricos
         try:
             earnings = ticker.earnings
             earnings_dict = None
@@ -124,7 +115,6 @@ def get_yfinance_data(ticker_symbol):
         except:
             earnings_dict = None
         
-        # Calendario de earnings
         try:
             calendar = ticker.calendar
             calendar_list = []
@@ -159,15 +149,12 @@ def get_finnhub_data(ticker, api_key):
         base_url = "https://finnhub.io/api/v1"
         headers = {"X-Finnhub-Token": api_key}
         
-        # Quote
         quote_resp = requests.get(f"{base_url}/quote", params={"symbol": ticker}, headers=headers, timeout=10)
         quote = quote_resp.json() if quote_resp.status_code == 200 else {}
         
-        # Profile
         profile_resp = requests.get(f"{base_url}/stock/profile2", params={"symbol": ticker}, headers=headers, timeout=10)
         profile = profile_resp.json() if profile_resp.status_code == 200 else {}
         
-        # Metrics
         metrics_resp = requests.get(f"{base_url}/stock/metric", params={"symbol": ticker, "metric": "all"}, headers=headers, timeout=10)
         metrics = metrics_resp.json().get('metric', {}) if metrics_resp.status_code == 200 else {}
         
@@ -238,7 +225,6 @@ def process_data(raw_data, ticker):
     if price == 0:
         return None
     
-    # Reconstruir DataFrames
     hist_df = pd.DataFrame()
     hist_data = raw_data.get('history')
     if hist_data:
@@ -253,7 +239,6 @@ def process_data(raw_data, ticker):
         except:
             pass
     
-    # Earnings DataFrame
     earnings_df = pd.DataFrame()
     earnings_data = raw_data.get('earnings')
     if earnings_data and earnings_data.get('dates'):
@@ -335,7 +320,6 @@ def process_data(raw_data, ticker):
         "data_source": raw_data.get('source', 'unknown')
     }
     
-    # Calcular cambios
     if data['prev_close'] and data['prev_close'] != 0:
         data['change_pct'] = ((data['price'] - data['prev_close']) / data['prev_close']) * 100
         data['change_abs'] = data['price'] - data['prev_close']
@@ -434,7 +418,6 @@ def generate_outlook_points(data):
     positive = []
     challenges = []
     
-    # Análisis de crecimiento
     if data.get('rev_growth'):
         if data['rev_growth'] > 0.20:
             positive.append(f"🚀 Crecimiento explosivo de ingresos ({data['rev_growth']:.1%})")
@@ -445,7 +428,6 @@ def generate_outlook_points(data):
         else:
             challenges.append(f"📉 Contracción de ingresos ({data['rev_growth']:.1%})")
     
-    # Márgenes
     if data.get('profit_margin'):
         if data['profit_margin'] > 0.25:
             positive.append(f"💰 Márgenes de beneficio excepcionales ({data['profit_margin']:.1%})")
@@ -458,7 +440,6 @@ def generate_outlook_points(data):
         if data['ebitda_margin'] > 0.30:
             positive.append(f"🏭 Alta generación operativa (EBITDA {data['ebitda_margin']:.1%})")
     
-    # Rentabilidad
     if data.get('roe'):
         if data['roe'] > 0.30:
             positive.append(f"🎯 ROE excepcional ({data['roe']:.1%}) - Eficiencia superior")
@@ -467,31 +448,26 @@ def generate_outlook_points(data):
         elif data['roe'] < 0.08:
             challenges.append(f"📉 ROE bajo ({data['roe']:.1%}) - Menor rentabilidad")
     
-    # Deuda
     if data.get('debt_to_equity'):
         if data['debt_to_equity'] < 50:
             positive.append(f"⚖️ Balance poco apalancado (Deuda/Pat {data['debt_to_equity']:.0f}%)")
         elif data['debt_to_equity'] > 100:
             challenges.append(f"⚠️ Alto apalancamiento financiero ({data['debt_to_equity']:.0f}%)")
     
-    # Cash flow
     if data.get('free_cashflow') and data['free_cashflow'] > 0:
         positive.append(f"💵 Generación robusta de Free Cash Flow ({format_value(data['free_cashflow'], '$')})")
     elif data.get('free_cashflow') and data['free_cashflow'] < 0:
         challenges.append(f"🔥 Free Cash Flow negativo - quema de caja")
     
-    # Valoración
     if data.get('pe_forward'):
         if data['pe_forward'] < 15:
             positive.append(f"💎 Valoración atractiva (P/E {data['pe_forward']:.1f}x)")
         elif data['pe_forward'] > 40:
             challenges.append(f"💸 Valoración elevada (P/E {data['pe_forward']:.1f}x) - altas expectativas")
     
-    # Dividendos
     if data.get('dividend_yield') and data['dividend_yield'] > 0.02:
         positive.append(f"🎁 Dividendo atractivo ({data['dividend_yield']:.2%} yield)")
     
-    # Precio vs objetivos
     if data.get('target_mean') and data.get('price'):
         upside = ((data['target_mean'] - data['price']) / data['price']) * 100
         if upside > 20:
@@ -499,7 +475,6 @@ def generate_outlook_points(data):
         elif upside < -10:
             challenges.append(f"📉 Precio por encima del consenso ({upside:.1f}%)")
     
-    # Rellenar si faltan
     defaults_pos = [
         "🌟 Posición de liderazgo en el sector",
         "🔧 Fortalezas operativas diferenciadas",
@@ -528,12 +503,11 @@ def render_earnings_chart(data):
     
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
-    # Revenue bars
     if 'Revenue' in earnings.columns and not earnings['Revenue'].empty:
         fig.add_trace(
             go.Bar(
                 x=earnings.index,
-                y=earnings['Revenue'] / 1e9,  # Convertir a billones
+                y=earnings['Revenue'] / 1e9,
                 name='Ingresos',
                 marker_color='#2a3f5f',
                 opacity=0.7
@@ -541,7 +515,6 @@ def render_earnings_chart(data):
             secondary_y=False
         )
     
-    # Earnings line
     if 'Earnings' in earnings.columns and not earnings['Earnings'].empty:
         fig.add_trace(
             go.Scatter(
@@ -591,26 +564,28 @@ def render_earnings_calendar(data):
             """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU HEDGE FUND (REEMPLAZA AI ANTERIOR)
+# ANÁLISIS RSU HEDGE FUND
 # ────────────────────────────────────────────────
 
 def render_rsu_earnings_analysis(data):
     """Renderiza Análisis Prompt RSU Earnings - Estilo Hedge Fund."""
     st.markdown("### 📊 Análisis Prompt RSU Earnings")
     
-    # Cargar el prompt base
     base_prompt = load_rsu_prompt()
     
     if not base_prompt:
         st.warning("⚠️ Prompt RSU no encontrado. Verifica que earnings.txt esté en el directorio raíz.")
         return
     
-    # Obtener datos adicionales de earnings
     earnings_extra = get_earnings_data_for_prompt(data['ticker'])
     
-    # Construir contexto de datos para el prompt
-    contexto_datos = f"""
-DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
+    # Formatear datos adicionales como texto legible
+    calendar_str = str(earnings_extra.get('calendar', 'No disponible'))
+    quarterly_str = str(earnings_extra.get('quarterly_earnings', 'No disponible'))
+    recs_str = str(earnings_extra.get('recommendations', 'No disponible'))
+    upgrades_str = str(earnings_extra.get('upgrades', 'No disponible'))
+    
+    contexto_datos = f"""DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
 
 📈 DATOS DE MERCADO:
 - Precio Actual: ${data['price']:.2f}
@@ -645,20 +620,22 @@ DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
 - Recomendación: {data.get('recommendation', 'N/A').upper()}
 
 📅 CALENDARIO DE EARNINGS:
-{earnings_extra.get('calendar', 'No disponible')}
+{calendar_str}
 
 📊 EARNINGS TRIMESTRALES HISTÓRICOS:
-{earnings_extra.get('quarterly_earnings', 'No disponible')}
+{quarterly_str}
 
 ⚡ RECOMENDACIONES RECIENTES:
-{earnings_extra.get('recommendations', 'No disponible')}
+{recs_str}
 
 🔄 UPGRADES/DOWNGRADES:
-{earnings_extra.get('upgrades', 'No disponible')}
-"""
+{upgrades_str}"""
     
-    # Combinar prompt base + contexto
-    prompt_completo = base_prompt + "\n\n" + contexto_datos + "\n\nGenera el reporte completo en español y formato markdown según las instrucciones anteriores."
+    prompt_completo = f"""{base_prompt}
+
+{contexto_datos}
+
+INSTRUCCIÓN FINAL: Genera ÚNICAMENTE el reporte solicitado en el formato especificado. No repitas esta instrucción. No digas 'Aquí tienes el informe'. Comienza directamente con el contenido del análisis en español y formato markdown."""
     
     model, name, err = get_ia_model()
     
@@ -668,12 +645,11 @@ DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
     
     try:
         with st.spinner("🧠 Generando análisis hedge fund..."):
-            # Configurar generación para respuestas más largas y detalladas
             generation_config = {
-                "temperature": 0.3,  # Más preciso para análisis financiero
+                "temperature": 0.2,
                 "top_p": 0.95,
                 "top_k": 40,
-                "max_output_tokens": 2048,  # Más tokens para reporte completo
+                "max_output_tokens": 2048,
             }
             
             response = model.generate_content(
@@ -681,7 +657,23 @@ DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
                 generation_config=generation_config
             )
             
-            # Renderizar resultado con estilo RSU/hacker
+            # Limpiar la respuesta de frases introductorias comunes
+            texto_limpio = response.text
+            frases_a_eliminar = [
+                "Aquí tienes el informe",
+                "Aquí está el análisis",
+                "A continuación te presento",
+                "Basado en los datos proporcionados",
+                "Informe de ganancias para",
+                "Análisis de earnings para"
+            ]
+            
+            for frase in frases_a_eliminar:
+                if texto_limpio.startswith(frase):
+                    texto_limpio = texto_limpio[len(frase):].strip()
+                    if texto_limpio.startswith(":"):
+                        texto_limpio = texto_limpio[1:].strip()
+            
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); 
                         border: 1px solid #00ffad; 
@@ -706,7 +698,7 @@ DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
                     </span>
                 </div>
                 <div style="padding: 25px; color: #e0e0e0; line-height: 1.8; font-size: 14px;">
-                    {response.text}
+                    {texto_limpio}
                 </div>
                 <div style="background: #0c0e12; 
                             border-top: 1px solid #2a3f5f; 
@@ -722,7 +714,6 @@ DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
             </div>
             """, unsafe_allow_html=True)
             
-            # Botón para copiar análisis
             st.code(response.text, language='markdown')
             
     except Exception as e:
@@ -739,7 +730,6 @@ def render():
         .stApp { background-color: #0c0e12; }
         .stTextInput > div > div > input { background-color: #1a1e26; color: white; border: 1px solid #2a3f5f; border-radius: 8px; }
         .stButton > button { background: linear-gradient(135deg, #00ffad 0%, #00cc8a 100%); color: #0c0e12; border: none; border-radius: 8px; font-weight: bold; }
-        /* Scrollbar personalizada estilo hacker */
         ::-webkit-scrollbar {
             width: 8px;
             background: #0c0e12;
@@ -753,32 +743,6 @@ def render():
         }
     </style>
     """, unsafe_allow_html=True)
-    
-    # Ticker de noticias estilo terminal
-    st.markdown("""
-    <div style="background: #000; color: #00ffad; padding: 5px; font-family: monospace; 
-                overflow: hidden; white-space: nowrap; border: 1px solid #00ffad; margin-bottom: 20px;">
-        <marquee scrollamount="3">
-        FED: TASAS SIN CAMBIOS | IPC: +3.2% YoY | DEUDA CORPORATIVA: NIVEL RÉCORD | 
-        DESIGUALDAD GINI: 0.49 | RSU: TRAZANDO LA LIQUIDEZ...
-        </marquee>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Manifiesto RSU colapsable
-    with st.expander("🔻 MANIFIESTO RSU - Rastro de la Liquidez", expanded=False):
-        st.markdown("""
-        <div style="font-family: 'Courier New', monospace; color: #00ffad; 
-                    background: #000; padding: 20px; border-left: 3px solid #00ffad;">
-            <p style="margin: 0; font-size: 12px; line-height: 1.6;">
-            "El capitalismo financiero no es un mecanismo de eficiencia, 
-            sino un sistema de extracción de valor. Cada ticker que analizamos
-            es un nodo en la red de acumulación de capital. El análisis técnico
-            es nuestra herramienta, la conciencia de clase nuestra brújula."<br><br>
-            — RSU Terminal // Contra la especulación irracional, a favor del análisis consciente
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
     
     st.title("📅 Análisis de Earnings")
     st.markdown('<div style="color: #888; margin-bottom: 20px;">Análisis fundamental con IA y datos en tiempo real</div>', unsafe_allow_html=True)
@@ -799,7 +763,6 @@ def render():
     
     if analyze and ticker:
         with st.spinner("Cargando datos..."):
-            # Obtener datos
             raw = get_yfinance_data(ticker)
             if not raw:
                 api_key = st.secrets.get("FINNHUB_API_KEY", None)
@@ -815,7 +778,6 @@ def render():
             st.error("No se pudieron obtener datos")
             return
         
-        # HEADER
         change_color = "#00ffad" if data.get('change_pct', 0) >= 0 else "#f23645"
         source_color = {"yfinance": "#00ffad", "finnhub": "#4caf50", "mock": "#ff9800"}.get(data.get('data_source'), "#888")
         source_label = {"yfinance": "YAHOO FINANCE", "finnhub": "FINNHUB", "mock": "DEMO"}.get(data.get('data_source'), "UNKNOWN")
@@ -842,7 +804,6 @@ def render():
             </div>
             """, unsafe_allow_html=True)
         
-        # MÉTRICAS
         st.markdown("### 📊 Métricas Fundamentales")
         cols = st.columns(4)
         metrics = [
@@ -865,7 +826,6 @@ def render():
                 </div>
                 """, unsafe_allow_html=True)
         
-        # GRÁFICOS Y DESCRIPCIÓN
         st.markdown("---")
         col_chart, col_info = st.columns([3, 2])
         
@@ -902,12 +862,10 @@ def render():
             </div>
             """, unsafe_allow_html=True)
         
-        # GRÁFICO DE EARNINGS
         st.markdown("---")
         render_earnings_chart(data)
         render_earnings_calendar(data)
         
-        # OUTLOOK
         st.markdown("---")
         st.markdown("### 🔮 Perspectivas y Desafíos")
         
@@ -942,11 +900,9 @@ def render():
             </div>
             """, unsafe_allow_html=True)
         
-        # ANÁLISIS RSU HEDGE FUND (reemplaza el anterior)
         st.markdown("---")
         render_rsu_earnings_analysis(data)
         
-        # FOOTER con cita aleatoria
         citas = [
             "Marx: 'El capital es trabajo muerto que, como un vampiro, solo vive chupando trabajo vivo.'",
             "Keynes: 'El mercado puede permanecer irracional más tiempo del que usted puede permanecer solvente.'",

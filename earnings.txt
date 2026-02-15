@@ -30,8 +30,7 @@ Report Date:
 7. Special Notes:
    - Reaction, accounting changes, management track record, insider activity
 
-Also pull up perplexity finance ticker data on a separate browser tab.
-
 IF the Company/Ticker is gapping up 6-10%+, give me a score out of 10 on the likelihood is makes a big move on gap day and subsequent days after.
 
-Dame toda la informacion en castellano-
+Dame toda la informacion en castellano.
+

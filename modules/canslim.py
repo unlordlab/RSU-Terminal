@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CAN SLIM Scanner Pro - Versión con Persistencia de Estado
+CAN SLIM Scanner Pro - Versión con Panel de Ratings IBD + Trend Template Minervini
 Sistema de selección de acciones con resultados que permanecen entre pestañas
 Autor: CAN SLIM Pro Team
-Versión: 2.2.0
+Versión: 3.0.0
 """
 
 import streamlit as st
@@ -159,7 +159,9 @@ COLORS = {
     'bg_card': '#1a1e26',
     'border': '#2a2e36',
     'text': '#ffffff',
-    'text_secondary': '#aaaaaa'
+    'text_secondary': '#aaaaaa',
+    'ibd_blue': '#2196F3',
+    'ibd_green': '#4CAF50'
 }
 
 # ============================================================
@@ -364,6 +366,263 @@ class MarketAnalyzer:
             'signals': signals,
             'data': data
         }
+
+# ============================================================
+# PANEL DE RATINGS IBD + TREND TEMPLATE MINERVINI
+# ============================================================
+
+class IBDRatingsCalculator:
+    """
+    Calcula ratings compatibles con IBD (Investors Business Daily):
+    - Composite Rating (0-99): RS ponderado + EPS + fundamentales
+    - RS Rating (0-99): fuerza relativa vs S&P 500, ponderada 40/20/20/20
+    - EPS Rating (0-99): crecimiento de ganancias trimestrales YoY
+    - SMR Rating (A-D): Sales, Margins, ROE composite
+    - Accumulation/Distribution (A-E): ratio volumen up/down 50 días
+    """
+    
+    def __init__(self):
+        self.weights_rs = [0.40, 0.20, 0.20, 0.20]
+    
+    def calculate_weighted_rs(self, hist_data, spy_data):
+        """RS Rating con ponderación IBD 40/20/20/20 (últimos 4 trimestres)"""
+        if hist_data is None or len(hist_data) < 252 or spy_data is None:
+            return 50.0
+        
+        try:
+            days_per_period = 63  # ~3 meses de trading
+            
+            rs_scores = []
+            for i in range(4):
+                end_idx = -1 if i == 0 else -(i * days_per_period)
+                start_idx = end_idx - days_per_period
+                
+                if abs(start_idx) > len(hist_data) or abs(end_idx) > len(spy_data):
+                    rs_scores.append(50.0)
+                    continue
+                
+                stock_start = hist_data['Close'].iloc[start_idx]
+                stock_end = hist_data['Close'].iloc[end_idx]
+                spy_start = spy_data['Close'].iloc[start_idx] if abs(start_idx) <= len(spy_data) else spy_data['Close'].iloc[0]
+                spy_end = spy_data['Close'].iloc[end_idx] if abs(end_idx) <= len(spy_data) else spy_data['Close'].iloc[-1]
+                
+                stock_return = (stock_end / stock_start) - 1
+                spy_return = (spy_end / spy_start) - 1
+                
+                if spy_return != 0:
+                    rs_relative = (stock_return - spy_return) / abs(spy_return)
+                else:
+                    rs_relative = stock_return
+                
+                rs_period = 50 + (rs_relative * 50)
+                rs_period = max(1, min(99, rs_period))
+                rs_scores.append(rs_period)
+            
+            weighted_rs = (
+                rs_scores[0] * 0.40 +
+                rs_scores[1] * 0.20 +
+                rs_scores[2] * 0.20 +
+                rs_scores[3] * 0.20
+            )
+            
+            return min(99, max(1, weighted_rs))
+            
+        except Exception:
+            return 50.0
+    
+    def calculate_eps_rating(self, quarterly_eps_growth):
+        """EPS Rating (0-99) basado en crecimiento trimestral YoY"""
+        if quarterly_eps_growth is None:
+            return 50
+        
+        if quarterly_eps_growth >= 100: return 99
+        elif quarterly_eps_growth >= 50: return 90 + min(9, int((quarterly_eps_growth - 50) / 5))
+        elif quarterly_eps_growth >= 25: return 80 + min(9, int((quarterly_eps_growth - 25) / 2.5))
+        elif quarterly_eps_growth >= 15: return 60 + min(19, int(quarterly_eps_growth - 15))
+        elif quarterly_eps_growth > 0: return 40 + min(19, int(quarterly_eps_growth * 2))
+        else: return max(1, 40 + int(quarterly_eps_growth))
+    
+    def calculate_composite_rating(self, rs_rating, eps_rating, sales_growth, roe, price_performance_12m):
+        """Composite Rating: ponderación IBD estándar"""
+        eps_score = eps_rating
+        rs_score = rs_rating
+        sales_score = min(99, max(1, 50 + sales_growth)) if sales_growth else 50
+        roe_score = min(99, max(1, roe * 2)) if roe else 50
+        perf_score = min(99, max(1, 50 + price_performance_12m)) if price_performance_12m else 50
+        
+        composite = (
+            eps_score * 0.30 +
+            rs_score * 0.30 +
+            sales_score * 0.15 +
+            roe_score * 0.15 +
+            perf_score * 0.10
+        )
+        
+        return min(99, max(1, round(composite)))
+    
+    def calculate_smr_rating(self, sales_growth, roe, profit_margins):
+        """SMR Rating (Sales + Margins + ROE): A (mejor) a D (peor)"""
+        score = 0
+        
+        # Sales growth (0-40 puntos)
+        if sales_growth >= 25: score += 40
+        elif sales_growth >= 15: score += 30
+        elif sales_growth >= 10: score += 20
+        elif sales_growth > 0: score += 10
+        
+        # ROE (0-40 puntos)
+        if roe >= 25: score += 40
+        elif roe >= 17: score += 30
+        elif roe >= 10: score += 20
+        elif roe > 0: score += 10
+        
+        # Margins (0-20 puntos)
+        if profit_margins and profit_margins > 0.20: score += 20
+        elif profit_margins and profit_margins > 0.10: score += 15
+        elif profit_margins and profit_margins > 0: score += 10
+        
+        if score >= 80: return 'A'
+        elif score >= 60: return 'B'
+        elif score >= 40: return 'C'
+        else: return 'D'
+    
+    def calculate_acc_dis_rating(self, hist_data, period=50):
+        """Accumulation/Distribution Rating (A-E) basado en volumen up/down"""
+        if hist_data is None or len(hist_data) < period:
+            return 'C'
+        
+        try:
+            recent = hist_data.tail(period).copy()
+            recent['price_change'] = recent['Close'].pct_change()
+            recent['is_up'] = recent['price_change'] > 0
+            recent['is_down'] = recent['price_change'] < 0
+            
+            vol_up = recent[recent['is_up']]['Volume'].sum()
+            vol_down = recent[recent['is_down']]['Volume'].sum()
+            total_vol = recent['Volume'].sum()
+            
+            if total_vol == 0:
+                return 'C'
+            
+            acc_ratio = (vol_up / total_vol) * 100
+            price_performance = (recent['Close'].iloc[-1] / recent['Close'].iloc[0] - 1) * 100
+            
+            if acc_ratio >= 65 and price_performance > 5: return 'A'
+            elif acc_ratio >= 58: return 'B'
+            elif acc_ratio >= 42: return 'C'
+            elif acc_ratio >= 35: return 'D'
+            else: return 'E'
+                
+        except Exception:
+            return 'C'
+    
+    def calculate_atr_percent(self, hist_data, period=14):
+        """Average True Range como porcentaje del precio"""
+        if hist_data is None or len(hist_data) < period:
+            return 0.0
+        
+        try:
+            high = hist_data['High']
+            low = hist_data['Low']
+            close = hist_data['Close']
+            
+            tr1 = high - low
+            tr2 = abs(high - close.shift())
+            tr3 = abs(low - close.shift())
+            
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = tr.rolling(window=period).mean().iloc[-1]
+            
+            current_price = close.iloc[-1]
+            atr_percent = (atr / current_price) * 100
+            
+            return round(atr_percent, 2)
+        except Exception:
+            return 0.0
+
+
+class MinerviniTrendTemplate:
+    """Implementación del Trend Template de Mark Minervini - 8 criterios para Stage 2"""
+    
+    def __init__(self):
+        self.criteria_names = [
+            "Precio > SMA 50",
+            "Precio > SMA 150", 
+            "Precio > SMA 200",
+            "SMA 50 > SMA 150",
+            "SMA 150 > SMA 200",
+            "SMA 200 Tendencia Alcista",
+            "Precio > 30% del mínimo 52s",
+            "Precio dentro 25% del máximo 52s"
+        ]
+    
+    def check_all_criteria(self, hist_data, current_price):
+        """Evalúa los 8 criterios del Trend Template"""
+        if hist_data is None or len(hist_data) < 200:
+            return {
+                'all_pass': False,
+                'score': 0,
+                'criteria': {name: False for name in self.criteria_names},
+                'stage': 'Insufficient Data'
+            }
+        
+        try:
+            sma_50 = hist_data['Close'].rolling(50).mean().iloc[-1]
+            sma_150 = hist_data['Close'].rolling(150).mean().iloc[-1]
+            sma_200 = hist_data['Close'].rolling(200).mean().iloc[-1]
+            
+            sma_200_20d_ago = hist_data['Close'].rolling(200).mean().iloc[-20]
+            sma_200_trending_up = sma_200 > sma_200_20d_ago
+            
+            high_52w = hist_data['High'].tail(252).max()
+            low_52w = hist_data['Low'].tail(252).min()
+            
+            criteria = {
+                "Precio > SMA 50": current_price > sma_50,
+                "Precio > SMA 150": current_price > sma_150,
+                "Precio > SMA 200": current_price > sma_200,
+                "SMA 50 > SMA 150": sma_50 > sma_150,
+                "SMA 150 > SMA 200": sma_150 > sma_200,
+                "SMA 200 Tendencia Alcista": sma_200_trending_up,
+                "Precio > 30% del mínimo 52s": current_price >= (low_52w * 1.30),
+                "Precio dentro 25% del máximo 52s": current_price >= (high_52w * 0.75)
+            }
+            
+            score = sum(criteria.values())
+            all_pass = score == 8
+            
+            if all_pass:
+                stage = "Stage 2 (Advancing)"
+            elif current_price > sma_200 and sma_200_trending_up:
+                stage = "Stage 1/2 Transition"
+            elif current_price < sma_200 and not sma_200_trending_up:
+                stage = "Stage 4 (Declining)"
+            else:
+                stage = "Stage 3 (Distribution)"
+            
+            return {
+                'all_pass': all_pass,
+                'score': score,
+                'criteria': criteria,
+                'stage': stage,
+                'values': {
+                    'sma_50': sma_50,
+                    'sma_150': sma_150,
+                    'sma_200': sma_200,
+                    'high_52w': high_52w,
+                    'low_52w': low_52w,
+                    'distance_from_high': ((current_price / high_52w) - 1) * 100,
+                    'distance_from_low': ((current_price / low_52w) - 1) * 100
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'all_pass': False,
+                'score': 0,
+                'criteria': {name: False for name in self.criteria_names},
+                'stage': f'Error: {str(e)}'
+            }
 
 # ============================================================
 # MODELO DE MACHINE LEARNING PARA SCORING PREDICTIVO
@@ -571,11 +830,11 @@ class CANSlimBacktester:
         }
 
 # ============================================================
-# CÁLCULOS CAN SLIM MEJORADOS
+# CÁLCULOS CAN SLIM MEJORADOS CON RATINGS IBD
 # ============================================================
 
 def calculate_can_slim_metrics(ticker, market_analyzer=None):
-    """Calcula todas las métricas CAN SLIM para un ticker con ML"""
+    """Calcula todas las métricas CAN SLIM + Ratings IBD + Trend Template"""
     try:
         stock = rate_limiter.get_ticker_with_retry(ticker)
         if stock is None:
@@ -587,13 +846,19 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         if len(hist) < 50:
             return None
         
+        # Datos básicos
         market_cap = info.get('marketCap', 0) / 1e9
         current_price = hist['Close'].iloc[-1]
         
+        # Métricas fundamentales
         earnings_growth = info.get('earningsGrowth', 0) * 100 if info.get('earningsGrowth') else 0
         revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
         eps_growth = info.get('earningsQuarterlyGrowth', 0) * 100 if info.get('earningsQuarterlyGrowth') else 0
+        roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
+        profit_margins = info.get('profitMargins', 0)
+        inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
         
+        # Datos técnicos
         high_52w = hist['High'].max()
         pct_from_high = ((current_price - high_52w) / high_52w) * 100
         
@@ -601,112 +866,108 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         current_volume = hist['Volume'].iloc[-1]
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
         
+        # Datos de mercado para RS
+        spy_data = None
         try:
             spy_ticker = rate_limiter.get_ticker_with_retry("SPY")
             if spy_ticker:
-                spy = spy_ticker.history(period="1y")
-                stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
-                spy_return = (spy['Close'].iloc[-1] / spy['Close'].iloc[0] - 1) * 100
-                rs_rating = 50 + (stock_return - spy_return) * 2
-                rs_rating = max(0, min(100, rs_rating))
-            else:
-                rs_rating = 50
+                spy_data = spy_ticker.history(period="1y")
         except:
-            rs_rating = 50
+            pass
         
-        inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
+        # Calcular Ratings IBD
+        ibd_calc = IBDRatingsCalculator()
         
-        if market_analyzer is None:
-            market_analyzer = MarketAnalyzer()
-            
-        market_data = market_analyzer.calculate_market_score()
-        m_score = market_data['score']
-        m_grade = 'A' if m_score >= 80 else 'B' if m_score >= 60 else 'C' if m_score >= 40 else 'D'
+        rs_rating = ibd_calc.calculate_weighted_rs(hist, spy_data)
+        eps_rating = ibd_calc.calculate_eps_rating(eps_growth)
         
-        volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
-        price_momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
+        # Performance 12 meses
+        if len(hist) > 252:
+            price_12m_ago = hist['Close'].iloc[-252]
+            perf_12m = ((current_price / price_12m_ago) - 1) * 100
+        else:
+            perf_12m = 0
         
+        composite = ibd_calc.calculate_composite_rating(rs_rating, eps_rating, revenue_growth, roe, perf_12m)
+        smr = ibd_calc.calculate_smr_rating(revenue_growth, roe, profit_margins)
+        acc_dis = ibd_calc.calculate_acc_dis_rating(hist)
+        atr_pct = ibd_calc.calculate_atr_percent(hist)
+        
+        # Trend Template Minervini
+        trend_template = MinerviniTrendTemplate()
+        trend_result = trend_template.check_all_criteria(hist, current_price)
+        
+        # RS Rating tradicional (para compatibilidad)
+        try:
+            if spy_data is not None:
+                spy_return = (spy_data['Close'].iloc[-1] / spy_data['Close'].iloc[0] - 1) * 100
+                stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
+                rs_rating_legacy = 50 + (stock_return - spy_return) * 2
+                rs_rating_legacy = max(0, min(100, rs_rating_legacy))
+            else:
+                rs_rating_legacy = 50
+        except:
+            rs_rating_legacy = 50
+        
+        # Score CAN SLIM original
         score = 0
         
-        if earnings_growth > 50: 
-            score += 20; c_grade = 'A'; c_score = 20
-        elif earnings_growth > 25: 
-            score += 15; c_grade = 'A'; c_score = 15
-        elif earnings_growth > 15: 
-            score += 10; c_grade = 'B'; c_score = 10
-        elif earnings_growth > 0: 
-            score += 5; c_grade = 'C'; c_score = 5
-        else: 
-            score += 0; c_grade = 'D'; c_score = 0
+        if earnings_growth > 50: score += 20; c_grade = 'A'; c_score = 20
+        elif earnings_growth > 25: score += 15; c_grade = 'A'; c_score = 15
+        elif earnings_growth > 15: score += 10; c_grade = 'B'; c_score = 10
+        elif earnings_growth > 0: score += 5; c_grade = 'C'; c_score = 5
+        else: score += 0; c_grade = 'D'; c_score = 0
         
-        if eps_growth > 50: 
-            score += 15; a_grade = 'A'; a_score = 15
-        elif eps_growth > 25: 
-            score += 12; a_grade = 'A'; a_score = 12
-        elif eps_growth > 15: 
-            score += 8; a_grade = 'B'; a_score = 8
-        elif eps_growth > 0: 
-            score += 4; a_grade = 'C'; a_score = 4
-        else: 
-            score += 0; a_grade = 'D'; a_score = 0
+        if eps_growth > 50: score += 15; a_grade = 'A'; a_score = 15
+        elif eps_growth > 25: score += 12; a_grade = 'A'; a_score = 12
+        elif eps_growth > 15: score += 8; a_grade = 'B'; a_score = 8
+        elif eps_growth > 0: score += 4; a_grade = 'C'; a_score = 4
+        else: score += 0; a_grade = 'D'; a_score = 0
         
-        if pct_from_high > -3: 
-            score += 15; n_grade = 'A'; n_score = 15
-        elif pct_from_high > -10: 
-            score += 12; n_grade = 'A'; n_score = 12
-        elif pct_from_high > -20: 
-            score += 8; n_grade = 'B'; n_score = 8
-        elif pct_from_high > -30: 
-            score += 4; n_grade = 'C'; n_score = 4
-        else: 
-            score += 0; n_grade = 'D'; n_score = 0
+        if pct_from_high > -3: score += 15; n_grade = 'A'; n_score = 15
+        elif pct_from_high > -10: score += 12; n_grade = 'A'; n_score = 12
+        elif pct_from_high > -20: score += 8; n_grade = 'B'; n_score = 8
+        elif pct_from_high > -30: score += 4; n_grade = 'C'; n_score = 4
+        else: score += 0; n_grade = 'D'; n_score = 0
         
-        if volume_ratio > 2.0: 
-            score += 10; s_grade = 'A'; s_score = 10
-        elif volume_ratio > 1.5: 
-            score += 8; s_grade = 'A'; s_score = 8
-        elif volume_ratio > 1.0: 
-            score += 5; s_grade = 'B'; s_score = 5
-        else: 
-            score += 2; s_grade = 'C'; s_score = 2
+        if volume_ratio > 2.0: score += 10; s_grade = 'A'; s_score = 10
+        elif volume_ratio > 1.5: score += 8; s_grade = 'A'; s_score = 8
+        elif volume_ratio > 1.0: score += 5; s_grade = 'B'; s_score = 5
+        else: score += 2; s_grade = 'C'; s_score = 2
         
-        if rs_rating > 90: 
-            score += 15; l_grade = 'A'; l_score = 15
-        elif rs_rating > 80: 
-            score += 12; l_grade = 'A'; l_score = 12
-        elif rs_rating > 70: 
-            score += 8; l_grade = 'B'; l_score = 8
-        elif rs_rating > 60: 
-            score += 4; l_grade = 'C'; l_score = 4
-        else: 
-            score += 0; l_grade = 'D'; l_score = 0
+        if rs_rating_legacy > 90: score += 15; l_grade = 'A'; l_score = 15
+        elif rs_rating_legacy > 80: score += 12; l_grade = 'A'; l_score = 12
+        elif rs_rating_legacy > 70: score += 8; l_grade = 'B'; l_score = 8
+        elif rs_rating_legacy > 60: score += 4; l_grade = 'C'; l_score = 4
+        else: score += 0; l_grade = 'D'; l_score = 0
         
-        if inst_ownership > 80: 
-            score += 10; i_grade = 'A'; i_score = 10
-        elif inst_ownership > 60: 
-            score += 8; i_grade = 'A'; i_score = 8
-        elif inst_ownership > 40: 
-            score += 5; i_grade = 'B'; i_score = 5
-        elif inst_ownership > 20: 
-            score += 3; i_grade = 'C'; i_score = 3
-        else: 
-            score += 0; i_grade = 'D'; i_score = 0
+        if inst_ownership > 80: score += 10; i_grade = 'A'; i_score = 10
+        elif inst_ownership > 60: score += 8; i_grade = 'A'; i_score = 8
+        elif inst_ownership > 40: score += 5; i_grade = 'B'; i_score = 5
+        elif inst_ownership > 20: score += 3; i_grade = 'C'; i_score = 3
+        else: score += 0; i_grade = 'D'; i_score = 0
         
-        if m_score >= 80: 
-            score += 15; m_grade_final = 'A'; m_score_val = 15
-        elif m_score >= 60: 
-            score += 10; m_grade_final = 'B'; m_score_val = 10
-        elif m_score >= 40: 
-            score += 5; m_grade_final = 'C'; m_score_val = 5
-        else: 
-            score += 0; m_grade_final = 'D'; m_score_val = 0
+        # Market Score
+        if market_analyzer is None:
+            market_analyzer = MarketAnalyzer()
+        market_data = market_analyzer.calculate_market_score()
+        m_score = market_data['score']
+        
+        if m_score >= 80: score += 15; m_grade = 'A'; m_score_val = 15
+        elif m_score >= 60: score += 10; m_grade = 'B'; m_score_val = 10
+        elif m_score >= 40: score += 5; m_grade = 'C'; m_score_val = 5
+        else: score += 0; m_grade = 'D'; m_score_val = 0
+        
+        # ML Prediction
+        volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
+        price_momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
         
         ml_predictor = CANSlimMLPredictor()
         ml_prob = ml_predictor.predict({
             'earnings_growth': earnings_growth,
             'revenue_growth': revenue_growth,
             'eps_growth': eps_growth,
-            'rs_rating': rs_rating,
+            'rs_rating': rs_rating_legacy,
             'volume_ratio': volume_ratio,
             'inst_ownership': inst_ownership,
             'pct_from_high': pct_from_high,
@@ -725,7 +986,7 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             'ml_probability': ml_prob,
             'grades': {
                 'C': c_grade, 'A': a_grade, 'N': n_grade, 
-                'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade_final
+                'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade
             },
             'scores': {
                 'C': c_score, 'A': a_score, 'N': n_score,
@@ -737,12 +998,30 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
                 'eps_growth': eps_growth,
                 'pct_from_high': pct_from_high,
                 'volume_ratio': volume_ratio,
-                'rs_rating': rs_rating,
+                'rs_rating': rs_rating_legacy,
                 'inst_ownership': inst_ownership,
                 'market_score': m_score,
                 'market_phase': market_data.get('phase', 'N/A'),
                 'volatility': volatility,
                 'price_momentum': price_momentum
+            },
+            # NUEVOS RATINGS IBD
+            'ibd_ratings': {
+                'composite': composite,
+                'rs': round(rs_rating),
+                'eps': eps_rating,
+                'smr': smr,
+                'acc_dis': acc_dis,
+                'atr_percent': atr_pct,
+                'pe_ratio': info.get('trailingPE', 0),
+                'roe': roe,
+                'sales_growth': revenue_growth
+            },
+            'trend_template': trend_result,
+            'week_52_range': {
+                'high': trend_result.get('values', {}).get('high_52w', high_52w),
+                'low': trend_result.get('values', {}).get('low_52w', hist['Low'].min()),
+                'current_position': ((current_price / high_52w) * 100) if high_52w else 0
             }
         }
     except Exception as e:
@@ -756,7 +1035,6 @@ def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False, samp
     """
     candidates = []
     
-    # Obtener tickers (con muestreo aleatorio por defecto)
     if comprehensive:
         current_tickers = get_all_universe_tickers(comprehensive=True, use_sample=False)
     else:
@@ -781,7 +1059,6 @@ def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False, samp
                 st.warning(f"⚠️ Demasiados errores consecutivos ({max_errors}). Deteniendo scan...")
                 break
         
-        # Pausa breve cada 10 tickers para no saturar
         if (i + 1) % 10 == 0:
             time.sleep(1)
     
@@ -954,14 +1231,197 @@ def create_ml_feature_importance(predictor):
     return fig
 
 # ============================================================
+# VISUALIZACIONES IBD Y TREND TEMPLATE
+# ============================================================
+
+def create_ibd_ratings_card(ticker, ratings):
+    """Crea tarjeta HTML de ratings IBD"""
+    composite = ratings.get('composite', 0)
+    rs = ratings.get('rs', 0)
+    eps = ratings.get('eps', 0)
+    smr = ratings.get('smr', 'C')
+    acc_dis = ratings.get('acc_dis', 'C')
+    atr = ratings.get('atr_percent', 0)
+    pe = ratings.get('pe_ratio', 0)
+    roe = ratings.get('roe', 0)
+    
+    # Colores para grades
+    smr_color = COLORS['primary'] if smr == 'A' else COLORS['warning'] if smr == 'B' else COLORS['danger'] if smr == 'D' else COLORS['neutral']
+    ad_color = COLORS['primary'] if acc_dis in ['A', 'B'] else COLORS['danger'] if acc_dis in ['D', 'E'] else COLORS['neutral']
+    
+    html = f"""
+    <div style="
+        background: linear-gradient(135deg, {COLORS['bg_card']} 0%, {COLORS['bg_dark']} 100%);
+        border: 1px solid {COLORS['border']};
+        border-radius: 12px;
+        padding: 20px;
+        margin: 10px 0;
+    ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid {COLORS['border']}; padding-bottom: 10px;">
+            <h3 style="color: {COLORS['primary']}; margin: 0; font-size: 1.3rem;">📊 Ratings IBD</h3>
+            <span style="
+                background: {COLORS['primary'] if composite >= 80 else COLORS['warning'] if composite >= 60 else COLORS['danger']};
+                color: {COLORS['bg_dark']};
+                padding: 5px 15px;
+                border-radius: 20px;
+                font-weight: bold;
+                font-size: 1.1rem;
+            ">
+                Composite: {composite}
+            </span>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px;">
+            <div style="text-align: center; padding: 12px; background: rgba(33, 150, 243, 0.1); border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.3);">
+                <div style="color: {COLORS['text_secondary']}; font-size: 0.75rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">RS Rating</div>
+                <div style="color: {COLORS['ibd_blue']}; font-size: 1.8rem; font-weight: bold;">{rs}</div>
+                <div style="color: {COLORS['text_secondary']}; font-size: 0.7rem;">vs S&P 500</div>
+            </div>
+            <div style="text-align: center; padding: 12px; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border: 1px solid rgba(76, 175, 80, 0.3);">
+                <div style="color: {COLORS['text_secondary']}; font-size: 0.75rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">EPS Rating</div>
+                <div style="color: {COLORS['ibd_green']}; font-size: 1.8rem; font-weight: bold;">{eps}</div>
+                <div style="color: {COLORS['text_secondary']}; font-size: 0.7rem;">Growth YoY</div>
+            </div>
+            <div style="text-align: center; padding: 12px; background: rgba(255, 152, 0, 0.1); border-radius: 8px; border: 1px solid rgba(255, 152, 0, 0.3);">
+                <div style="color: {COLORS['text_secondary']}; font-size: 0.75rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">SMR Grade</div>
+                <div style="color: {smr_color}; font-size: 1.8rem; font-weight: bold;">{smr}</div>
+                <div style="color: {COLORS['text_secondary']}; font-size: 0.7rem;">Sales/Margins/ROE</div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 0.85rem;">
+            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
+                <span style="color: {COLORS['text_secondary']};">A/D:</span>
+                <span style="color: {ad_color}; font-weight: bold; margin-left: 5px;">{acc_dis}</span>
+            </div>
+            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
+                <span style="color: {COLORS['text_secondary']};">ATR:</span>
+                <span style="color: {COLORS['text']}; font-weight: bold; margin-left: 5px;">{atr}%</span>
+            </div>
+            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
+                <span style="color: {COLORS['text_secondary']};">P/E:</span>
+                <span style="color: {COLORS['text']}; font-weight: bold; margin-left: 5px;">{pe:.1f}</span>
+            </div>
+            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
+                <span style="color: {COLORS['text_secondary']};">ROE:</span>
+                <span style="color: {COLORS['text']}; font-weight: bold; margin-left: 5px;">{roe:.1f}%</span>
+            </div>
+        </div>
+    </div>
+    """
+    return html
+
+def create_trend_template_visual(result):
+    """Visualización HTML del Trend Template Minervini"""
+    criteria = result.get('criteria', {})
+    score = result.get('score', 0)
+    stage = result.get('stage', '')
+    all_pass = result.get('all_pass', False)
+    
+    # Determinar color del stage
+    if 'Stage 2' in stage:
+        stage_color = COLORS['primary']
+    elif 'Stage 4' in stage:
+        stage_color = COLORS['danger']
+    else:
+        stage_color = COLORS['warning']
+    
+    html = f"""
+    <div style="
+        background: {COLORS['bg_card']};
+        border: 2px solid {COLORS['primary'] if all_pass else COLORS['warning']};
+        border-radius: 12px;
+        padding: 20px;
+        margin: 10px 0;
+    ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="color: {COLORS['text']}; margin: 0; font-size: 1.1rem;">🎯 Trend Template Minervini</h4>
+            <div style="text-align: right;">
+                <span style="
+                    background: {COLORS['primary'] if all_pass else COLORS['warning']};
+                    color: {COLORS['bg_dark']};
+                    padding: 5px 12px;
+                    border-radius: 15px;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                ">
+                    {score}/8
+                </span>
+                <div style="font-size: 0.75rem; color: {stage_color}; margin-top: 5px; font-weight: bold;">{stage}</div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem;">
+    """
+    
+    for criterion, passed in criteria.items():
+        bg_color = 'rgba(0, 255, 173, 0.1)' if passed else 'rgba(242, 54, 69, 0.1)'
+        border_color = COLORS['primary'] if passed else COLORS['danger']
+        text_color = COLORS['primary'] if passed else COLORS['danger']
+        icon = '✓' if passed else '✗'
+        
+        html += f"""
+            <div style="
+                background: {bg_color};
+                border-left: 3px solid {border_color};
+                padding: 8px 12px;
+                border-radius: 0 6px 6px 0;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            ">
+                <span style="color: {COLORS['text']};">{criterion}</span>
+                <span style="color: {text_color}; font-weight: bold; font-size: 1rem;">{icon}</span>
+            </div>
+        """
+    
+    html += "</div></div>"
+    return html
+
+def create_ibd_radar(ibd_ratings):
+    """Radar chart para ratings IBD"""
+    categories = ['Composite', 'RS', 'EPS', 'Sales', 'ROE']
+    
+    values = [
+        ibd_ratings.get('composite', 50),
+        ibd_ratings.get('rs', 50),
+        ibd_ratings.get('eps', 50),
+        min(100, max(0, 50 + (ibd_ratings.get('sales_growth', 0) or 0))),
+        min(100, (ibd_ratings.get('roe', 0) or 0) * 2)
+    ]
+    
+    fig = go.Figure(data=go.Scatterpolar(
+        r=values + [values[0]],
+        theta=categories + [categories[0]],
+        fill='toself',
+        fillcolor='rgba(33, 150, 243, 0.3)',
+        line=dict(color=COLORS['ibd_blue'], width=2),
+        marker=dict(size=8, color=COLORS['ibd_blue'])
+    ))
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], color='white', gridcolor=COLORS['border']),
+            angularaxis=dict(color='white', gridcolor=COLORS['border']),
+            bgcolor=COLORS['bg_dark']
+        ),
+        paper_bgcolor=COLORS['bg_dark'],
+        font=dict(color='white'),
+        title=dict(text="Perfil IBD", font=dict(color='white', size=14)),
+        height=300,
+        margin=dict(l=40, r=40, t=40, b=40)
+    )
+    return fig
+
+# ============================================================
 # FASTAPI IMPLEMENTATION (CONDICIONAL)
 # ============================================================
 
 if FASTAPI_AVAILABLE:
     app = FastAPI(
         title="CAN SLIM Pro API",
-        description="API profesional para análisis CAN SLIM con ML y Backtesting",
-        version="2.0.0"
+        description="API profesional para análisis CAN SLIM con ML, IBD Ratings y Backtesting",
+        version="3.0.0"
     )
 
     app.add_middleware(
@@ -991,7 +1451,8 @@ if FASTAPI_AVAILABLE:
     async def root():
         return {
             "message": "CAN SLIM Pro API",
-            "version": "2.0.0",
+            "version": "3.0.0",
+            "features": ["CAN SLIM", "IBD Ratings", "Minervini Trend Template", "ML", "Backtesting"],
             "endpoints": [
                 "/market/status",
                 "/analyze/{ticker}",
@@ -1052,16 +1513,17 @@ else:
     app = None
 
 # ============================================================
-# CONTENIDO EDUCATIVO EXPANDIDO (SIN RECURSOS ADICIONALES)
+# CONTENIDO EDUCATIVO EXPANDIDO CON IBD Y MINERVINI
 # ============================================================
 
 EDUCATIONAL_CONTENT = {
     "guia_completa": """
-    ### 📚 Guía Completa de los 7 Criterios CAN SLIM
+    ### 📚 Guía Completa de los 7 Criterios CAN SLIM + Ratings IBD
     
     **C - Current Quarterly Earnings (Beneficios Trimestrales Actuales)**
     - Buscar crecimiento >25% vs mismo trimestre año anterior
     - Idealmente >50% o aceleración quarter-over-quarter
+    - **EPS Rating IBD (0-99)**: Normaliza el crecimiento en escala percentil
     - Revisar sorpresas de earnings (beat estimates)
     - Importancia: 20 puntos del score total
     
@@ -1069,6 +1531,7 @@ EDUCATIONAL_CONTENT = {
     - Crecimiento EPS últimos 3-5 años >25% anual
     - Consistencia: no queremos un año bueno y otro malo
     - ROE (Return on Equity) >17%
+    - **SMR Rating (A-D)**: Composite de Sales, Margins, ROE
     - Margen de beneficio en expansión
     - Importancia: 15 puntos
     
@@ -1081,13 +1544,15 @@ EDUCATIONAL_CONTENT = {
     
     **S - Supply and Demand (Oferta y Demanda)**
     - Volumen superior al promedio (1.5x - 3x) en días alcistas
+    - **Accumulation/Distribution (A-E)**: Rating IBD de presión compradora
+    - A = Heavy Accumulation, E = Heavy Distribution
     - Acciones en circulación < 25M (preferiblemente)
     - Float bajo = mayor volatilidad potencial
-    - Acumulación institucional visible en el volumen
     - Importancia: 10 puntos
     
     **L - Leader or Laggard (Líder o Rezagado)**
-    - RS Rating (Relative Strength) >80
+    - **RS Rating (0-99)**: Fuerza relativa vs S&P 500 con ponderación 40/20/20/20
+    - Metodología IBD: 40% último trimestre, 20% cada uno de los 3 anteriores
     - Top 10% de rendimiento en su sector
     - Líderes de grupo industrial (ej: NVDA en semiconductores)
     - Evitar stocks débiles "porque están baratos"
@@ -1109,8 +1574,79 @@ EDUCATIONAL_CONTENT = {
     - Importancia: 15 puntos
     """,
     
+    "ibd_ratings_guide": """
+    ### 📊 Guía de Ratings IBD (Investors Business Daily)
+    
+    **Composite Rating (0-99)**
+    - Ponderación: 30% EPS Rating + 30% RS Rating + 40% fundamentales/momentum
+    - 99 = Mejor 1% del mercado
+    - 80 = Top 20%
+    - Fórmula propietaria de IBD que sintetiza fortaleza general
+    
+    **RS Rating - Relative Strength (0-99)**
+    - Compara performance del stock vs S&P 500
+    - **Ponderación única IBD**: 40% último trimestre, 20% cada uno de los 3 trimestres anteriores
+    - Da más peso al momentum reciente
+    - >80 indica outperformance significativo
+    
+    **EPS Rating (0-99)**
+    - Basado en crecimiento de ganancias trimestrales YoY
+    - Normalizado a escala percentil
+    - >80 indica crecimiento superior al promedio
+    
+    **SMR Rating (A-D)**
+    - **S**ales: Crecimiento de ventas (peso 40%)
+    - **M**argins: Tendencia de márgenes (peso 30%)
+    - **R**OE: Return on Equity (peso 30%)
+    - A = Excelente, B = Bueno, C = Promedio, D = Débil
+    
+    **Accumulation/Distribution (A-E)**
+    - A = Heavy Accumulation (compra institucional fuerte)
+    - B = Moderate Accumulation
+    - C = Neutral
+    - D = Moderate Distribution
+    - E = Heavy Distribution (venta institucional)
+    - Basado en ratio volumen en días up vs down (50 días)
+    
+    **Métricas Adicionales**
+    - **P/E Ratio**: Precio/Beneficio trailing 12 meses
+    - **ROE**: Return on Equity (%)
+    - **ATR%**: Average True Range como % del precio (volatilidad)
+    - **52-Week Range**: Posición dentro del rango anual
+    """,
+    
+    "trend_template_minervini": """
+    ### 🎯 Trend Template de Mark Minervini
+    
+    El Trend Template es un sistema de 8 criterios técnicos para identificar stocks en **Stage 2 (Advancing Phase)** según la metodología de Stan Weinstein, popularizada por Mark Minervini.
+    
+    **Los 8 Criterios (todos deben cumplirse):**
+    
+    1. **Precio > SMA 50** - Por encima de la media móvil de 50 días
+    2. **Precio > SMA 150** - Por encima de la media móvil de 150 días
+    3. **Precio > SMA 200** - Por encima de la media móvil de 200 días
+    4. **SMA 50 > SMA 150** - Media corta por encima de media media
+    5. **SMA 150 > SMA 200** - Media media por encima de media larga
+    6. **SMA 200 Tendencia Alcista** - SMA 200 subiendo (últimos 20 días)
+    7. **Precio > 30% del mínimo 52 semanas** - No comprar demasiado cerca del fondo
+    8. **Precio dentro 25% del máximo 52 semanas** - Cerca de máximos históricos
+    
+    **Interpretación de Stages (Weinstein):**
+    
+    - **Stage 1 (Accumulation)**: Consolidación después de caída. SMA 200 plana o subiendo levemente. Precio oscila alrededor de SMA 200.
+    - **Stage 2 (Advancing)**: Tendencia alcista confirmada. Todas las medias alineadas alcista. Precio > SMA 50 > SMA 150 > SMA 200.
+    - **Stage 3 (Distribution)**: Tope del mercado. SMA 200 empieza a aplanarse. Volumen de distribución.
+    - **Stage 4 (Declining)**: Tendencia bajista. Precio < SMA 200. Medias alineadas a la baja.
+    
+    **Uso en Trading:**
+    - Operar SOLO en Stage 2 confirmed (8/8 criterios)
+    - El Trend Template actúa como filtro antes de aplicar CAN SLIM
+    - Reduce falsos breakouts y mejora win rate
+    - Combinar con señales de volumen y fundamentals CAN SLIM
+    """,
+    
     "reglas_operacion": """
-    ### 📋 Reglas de Operación CAN SLIM
+    ### 📋 Reglas de Operación CAN SLIM + IBD
     
     **Entradas:**
     1. **Punto de Compra Ideal**: Breakout desde base de consolidación + volumen
@@ -1118,6 +1654,14 @@ EDUCATIONAL_CONTENT = {
     3. **Piramidación**: Aumentar posición solo cuando la primera sube 2-3%
     4. **Tamaño de Posición**: Máximo 10-12% por posición inicial
     5. **Número de Posiciones**: 5-10 stocks diversificados por sector
+    
+    **Filtros IBD Adicionales:**
+    - Composite Rating > 80 (preferiblemente > 90)
+    - RS Rating > 80 (top 20% del mercado)
+    - EPS Rating > 80 (crecimiento sólido)
+    - SMR Rating A o B (fundamentales sanos)
+    - A/D Rating A o B (acumulación institucional)
+    - Trend Template: 7/8 o 8/8 criterios cumplidos
     
     **Gestión de Riesgo:**
     - **Stop Loss**: 7-8% máximo desde punto de compra
@@ -1148,19 +1692,25 @@ EDUCATIONAL_CONTENT = {
     4. **Largest Daily Loss**: El día de mayor pérdida desde el breakout
     5. **Outside Reversal**: Key reversal day (nuevo máximo + cierre bajo día anterior)
     
+    **Señales de Ratings IBD:**
+    6. **Composite Rating cae < 60**: Deterioro relativo general
+    7. **RS Rating cae < 70**: Perdiendo fuerza vs mercado
+    8. **A/D Rating cambia a D o E**: Distribución institucional
+    9. **Trend Template falla**: Menos de 6/8 criterios cumplidos
+    
     **Señales Fundamentales:**
-    6. **Slowing Earnings Growth**: 2 trimestres consecutivos de desaceleración
-    7. **Earnings Estimate Cuts**: Reducción de estimaciones por analistas
-    8. **Sector Rotation**: Fuga de capital del sector (outflow)
-    9. **Increased Competition**: Pérdida de market share visible
-    10. **Insider Selling**: Ventas masivas de insiders (no ejercicio de opciones)
+    10. **Slowing Earnings Growth**: 2 trimestres consecutivos de desaceleración
+    11. **Earnings Estimate Cuts**: Reducción de estimaciones por analistas
+    12. **Sector Rotation**: Fuga de capital del sector (outflow)
+    13. **Increased Competition**: Pérdida de market share visible
+    14. **Insider Selling**: Ventas masivas de insiders (no ejercicio de opciones)
     
     **Reglas de Gestión:**
-    11. **7-8% Stop Loss**: Vender inmediatamente si cae 7-8% desde entrada
-    12. **20-25% Profit Taking**: Tomar ganancias parciales en +20-25%
-    13. **Break Even Rule**: Poner stop en entrada cuando suba 8-10%
-    14. **50-day MA Violation**: Vender si pierde SMA50 con volumen alto
-    15. **Market Direction Change**: Vender todo si el mercado entra en downtrend
+    15. **7-8% Stop Loss**: Vender inmediatamente si cae 7-8% desde entrada
+    16. **20-25% Profit Taking**: Tomar ganancias parciales en +20-25%
+    17. **Break Even Rule**: Poner stop en entrada cuando suba 8-10%
+    18. **50-day MA Violation**: Vender si pierde SMA50 con volumen alto
+    19. **Market Direction Change**: Vender todo si el mercado entra en downtrend
     
     **Señales de Agotamiento:**
     - Cover stories en revistas financieras (señal contraria)
@@ -1183,22 +1733,23 @@ EDUCATIONAL_CONTENT = {
     6. **Foco en precio bajo**: "Barato" ≠ buen valor. Un stock a $5 puede ir a $2
     7. **Descuidar el volumen**: Confirmación esencial de movimientos
     8. **Comprar en consolidación**: Esperar al breakout, no anticipar
+    9. **Ignorar los Ratings IBD**: Son herramientas validadas históricamente
     
     **Errores de Ejecución:**
-    9. **Órdenes de mercado en apertura**: Usar limit orders para evitar slippage
-    10. **Posiciones muy grandes**: >20% en una sola acción es apostar, no invertir
-    11. **No tener plan de salida**: Definir stop antes de entrar, no después
-    12. **Revisar portafolio cada minuto**: Timeframe diario es suficiente
+    10. **Órdenes de mercado en apertura**: Usar limit orders para evitar slippage
+    11. **Posiciones muy grandes**: >20% en una sola acción es apostar, no invertir
+    12. **No tener plan de salida**: Definir stop antes de entrar, no después
+    13. **Revisar portafolio cada minuto**: Timeframe diario es suficiente
     
     **Errores de Timing:**
-    13. **Comprar antes de earnings**: Riesgo de gap del 20-30% si fallan
-    14. **Ignorar seasonality**: "Sell in May" tiene fundamentos estadísticos
-    15. **Forzar operaciones**: No hay setup válido = no operar
+    14. **Comprar antes de earnings**: Riesgo de gap del 20-30% si fallan
+    15. **Ignorar seasonality**: "Sell in May" tiene fundamentos estadísticos
+    16. **Forzar operaciones**: No hay setup válido = no operar
     
     **Errores de Disciplina:**
-    16. **Cambiar reglas mid-game**: El sistema funciona, los emociones no
-    17. **Resultado reciente sesga juicio**: Un trade no define el sistema
-    18. **Buscar confirmación externa**: Tu análisis debe ser independiente
+    17. **Cambiar reglas mid-game**: El sistema funciona, los emociones no
+    18. **Resultado reciente sesga juicio**: Un trade no define el sistema
+    19. **Buscar confirmación externa**: Tu análisis debe ser independiente
     """
 }
 
@@ -1310,7 +1861,7 @@ def display_saved_results():
     return False
 
 # ============================================================
-# RENDER PRINCIPAL MEJORADO (CON PERSISTENCIA)
+# RENDER PRINCIPAL MEJORADO (CON PERSISTENCIA Y RATINGS IBD)
 # ============================================================
 
 def render():
@@ -1413,7 +1964,7 @@ def render():
         <h1 style="font-size: 2.5rem; margin-bottom: 10px; color: {COLORS['primary']};">
             🎯 CAN SLIM Scanner Pro
         </h1>
-        <p style="color: #888; font-size: 1.1rem;">Sistema de Selección de Acciones de William O'Neil</p>
+        <p style="color: #888; font-size: 1.1rem;">Sistema de Selección de Acciones con Ratings IBD + Trend Template Minervini</p>
         <div style="margin-top: 15px;">
             <span class="market-badge" style="background: {hex_to_rgba(market_status['color'], 0.2)}; color: {market_status['color']}; border: 1px solid {market_status['color']};">
                 M-MARKET: {market_status['phase']} ({market_status['score']}/100)
@@ -1422,7 +1973,7 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # Tabs expandidos - SOLO 5 TABS
+    # Tabs expandidos
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🚀 Scanner", 
         "📊 Análisis Detallado", 
@@ -1498,7 +2049,7 @@ def render():
             else:
                 st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
-    # TAB 2: ANÁLISIS DETALLADO
+    # TAB 2: ANÁLISIS DETALLADO CON RATINGS IBD
     with tab2:
         # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
@@ -1520,15 +2071,17 @@ def render():
                         st.error(f"❌ No se pudieron obtener datos válidos para {ticker_input}")
                         st.info("💡 Posibles causas:\n- Ticker no válido o delistado\n- Problemas de conexión con Yahoo Finance\n- Rate limit alcanzado (espera unos segundos e intenta de nuevo)")
                     else:
-                        col1, col2 = st.columns([1, 2])
+                        # Layout de 3 columnas: CAN SLIM | IBD Ratings | Trend Template
+                        col1, col2, col3 = st.columns([1, 1.2, 1])
                         
                         with col1:
-                            st.plotly_chart(create_score_gauge(result['score']), use_container_width=True)
-                            st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True)
+                            st.subheader("CAN SLIM Score")
+                            st.plotly_chart(create_score_gauge(result['score']), use_container_width=True, key=f"cs_{ticker_input}")
+                            st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True, key=f"radar_{ticker_input}")
                             
                             st.markdown(f"""
                             <div class="metric-card">
-                                <h4>RS Rating</h4>
+                                <h4>RS Rating (Legacy)</h4>
                                 <h2 style="color: {COLORS['primary'] if result['metrics']['rs_rating'] > 80 else COLORS['warning'] if result['metrics']['rs_rating'] > 60 else COLORS['danger']};">
                                     {result['metrics']['rs_rating']:.0f}
                                 </h2>
@@ -1545,60 +2098,116 @@ def render():
                             """, unsafe_allow_html=True)
                         
                         with col2:
-                            try:
-                                stock = rate_limiter.get_ticker_with_retry(ticker_input)
-                                if stock:
-                                    hist = stock.history(period="1y")
-                                    
-                                    if len(hist) == 0:
-                                        st.warning("No hay datos históricos disponibles")
-                                    else:
-                                        fig = go.Figure()
-                                        fig.add_trace(go.Candlestick(
-                                            x=hist.index,
-                                            open=hist['Open'],
-                                            high=hist['High'],
-                                            low=hist['Low'],
-                                            close=hist['Close'],
-                                            name='Price'
-                                        ))
-                                        
-                                        if len(hist) >= 50:
-                                            fig.add_trace(go.Scatter(
-                                                x=hist.index,
-                                                y=hist['Close'].rolling(50).mean(),
-                                                name='SMA 50',
-                                                line=dict(color=COLORS['warning'], width=1)
-                                            ))
-                                        if len(hist) >= 200:
-                                            fig.add_trace(go.Scatter(
-                                                x=hist.index,
-                                                y=hist['Close'].rolling(200).mean(),
-                                                name='SMA 200',
-                                                line=dict(color=COLORS['primary'], width=1)
-                                            ))
-                                        
-                                        fig.update_layout(
-                                            title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
-                                            paper_bgcolor=COLORS['bg_dark'],
-                                            plot_bgcolor=COLORS['bg_dark'],
-                                            font=dict(color='white'),
-                                            xaxis=dict(gridcolor=COLORS['bg_card']),
-                                            yaxis=dict(gridcolor=COLORS['bg_card']),
-                                            height=500
-                                        )
-                                        
-                                        st.plotly_chart(fig, use_container_width=True)
-                                else:
-                                    st.error("No se pudo obtener el ticker para el gráfico")
-                            except Exception as e:
-                                st.error(f"Error cargando gráfico: {str(e)}")
+                            # NUEVO: Panel de Ratings IBD
+                            st.markdown(create_ibd_ratings_card(ticker_input, result['ibd_ratings']), unsafe_allow_html=True)
                             
+                            # Radar IBD
+                            st.plotly_chart(create_ibd_radar(result['ibd_ratings']), use_container_width=True, key=f"ibd_radar_{ticker_input}")
+                        
+                        with col3:
+                            # NUEVO: Trend Template Minervini
+                            st.markdown(create_trend_template_visual(result['trend_template']), unsafe_allow_html=True)
+                            
+                            # Métricas adicionales
+                            trend_vals = result['trend_template'].get('values', {})
+                            if trend_vals:
+                                st.markdown("**Niveles Técnicos:**")
+                                metrics_html = f"""
+                                <div style="background: {COLORS['bg_card']}; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="color: {COLORS['text_secondary']};">SMA 50:</span>
+                                        <span style="color: {COLORS['text']}; font-weight: bold;">${trend_vals.get('sma_50', 0):.2f}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="color: {COLORS['text_secondary']};">SMA 150:</span>
+                                        <span style="color: {COLORS['text']}; font-weight: bold;">${trend_vals.get('sma_150', 0):.2f}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="color: {COLORS['text_secondary']};">SMA 200:</span>
+                                        <span style="color: {COLORS['text']}; font-weight: bold;">${trend_vals.get('sma_200', 0):.2f}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span style="color: {COLORS['text_secondary']};">52W High:</span>
+                                        <span style="color: {COLORS['primary']}; font-weight: bold;">${trend_vals.get('high_52w', 0):.2f}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: {COLORS['text_secondary']};">52W Low:</span>
+                                        <span style="color: {COLORS['danger']}; font-weight: bold;">${trend_vals.get('low_52w', 0):.2f}</span>
+                                    </div>
+                                </div>
+                                """
+                                st.markdown(metrics_html, unsafe_allow_html=True)
+                        
+                        # Gráfico de precios debajo
+                        st.markdown("---")
+                        try:
+                            stock = rate_limiter.get_ticker_with_retry(ticker_input)
+                            if stock:
+                                hist = stock.history(period="1y")
+                                
+                                if len(hist) == 0:
+                                    st.warning("No hay datos históricos disponibles")
+                                else:
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Candlestick(
+                                        x=hist.index,
+                                        open=hist['Open'],
+                                        high=hist['High'],
+                                        low=hist['Low'],
+                                        close=hist['Close'],
+                                        name='Price'
+                                    ))
+                                    
+                                    # Añadir SMAs del Trend Template
+                                    if len(hist) >= 50:
+                                        fig.add_trace(go.Scatter(
+                                            x=hist.index,
+                                            y=hist['Close'].rolling(50).mean(),
+                                            name='SMA 50',
+                                            line=dict(color=COLORS['warning'], width=1)
+                                        ))
+                                    if len(hist) >= 150:
+                                        fig.add_trace(go.Scatter(
+                                            x=hist.index,
+                                            y=hist['Close'].rolling(150).mean(),
+                                            name='SMA 150',
+                                            line=dict(color='#FF9800', width=1, dash='dash')
+                                        ))
+                                    if len(hist) >= 200:
+                                        fig.add_trace(go.Scatter(
+                                            x=hist.index,
+                                            y=hist['Close'].rolling(200).mean(),
+                                            name='SMA 200',
+                                            line=dict(color=COLORS['primary'], width=2)
+                                        ))
+                                    
+                                    fig.update_layout(
+                                        title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
+                                        paper_bgcolor=COLORS['bg_dark'],
+                                        plot_bgcolor=COLORS['bg_dark'],
+                                        font=dict(color='white'),
+                                        xaxis=dict(gridcolor=COLORS['bg_card']),
+                                        yaxis=dict(gridcolor=COLORS['bg_card']),
+                                        height=500,
+                                        showlegend=True,
+                                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.error("No se pudo obtener el ticker para el gráfico")
+                        except Exception as e:
+                            st.error(f"Error cargando gráfico: {str(e)}")
+                        
+                        # Tabla de métricas completas
+                        with st.expander("📋 Ver Métricas Completas"):
                             metrics_df = pd.DataFrame({
                                 'Métrica': [
                                     'Market Cap', 'EPS Growth', 'Revenue Growth',
                                     'Inst. Ownership', 'Volume Ratio', 'From 52W High',
-                                    'Volatility', 'Price Momentum', 'Market Score'
+                                    'Volatility', 'Price Momentum', 'Market Score',
+                                    'IBD Composite', 'IBD RS', 'IBD EPS', 'IBD SMR',
+                                    'A/D Rating', 'ATR%', 'P/E Ratio', 'ROE'
                                 ],
                                 'Valor': [
                                     f"${result['market_cap']:.1f}B",
@@ -1609,7 +2218,15 @@ def render():
                                     f"{result['metrics']['pct_from_high']:.1f}%",
                                     f"{result['metrics']['volatility']:.1f}%",
                                     f"{result['metrics']['price_momentum']:.1f}%",
-                                    f"{result['metrics']['market_score']:.0f}/100"
+                                    f"{result['metrics']['market_score']:.0f}/100",
+                                    f"{result['ibd_ratings']['composite']}/99",
+                                    f"{result['ibd_ratings']['rs']}/99",
+                                    f"{result['ibd_ratings']['eps']}/99",
+                                    result['ibd_ratings']['smr'],
+                                    result['ibd_ratings']['acc_dis'],
+                                    f"{result['ibd_ratings']['atr_percent']:.2f}%",
+                                    f"{result['ibd_ratings']['pe_ratio']:.1f}",
+                                    f"{result['ibd_ratings']['roe']:.1f}%"
                                 ]
                             })
                             st.table(metrics_df)
@@ -1617,7 +2234,7 @@ def render():
                     st.error(f"❌ Error inesperado: {str(e)}")
                     st.info("Por favor, verifica que el ticker sea válido e intenta de nuevo.")
 
-    # TAB 3: METODOLOGÍA COMPLETA
+    # TAB 3: METODOLOGÍA COMPLETA ACTUALIZADA
     with tab3:
         # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
@@ -1645,6 +2262,8 @@ def render():
         st.markdown('<div class="methodology-section">', unsafe_allow_html=True)
         
         st.markdown(EDUCATIONAL_CONTENT["guia_completa"])
+        st.markdown(EDUCATIONAL_CONTENT["ibd_ratings_guide"])
+        st.markdown(EDUCATIONAL_CONTENT["trend_template_minervini"])
         st.markdown(EDUCATIONAL_CONTENT["reglas_operacion"])
         st.markdown(EDUCATIONAL_CONTENT["senales_venta"])
         st.markdown(EDUCATIONAL_CONTENT["errores_comunes"])

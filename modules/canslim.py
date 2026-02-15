@@ -3,7 +3,7 @@
 CAN SLIM Scanner Pro - Versión con Panel de Ratings IBD + Trend Template Minervini
 Sistema de selección de acciones con resultados que permanecen entre pestañas
 Autor: CAN SLIM Pro Team
-Versión: 3.0.1 - Fix visualizaciones HTML
+Versión: 3.0.2 - Fix RS Rating calculation
 """
 
 import streamlit as st
@@ -39,6 +39,8 @@ def init_session_state():
         st.session_state.last_scan_params = {}
     if 'market_status' not in st.session_state:
         st.session_state.market_status = None
+    if 'spy_data_cache' not in st.session_state:
+        st.session_state.spy_data_cache = None
 
 # ============================================================
 # CONFIGURACIÓN DE RATE LIMITING Y MUESTREO INTELIGENTE
@@ -385,49 +387,118 @@ class IBDRatingsCalculator:
         self.weights_rs = [0.40, 0.20, 0.20, 0.20]
     
     def calculate_weighted_rs(self, hist_data, spy_data):
-        """RS Rating con ponderación IBD 40/20/20/20 (últimos 4 trimestres)"""
-        if hist_data is None or len(hist_data) < 252 or spy_data is None:
+        """
+        RS Rating con ponderación IBD 40/20/20/20 (últimos 4 trimestres)
+        VERSIÓN CORREGIDA - Maneja alineación de fechas correctamente
+        """
+        if hist_data is None or spy_data is None:
             return 50.0
         
         try:
-            days_per_period = 63  # ~3 meses de trading
+            # Alinear fechas: usar solo días donde ambos tengan datos
+            # Convertir índices a fechas simples (sin timezone) para comparación
+            hist_dates = pd.to_datetime(hist_data.index).tz_localize(None) if hist_data.index.tz else pd.to_datetime(hist_data.index)
+            spy_dates = pd.to_datetime(spy_data.index).tz_localize(None) if spy_data.index.tz else pd.to_datetime(spy_data.index)
             
+            # Encontrar fechas comunes
+            common_dates = hist_dates.intersection(spy_dates)
+            
+            if len(common_dates) < 100:  # Necesitamos al menos ~100 días de datos comunes
+                print(f"Datos insuficientes: {len(common_dates)} días comunes")
+                return 50.0
+            
+            # Crear DataFrames alineados
+            hist_aligned = hist_data.copy()
+            spy_aligned = spy_data.copy()
+            
+            # Resetear índices para alinear
+            hist_aligned = hist_aligned.reset_index()
+            spy_aligned = spy_aligned.reset_index()
+            
+            # Convertir fechas a datetime simple
+            hist_aligned['Date'] = pd.to_datetime(hist_aligned['Date']).dt.tz_localize(None)
+            spy_aligned['Date'] = pd.to_datetime(spy_aligned['Date']).dt.tz_localize(None)
+            
+            # Merge para obtener solo fechas comunes
+            merged = pd.merge(hist_aligned[['Date', 'Close']], spy_aligned[['Date', 'Close']], 
+                             on='Date', suffixes=('_stock', '_spy'))
+            
+            if len(merged) < 100:
+                print(f"Merge resultó en solo {len(merged)} filas")
+                return 50.0
+            
+            # Calcular retornos para cada período
+            days_per_period = 63  # ~3 meses de trading
             rs_scores = []
+            
             for i in range(4):
                 end_idx = -1 if i == 0 else -(i * days_per_period)
                 start_idx = end_idx - days_per_period
                 
-                if abs(start_idx) > len(hist_data) or abs(end_idx) > len(spy_data):
+                if abs(start_idx) > len(merged):
                     rs_scores.append(50.0)
                     continue
                 
-                stock_start = hist_data['Close'].iloc[start_idx]
-                stock_end = hist_data['Close'].iloc[end_idx]
-                spy_start = spy_data['Close'].iloc[start_idx] if abs(start_idx) <= len(spy_data) else spy_data['Close'].iloc[0]
-                spy_end = spy_data['Close'].iloc[end_idx] if abs(end_idx) <= len(spy_data) else spy_data['Close'].iloc[-1]
-                
-                stock_return = (stock_end / stock_start) - 1
-                spy_return = (spy_end / spy_start) - 1
-                
-                if spy_return != 0:
-                    rs_relative = (stock_return - spy_return) / abs(spy_return)
-                else:
-                    rs_relative = stock_return
-                
-                rs_period = 50 + (rs_relative * 50)
-                rs_period = max(1, min(99, rs_period))
-                rs_scores.append(rs_period)
+                try:
+                    stock_start = merged['Close_stock'].iloc[start_idx]
+                    stock_end = merged['Close_stock'].iloc[end_idx]
+                    spy_start = merged['Close_spy'].iloc[start_idx]
+                    spy_end = merged['Close_spy'].iloc[end_idx]
+                    
+                    # Validar datos
+                    if any(pd.isna([stock_start, stock_end, spy_start, spy_end])):
+                        rs_scores.append(50.0)
+                        continue
+                    
+                    if stock_start <= 0 or spy_start <= 0:
+                        rs_scores.append(50.0)
+                        continue
+                    
+                    # Calcular retornos simples (no logarítmicos para consistencia con IBD)
+                    stock_return = (stock_end / stock_start) - 1
+                    spy_return = (spy_end / spy_start) - 1
+                    
+                    # RS Rating para este período
+                    # Base 50 = neutral, >50 = outperformance, <50 = underperformance
+                    if abs(spy_return) > 0.001:  # Evitar división por cero
+                        # Calcular ratio de performance relativo
+                        relative_performance = (1 + stock_return) / (1 + spy_return) - 1
+                        # Convertir a escala 0-99
+                        # +20% relativo = ~70, +50% relativo = ~85, +100% relativo = ~95
+                        rs_period = 50 + (relative_performance * 100)
+                    else:
+                        # Si SPY está flat, usar absolute return
+                        rs_period = 50 + (stock_return * 100)
+                    
+                    # Limitar a rango válido
+                    rs_period = max(1, min(99, rs_period))
+                    rs_scores.append(rs_period)
+                    
+                except Exception as e:
+                    print(f"Error en período {i}: {e}")
+                    rs_scores.append(50.0)
             
-            weighted_rs = (
-                rs_scores[0] * 0.40 +
-                rs_scores[1] * 0.20 +
-                rs_scores[2] * 0.20 +
-                rs_scores[3] * 0.20
-            )
+            # Aplicar ponderación 40/20/20/20
+            if len(rs_scores) >= 4:
+                weighted_rs = (
+                    rs_scores[0] * 0.40 +
+                    rs_scores[1] * 0.20 +
+                    rs_scores[2] * 0.20 +
+                    rs_scores[3] * 0.20
+                )
+            elif len(rs_scores) > 0:
+                # Si no tenemos 4 períodos, usar promedio simple
+                weighted_rs = sum(rs_scores) / len(rs_scores)
+            else:
+                return 50.0
             
-            return min(99, max(1, weighted_rs))
+            # Asegurar rango 1-99
+            final_rs = min(99, max(1, round(weighted_rs)))
+            print(f"RS calculado: {final_rs} (scores: {rs_scores})")
+            return final_rs
             
-        except Exception:
+        except Exception as e:
+            print(f"Error general en calculate_weighted_rs: {e}")
             return 50.0
     
     def calculate_eps_rating(self, quarterly_eps_growth):
@@ -833,6 +904,23 @@ class CANSlimBacktester:
 # CÁLCULOS CAN SLIM MEJORADOS CON RATINGS IBD
 # ============================================================
 
+def get_spy_data_cached():
+    """Obtiene datos de SPY con caché en session_state"""
+    if st.session_state.spy_data_cache is not None:
+        return st.session_state.spy_data_cache
+    
+    try:
+        spy_ticker = rate_limiter.get_ticker_with_retry("SPY")
+        if spy_ticker:
+            spy_data = spy_ticker.history(period="2y")  # 2 años para asegurar suficiente historial
+            st.session_state.spy_data_cache = spy_data
+            return spy_data
+    except Exception as e:
+        print(f"Error obteniendo SPY: {e}")
+    
+    return None
+
+
 def calculate_can_slim_metrics(ticker, market_analyzer=None):
     """Calcula todas las métricas CAN SLIM + Ratings IBD + Trend Template"""
     try:
@@ -866,18 +954,13 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         current_volume = hist['Volume'].iloc[-1]
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
         
-        # Datos de mercado para RS
-        spy_data = None
-        try:
-            spy_ticker = rate_limiter.get_ticker_with_retry("SPY")
-            if spy_ticker:
-                spy_data = spy_ticker.history(period="1y")
-        except:
-            pass
+        # Datos de mercado para RS - USAR CACHÉ
+        spy_data = get_spy_data_cached()
         
         # Calcular Ratings IBD
         ibd_calc = IBDRatingsCalculator()
         
+        # CORRECCIÓN: Pasar datos históricos correctamente
         rs_rating = ibd_calc.calculate_weighted_rs(hist, spy_data)
         eps_rating = ibd_calc.calculate_eps_rating(eps_growth)
         
@@ -886,7 +969,10 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             price_12m_ago = hist['Close'].iloc[-252]
             perf_12m = ((current_price / price_12m_ago) - 1) * 100
         else:
-            perf_12m = 0
+            # Calcular con los datos disponibles
+            price_12m_ago = hist['Close'].iloc[0]
+            days_available = len(hist)
+            perf_12m = ((current_price / price_12m_ago) - 1) * 100 * (252 / days_available) if days_available > 0 else 0
         
         composite = ibd_calc.calculate_composite_rating(rs_rating, eps_rating, revenue_growth, roe, perf_12m)
         smr = ibd_calc.calculate_smr_rating(revenue_growth, roe, profit_margins)
@@ -897,16 +983,28 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         trend_template = MinerviniTrendTemplate()
         trend_result = trend_template.check_all_criteria(hist, current_price)
         
-        # RS Rating tradicional (para compatibilidad)
+        # RS Rating tradicional (para compatibilidad) - CÁLCULO CORREGIDO
         try:
-            if spy_data is not None:
-                spy_return = (spy_data['Close'].iloc[-1] / spy_data['Close'].iloc[0] - 1) * 100
-                stock_return = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) * 100
+            if spy_data is not None and len(hist) > 0:
+                # Alinear fechas para cálculo justo
+                hist_dates = pd.to_datetime(hist.index).tz_localize(None) if hist.index.tz else pd.to_datetime(hist.index)
+                spy_dates = pd.to_datetime(spy_data.index).tz_localize(None) if spy_data.index.tz else pd.to_datetime(spy_data.index)
+                
+                # Usar fecha de inicio común
+                common_start = max(hist_dates.min(), spy_dates.min())
+                
+                hist_start_price = hist.loc[hist_dates >= common_start, 'Close'].iloc[0] if any(hist_dates >= common_start) else hist['Close'].iloc[0]
+                spy_start_price = spy_data.loc[spy_dates >= common_start, 'Close'].iloc[0] if any(spy_dates >= common_start) else spy_data['Close'].iloc[0]
+                
+                stock_return = (current_price / hist_start_price - 1) * 100
+                spy_return = (spy_data['Close'].iloc[-1] / spy_start_price - 1) * 100
+                
                 rs_rating_legacy = 50 + (stock_return - spy_return) * 2
                 rs_rating_legacy = max(0, min(100, rs_rating_legacy))
             else:
                 rs_rating_legacy = 50
-        except:
+        except Exception as e:
+            print(f"Error en RS legacy: {e}")
             rs_rating_legacy = 50
         
         # Score CAN SLIM original
@@ -1025,6 +1123,9 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             }
         }
     except Exception as e:
+        print(f"Error en calculate_can_slim_metrics para {ticker}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 @st.cache_data(ttl=600)
@@ -2050,6 +2151,13 @@ def render():
                         st.error(f"❌ No se pudieron obtener datos válidos para {ticker_input}")
                         st.info("💡 Posibles causas:\n- Ticker no válido o delistado\n- Problemas de conexión con Yahoo Finance\n- Rate limit alcanzado (espera unos segundos e intenta de nuevo)")
                     else:
+                        # Debug: mostrar valores de RS calculados
+                        with st.expander("🔍 Debug Info (valores calculados)"):
+                            st.write(f"RS Rating (IBD ponderado): {result['ibd_ratings']['rs']}")
+                            st.write(f"RS Rating (Legacy simple): {result['metrics']['rs_rating']:.0f}")
+                            st.write(f"EPS Rating: {result['ibd_ratings']['eps']}")
+                            st.write(f"Composite: {result['ibd_ratings']['composite']}")
+                        
                         # Layout de 3 columnas: CAN SLIM | IBD Ratings | Trend Template
                         col1, col2, col3 = st.columns([1, 1.2, 1])
                         
@@ -2199,6 +2307,8 @@ def render():
                             st.table(metrics_df)
                 except Exception as e:
                     st.error(f"❌ Error inesperado: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
                     st.info("Por favor, verifica que el ticker sea válido e intenta de nuevo.")
 
     # TAB 3: METODOLOGÍA COMPLETA ACTUALIZADA

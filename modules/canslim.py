@@ -3,7 +3,7 @@
 CAN SLIM Scanner Pro - Versión con Panel de Ratings IBD + Trend Template Minervini
 Sistema de selección de acciones con resultados que permanecen entre pestañas
 Autor: CAN SLIM Pro Team
-Versión: 3.0.0
+Versión: 3.0.1 - Fix visualizaciones HTML
 """
 
 import streamlit as st
@@ -1231,152 +1231,125 @@ def create_ml_feature_importance(predictor):
     return fig
 
 # ============================================================
-# VISUALIZACIONES IBD Y TREND TEMPLATE
+# VISUALIZACIONES IBD Y TREND TEMPLATE - VERSIÓN CORREGIDA
 # ============================================================
 
-def create_ibd_ratings_card(ticker, ratings):
-    """Crea tarjeta HTML de ratings IBD"""
-    composite = ratings.get('composite', 0)
-    rs = ratings.get('rs', 0)
-    eps = ratings.get('eps', 0)
-    smr = ratings.get('smr', 'C')
-    acc_dis = ratings.get('acc_dis', 'C')
-    atr = ratings.get('atr_percent', 0)
-    pe = ratings.get('pe_ratio', 0)
-    roe = ratings.get('roe', 0)
+def render_ibd_panel(ibd_ratings):
+    """
+    Renderiza el panel de ratings IBD usando componentes nativos de Streamlit
+    en lugar de HTML complejo que puede escaparse
+    """
+    composite = ibd_ratings.get('composite', 0)
+    rs = ibd_ratings.get('rs', 0)
+    eps = ibd_ratings.get('eps', 0)
+    smr = ibd_ratings.get('smr', 'C')
+    acc_dis = ibd_ratings.get('acc_dis', 'C')
+    atr = ibd_ratings.get('atr_percent', 0)
+    pe = ibd_ratings.get('pe_ratio', 0)
+    roe = ibd_ratings.get('roe', 0)
     
-    # Colores para grades
-    smr_color = COLORS['primary'] if smr == 'A' else COLORS['warning'] if smr == 'B' else COLORS['danger'] if smr == 'D' else COLORS['neutral']
+    # Header con Composite
+    header_col1, header_col2 = st.columns([2, 1])
+    with header_col1:
+        st.subheader("📊 Ratings IBD")
+    with header_col2:
+        composite_color = COLORS['primary'] if composite >= 80 else COLORS['warning'] if composite >= 60 else COLORS['danger']
+        st.markdown(f"<h3 style='color: {composite_color}; text-align: right; margin: 0;'>Composite: {composite}</h3>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Tres métricas principales en columnas
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        st.markdown(f"""
+        <div style='text-align: center; padding: 15px; background: rgba(33, 150, 243, 0.1); border-radius: 10px; border: 1px solid rgba(33, 150, 243, 0.3);'>
+            <div style='color: #aaaaaa; font-size: 0.8rem; margin-bottom: 5px;'>RS RATING</div>
+            <div style='color: #2196F3; font-size: 2rem; font-weight: bold;'>{rs}</div>
+            <div style='color: #666; font-size: 0.7rem;'>vs S&P 500</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with c2:
+        st.markdown(f"""
+        <div style='text-align: center; padding: 15px; background: rgba(76, 175, 80, 0.1); border-radius: 10px; border: 1px solid rgba(76, 175, 80, 0.3);'>
+            <div style='color: #aaaaaa; font-size: 0.8rem; margin-bottom: 5px;'>EPS RATING</div>
+            <div style='color: #4CAF50; font-size: 2rem; font-weight: bold;'>{eps}</div>
+            <div style='color: #666; font-size: 0.7rem;'>Growth YoY</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with c3:
+        smr_color = COLORS['primary'] if smr == 'A' else COLORS['warning'] if smr == 'B' else COLORS['danger'] if smr == 'D' else COLORS['neutral']
+        st.markdown(f"""
+        <div style='text-align: center; padding: 15px; background: rgba(255, 152, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 152, 0, 0.3);'>
+            <div style='color: #aaaaaa; font-size: 0.8rem; margin-bottom: 5px;'>SMR GRADE</div>
+            <div style='color: {smr_color}; font-size: 2rem; font-weight: bold;'>{smr}</div>
+            <div style='color: #666; font-size: 0.7rem;'>Sales/Margins/ROE</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Métricas secundarias
+    st.markdown("<br>", unsafe_allow_html=True)
+    c4, c5, c6, c7 = st.columns(4)
+    
     ad_color = COLORS['primary'] if acc_dis in ['A', 'B'] else COLORS['danger'] if acc_dis in ['D', 'E'] else COLORS['neutral']
     
-    html = f"""
-    <div style="
-        background: linear-gradient(135deg, {COLORS['bg_card']} 0%, {COLORS['bg_dark']} 100%);
-        border: 1px solid {COLORS['border']};
-        border-radius: 12px;
-        padding: 20px;
-        margin: 10px 0;
-    ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid {COLORS['border']}; padding-bottom: 10px;">
-            <h3 style="color: {COLORS['primary']}; margin: 0; font-size: 1.3rem;">📊 Ratings IBD</h3>
-            <span style="
-                background: {COLORS['primary'] if composite >= 80 else COLORS['warning'] if composite >= 60 else COLORS['danger']};
-                color: {COLORS['bg_dark']};
-                padding: 5px 15px;
-                border-radius: 20px;
-                font-weight: bold;
-                font-size: 1.1rem;
-            ">
-                Composite: {composite}
-            </span>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px;">
-            <div style="text-align: center; padding: 12px; background: rgba(33, 150, 243, 0.1); border-radius: 8px; border: 1px solid rgba(33, 150, 243, 0.3);">
-                <div style="color: {COLORS['text_secondary']}; font-size: 0.75rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">RS Rating</div>
-                <div style="color: {COLORS['ibd_blue']}; font-size: 1.8rem; font-weight: bold;">{rs}</div>
-                <div style="color: {COLORS['text_secondary']}; font-size: 0.7rem;">vs S&P 500</div>
-            </div>
-            <div style="text-align: center; padding: 12px; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border: 1px solid rgba(76, 175, 80, 0.3);">
-                <div style="color: {COLORS['text_secondary']}; font-size: 0.75rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">EPS Rating</div>
-                <div style="color: {COLORS['ibd_green']}; font-size: 1.8rem; font-weight: bold;">{eps}</div>
-                <div style="color: {COLORS['text_secondary']}; font-size: 0.7rem;">Growth YoY</div>
-            </div>
-            <div style="text-align: center; padding: 12px; background: rgba(255, 152, 0, 0.1); border-radius: 8px; border: 1px solid rgba(255, 152, 0, 0.3);">
-                <div style="color: {COLORS['text_secondary']}; font-size: 0.75rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">SMR Grade</div>
-                <div style="color: {smr_color}; font-size: 1.8rem; font-weight: bold;">{smr}</div>
-                <div style="color: {COLORS['text_secondary']}; font-size: 0.7rem;">Sales/Margins/ROE</div>
-            </div>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 0.85rem;">
-            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
-                <span style="color: {COLORS['text_secondary']};">A/D:</span>
-                <span style="color: {ad_color}; font-weight: bold; margin-left: 5px;">{acc_dis}</span>
-            </div>
-            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
-                <span style="color: {COLORS['text_secondary']};">ATR:</span>
-                <span style="color: {COLORS['text']}; font-weight: bold; margin-left: 5px;">{atr}%</span>
-            </div>
-            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
-                <span style="color: {COLORS['text_secondary']};">P/E:</span>
-                <span style="color: {COLORS['text']}; font-weight: bold; margin-left: 5px;">{pe:.1f}</span>
-            </div>
-            <div style="text-align: center; padding: 8px; background: {COLORS['bg_dark']}; border-radius: 6px;">
-                <span style="color: {COLORS['text_secondary']};">ROE:</span>
-                <span style="color: {COLORS['text']}; font-weight: bold; margin-left: 5px;">{roe:.1f}%</span>
-            </div>
-        </div>
-    </div>
-    """
-    return html
+    with c4:
+        st.metric("A/D Rating", acc_dis, help="Accumulation/Distribution")
+    with c5:
+        st.metric("ATR %", f"{atr}%", help="Volatilidad promedio")
+    with c6:
+        st.metric("P/E Ratio", f"{pe:.1f}" if pe else "N/A")
+    with c7:
+        st.metric("ROE", f"{roe:.1f}%", help="Return on Equity")
 
-def create_trend_template_visual(result):
-    """Visualización HTML del Trend Template Minervini"""
-    criteria = result.get('criteria', {})
-    score = result.get('score', 0)
-    stage = result.get('stage', '')
-    all_pass = result.get('all_pass', False)
-    
-    # Determinar color del stage
-    if 'Stage 2' in stage:
-        stage_color = COLORS['primary']
-    elif 'Stage 4' in stage:
-        stage_color = COLORS['danger']
-    else:
-        stage_color = COLORS['warning']
-    
-    html = f"""
-    <div style="
-        background: {COLORS['bg_card']};
-        border: 2px solid {COLORS['primary'] if all_pass else COLORS['warning']};
-        border-radius: 12px;
-        padding: 20px;
-        margin: 10px 0;
-    ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h4 style="color: {COLORS['text']}; margin: 0; font-size: 1.1rem;">🎯 Trend Template Minervini</h4>
-            <div style="text-align: right;">
-                <span style="
-                    background: {COLORS['primary'] if all_pass else COLORS['warning']};
-                    color: {COLORS['bg_dark']};
-                    padding: 5px 12px;
-                    border-radius: 15px;
-                    font-weight: bold;
-                    font-size: 0.9rem;
-                ">
-                    {score}/8
-                </span>
-                <div style="font-size: 0.75rem; color: {stage_color}; margin-top: 5px; font-weight: bold;">{stage}</div>
-            </div>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem;">
+
+def render_trend_template(trend_result):
     """
+    Renderiza el Trend Template usando componentes nativos de Streamlit
+    """
+    criteria = trend_result.get('criteria', {})
+    score = trend_result.get('score', 0)
+    stage = trend_result.get('stage', '')
+    all_pass = trend_result.get('all_pass', False)
     
-    for criterion, passed in criteria.items():
-        bg_color = 'rgba(0, 255, 173, 0.1)' if passed else 'rgba(242, 54, 69, 0.1)'
-        border_color = COLORS['primary'] if passed else COLORS['danger']
-        text_color = COLORS['primary'] if passed else COLORS['danger']
-        icon = '✓' if passed else '✗'
+    # Header
+    header_col1, header_col2 = st.columns([2, 1])
+    with header_col1:
+        st.subheader("🎯 Trend Template Minervini")
+    with header_col2:
+        score_color = COLORS['primary'] if all_pass else COLORS['warning']
+        st.markdown(f"<h3 style='color: {score_color}; text-align: right; margin: 0;'>{score}/8</h3>", unsafe_allow_html=True)
+    
+    # Stage badge
+    stage_color = COLORS['primary'] if 'Stage 2' in stage else COLORS['danger'] if 'Stage 4' in stage else COLORS['warning']
+    st.markdown(f"<p style='color: {stage_color}; font-weight: bold; text-align: right; margin-top: -10px;'>{stage}</p>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Grid de criterios (2 columnas)
+    criteria_items = list(criteria.items())
+    mid = len(criteria_items) // 2
+    
+    col1, col2 = st.columns(2)
+    
+    for i, (criterion, passed) in enumerate(criteria_items):
+        target_col = col1 if i < mid else col2
         
-        html += f"""
-            <div style="
-                background: {bg_color};
-                border-left: 3px solid {border_color};
-                padding: 8px 12px;
-                border-radius: 0 6px 6px 0;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            ">
-                <span style="color: {COLORS['text']};">{criterion}</span>
-                <span style="color: {text_color}; font-weight: bold; font-size: 1rem;">{icon}</span>
-            </div>
-        """
+        with target_col:
+            if passed:
+                st.success(f"✓ {criterion}")
+            else:
+                st.error(f"✗ {criterion}")
     
-    html += "</div></div>"
-    return html
+    # Mensaje final
+    st.markdown("---")
+    if all_pass:
+        st.success("✅ **TODOS LOS CRITERIOS CUMPLIDOS** - Stage 2 Confirmado")
+    else:
+        st.warning(f"⚠️ **{score}/8 criterios cumplidos** - Revisar condiciones técnicas")
+
 
 def create_ibd_radar(ibd_ratings):
     """Radar chart para ratings IBD"""
@@ -1553,6 +1526,7 @@ EDUCATIONAL_CONTENT = {
     **L - Leader or Laggard (Líder o Rezagado)**
     - **RS Rating (0-99)**: Fuerza relativa vs S&P 500 con ponderación 40/20/20/20
     - Metodología IBD: 40% último trimestre, 20% cada uno de los 3 anteriores
+    - Da más peso al momentum reciente
     - Top 10% de rendimiento en su sector
     - Líderes de grupo industrial (ej: NVDA en semiconductores)
     - Evitar stocks débiles "porque están baratos"
@@ -1952,6 +1926,11 @@ def render():
         border-radius: 0 8px 8px 0;
         margin: 10px 0;
     }}
+    /* Estilos para expander más compactos */
+    .streamlit-expanderHeader {{
+        font-size: 0.9rem;
+        color: {COLORS['text_secondary']};
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -2049,7 +2028,7 @@ def render():
             else:
                 st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
 
-    # TAB 2: ANÁLISIS DETALLADO CON RATINGS IBD
+    # TAB 2: ANÁLISIS DETALLADO CON RATINGS IBD - VERSIÓN CORREGIDA
     with tab2:
         # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
@@ -2098,45 +2077,33 @@ def render():
                             """, unsafe_allow_html=True)
                         
                         with col2:
-                            # NUEVO: Panel de Ratings IBD
-                            st.markdown(create_ibd_ratings_card(ticker_input, result['ibd_ratings']), unsafe_allow_html=True)
+                            # NUEVO: Panel de Ratings IBD usando componentes nativos
+                            render_ibd_panel(result['ibd_ratings'])
                             
                             # Radar IBD
                             st.plotly_chart(create_ibd_radar(result['ibd_ratings']), use_container_width=True, key=f"ibd_radar_{ticker_input}")
                         
                         with col3:
-                            # NUEVO: Trend Template Minervini
-                            st.markdown(create_trend_template_visual(result['trend_template']), unsafe_allow_html=True)
+                            # NUEVO: Trend Template Minervini usando componentes nativos
+                            render_trend_template(result['trend_template'])
                             
-                            # Métricas adicionales
-                            trend_vals = result['trend_template'].get('values', {})
-                            if trend_vals:
-                                st.markdown("**Niveles Técnicos:**")
-                                metrics_html = f"""
-                                <div style="background: {COLORS['bg_card']}; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span style="color: {COLORS['text_secondary']};">SMA 50:</span>
-                                        <span style="color: {COLORS['text']}; font-weight: bold;">${trend_vals.get('sma_50', 0):.2f}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span style="color: {COLORS['text_secondary']};">SMA 150:</span>
-                                        <span style="color: {COLORS['text']}; font-weight: bold;">${trend_vals.get('sma_150', 0):.2f}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span style="color: {COLORS['text_secondary']};">SMA 200:</span>
-                                        <span style="color: {COLORS['text']}; font-weight: bold;">${trend_vals.get('sma_200', 0):.2f}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                        <span style="color: {COLORS['text_secondary']};">52W High:</span>
-                                        <span style="color: {COLORS['primary']}; font-weight: bold;">${trend_vals.get('high_52w', 0):.2f}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: {COLORS['text_secondary']};">52W Low:</span>
-                                        <span style="color: {COLORS['danger']}; font-weight: bold;">${trend_vals.get('low_52w', 0):.2f}</span>
-                                    </div>
-                                </div>
-                                """
-                                st.markdown(metrics_html, unsafe_allow_html=True)
+                            # Métricas adicionales del Trend Template
+                            with st.expander("📐 Niveles Técnicos"):
+                                trend_vals = result['trend_template'].get('values', {})
+                                if trend_vals:
+                                    tech_data = {
+                                        'Métrica': ['SMA 50', 'SMA 150', 'SMA 200', '52W High', '52W Low', 'Dist. del High', 'Dist. del Low'],
+                                        'Valor': [
+                                            f"${trend_vals.get('sma_50', 0):.2f}",
+                                            f"${trend_vals.get('sma_150', 0):.2f}",
+                                            f"${trend_vals.get('sma_200', 0):.2f}",
+                                            f"${trend_vals.get('high_52w', 0):.2f}",
+                                            f"${trend_vals.get('low_52w', 0):.2f}",
+                                            f"{trend_vals.get('distance_from_high', 0):.1f}%",
+                                            f"{trend_vals.get('distance_from_low', 0):.1f}%"
+                                        ]
+                                    }
+                                    st.dataframe(pd.DataFrame(tech_data), use_container_width=True, hide_index=True)
                         
                         # Gráfico de precios debajo
                         st.markdown("---")

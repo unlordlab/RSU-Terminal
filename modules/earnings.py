@@ -11,6 +11,7 @@ from functools import wraps
 import hashlib
 import requests
 import os
+import re
 
 # ────────────────────────────────────────────────
 # CONFIGURACIÓN
@@ -564,11 +565,47 @@ def render_earnings_calendar(data):
             """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU HEDGE FUND
+# ANÁLISIS RSU HEDGE FUND - VERSIÓN OPTIMIZADA
 # ────────────────────────────────────────────────
 
+def clean_ai_response(text):
+    """Limpia la respuesta de la IA de código HTML y frases innecesarias."""
+    # Eliminar bloques de código HTML/CSS
+    text = re.sub(r'<div.*?>.*?</div>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<style.*?>.*?</style>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<script.*?>.*?</script>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<\w+[^>]*>', '', text)
+    text = re.sub(r'</\w+>', '', text)
+    
+    # Eliminar frases introductorias comunes
+    intro_patterns = [
+        r'^Aquí tienes.*?(?=\n|$)',
+        r'^Aquí está.*?(?=\n|$)',
+        r'^A continuación.*?(?=\n|$)',
+        r'^Basado en los datos.*?(?=\n|$)',
+        r'^Informe de.*?(?=\n|$)',
+        r'^Análisis de.*?(?=\n|$)',
+        r'^Reporte de.*?(?=\n|$)',
+        r'^\*\*Informe de Resultados.*?\*\*',
+        r'^El siguiente análisis.*?(?=\n|$)',
+    ]
+    
+    for pattern in intro_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Limpiar líneas vacías al inicio
+    lines = text.split('\n')
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    
+    # Limpiar espacios múltiples
+    text = '\n'.join(lines)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    return text.strip()
+
 def render_rsu_earnings_analysis(data):
-    """Renderiza Análisis Prompt RSU Earnings - Estilo Hedge Fund."""
+    """Renderiza Análisis Prompt RSU Earnings - Estilo Hedge Fund Optimizado."""
     st.markdown("### 📊 Análisis Prompt RSU Earnings")
     
     base_prompt = load_rsu_prompt()
@@ -579,63 +616,105 @@ def render_rsu_earnings_analysis(data):
     
     earnings_extra = get_earnings_data_for_prompt(data['ticker'])
     
-    # Formatear datos adicionales como texto legible
-    calendar_str = str(earnings_extra.get('calendar', 'No disponible'))
-    quarterly_str = str(earnings_extra.get('quarterly_earnings', 'No disponible'))
-    recs_str = str(earnings_extra.get('recommendations', 'No disponible'))
-    upgrades_str = str(earnings_extra.get('upgrades', 'No disponible'))
+    # Formatear datos adicionales de forma más limpia
+    calendar_str = "No disponible"
+    if earnings_extra.get('calendar') is not None:
+        try:
+            cal_df = earnings_extra['calendar']
+            if hasattr(cal_df, 'to_string'):
+                calendar_str = cal_df.to_string()
+            else:
+                calendar_str = str(cal_df)
+        except:
+            calendar_str = str(earnings_extra['calendar'])
     
-    contexto_datos = f"""DATOS EN TIEMPO REAL PARA {data['name']} ({data['ticker']}):
+    quarterly_str = "No disponible"
+    if earnings_extra.get('quarterly_earnings') is not None:
+        try:
+            q_df = earnings_extra['quarterly_earnings']
+            if hasattr(q_df, 'to_string'):
+                quarterly_str = q_df.head(8).to_string()
+            else:
+                quarterly_str = str(q_df)
+        except:
+            quarterly_str = str(earnings_extra['quarterly_earnings'])
+    
+    recs_str = "No disponible"
+    if earnings_extra.get('recommendations') is not None:
+        try:
+            r_df = earnings_extra['recommendations']
+            if hasattr(r_df, 'to_string'):
+                recs_str = r_df.to_string()
+            else:
+                recs_str = str(r_df)
+        except:
+            recs_str = str(earnings_extra['recommendations'])
+    
+    upgrades_str = "No disponible"
+    if earnings_extra.get('upgrades') is not None:
+        try:
+            u_df = earnings_extra['upgrades']
+            if hasattr(u_df, 'to_string'):
+                upgrades_str = u_df.head(10).to_string()
+            else:
+                upgrades_str = str(u_df)
+        except:
+            upgrades_str = str(earnings_extra['upgrades'])
+    
+    # Construir prompt estructurado y claro
+    system_prompt = """Eres un analista de hedge fund senior. Tu trabajo es analizar earnings de empresas públicas.
+REGLAS ESTRICTAS:
+1. Responde SOLO con el análisis solicitado, sin introducciones ni conclusiones metas
+2. Usa el formato markdown especificado en la plantilla
+3. NO incluyas código HTML, CSS ni JavaScript
+4. NO digas "Aquí tienes" o "A continuación"
+5. Comienza directamente con: **Company:** [nombre]
+6. Si faltan datos específicos, indica "No disponible" o "Estimado"
+7. Mantén un tono profesional, objetivo y conciso"""
+    
+    contexto_datos = f"""
+DATOS DISPONIBLES PARA {data['name']} ({data['ticker']}):
 
-📈 DATOS DE MERCADO:
-- Precio Actual: ${data['price']:.2f}
-- Cambio: {data.get('change_pct', 0):+.2f}%
+PRECIO Y MERCADO:
+- Precio: ${data['price']:.2f} | Cambio: {data.get('change_pct', 0):+.2f}%
 - Market Cap: {format_value(data['market_cap'], '$')}
-- Beta: {data.get('beta', 'N/A')}
-- Rango 52 semanas: ${data.get('fifty_two_low', 0):.2f} - ${data.get('fifty_two_high', 0):.2f}
-- Volumen: {format_value(data['volume'], '', '', 0)}
+- Beta: {data.get('beta', 'N/A')} | Volumen: {format_value(data['volume'], '', '', 0)}
 
-💰 FUNDAMENTALES CLAVE:
+FUNDAMENTALES:
 - P/E Trailing: {format_value(data.get('pe_trailing'), '', 'x', 2)}
 - P/E Forward: {format_value(data.get('pe_forward'), '', 'x', 2)}
-- EPS Actual: ${data.get('eps', 'N/A')}
-- EPS Forward: ${data.get('eps_forward', 'N/A')}
+- EPS: ${data.get('eps', 'N/A')} | EPS Forward: ${data.get('eps_forward', 'N/A')}
 - Crecimiento Ingresos: {format_value(data.get('rev_growth'), '', '%', 2)}
 - Margen Neto: {format_value(data.get('profit_margin'), '', '%', 2)}
 - Margen EBITDA: {format_value(data.get('ebitda_margin'), '', '%', 2)}
 - ROE: {format_value(data.get('roe'), '', '%', 2)}
-- Deuda/Patrimonio: {format_value(data.get('debt_to_equity'), '', '%', 2)}
 
-🏦 SALUD FINANCIERA:
-- Cash Total: {format_value(data.get('cash'), '$')}
-- Deuda Total: {format_value(data.get('debt'), '$')}
-- Free Cash Flow: {format_value(data.get('free_cashflow'), '$')}
-- Current Ratio: {data.get('current_ratio', 'N/A')}
+BALANCE:
+- Cash: {format_value(data.get('cash'), '$')}
+- Deuda: {format_value(data.get('debt'), '$')}
+- FCF: {format_value(data.get('free_cashflow'), '$')}
+- Deuda/Equity: {format_value(data.get('debt_to_equity'), '', '%', 2)}
 
-🎯 CONSENSO DE ANALISTAS:
-- Número de Analistas: {data.get('num_analysts', 'N/A')}
-- Precio Objetivo Medio: ${data.get('target_mean', 0):.2f}
-- Precio Objetivo Alto: ${data.get('target_high', 0):.2f}
-- Precio Objetivo Bajo: ${data.get('target_low', 0):.2f}
+ANALISTAS:
+- Consenso: {data.get('num_analysts', 'N/A')} analistas
+- Target Medio: ${data.get('target_mean', 0):.2f}
 - Recomendación: {data.get('recommendation', 'N/A').upper()}
 
-📅 CALENDARIO DE EARNINGS:
+DATOS ADICIONALES:
+Calendario:
 {calendar_str}
 
-📊 EARNINGS TRIMESTRALES HISTÓRICOS:
+Earnings Históricos:
 {quarterly_str}
 
-⚡ RECOMENDACIONES RECIENTES:
+Recomendaciones Recientes:
 {recs_str}
 
-🔄 UPGRADES/DOWNGRADES:
-{upgrades_str}"""
+Upgrades/Downgrades:
+{upgrades_str}
+"""
     
-    prompt_completo = f"""{base_prompt}
-
-{contexto_datos}
-
-INSTRUCCIÓN FINAL: Genera ÚNICAMENTE el reporte solicitado en el formato especificado. No repitas esta instrucción. No digas 'Aquí tienes el informe'. Comienza directamente con el contenido del análisis en español y formato markdown."""
+    prompt_completo = f"{system_prompt}\n\n{base_prompt}\n\n{contexto_datos}\n\nGENERA EL REPORTE AHORA:"
     
     model, name, err = get_ia_model()
     
@@ -646,10 +725,10 @@ INSTRUCCIÓN FINAL: Genera ÚNICAMENTE el reporte solicitado en el formato espec
     try:
         with st.spinner("🧠 Generando análisis hedge fund..."):
             generation_config = {
-                "temperature": 0.2,
-                "top_p": 0.95,
-                "top_k": 40,
-                "max_output_tokens": 2048,
+                "temperature": 0.1,  # Muy bajo para máxima precisión
+                "top_p": 0.9,
+                "top_k": 20,
+                "max_output_tokens": 2500,
             }
             
             response = model.generate_content(
@@ -657,30 +736,21 @@ INSTRUCCIÓN FINAL: Genera ÚNICAMENTE el reporte solicitado en el formato espec
                 generation_config=generation_config
             )
             
-            # Limpiar la respuesta de frases introductorias comunes
-            texto_limpio = response.text
-            frases_a_eliminar = [
-                "Aquí tienes el informe",
-                "Aquí está el análisis",
-                "A continuación te presento",
-                "Basado en los datos proporcionados",
-                "Informe de ganancias para",
-                "Análisis de earnings para"
-            ]
+            # Limpiar respuesta
+            texto_limpio = clean_ai_response(response.text)
             
-            for frase in frases_a_eliminar:
-                if texto_limpio.startswith(frase):
-                    texto_limpio = texto_limpio[len(frase):].strip()
-                    if texto_limpio.startswith(":"):
-                        texto_limpio = texto_limpio[1:].strip()
+            # Si después de limpiar queda muy corto, mostrar original con advertencia
+            if len(texto_limpio) < 100:
+                texto_limpio = response.text
+                st.warning("⚠️ La respuesta de la IA contenía código. Mostrando versión original:")
             
+            # Renderizar en contenedor limpio
             st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); 
+            <div style="background: #0c0e12; 
                         border: 1px solid #00ffad; 
                         border-radius: 8px; 
                         padding: 0;
-                        margin: 20px 0;
-                        box-shadow: 0 0 20px rgba(0, 255, 173, 0.1);">
+                        margin: 20px 0;">
                 <div style="background: #00ffad11; 
                             border-bottom: 1px solid #00ffad; 
                             padding: 15px 20px; 
@@ -697,24 +767,31 @@ INSTRUCCIÓN FINAL: Genera ÚNICAMENTE el reporte solicitado en el formato espec
                         {data['ticker']} // {datetime.now().strftime('%Y-%m-%d %H:%M')}
                     </span>
                 </div>
-                <div style="padding: 25px; color: #e0e0e0; line-height: 1.8; font-size: 14px;">
-                    {texto_limpio}
-                </div>
-                <div style="background: #0c0e12; 
-                            border-top: 1px solid #2a3f5f; 
-                            padding: 10px 20px; 
-                            font-size: 10px; 
-                            color: #666; 
-                            font-family: monospace;
-                            display: flex;
-                            justify-content: space-between;">
-                    <span>Fuente: Gemini Pro + Yahoo Finance</span>
-                    <span style="color: #00ffad;">RSU TERMINAL v1.0</span>
-                </div>
             </div>
             """, unsafe_allow_html=True)
             
-            st.code(response.text, language='markdown')
+            # Mostrar el análisis en contenedor de markdown limpio
+            st.markdown(texto_limpio)
+            
+            # Footer del análisis
+            st.markdown(f"""
+            <div style="background: #0c0e12; 
+                        border-top: 1px solid #2a3f5f; 
+                        padding: 10px 20px; 
+                        font-size: 10px; 
+                        color: #666; 
+                        font-family: monospace;
+                        display: flex;
+                        justify-content: space-between;
+                        margin-top: 20px;">
+                <span>Fuente: Gemini Pro + Yahoo Finance</span>
+                <span style="color: #00ffad;">RSU TERMINAL v1.0</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Expander con raw para debug (opcional)
+            with st.expander("📝 Ver texto raw del análisis"):
+                st.code(response.text, language='markdown')
             
     except Exception as e:
         st.error(f"❌ Error generando análisis: {e}")
@@ -921,3 +998,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

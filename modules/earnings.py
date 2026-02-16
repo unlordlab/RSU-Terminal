@@ -34,11 +34,114 @@ def load_rsu_prompt():
         return None
 
 # ────────────────────────────────────────────────
-# OBTENCIÓN DE DATOS MEJORADA
+# FINANCIAL MODELING PREP API
+# ────────────────────────────────────────────────
+
+def get_fmp_data(ticker, api_key):
+    """Obtiene datos de Financial Modeling Prep API."""
+    if not api_key:
+        return None
+    
+    try:
+        base_url = "https://financialmodelingprep.com/api/v3"
+        
+        # Income Statement (para revenue y earnings)
+        income_url = f"{base_url}/income-statement/{ticker}?limit=4&apikey={api_key}"
+        income_resp = requests.get(income_url, timeout=10)
+        income = income_resp.json() if income_resp.status_code == 200 else []
+        
+        # Earnings Surprises (Actual vs Estimate)
+        surprises_url = f"{base_url}/earnings-surprises/{ticker}?apikey={api_key}"
+        surprises_resp = requests.get(surprises_url, timeout=10)
+        surprises = surprises_resp.json() if surprises_resp.status_code == 200 else []
+        
+        # Earnings Calendar (próximos)
+        calendar_url = f"{base_url}/earning_calendar/{ticker}?apikey={api_key}"
+        calendar_resp = requests.get(calendar_url, timeout=10)
+        calendar = calendar_resp.json() if calendar_resp.status_code == 200 else []
+        
+        # Analyst Estimates
+        estimates_url = f"{base_url}/analyst-estimates/{ticker}?limit=4&apikey={api_key}"
+        estimates_resp = requests.get(estimates_url, timeout=10)
+        estimates = estimates_resp.json() if estimates_resp.status_code == 200 else []
+        
+        # Company Outlook ( guidance, etc)
+        outlook_url = f"{base_url}/company-outlook/{ticker}?apikey={api_key}"
+        outlook_resp = requests.get(outlook_url, timeout=10)
+        outlook = outlook_resp.json() if outlook_resp.status_code == 200 else {}
+        
+        return {
+            'income_statement': income,
+            'earnings_surprises': surprises,
+            'earnings_calendar': calendar,
+            'analyst_estimates': estimates,
+            'company_outlook': outlook,
+            'source': 'fmp'
+        }
+        
+    except Exception as e:
+        print(f"Error FMP: {e}")
+        return None
+
+def format_fmp_earnings_data(fmp_data):
+    """Formatea datos de FMP para el prompt."""
+    if not fmp_data:
+        return "No disponible"
+    
+    result = []
+    
+    # Earnings Surprises (Actual vs Estimate)
+    surprises = fmp_data.get('earnings_surprises', [])
+    if surprises:
+        result.append("=== EARNINGS SURPRISES (Actual vs Estimate) ===")
+        for s in surprises[:4]:
+            date = s.get('date', 'N/D')
+            actual = s.get('actualEarningResult', 'N/D')
+            estimate = s.get('estimatedEarning', 'N/D')
+            surprise = s.get('surprise', 'N/D')
+            surprise_pct = s.get('surprisePercentage', 'N/D')
+            result.append(f"Fecha: {date} | Actual: ${actual} | Est: ${estimate} | Surprise: {surprise} ({surprise_pct}%)")
+    
+    # Income Statement (últimos 4 trimestres)
+    income = fmp_data.get('income_statement', [])
+    if income:
+        result.append("\n=== INCOME STATEMENT (Últimos 4Q) ===")
+        for i in income[:4]:
+            date = i.get('date', 'N/D')
+            revenue = i.get('revenue', 'N/D')
+            net_income = i.get('netIncome', 'N/D')
+            eps = i.get('eps', 'N/D')
+            ebitda = i.get('ebitda', 'N/D')
+            result.append(f"{date}: Revenue ${revenue:,} | Net Income ${net_income:,} | EPS ${eps} | EBITDA ${ebitda:,}")
+    
+    # Analyst Estimates
+    estimates = fmp_data.get('analyst_estimates', [])
+    if estimates:
+        result.append("\n=== ANALYST ESTIMATES ===")
+        for e in estimates[:4]:
+            date = e.get('date', 'N/D')
+            eps_est = e.get('estimatedEps', 'N/D')
+            revenue_est = e.get('estimatedRevenue', 'N/D')
+            result.append(f"{date}: EPS Est ${eps_est} | Revenue Est ${revenue_est:,}")
+    
+    # Próximos earnings
+    calendar = fmp_data.get('earnings_calendar', [])
+    if calendar:
+        result.append("\n=== PRÓXIMOS EARNINGS ===")
+        for c in calendar[:2]:
+            date = c.get('date', 'N/D')
+            eps_est = c.get('epsEstimated', 'N/D')
+            revenue_est = c.get('revenueEstimated', 'N/D')
+            result.append(f"{date}: EPS Est ${eps_est} | Revenue Est ${revenue_est:,}")
+    
+    return "\n".join(result) if result else "No disponible"
+
+# ────────────────────────────────────────────────
+# OBTENCIÓN DE DATOS YFINANCE
 # ────────────────────────────────────────────────
 
 def get_yfinance_data(ticker_symbol):
-    """Obtiene datos de yfinance incluyendo earnings trimestrales."""
+    """Obtiene datos de yfinance."""
     try:
         rate_limit_delay()
         ticker = yf.Ticker(ticker_symbol)
@@ -48,7 +151,6 @@ def get_yfinance_data(ticker_symbol):
         except:
             info = dict(ticker.fast_info) if hasattr(ticker, 'fast_info') else {}
         
-        # Obtener histórico
         try:
             hist = ticker.history(period="1y", auto_adjust=True)
             hist_dict = {
@@ -62,7 +164,6 @@ def get_yfinance_data(ticker_symbol):
         except:
             hist_dict = None
         
-        # Obtener earnings anuales
         try:
             earnings = ticker.earnings
             earnings_dict = None
@@ -75,21 +176,6 @@ def get_yfinance_data(ticker_symbol):
         except:
             earnings_dict = None
         
-        # OBTENER EARNINGS TRIMESTRALES (crucial para análisis reciente)
-        quarterly_earnings_dict = None
-        try:
-            quarterly = ticker.quarterly_earnings
-            if quarterly is not None and not quarterly.empty:
-                quarterly_earnings_dict = {
-                    'dates': quarterly.index.strftime('%Y-%m-%d').tolist() if hasattr(quarterly.index, 'strftime') else list(quarterly.index),
-                    'revenue': quarterly.get('Revenue', []).tolist() if 'Revenue' in quarterly.columns else [],
-                    'earnings': quarterly.get('Earnings', []).tolist() if 'Earnings' in quarterly.columns else []
-                }
-        except Exception as e:
-            print(f"Error getting quarterly earnings: {e}")
-            quarterly_earnings_dict = None
-        
-        # Calendario de earnings
         try:
             calendar = ticker.calendar
             calendar_list = []
@@ -103,32 +189,11 @@ def get_yfinance_data(ticker_symbol):
         except:
             calendar_list = []
         
-        # EPS estimates
-        eps_estimates_dict = None
-        try:
-            eps_est = ticker.eps_estimates
-            if eps_est is not None and not eps_est.empty:
-                eps_estimates_dict = eps_est.to_dict()
-        except:
-            pass
-        
-        # Recomendaciones
-        recommendations_dict = None
-        try:
-            recs = ticker.recommendations
-            if recs is not None and not recs.empty:
-                recommendations_dict = recs.tail(5).to_dict()
-        except:
-            pass
-        
         return {
             'info': info, 
             'history': hist_dict, 
             'earnings': earnings_dict,
-            'quarterly_earnings': quarterly_earnings_dict,
             'calendar': calendar_list,
-            'eps_estimates': eps_estimates_dict,
-            'recommendations': recommendations_dict,
             'source': 'yfinance'
         }
         
@@ -184,7 +249,6 @@ def get_finnhub_data(ticker, api_key):
             },
             'history': None,
             'earnings': None,
-            'quarterly_earnings': None,
             'calendar': [],
             'source': 'finnhub'
         }
@@ -244,18 +308,6 @@ def process_data(raw_data, ticker):
                 'Revenue': earnings_data.get('revenue', []),
                 'Earnings': earnings_data.get('earnings', [])
             }, index=earnings_data['dates'])
-        except:
-            pass
-    
-    # Procesar earnings trimestrales
-    quarterly_earnings_df = pd.DataFrame()
-    quarterly_data = raw_data.get('quarterly_earnings')
-    if quarterly_data and quarterly_data.get('dates'):
-        try:
-            quarterly_earnings_df = pd.DataFrame({
-                'Revenue': quarterly_data.get('revenue', []),
-                'Earnings': quarterly_data.get('earnings', [])
-            }, index=quarterly_data['dates'])
         except:
             pass
     
@@ -322,10 +374,7 @@ def process_data(raw_data, ticker):
         
         "hist": hist_df,
         "earnings_hist": earnings_df,
-        "quarterly_earnings_hist": quarterly_earnings_df,
         "earnings_calendar": raw_data.get('calendar', []),
-        "eps_estimates": raw_data.get('eps_estimates'),
-        "recommendations": raw_data.get('recommendations'),
         "beta": float(get(['beta'], 0) or 0),
         
         "is_real_data": raw_data.get('source') != 'mock',
@@ -389,8 +438,7 @@ def get_mock_data(ticker):
         "ex_div_date": None, "payout_ratio": 0.20, "target_high": price * 1.3,
         "target_low": price * 0.8, "target_mean": price * 1.1, "target_median": price * 1.1,
         "recommendation": "buy", "num_analysts": 35, "hist": pd.DataFrame(),
-        "earnings_hist": pd.DataFrame(), "quarterly_earnings_hist": pd.DataFrame(),
-        "earnings_calendar": [], "eps_estimates": None, "recommendations": None,
+        "earnings_hist": pd.DataFrame(), "earnings_calendar": [],
         "beta": mock["beta"], "is_real_data": False, "data_source": "mock",
         "change_pct": 2.04, "change_abs": price * 0.02, "pct_from_high": -5.0
     }
@@ -577,11 +625,11 @@ def render_earnings_calendar(data):
             """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU - TERMINAL HACKER STYLE
+# ANÁLISIS RSU - CON FMP DATA
 # ────────────────────────────────────────────────
 
-def render_rsu_earnings_analysis(data):
-    """Renderiza el análisis con estética terminal hacker."""
+def render_rsu_earnings_analysis(data, fmp_data=None):
+    """Renderiza el análisis con datos de FMP si están disponibles."""
     
     base_prompt = load_rsu_prompt()
     
@@ -589,30 +637,8 @@ def render_rsu_earnings_analysis(data):
         st.warning("⚠️ Prompt RSU no encontrado.")
         return
     
-    # Preparar datos de earnings trimestrales
-    quarterly_str = "No disponible"
-    if data.get('quarterly_earnings_hist') is not None and not data['quarterly_earnings_hist'].empty:
-        try:
-            q_df = data['quarterly_earnings_hist'].tail(4)  # Últimos 4 trimestres
-            quarterly_str = q_df.to_string()
-        except:
-            quarterly_str = str(data['quarterly_earnings_hist'])
-    
-    # Calendario
-    calendar_str = "No disponible"
-    if data.get('earnings_calendar'):
-        try:
-            calendar_str = str(data['earnings_calendar'])
-        except:
-            pass
-    
-    # EPS Estimates
-    eps_est_str = "No disponible"
-    if data.get('eps_estimates'):
-        try:
-            eps_est_str = str(data['eps_estimates'])
-        except:
-            pass
+    # Formatear datos de FMP
+    fmp_formatted = format_fmp_earnings_data(fmp_data) if fmp_data else "No disponible"
     
     # Construir datos para el prompt
     datos_ticker = f"""=== DATOS DEL TICKER ===
@@ -673,17 +699,11 @@ TARGET_HIGH: ${data.get('target_high', 0):.2f}
 TARGET_LOW: ${data.get('target_low', 0):.2f}
 TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
 
-=== EARNINGS TRIMESTRALES (ÚLTIMOS 4) ===
-{quarterly_str}
-
-=== CALENDARIO PROXIMO EARNINGS ===
-{calendar_str}
-
-=== EPS ESTIMATES ===
-{eps_est_str}
+{f"=== DATOS FMP (EARNINGS DETALLADOS) ===" if fmp_data else ""}
+{fmp_formatted}
 """
     
-    prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español siguiendo el formato especificado. NO omitas ninguna sección. Si faltan datos, indica 'N/D' pero mantén la estructura completa."
+    prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español. Usa los datos FMP proporcionados para las secciones de Actual vs Estimates y Guidance. Si algún dato específico no está disponible, indica 'N/D' pero mantén la estructura completa del análisis."
     
     model, name, err = get_ia_model()
     
@@ -699,7 +719,7 @@ TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
                 generation_config={
                     "temperature": 0.15,
                     "top_p": 0.95,
-                    "max_output_tokens": 4000,  # Aumentado para evitar cortes
+                    "max_output_tokens": 4000,
                 }
             )
             
@@ -767,7 +787,7 @@ TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
             st.markdown(f"""
                 </div>
                 <div class="terminal-footer">
-                    <span>Gemini Pro + Yahoo Finance API</span>
+                    <span>Gemini Pro + Yahoo Finance + FMP API</span>
                     <span style="color: #00ffad;">RSU_TERMINAL_v1.0</span>
                 </div>
             </div>
@@ -803,7 +823,7 @@ def render():
     st.title("📅 Análisis de Earnings")
     st.markdown('<div style="color: #888; margin-bottom: 20px;">Análisis fundamental con IA y datos en tiempo real</div>', unsafe_allow_html=True)
     
-    # SIN BOTÓN DEMO - Solo input y botón analizar
+    # SIN BOTÓN DEMO
     col1, col2 = st.columns([3, 1])
     with col1:
         ticker = st.text_input("Ticker", value="AAPL").upper().strip()
@@ -814,11 +834,18 @@ def render():
     
     if analyze and ticker:
         with st.spinner("Cargando datos..."):
+            # Intentar obtener datos de FMP primero (mejores datos de earnings)
+            fmp_api_key = st.secrets.get("FMP_API_KEY", None)
+            fmp_data = None
+            if fmp_api_key:
+                fmp_data = get_fmp_data(ticker, fmp_api_key)
+            
+            # Datos de yfinance/Finnhub para fundamentales
             raw = get_yfinance_data(ticker)
             if not raw:
-                api_key = st.secrets.get("FINNHUB_API_KEY", None)
-                if api_key:
-                    raw = get_finnhub_data(ticker, api_key)
+                finnhub_key = st.secrets.get("FINNHUB_API_KEY", None)
+                if finnhub_key:
+                    raw = get_finnhub_data(ticker, finnhub_key)
             
             if raw:
                 data = process_data(raw, ticker)
@@ -832,6 +859,14 @@ def render():
         change_color = "#00ffad" if data.get('change_pct', 0) >= 0 else "#f23645"
         source_color = {"yfinance": "#00ffad", "finnhub": "#4caf50", "mock": "#ff9800"}.get(data.get('data_source'), "#888")
         source_label = {"yfinance": "YAHOO FINANCE", "finnhub": "FINNHUB", "mock": "DEMO"}.get(data.get('data_source'), "UNKNOWN")
+        
+        # Indicador si hay datos FMP
+        if fmp_data:
+            st.markdown("""
+            <div style="background: #00ffad22; border: 1px solid #00ffad; border-radius: 4px; padding: 8px 12px; margin-bottom: 15px; display: inline-block;">
+                <span style="color: #00ffad; font-size: 11px; font-weight: bold;">● FMP API CONECTADO - Datos de earnings disponibles</span>
+            </div>
+            """, unsafe_allow_html=True)
         
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -952,12 +987,12 @@ def render():
             """, unsafe_allow_html=True)
         
         st.markdown("---")
-        render_rsu_earnings_analysis(data)
+        render_rsu_earnings_analysis(data, fmp_data)
         
         # FOOTER SIN CITAS ALEATORIAS
         st.markdown(f"""
         <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
-            Datos proporcionados por Yahoo Finance & Finnhub | Análisis generado por IA Gemini<br>
+            Datos proporcionados por Yahoo Finance & Financial Modeling Prep | Análisis generado por IA Gemini<br>
             <span style="color: #00ffad;">RSU Dashboard Pro</span> • Para fines informativos únicamente
         </div>
         """, unsafe_allow_html=True)

@@ -11,7 +11,6 @@ from functools import wraps
 import hashlib
 import requests
 import os
-import re
 
 # ────────────────────────────────────────────────
 # CONFIGURACIÓN
@@ -33,48 +32,6 @@ def load_rsu_prompt():
     except Exception as e:
         print(f"Error cargando prompt RSU: {e}")
         return None
-
-def get_earnings_data_for_prompt(ticker):
-    """Obtiene datos específicos de earnings para enriquecer el prompt."""
-    try:
-        rate_limit_delay()
-        ticker_obj = yf.Ticker(ticker)
-        
-        calendar = ticker_obj.calendar
-        quarterly_earnings = None
-        try:
-            quarterly = ticker_obj.quarterly_earnings
-            if quarterly is not None and not quarterly.empty:
-                quarterly_earnings = quarterly
-        except:
-            pass
-            
-        recommendations = None
-        try:
-            recs = ticker_obj.recommendations
-            if recs is not None and not recs.empty:
-                recommendations = recs.tail(10)
-        except:
-            pass
-            
-        upgrades = None
-        try:
-            up = ticker_obj.upgrades_downgrades
-            if up is not None and not up.empty:
-                upgrades = up.head(10)
-        except:
-            pass
-            
-        return {
-            'calendar': calendar,
-            'quarterly_earnings': quarterly_earnings,
-            'recommendations': recommendations,
-            'upgrades': upgrades
-        }
-        
-    except Exception as e:
-        print(f"Error obteniendo datos de earnings: {e}")
-        return {}
 
 # ────────────────────────────────────────────────
 # OBTENCIÓN DE DATOS
@@ -565,47 +522,11 @@ def render_earnings_calendar(data):
             """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU HEDGE FUND - VERSIÓN OPTIMIZADA
+# ANÁLISIS RSU - OUTPUT DIRECTO DEL PROMPT
 # ────────────────────────────────────────────────
 
-def clean_ai_response(text):
-    """Limpia la respuesta de la IA de código HTML y frases innecesarias."""
-    # Eliminar bloques de código HTML/CSS
-    text = re.sub(r'<div.*?>.*?</div>', '', text, flags=re.DOTALL)
-    text = re.sub(r'<style.*?>.*?</style>', '', text, flags=re.DOTALL)
-    text = re.sub(r'<script.*?>.*?</script>', '', text, flags=re.DOTALL)
-    text = re.sub(r'<\w+[^>]*>', '', text)
-    text = re.sub(r'</\w+>', '', text)
-    
-    # Eliminar frases introductorias comunes
-    intro_patterns = [
-        r'^Aquí tienes.*?(?=\n|$)',
-        r'^Aquí está.*?(?=\n|$)',
-        r'^A continuación.*?(?=\n|$)',
-        r'^Basado en los datos.*?(?=\n|$)',
-        r'^Informe de.*?(?=\n|$)',
-        r'^Análisis de.*?(?=\n|$)',
-        r'^Reporte de.*?(?=\n|$)',
-        r'^\*\*Informe de Resultados.*?\*\*',
-        r'^El siguiente análisis.*?(?=\n|$)',
-    ]
-    
-    for pattern in intro_patterns:
-        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
-    
-    # Limpiar líneas vacías al inicio
-    lines = text.split('\n')
-    while lines and not lines[0].strip():
-        lines.pop(0)
-    
-    # Limpiar espacios múltiples
-    text = '\n'.join(lines)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    
-    return text.strip()
-
 def render_rsu_earnings_analysis(data):
-    """Renderiza Análisis Prompt RSU Earnings - Estilo Hedge Fund Optimizado."""
+    """Renderiza el output directo del prompt sin procesar."""
     st.markdown("### 📊 Análisis Prompt RSU Earnings")
     
     base_prompt = load_rsu_prompt()
@@ -614,107 +535,36 @@ def render_rsu_earnings_analysis(data):
         st.warning("⚠️ Prompt RSU no encontrado. Verifica que earnings.txt esté en el directorio raíz.")
         return
     
-    earnings_extra = get_earnings_data_for_prompt(data['ticker'])
-    
-    # Formatear datos adicionales de forma más limpia
-    calendar_str = "No disponible"
-    if earnings_extra.get('calendar') is not None:
-        try:
-            cal_df = earnings_extra['calendar']
-            if hasattr(cal_df, 'to_string'):
-                calendar_str = cal_df.to_string()
-            else:
-                calendar_str = str(cal_df)
-        except:
-            calendar_str = str(earnings_extra['calendar'])
-    
-    quarterly_str = "No disponible"
-    if earnings_extra.get('quarterly_earnings') is not None:
-        try:
-            q_df = earnings_extra['quarterly_earnings']
-            if hasattr(q_df, 'to_string'):
-                quarterly_str = q_df.head(8).to_string()
-            else:
-                quarterly_str = str(q_df)
-        except:
-            quarterly_str = str(earnings_extra['quarterly_earnings'])
-    
-    recs_str = "No disponible"
-    if earnings_extra.get('recommendations') is not None:
-        try:
-            r_df = earnings_extra['recommendations']
-            if hasattr(r_df, 'to_string'):
-                recs_str = r_df.to_string()
-            else:
-                recs_str = str(r_df)
-        except:
-            recs_str = str(earnings_extra['recommendations'])
-    
-    upgrades_str = "No disponible"
-    if earnings_extra.get('upgrades') is not None:
-        try:
-            u_df = earnings_extra['upgrades']
-            if hasattr(u_df, 'to_string'):
-                upgrades_str = u_df.head(10).to_string()
-            else:
-                upgrades_str = str(u_df)
-        except:
-            upgrades_str = str(earnings_extra['upgrades'])
-    
-    # Construir prompt estructurado y claro
-    system_prompt = """Eres un analista de hedge fund senior. Tu trabajo es analizar earnings de empresas públicas.
-REGLAS ESTRICTAS:
-1. Responde SOLO con el análisis solicitado, sin introducciones ni conclusiones metas
-2. Usa el formato markdown especificado en la plantilla
-3. NO incluyas código HTML, CSS ni JavaScript
-4. NO digas "Aquí tienes" o "A continuación"
-5. Comienza directamente con: **Company:** [nombre]
-6. Si faltan datos específicos, indica "No disponible" o "Estimado"
-7. Mantén un tono profesional, objetivo y conciso"""
-    
-    contexto_datos = f"""
-DATOS DISPONIBLES PARA {data['name']} ({data['ticker']}):
-
-PRECIO Y MERCADO:
-- Precio: ${data['price']:.2f} | Cambio: {data.get('change_pct', 0):+.2f}%
-- Market Cap: {format_value(data['market_cap'], '$')}
-- Beta: {data.get('beta', 'N/A')} | Volumen: {format_value(data['volume'], '', '', 0)}
-
-FUNDAMENTALES:
-- P/E Trailing: {format_value(data.get('pe_trailing'), '', 'x', 2)}
-- P/E Forward: {format_value(data.get('pe_forward'), '', 'x', 2)}
-- EPS: ${data.get('eps', 'N/A')} | EPS Forward: ${data.get('eps_forward', 'N/A')}
-- Crecimiento Ingresos: {format_value(data.get('rev_growth'), '', '%', 2)}
-- Margen Neto: {format_value(data.get('profit_margin'), '', '%', 2)}
-- Margen EBITDA: {format_value(data.get('ebitda_margin'), '', '%', 2)}
-- ROE: {format_value(data.get('roe'), '', '%', 2)}
-
-BALANCE:
-- Cash: {format_value(data.get('cash'), '$')}
-- Deuda: {format_value(data.get('debt'), '$')}
-- FCF: {format_value(data.get('free_cashflow'), '$')}
-- Deuda/Equity: {format_value(data.get('debt_to_equity'), '', '%', 2)}
-
-ANALISTAS:
-- Consenso: {data.get('num_analysts', 'N/A')} analistas
-- Target Medio: ${data.get('target_mean', 0):.2f}
-- Recomendación: {data.get('recommendation', 'N/A').upper()}
-
-DATOS ADICIONALES:
-Calendario:
-{calendar_str}
-
-Earnings Históricos:
-{quarterly_str}
-
-Recomendaciones Recientes:
-{recs_str}
-
-Upgrades/Downgrades:
-{upgrades_str}
+    # Construir datos para el prompt
+    datos_ticker = f"""
+TICKER: {data['ticker']}
+COMPANY: {data['name']}
+SECTOR: {data.get('sector', 'N/A')}
+PRICE: ${data['price']:.2f}
+CHANGE: {data.get('change_pct', 0):+.2f}%
+MARKET CAP: {format_value(data['market_cap'], '$')}
+P/E TRAILING: {format_value(data.get('pe_trailing'), '', 'x', 2)}
+P/E FORWARD: {format_value(data.get('pe_forward'), '', 'x', 2)}
+EPS: ${data.get('eps', 'N/A')}
+EPS FORWARD: ${data.get('eps_forward', 'N/A')}
+REVENUE GROWTH: {format_value(data.get('rev_growth'), '', '%', 2)}
+PROFIT MARGIN: {format_value(data.get('profit_margin'), '', '%', 2)}
+EBITDA MARGIN: {format_value(data.get('ebitda_margin'), '', '%', 2)}
+ROE: {format_value(data.get('roe'), '', '%', 2)}
+CASH: {format_value(data.get('cash'), '$')}
+DEBT: {format_value(data.get('debt'), '$')}
+FREE CASH FLOW: {format_value(data.get('free_cashflow'), '$')}
+DEBT TO EQUITY: {format_value(data.get('debt_to_equity'), '', '%', 2)}
+BETA: {data.get('beta', 'N/A')}
+DIVIDEND YIELD: {format_value(data.get('dividend_yield'), '', '%', 2)}
+ANALYST TARGET: ${data.get('target_mean', 0):.2f}
+ANALYST COUNT: {data.get('num_analysts', 'N/A')}
+RECOMMENDATION: {data.get('recommendation', 'N/A').upper()}
+52W HIGH: ${data.get('fifty_two_high', 0):.2f}
+52W LOW: ${data.get('fifty_two_low', 0):.2f}
 """
     
-    prompt_completo = f"{system_prompt}\n\n{base_prompt}\n\n{contexto_datos}\n\nGENERA EL REPORTE AHORA:"
+    prompt_completo = f"{base_prompt}\n\n{datos_ticker}"
     
     model, name, err = get_ia_model()
     
@@ -723,79 +573,24 @@ Upgrades/Downgrades:
         return
     
     try:
-        with st.spinner("🧠 Generando análisis hedge fund..."):
-            generation_config = {
-                "temperature": 0.1,  # Muy bajo para máxima precisión
-                "top_p": 0.9,
-                "top_k": 20,
-                "max_output_tokens": 2500,
-            }
+        with st.spinner("🧠 Generando análisis..."):
             
             response = model.generate_content(
                 prompt_completo,
-                generation_config=generation_config
+                generation_config={
+                    "temperature": 0.2,
+                    "top_p": 0.95,
+                    "max_output_tokens": 2000,
+                }
             )
             
-            # Limpiar respuesta
-            texto_limpio = clean_ai_response(response.text)
-            
-            # Si después de limpiar queda muy corto, mostrar original con advertencia
-            if len(texto_limpio) < 100:
-                texto_limpio = response.text
-                st.warning("⚠️ La respuesta de la IA contenía código. Mostrando versión original:")
-            
-            # Renderizar en contenedor limpio
-            st.markdown(f"""
-            <div style="background: #0c0e12; 
-                        border: 1px solid #00ffad; 
-                        border-radius: 8px; 
-                        padding: 0;
-                        margin: 20px 0;">
-                <div style="background: #00ffad11; 
-                            border-bottom: 1px solid #00ffad; 
-                            padding: 15px 20px; 
-                            display: flex; 
-                            align-items: center; 
-                            justify-content: space-between;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="color: #00ffad; font-size: 20px;">📈</span>
-                        <span style="color: #00ffad; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">
-                            RSU Hedge Fund Analysis
-                        </span>
-                    </div>
-                    <span style="color: #00ffad; font-size: 11px; font-family: monospace;">
-                        {data['ticker']} // {datetime.now().strftime('%Y-%m-%d %H:%M')}
-                    </span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Mostrar el análisis en contenedor de markdown limpio
-            st.markdown(texto_limpio)
-            
-            # Footer del análisis
-            st.markdown(f"""
-            <div style="background: #0c0e12; 
-                        border-top: 1px solid #2a3f5f; 
-                        padding: 10px 20px; 
-                        font-size: 10px; 
-                        color: #666; 
-                        font-family: monospace;
-                        display: flex;
-                        justify-content: space-between;
-                        margin-top: 20px;">
-                <span>Fuente: Gemini Pro + Yahoo Finance</span>
-                <span style="color: #00ffad;">RSU TERMINAL v1.0</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Expander con raw para debug (opcional)
-            with st.expander("📝 Ver texto raw del análisis"):
-                st.code(response.text, language='markdown')
+            # MOSTRAR OUTPUT DIRECTO SIN PROCESAR
+            st.markdown("---")
+            st.markdown(response.text)
+            st.markdown("---")
             
     except Exception as e:
         st.error(f"❌ Error generando análisis: {e}")
-        st.info("Intenta recargar la página o verifica tu configuración de API.")
 
 # ────────────────────────────────────────────────
 # MAIN
@@ -998,4 +793,3 @@ def render():
 
 if __name__ == "__main__":
     render()
-

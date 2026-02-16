@@ -34,11 +34,11 @@ def load_rsu_prompt():
         return None
 
 # ────────────────────────────────────────────────
-# OBTENCIÓN DE DATOS
+# OBTENCIÓN DE DATOS MEJORADA
 # ────────────────────────────────────────────────
 
 def get_yfinance_data(ticker_symbol):
-    """Obtiene datos de yfinance."""
+    """Obtiene datos de yfinance incluyendo earnings trimestrales."""
     try:
         rate_limit_delay()
         ticker = yf.Ticker(ticker_symbol)
@@ -48,6 +48,7 @@ def get_yfinance_data(ticker_symbol):
         except:
             info = dict(ticker.fast_info) if hasattr(ticker, 'fast_info') else {}
         
+        # Obtener histórico
         try:
             hist = ticker.history(period="1y", auto_adjust=True)
             hist_dict = {
@@ -61,6 +62,7 @@ def get_yfinance_data(ticker_symbol):
         except:
             hist_dict = None
         
+        # Obtener earnings anuales
         try:
             earnings = ticker.earnings
             earnings_dict = None
@@ -73,6 +75,21 @@ def get_yfinance_data(ticker_symbol):
         except:
             earnings_dict = None
         
+        # OBTENER EARNINGS TRIMESTRALES (crucial para análisis reciente)
+        quarterly_earnings_dict = None
+        try:
+            quarterly = ticker.quarterly_earnings
+            if quarterly is not None and not quarterly.empty:
+                quarterly_earnings_dict = {
+                    'dates': quarterly.index.strftime('%Y-%m-%d').tolist() if hasattr(quarterly.index, 'strftime') else list(quarterly.index),
+                    'revenue': quarterly.get('Revenue', []).tolist() if 'Revenue' in quarterly.columns else [],
+                    'earnings': quarterly.get('Earnings', []).tolist() if 'Earnings' in quarterly.columns else []
+                }
+        except Exception as e:
+            print(f"Error getting quarterly earnings: {e}")
+            quarterly_earnings_dict = None
+        
+        # Calendario de earnings
         try:
             calendar = ticker.calendar
             calendar_list = []
@@ -86,11 +103,32 @@ def get_yfinance_data(ticker_symbol):
         except:
             calendar_list = []
         
+        # EPS estimates
+        eps_estimates_dict = None
+        try:
+            eps_est = ticker.eps_estimates
+            if eps_est is not None and not eps_est.empty:
+                eps_estimates_dict = eps_est.to_dict()
+        except:
+            pass
+        
+        # Recomendaciones
+        recommendations_dict = None
+        try:
+            recs = ticker.recommendations
+            if recs is not None and not recs.empty:
+                recommendations_dict = recs.tail(5).to_dict()
+        except:
+            pass
+        
         return {
             'info': info, 
             'history': hist_dict, 
             'earnings': earnings_dict,
+            'quarterly_earnings': quarterly_earnings_dict,
             'calendar': calendar_list,
+            'eps_estimates': eps_estimates_dict,
+            'recommendations': recommendations_dict,
             'source': 'yfinance'
         }
         
@@ -146,6 +184,7 @@ def get_finnhub_data(ticker, api_key):
             },
             'history': None,
             'earnings': None,
+            'quarterly_earnings': None,
             'calendar': [],
             'source': 'finnhub'
         }
@@ -205,6 +244,18 @@ def process_data(raw_data, ticker):
                 'Revenue': earnings_data.get('revenue', []),
                 'Earnings': earnings_data.get('earnings', [])
             }, index=earnings_data['dates'])
+        except:
+            pass
+    
+    # Procesar earnings trimestrales
+    quarterly_earnings_df = pd.DataFrame()
+    quarterly_data = raw_data.get('quarterly_earnings')
+    if quarterly_data and quarterly_data.get('dates'):
+        try:
+            quarterly_earnings_df = pd.DataFrame({
+                'Revenue': quarterly_data.get('revenue', []),
+                'Earnings': quarterly_data.get('earnings', [])
+            }, index=quarterly_data['dates'])
         except:
             pass
     
@@ -271,7 +322,10 @@ def process_data(raw_data, ticker):
         
         "hist": hist_df,
         "earnings_hist": earnings_df,
+        "quarterly_earnings_hist": quarterly_earnings_df,
         "earnings_calendar": raw_data.get('calendar', []),
+        "eps_estimates": raw_data.get('eps_estimates'),
+        "recommendations": raw_data.get('recommendations'),
         "beta": float(get(['beta'], 0) or 0),
         
         "is_real_data": raw_data.get('source') != 'mock',
@@ -335,7 +389,8 @@ def get_mock_data(ticker):
         "ex_div_date": None, "payout_ratio": 0.20, "target_high": price * 1.3,
         "target_low": price * 0.8, "target_mean": price * 1.1, "target_median": price * 1.1,
         "recommendation": "buy", "num_analysts": 35, "hist": pd.DataFrame(),
-        "earnings_hist": pd.DataFrame(), "earnings_calendar": [],
+        "earnings_hist": pd.DataFrame(), "quarterly_earnings_hist": pd.DataFrame(),
+        "earnings_calendar": [], "eps_estimates": None, "recommendations": None,
         "beta": mock["beta"], "is_real_data": False, "data_source": "mock",
         "change_pct": 2.04, "change_abs": price * 0.02, "pct_from_high": -5.0
     }
@@ -522,54 +577,118 @@ def render_earnings_calendar(data):
             """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU - OUTPUT DIRECTO DEL PROMPT
+# ANÁLISIS RSU - TERMINAL HACKER STYLE
 # ────────────────────────────────────────────────
 
 def render_rsu_earnings_analysis(data):
-    """Renderiza el output directo del prompt sin procesar."""
-    st.markdown("### 📊 Análisis Prompt RSU Earnings")
+    """Renderiza el análisis con estética terminal hacker."""
     
     base_prompt = load_rsu_prompt()
     
     if not base_prompt:
-        st.warning("⚠️ Prompt RSU no encontrado. Verifica que earnings.txt esté en el directorio raíz.")
+        st.warning("⚠️ Prompt RSU no encontrado.")
         return
     
+    # Preparar datos de earnings trimestrales
+    quarterly_str = "No disponible"
+    if data.get('quarterly_earnings_hist') is not None and not data['quarterly_earnings_hist'].empty:
+        try:
+            q_df = data['quarterly_earnings_hist'].tail(4)  # Últimos 4 trimestres
+            quarterly_str = q_df.to_string()
+        except:
+            quarterly_str = str(data['quarterly_earnings_hist'])
+    
+    # Calendario
+    calendar_str = "No disponible"
+    if data.get('earnings_calendar'):
+        try:
+            calendar_str = str(data['earnings_calendar'])
+        except:
+            pass
+    
+    # EPS Estimates
+    eps_est_str = "No disponible"
+    if data.get('eps_estimates'):
+        try:
+            eps_est_str = str(data['eps_estimates'])
+        except:
+            pass
+    
     # Construir datos para el prompt
-    datos_ticker = f"""
+    datos_ticker = f"""=== DATOS DEL TICKER ===
 TICKER: {data['ticker']}
 COMPANY: {data['name']}
 SECTOR: {data.get('sector', 'N/A')}
+INDUSTRY: {data.get('industry', 'N/A')}
+
+=== DATOS DE MERCADO ===
 PRICE: ${data['price']:.2f}
 CHANGE: {data.get('change_pct', 0):+.2f}%
-MARKET CAP: {format_value(data['market_cap'], '$')}
-P/E TRAILING: {format_value(data.get('pe_trailing'), '', 'x', 2)}
-P/E FORWARD: {format_value(data.get('pe_forward'), '', 'x', 2)}
+PREV_CLOSE: ${data.get('prev_close', 0):.2f}
+MARKET_CAP: {format_value(data['market_cap'], '$')}
+VOLUME: {format_value(data['volume'], '', '', 0)}
+AVG_VOLUME: {format_value(data['avg_volume'], '', '', 0)}
+BETA: {data.get('beta', 'N/A')}
+52W_RANGE: ${data.get('fifty_two_low', 0):.2f} - ${data.get('fifty_two_high', 0):.2f}
+PCT_FROM_HIGH: {data.get('pct_from_high', 0):.1f}%
+
+=== FUNDAMENTALES ===
+P/E_TRAILING: {format_value(data.get('pe_trailing'), '', 'x', 2)}
+P/E_FORWARD: {format_value(data.get('pe_forward'), '', 'x', 2)}
+PEG_RATIO: {format_value(data.get('peg_ratio'), '', '', 2)}
+PRICE_TO_SALES: {format_value(data.get('price_to_sales'), '', 'x', 2)}
+PRICE_TO_BOOK: {format_value(data.get('price_to_book'), '', 'x', 2)}
 EPS: ${data.get('eps', 'N/A')}
-EPS FORWARD: ${data.get('eps_forward', 'N/A')}
-REVENUE GROWTH: {format_value(data.get('rev_growth'), '', '%', 2)}
-PROFIT MARGIN: {format_value(data.get('profit_margin'), '', '%', 2)}
-EBITDA MARGIN: {format_value(data.get('ebitda_margin'), '', '%', 2)}
+EPS_FORWARD: ${data.get('eps_forward', 'N/A')}
+EPS_GROWTH: {format_value(data.get('eps_growth'), '', '%', 2)}
+
+=== MÁRGENES ===
+GROSS_MARGIN: {format_value(data.get('gross_margin'), '', '%', 2)}
+OPERATING_MARGIN: {format_value(data.get('operating_margin'), '', '%', 2)}
+EBITDA_MARGIN: {format_value(data.get('ebitda_margin'), '', '%', 2)}
+PROFIT_MARGIN: {format_value(data.get('profit_margin'), '', '%', 2)}
+
+=== RENTABILIDAD ===
 ROE: {format_value(data.get('roe'), '', '%', 2)}
+ROA: {format_value(data.get('roa'), '', '%', 2)}
+
+=== BALANCE ===
 CASH: {format_value(data.get('cash'), '$')}
 DEBT: {format_value(data.get('debt'), '$')}
-FREE CASH FLOW: {format_value(data.get('free_cashflow'), '$')}
-DEBT TO EQUITY: {format_value(data.get('debt_to_equity'), '', '%', 2)}
-BETA: {data.get('beta', 'N/A')}
-DIVIDEND YIELD: {format_value(data.get('dividend_yield'), '', '%', 2)}
-ANALYST TARGET: ${data.get('target_mean', 0):.2f}
-ANALYST COUNT: {data.get('num_analysts', 'N/A')}
+FREE_CASH_FLOW: {format_value(data.get('free_cashflow'), '$')}
+OPERATING_CASH_FLOW: {format_value(data.get('operating_cashflow'), '$')}
+DEBT_TO_EQUITY: {format_value(data.get('debt_to_equity'), '', '%', 2)}
+CURRENT_RATIO: {data.get('current_ratio', 'N/A')}
+
+=== DIVIDENDOS ===
+DIVIDEND_RATE: ${data.get('dividend_rate', 0):.2f}
+DIVIDEND_YIELD: {format_value(data.get('dividend_yield'), '', '%', 2)}
+PAYOUT_RATIO: {format_value(data.get('payout_ratio'), '', '%', 2)}
+
+=== CONSENSO ANALISTAS ===
 RECOMMENDATION: {data.get('recommendation', 'N/A').upper()}
-52W HIGH: ${data.get('fifty_two_high', 0):.2f}
-52W LOW: ${data.get('fifty_two_low', 0):.2f}
+NUM_ANALYSTS: {data.get('num_analysts', 'N/A')}
+TARGET_MEAN: ${data.get('target_mean', 0):.2f}
+TARGET_HIGH: ${data.get('target_high', 0):.2f}
+TARGET_LOW: ${data.get('target_low', 0):.2f}
+TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
+
+=== EARNINGS TRIMESTRALES (ÚLTIMOS 4) ===
+{quarterly_str}
+
+=== CALENDARIO PROXIMO EARNINGS ===
+{calendar_str}
+
+=== EPS ESTIMATES ===
+{eps_est_str}
 """
     
-    prompt_completo = f"{base_prompt}\n\n{datos_ticker}"
+    prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español siguiendo el formato especificado. NO omitas ninguna sección. Si faltan datos, indica 'N/D' pero mantén la estructura completa."
     
     model, name, err = get_ia_model()
     
     if not model:
-        st.info("🤖 IA no configurada. Configura tu API key en secrets.toml")
+        st.info("🤖 IA no configurada.")
         return
     
     try:
@@ -578,19 +697,84 @@ RECOMMENDATION: {data.get('recommendation', 'N/A').upper()}
             response = model.generate_content(
                 prompt_completo,
                 generation_config={
-                    "temperature": 0.2,
+                    "temperature": 0.15,
                     "top_p": 0.95,
-                    "max_output_tokens": 2000,
+                    "max_output_tokens": 4000,  # Aumentado para evitar cortes
                 }
             )
             
-            # MOSTRAR OUTPUT DIRECTO SIN PROCESAR
-            st.markdown("---")
+            # TERMINAL HACKER STYLE OUTPUT
+            st.markdown("""
+            <style>
+            .terminal-box {
+                background-color: #0c0e12;
+                border: 1px solid #00ffad;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+                margin: 20px 0;
+            }
+            .terminal-header {
+                background: linear-gradient(90deg, #00ffad22 0%, #00ffad11 100%);
+                border-bottom: 1px solid #00ffad;
+                padding: 12px 16px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .terminal-title {
+                color: #00ffad;
+                font-size: 13px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+            }
+            .terminal-ticker {
+                color: #00ffad;
+                font-size: 11px;
+                margin-left: auto;
+                opacity: 0.8;
+            }
+            .terminal-body {
+                padding: 20px;
+                color: #e0e0e0;
+                line-height: 1.6;
+                font-size: 13px;
+            }
+            .terminal-footer {
+                border-top: 1px solid #2a3f5f;
+                padding: 8px 16px;
+                font-size: 10px;
+                color: #666;
+                display: flex;
+                justify-content: space-between;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class="terminal-box">
+                <div class="terminal-header">
+                    <span style="color: #00ffad;">⬤</span>
+                    <span class="terminal-title">RSU Hedge Fund Analysis Terminal</span>
+                    <span class="terminal-ticker">{data['ticker']} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</span>
+                </div>
+                <div class="terminal-body">
+            """, unsafe_allow_html=True)
+            
+            # OUTPUT DIRECTO DEL PROMPT
             st.markdown(response.text)
-            st.markdown("---")
+            
+            st.markdown(f"""
+                </div>
+                <div class="terminal-footer">
+                    <span>Gemini Pro + Yahoo Finance API</span>
+                    <span style="color: #00ffad;">RSU_TERMINAL_v1.0</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             
     except Exception as e:
-        st.error(f"❌ Error generando análisis: {e}")
+        st.error(f"❌ Error: {e}")
 
 # ────────────────────────────────────────────────
 # MAIN
@@ -619,19 +803,14 @@ def render():
     st.title("📅 Análisis de Earnings")
     st.markdown('<div style="color: #888; margin-bottom: 20px;">Análisis fundamental con IA y datos en tiempo real</div>', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # SIN BOTÓN DEMO - Solo input y botón analizar
+    col1, col2 = st.columns([3, 1])
     with col1:
         ticker = st.text_input("Ticker", value="AAPL").upper().strip()
     with col2:
         st.write("")
         st.write("")
         analyze = st.button("🔍 Analizar", use_container_width=True)
-    with col3:
-        st.write("")
-        st.write("")
-        if st.button("🎲 Demo", use_container_width=True):
-            ticker = random.choice(["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN", "META"])
-            analyze = True
     
     if analyze and ticker:
         with st.spinner("Cargando datos..."):
@@ -775,17 +954,9 @@ def render():
         st.markdown("---")
         render_rsu_earnings_analysis(data)
         
-        citas = [
-            "Marx: 'El capital es trabajo muerto que, como un vampiro, solo vive chupando trabajo vivo.'",
-            "Keynes: 'El mercado puede permanecer irracional más tiempo del que usted puede permanecer solvente.'",
-            "Stiglitz: 'La desigualdad no es inevitable, es una elección.'",
-            "Varoufakis: 'El dinero es el oxígeno del capitalismo.'",
-            "Buffett: 'Solo cuando baja la marea descubres quién nadaba desnudo.'"
-        ]
-        
+        # FOOTER SIN CITAS ALEATORIAS
         st.markdown(f"""
         <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
-            <div style="font-style: italic; margin-bottom: 10px; color: #555;">{random.choice(citas)}</div>
             Datos proporcionados por Yahoo Finance & Finnhub | Análisis generado por IA Gemini<br>
             <span style="color: #00ffad;">RSU Dashboard Pro</span> • Para fines informativos únicamente
         </div>
@@ -793,3 +964,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

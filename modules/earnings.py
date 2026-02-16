@@ -11,6 +11,7 @@ from functools import wraps
 import hashlib
 import requests
 import os
+import re
 
 # ────────────────────────────────────────────────
 # CONFIGURACIÓN
@@ -20,18 +21,55 @@ def rate_limit_delay():
     time.sleep(random.uniform(0.3, 0.8))
 
 # ────────────────────────────────────────────────
-# CARGA DE PROMPT RSU
+# CARGA DE PROMPT RSU - CORREGIDO
 # ────────────────────────────────────────────────
 
 def load_rsu_prompt():
     """Carga el prompt de análisis hedge fund desde earnings.txt en raíz."""
     try:
-        prompt_path = os.path.join(os.path.dirname(__file__), '..', 'earnings.txt')
-        with open(prompt_path, 'r', encoding='utf-8') as f:
-            return f.read()
+        # Intentar múltiples rutas posibles
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), '..', 'earnings.txt'),
+            os.path.join(os.path.dirname(__file__), 'earnings.txt'),
+            os.path.join(os.getcwd(), 'earnings.txt'),
+            os.path.join(os.getcwd(), 'modules', '..', 'earnings.txt'),
+            'earnings.txt',
+        ]
+        
+        for prompt_path in possible_paths:
+            if os.path.exists(prompt_path):
+                with open(prompt_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content.strip():
+                        return content
+                    else:
+                        print(f"Archivo vacío: {prompt_path}")
+        
+        # Si no se encuentra, usar prompt embebido como fallback
+        st.warning("⚠️ No se encontró earnings.txt, usando prompt embebido")
+        return get_embedded_prompt()
+        
     except Exception as e:
         print(f"Error cargando prompt RSU: {e}")
-        return None
+        return get_embedded_prompt()
+
+def get_embedded_prompt():
+    """Prompt embebido como fallback."""
+    return """Eres un analista de hedge fund senior. Analiza la empresa usando estos datos:
+
+{datos_ticker}
+
+Genera un análisis fundamental con:
+1. Snapshot ejecutivo (precio, market cap, thesis 1 línea)
+2. Valoración relativa (P/E, PEG, comparativas)
+3. Calidad del negocio (márgenes, ROE, ROA)
+4. Salud financiera (cash, deuda, FCF)
+5. Dinámica de mercado (vs 52 semanas, consenso analistas)
+6. Catalysts y riesgos
+7. Bull/Bear/Base case
+8. Veredicto RSU con score /10 y recomendación final
+
+Sé específico con los números proporcionados."""
 
 # ────────────────────────────────────────────────
 # FINANCIAL MODELING PREP API
@@ -625,7 +663,7 @@ def render_earnings_calendar(data):
             """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU - CON FMP DATA
+# ANÁLISIS RSU - CON FMP DATA - CORREGIDO
 # ────────────────────────────────────────────────
 
 def render_rsu_earnings_analysis(data, fmp_data=None):
@@ -640,7 +678,7 @@ def render_rsu_earnings_analysis(data, fmp_data=None):
     # Formatear datos de FMP
     fmp_formatted = format_fmp_earnings_data(fmp_data) if fmp_data else "No disponible"
     
-    # Construir datos para el prompt
+    # Construir datos para el prompt - FORMATO MÁS COMPACTO
     datos_ticker = f"""=== DATOS DEL TICKER ===
 TICKER: {data['ticker']}
 COMPANY: {data['name']}
@@ -648,62 +686,43 @@ SECTOR: {data.get('sector', 'N/A')}
 INDUSTRY: {data.get('industry', 'N/A')}
 
 === DATOS DE MERCADO ===
-PRICE: ${data['price']:.2f}
-CHANGE: {data.get('change_pct', 0):+.2f}%
-PREV_CLOSE: ${data.get('prev_close', 0):.2f}
-MARKET_CAP: {format_value(data['market_cap'], '$')}
-VOLUME: {format_value(data['volume'], '', '', 0)}
-AVG_VOLUME: {format_value(data['avg_volume'], '', '', 0)}
-BETA: {data.get('beta', 'N/A')}
-52W_RANGE: ${data.get('fifty_two_low', 0):.2f} - ${data.get('fifty_two_high', 0):.2f}
-PCT_FROM_HIGH: {data.get('pct_from_high', 0):.1f}%
+PRICE: ${data['price']:.2f} | CHANGE: {data.get('change_pct', 0):+.2f}% | MARKET_CAP: {format_value(data['market_cap'], '$')}
+VOLUME: {format_value(data['volume'], '', '', 0)} | AVG_VOLUME: {format_value(data['avg_volume'], '', '', 0)}
+BETA: {data.get('beta', 'N/A')} | 52W_RANGE: ${data.get('fifty_two_low', 0):.2f}-${data.get('fifty_two_high', 0):.2f} | PCT_FROM_HIGH: {data.get('pct_from_high', 0):.1f}%
 
-=== FUNDAMENTALES ===
-P/E_TRAILING: {format_value(data.get('pe_trailing'), '', 'x', 2)}
-P/E_FORWARD: {format_value(data.get('pe_forward'), '', 'x', 2)}
-PEG_RATIO: {format_value(data.get('peg_ratio'), '', '', 2)}
-PRICE_TO_SALES: {format_value(data.get('price_to_sales'), '', 'x', 2)}
-PRICE_TO_BOOK: {format_value(data.get('price_to_book'), '', 'x', 2)}
-EPS: ${data.get('eps', 'N/A')}
-EPS_FORWARD: ${data.get('eps_forward', 'N/A')}
-EPS_GROWTH: {format_value(data.get('eps_growth'), '', '%', 2)}
+=== VALORACIÓN ===
+P/E_TRAILING: {format_value(data.get('pe_trailing'), '', 'x', 2)} | P/E_FORWARD: {format_value(data.get('pe_forward'), '', 'x', 2)}
+PEG_RATIO: {format_value(data.get('peg_ratio'), '', '', 2)} | P/S: {format_value(data.get('price_to_sales'), '', 'x', 2)} | P/B: {format_value(data.get('price_to_book'), '', 'x', 2)}
+EPS: ${data.get('eps', 'N/A')} | EPS_FORWARD: ${data.get('eps_forward', 'N/A')} | EPS_GROWTH: {format_value(data.get('eps_growth'), '', '%', 2)}
 
 === MÁRGENES ===
-GROSS_MARGIN: {format_value(data.get('gross_margin'), '', '%', 2)}
-OPERATING_MARGIN: {format_value(data.get('operating_margin'), '', '%', 2)}
-EBITDA_MARGIN: {format_value(data.get('ebitda_margin'), '', '%', 2)}
-PROFIT_MARGIN: {format_value(data.get('profit_margin'), '', '%', 2)}
+GROSS_MARGIN: {format_value(data.get('gross_margin'), '', '%', 2)} | OPERATING_MARGIN: {format_value(data.get('operating_margin'), '', '%', 2)}
+EBITDA_MARGIN: {format_value(data.get('ebitda_margin'), '', '%', 2)} | PROFIT_MARGIN: {format_value(data.get('profit_margin'), '', '%', 2)}
 
 === RENTABILIDAD ===
-ROE: {format_value(data.get('roe'), '', '%', 2)}
-ROA: {format_value(data.get('roa'), '', '%', 2)}
+ROE: {format_value(data.get('roe'), '', '%', 2)} | ROA: {format_value(data.get('roa'), '', '%', 2)}
 
 === BALANCE ===
-CASH: {format_value(data.get('cash'), '$')}
-DEBT: {format_value(data.get('debt'), '$')}
-FREE_CASH_FLOW: {format_value(data.get('free_cashflow'), '$')}
-OPERATING_CASH_FLOW: {format_value(data.get('operating_cashflow'), '$')}
-DEBT_TO_EQUITY: {format_value(data.get('debt_to_equity'), '', '%', 2)}
-CURRENT_RATIO: {data.get('current_ratio', 'N/A')}
+CASH: {format_value(data.get('cash'), '$')} | DEBT: {format_value(data.get('debt'), '$')}
+FREE_CASH_FLOW: {format_value(data.get('free_cashflow'), '$')} | OPERATING_CASH_FLOW: {format_value(data.get('operating_cashflow'), '$')}
+DEBT_TO_EQUITY: {format_value(data.get('debt_to_equity'), '', '%', 2)} | CURRENT_RATIO: {data.get('current_ratio', 'N/A')}
 
 === DIVIDENDOS ===
-DIVIDEND_RATE: ${data.get('dividend_rate', 0):.2f}
-DIVIDEND_YIELD: {format_value(data.get('dividend_yield'), '', '%', 2)}
-PAYOUT_RATIO: {format_value(data.get('payout_ratio'), '', '%', 2)}
+DIVIDEND_RATE: ${data.get('dividend_rate', 0):.2f} | DIVIDEND_YIELD: {format_value(data.get('dividend_yield'), '', '%', 2)} | PAYOUT_RATIO: {format_value(data.get('payout_ratio'), '', '%', 2)}
 
 === CONSENSO ANALISTAS ===
-RECOMMENDATION: {data.get('recommendation', 'N/A').upper()}
-NUM_ANALYSTS: {data.get('num_analysts', 'N/A')}
-TARGET_MEAN: ${data.get('target_mean', 0):.2f}
-TARGET_HIGH: ${data.get('target_high', 0):.2f}
-TARGET_LOW: ${data.get('target_low', 0):.2f}
-TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
+RECOMMENDATION: {data.get('recommendation', 'N/A').upper()} | NUM_ANALYSTS: {data.get('num_analysts', 'N/A')}
+TARGET_MEAN: ${data.get('target_mean', 0):.2f} | TARGET_HIGH: ${data.get('target_high', 0):.2f} | TARGET_LOW: ${data.get('target_low', 0):.2f}
 
 {f"=== DATOS FMP (EARNINGS DETALLADOS) ===" if fmp_data else ""}
 {fmp_formatted}
 """
     
-    prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español. Usa los datos FMP proporcionados para las secciones de Actual vs Estimates y Guidance. Si algún dato específico no está disponible, indica 'N/D' pero mantén la estructura completa del análisis."
+    # USAR PROMPT SIMPLIFICADO SI ES DEMASIADO LARGO
+    prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español. Usa los datos proporcionados. Si algún dato es 0 o None, indícalo explícitamente."
+    
+    # Debug: Mostrar longitud del prompt
+    st.caption(f"📊 Prompt length: {len(prompt_completo)} chars | Est. tokens: ~{len(prompt_completo)//4}")
     
     model, name, err = get_ia_model()
     
@@ -712,16 +731,59 @@ TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
         return
     
     try:
-        with st.spinner("🧠 Generando análisis..."):
+        with st.spinner("🧠 Generando análisis... (puede tomar 30-60s)"):
             
+            # AUMENTAR MAX_OUTPUT_TOKENS Y USAR STREAMING
             response = model.generate_content(
                 prompt_completo,
                 generation_config={
-                    "temperature": 0.15,
+                    "temperature": 0.2,  # Ligeramente más alto para evitar repetición
                     "top_p": 0.95,
-                    "max_output_tokens": 4000,
+                    "top_k": 40,
+                    "max_output_tokens": 8192,  # AUMENTADO significativamente
+                },
+                safety_settings={
+                    'HATE': 'BLOCK_NONE',
+                    'HARASSMENT': 'BLOCK_NONE',
+                    'SEXUAL': 'BLOCK_NONE',
+                    'DANGEROUS': 'BLOCK_NONE'
                 }
             )
+            
+            # VERIFICAR SI LA RESPUESTA ESTÁ COMPLETA
+            response_text = response.text
+            
+            # Detectar si la respuesta parece truncada
+            if not response_text.strip().endswith('---') and len(response_text) > 100:
+                # Intentar continuar la generación si parece incompleta
+                if '## 8. VEREDICTO RSU' not in response_text or len(response_text) < 2000:
+                    st.warning("⚠️ La respuesta parece incompleta. Intentando regenerar...")
+                    
+                    # Reintentar con prompt más corto
+                    short_prompt = f"""Análisis fundamental rápido de {data['ticker']}:
+
+Precio: ${data['price']:.2f} | Market Cap: {format_value(data['market_cap'], '$')}
+P/E: {format_value(data.get('pe_forward'), '', 'x', 2)} | ROE: {format_value(data.get('roe'), '', '%', 2)} | Margen: {format_value(data.get('profit_margin'), '', '%', 2)}
+
+Genera:
+1. Snapshot (thesis 1 línea)
+2. Valoración (P/E, PEG análisis)
+3. Calidad negocio (márgenes, ROE)
+4. Salud financiera (cash, deuda)
+5. Consenso analistas
+6. Bull/Bear case
+7. Score /10 y recomendación final
+
+Sé conciso pero completo."""
+                    
+                    response = model.generate_content(
+                        short_prompt,
+                        generation_config={
+                            "temperature": 0.2,
+                            "max_output_tokens": 4096,
+                        }
+                    )
+                    response_text = response.text
             
             # TERMINAL HACKER STYLE OUTPUT
             st.markdown("""
@@ -760,6 +822,24 @@ TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
                 line-height: 1.6;
                 font-size: 13px;
             }
+            .terminal-body h1, .terminal-body h2, .terminal-body h3 {
+                color: #00ffad;
+                margin-top: 20px;
+                margin-bottom: 10px;
+            }
+            .terminal-body table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 10px 0;
+            }
+            .terminal-body th, .terminal-body td {
+                border: 1px solid #2a3f5f;
+                padding: 8px;
+                text-align: left;
+            }
+            .terminal-body th {
+                background-color: #1a1e26;
+            }
             .terminal-footer {
                 border-top: 1px solid #2a3f5f;
                 padding: 8px 16px;
@@ -781,20 +861,83 @@ TARGET_MEDIAN: ${data.get('target_median', 0):.2f}
                 <div class="terminal-body">
             """, unsafe_allow_html=True)
             
-            # OUTPUT DIRECTO DEL PROMPT
-            st.markdown(response.text)
+            # OUTPUT DIRECTO DEL PROMPT CON MARKDOWN
+            st.markdown(response_text, unsafe_allow_html=True)
+            
+            # Mostrar estadísticas de la respuesta
+            word_count = len(response_text.split())
+            char_count = len(response_text)
             
             st.markdown(f"""
                 </div>
                 <div class="terminal-footer">
-                    <span>Gemini Pro + Yahoo Finance + FMP API</span>
-                    <span style="color: #00ffad;">RSU_TERMINAL_v1.0</span>
+                    <span>{name} | {word_count} palabras | {char_count} caracteres</span>
+                    <span style="color: #00ffad;">RSU_TERMINAL_v1.1</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
+            # Opción para ver el prompt completo (debug)
+            with st.expander("🔧 Ver prompt enviado (debug)"):
+                st.text_area("Prompt", prompt_completo, height=300)
+                st.text_area("Respuesta raw", response_text, height=200)
+            
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"❌ Error en generación: {e}")
+        st.error(f"Detalles: {str(e)}")
+        
+        # Fallback: Mostrar análisis básico generado localmente
+        st.info("🔄 Mostrando análisis básico de fallback...")
+        generate_fallback_analysis(data)
+
+def generate_fallback_analysis(data):
+    """Genera un análisis básico localmente si la IA falla."""
+    
+    # Calcular score simple
+    score = 5.0
+    factors = []
+    
+    if data.get('pe_forward') and data['pe_forward'] < 20:
+        score += 1
+        factors.append("P/E atractivo")
+    elif data.get('pe_forward') and data['pe_forward'] > 40:
+        score -= 1
+        factors.append("P/E elevado")
+    
+    if data.get('roe') and data['roe'] > 0.15:
+        score += 1
+        factors.append("ROE sólido")
+    
+    if data.get('profit_margin') and data['profit_margin'] > 0.15:
+        score += 0.5
+        factors.append("Buenos márgenes")
+    
+    if data.get('debt_to_equity') and data['debt_to_equity'] < 50:
+        score += 0.5
+        factors.append("Baja deuda")
+    
+    score = max(1, min(10, score))
+    
+    recommendation = "COMPRA FUERTE" if score >= 8 else "COMPRA" if score >= 6.5 else "MANTENER" if score >= 5 else "VENDER" if score >= 3 else "VENDER FUERTE"
+    
+    st.markdown(f"""
+    ### 📊 ANÁLISIS FALLBACK (IA no disponible)
+    
+    **{data['ticker']} - {data['name']}**
+    
+    | Métrica | Valor |
+    |---------|-------|
+    | Precio | ${data['price']:.2f} |
+    | P/E Forward | {format_value(data.get('pe_forward'), '', 'x', 2)} |
+    | ROE | {format_value(data.get('roe'), '', '%', 2)} |
+    | Margen Neto | {format_value(data.get('profit_margin'), '', '%', 2)} |
+    
+    **Score RSU: {score:.1f}/10**
+    
+    **Recomendación: {recommendation}**
+    
+    **Factores considerados:** {', '.join(factors) if factors else 'Datos limitados'}
+    """)
 
 # ────────────────────────────────────────────────
 # MAIN
@@ -999,4 +1142,3 @@ def render():
 
 if __name__ == "__main__":
     render()
-

@@ -21,13 +21,12 @@ def rate_limit_delay():
     time.sleep(random.uniform(0.3, 0.8))
 
 # ────────────────────────────────────────────────
-# CARGA DE PROMPT RSU - CORREGIDO
+# CARGA DE PROMPT RSU
 # ────────────────────────────────────────────────
 
 def load_rsu_prompt():
     """Carga el prompt de análisis hedge fund desde earnings.txt en raíz."""
     try:
-        # Intentar múltiples rutas posibles
         possible_paths = [
             os.path.join(os.path.dirname(__file__), '..', 'earnings.txt'),
             os.path.join(os.path.dirname(__file__), 'earnings.txt'),
@@ -45,7 +44,6 @@ def load_rsu_prompt():
                     else:
                         print(f"Archivo vacío: {prompt_path}")
         
-        # Si no se encuentra, usar prompt embebido como fallback
         st.warning("⚠️ No se encontró earnings.txt, usando prompt embebido")
         return get_embedded_prompt()
         
@@ -61,52 +59,63 @@ def get_embedded_prompt():
 
 Genera un análisis fundamental con:
 1. Snapshot ejecutivo (precio, market cap, thesis 1 línea)
-2. Valoración relativa (P/E, PEG, comparativas)
+2. Valoración relativa (P/E, PEG análisis)
 3. Calidad del negocio (márgenes, ROE, ROA)
 4. Salud financiera (cash, deuda, FCF)
 5. Dinámica de mercado (vs 52 semanas, consenso analistas)
 6. Catalysts y riesgos
 7. Bull/Bear/Base case
-8. Veredicto RSU con score /10 y recomendación final
+8. Score /10 y recomendación final
 
+Fecha actual: {current_date}
 Sé específico con los números proporcionados."""
 
 # ────────────────────────────────────────────────
-# FINANCIAL MODELING PREP API
+# FINANCIAL MODELING PREP API - MEJORADO
 # ────────────────────────────────────────────────
 
 def get_fmp_data(ticker, api_key):
-    """Obtiene datos de Financial Modeling Prep API."""
+    """Obtiene datos completos de Financial Modeling Prep API."""
     if not api_key:
         return None
     
     try:
         base_url = "https://financialmodelingprep.com/api/v3"
         
-        # Income Statement (para revenue y earnings)
-        income_url = f"{base_url}/income-statement/{ticker}?limit=4&apikey={api_key}"
-        income_resp = requests.get(income_url, timeout=10)
+        # Income Statement (últimos 4 trimestres)
+        income_url = f"{base_url}/income-statement/{ticker}?period=quarter&limit=8&apikey={api_key}"
+        income_resp = requests.get(income_url, timeout=15)
         income = income_resp.json() if income_resp.status_code == 200 else []
         
-        # Earnings Surprises (Actual vs Estimate)
+        # Earnings Surprises (Actual vs Estimate histórico)
         surprises_url = f"{base_url}/earnings-surprises/{ticker}?apikey={api_key}"
-        surprises_resp = requests.get(surprises_url, timeout=10)
+        surprises_resp = requests.get(surprises_url, timeout=15)
         surprises = surprises_resp.json() if surprises_resp.status_code == 200 else []
         
         # Earnings Calendar (próximos)
         calendar_url = f"{base_url}/earning_calendar/{ticker}?apikey={api_key}"
-        calendar_resp = requests.get(calendar_url, timeout=10)
+        calendar_resp = requests.get(calendar_url, timeout=15)
         calendar = calendar_resp.json() if calendar_resp.status_code == 200 else []
         
         # Analyst Estimates
-        estimates_url = f"{base_url}/analyst-estimates/{ticker}?limit=4&apikey={api_key}"
-        estimates_resp = requests.get(estimates_url, timeout=10)
+        estimates_url = f"{base_url}/analyst-estimates/{ticker}?period=quarter&limit=8&apikey={api_key}"
+        estimates_resp = requests.get(estimates_url, timeout=15)
         estimates = estimates_resp.json() if estimates_resp.status_code == 200 else []
         
-        # Company Outlook ( guidance, etc)
+        # Company Outlook (guidance, segmentos, etc)
         outlook_url = f"{base_url}/company-outlook/{ticker}?apikey={api_key}"
-        outlook_resp = requests.get(outlook_url, timeout=10)
+        outlook_resp = requests.get(outlook_url, timeout=15)
         outlook = outlook_resp.json() if outlook_resp.status_code == 200 else {}
+        
+        # Key Metrics (para datos recientes)
+        metrics_url = f"{base_url}/key-metrics/{ticker}?period=quarter&limit=4&apikey={api_key}"
+        metrics_resp = requests.get(metrics_url, timeout=15)
+        metrics = metrics_resp.json() if metrics_resp.status_code == 200 else []
+        
+        # Earnings Call Transcript (último disponible)
+        transcript_url = f"{base_url}/earning_call_transcript/{ticker}?apikey={api_key}"
+        transcript_resp = requests.get(transcript_url, timeout=15)
+        transcript = transcript_resp.json() if transcript_resp.status_code == 200 else []
         
         return {
             'income_statement': income,
@@ -114,68 +123,510 @@ def get_fmp_data(ticker, api_key):
             'earnings_calendar': calendar,
             'analyst_estimates': estimates,
             'company_outlook': outlook,
-            'source': 'fmp'
+            'key_metrics': metrics,
+            'transcript': transcript,
+            'source': 'fmp',
+            'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
     except Exception as e:
         print(f"Error FMP: {e}")
         return None
 
+def get_fmp_earnings_historical(ticker, api_key, limit=8):
+    """Obtiene historial detallado de earnings trimestrales."""
+    if not api_key:
+        return []
+    
+    try:
+        base_url = "https://financialmodelingprep.com/api/v3"
+        
+        # Historical Earnings
+        hist_url = f"{base_url}/historical/earning_calendar/{ticker}?limit={limit}&apikey={api_key}"
+        hist_resp = requests.get(hist_url, timeout=15)
+        historical = hist_resp.json() if hist_resp.status_code == 200 else []
+        
+        return historical
+        
+    except Exception as e:
+        print(f"Error FMP Historical: {e}")
+        return []
+
+# ────────────────────────────────────────────────
+# FORMATO DE DATOS FMP MEJORADO
+# ────────────────────────────────────────────────
+
 def format_fmp_earnings_data(fmp_data):
-    """Formatea datos de FMP para el prompt."""
+    """Formatea datos de FMP para el prompt con información reciente."""
     if not fmp_data:
         return "No disponible"
     
     result = []
+    current_date = datetime.now().strftime('%Y-%m-%d')
     
-    # Earnings Surprises (Actual vs Estimate)
+    result.append(f"=== DATOS ACTUALIZADOS AL: {current_date} ===\n")
+    
+    # Income Statement - Últimos 4 trimestres
+    income = fmp_data.get('income_statement', [])
+    if income:
+        result.append("=== INCOME STATEMENT (Últimos trimestres) ===")
+        for i in income[:4]:
+            date = i.get('date', 'N/D')
+            period = i.get('period', 'N/D')
+            revenue = i.get('revenue', 0)
+            net_income = i.get('netIncome', 0)
+            eps = i.get('eps', 0)
+            ebitda = i.get('ebitda', 0)
+            gross_profit = i.get('grossProfit', 0)
+            operating_income = i.get('operatingIncome', 0)
+            
+            result.append(f"\n{date} ({period}):")
+            result.append(f"  Revenue: ${revenue:,.0f} | Net Income: ${net_income:,.0f} | EPS: ${eps:.2f}")
+            result.append(f"  EBITDA: ${ebitda:,.0f} | Gross Profit: ${gross_profit:,.0f} | Operating Income: ${operating_income:,.0f}")
+            
+            # Calcular márgenes si hay datos
+            if revenue > 0:
+                gross_margin = (gross_profit / revenue) * 100
+                operating_margin = (operating_income / revenue) * 100
+                net_margin = (net_income / revenue) * 100
+                result.append(f"  Márgenes: Gross {gross_margin:.1f}% | Operating {operating_margin:.1f}% | Net {net_margin:.1f}%")
+    
+    # Earnings Surprises - Actual vs Estimate
     surprises = fmp_data.get('earnings_surprises', [])
     if surprises:
-        result.append("=== EARNINGS SURPRISES (Actual vs Estimate) ===")
-        for s in surprises[:4]:
+        result.append("\n\n=== EARNINGS SURPRISES (Actual vs Estimate) ===")
+        for s in surprises[:6]:
             date = s.get('date', 'N/D')
             actual = s.get('actualEarningResult', 'N/D')
             estimate = s.get('estimatedEarning', 'N/D')
             surprise = s.get('surprise', 'N/D')
             surprise_pct = s.get('surprisePercentage', 'N/D')
-            result.append(f"Fecha: {date} | Actual: ${actual} | Est: ${estimate} | Surprise: {surprise} ({surprise_pct}%)")
+            
+            # Determinar si es beat o miss
+            try:
+                actual_f = float(actual) if actual != 'N/D' else 0
+                estimate_f = float(estimate) if estimate != 'N/D' else 0
+                beat_miss = "BEAT ✅" if actual_f > estimate_f else "MISS ❌" if actual_f < estimate_f else "IN LINE ➖"
+            except:
+                beat_miss = "N/D"
+            
+            result.append(f"{date}: Actual ${actual} vs Est ${estimate} | Surprise: {surprise_pct}% {beat_miss}")
     
-    # Income Statement (últimos 4 trimestres)
-    income = fmp_data.get('income_statement', [])
-    if income:
-        result.append("\n=== INCOME STATEMENT (Últimos 4Q) ===")
-        for i in income[:4]:
-            date = i.get('date', 'N/D')
-            revenue = i.get('revenue', 'N/D')
-            net_income = i.get('netIncome', 'N/D')
-            eps = i.get('eps', 'N/D')
-            ebitda = i.get('ebitda', 'N/D')
-            result.append(f"{date}: Revenue ${revenue:,} | Net Income ${net_income:,} | EPS ${eps} | EBITDA ${ebitda:,}")
-    
-    # Analyst Estimates
+    # Analyst Estimates - Próximos trimestres
     estimates = fmp_data.get('analyst_estimates', [])
     if estimates:
-        result.append("\n=== ANALYST ESTIMATES ===")
+        result.append("\n\n=== ANALYST ESTIMATES (Próximos períodos) ===")
         for e in estimates[:4]:
             date = e.get('date', 'N/D')
+            period = e.get('period', 'N/D')
             eps_est = e.get('estimatedEps', 'N/D')
             revenue_est = e.get('estimatedRevenue', 'N/D')
-            result.append(f"{date}: EPS Est ${eps_est} | Revenue Est ${revenue_est:,}")
+            result.append(f"{date} ({period}): EPS Est ${eps_est} | Revenue Est ${revenue_est:,.0f}" if isinstance(revenue_est, (int, float)) else f"{date} ({period}): EPS Est ${eps_est} | Revenue Est {revenue_est}")
     
     # Próximos earnings
     calendar = fmp_data.get('earnings_calendar', [])
     if calendar:
-        result.append("\n=== PRÓXIMOS EARNINGS ===")
+        result.append("\n\n=== PRÓXIMOS EARNINGS PROGRAMADOS ===")
         for c in calendar[:2]:
-            date = c.get('date', 'N/D')
+            date = c.get('date', 'TBA')
             eps_est = c.get('epsEstimated', 'N/D')
             revenue_est = c.get('revenueEstimated', 'N/D')
-            result.append(f"{date}: EPS Est ${eps_est} | Revenue Est ${revenue_est:,}")
+            result.append(f"Fecha: {date} | EPS Est: ${eps_est} | Revenue Est: ${revenue_est:,.0f}" if isinstance(revenue_est, (int, float)) else f"Fecha: {date} | EPS Est: ${eps_est}")
+    
+    # Key Metrics recientes
+    metrics = fmp_data.get('key_metrics', [])
+    if metrics:
+        result.append("\n\n=== KEY METRICS (Último trimestre) ===")
+        m = metrics[0]
+        result.append(f"Revenue per Share: ${m.get('revenuePerShare', 'N/D')}")
+        result.append(f"Net Income per Share: ${m.get('netIncomePerShare', 'N/D')}")
+        result.append(f"Free Cash Flow per Share: ${m.get('freeCashFlowPerShare', 'N/D')}")
+        result.append(f"Book Value per Share: ${m.get('bookValuePerShare', 'N/D')}")
+    
+    # Outlook/Growth
+    outlook = fmp_data.get('company_outlook', {})
+    if outlook:
+        result.append("\n\n=== COMPANY OUTLOOK ===")
+        profile = outlook.get('profile', {})
+        if profile:
+            result.append(f"CEO: {profile.get('ceo', 'N/D')}")
+            result.append(f"Employees: {profile.get('employees', 'N/D')}")
+            result.append(f"Industry: {profile.get('industry', 'N/D')}")
+            result.append(f"Sector: {profile.get('sector', 'N/D')}")
     
     return "\n".join(result) if result else "No disponible"
 
+def get_latest_earnings_summary(fmp_data):
+    """Extrae el resumen del último earnings report."""
+    if not fmp_data:
+        return None
+    
+    income = fmp_data.get('income_statement', [])
+    surprises = fmp_data.get('earnings_surprises', [])
+    
+    if not income:
+        return None
+    
+    latest = income[0]
+    latest_surprise = surprises[0] if surprises else {}
+    
+    # Calcular crecimiento YoY si hay datos históricos
+    revenue_growth = None
+    eps_growth = None
+    
+    if len(income) >= 5:  # Comparar con mismo trimestre año anterior
+        try:
+            current_rev = latest.get('revenue', 0)
+            current_eps = latest.get('eps', 0)
+            
+            # Buscar mismo trimestre año anterior (aproximadamente 4 trimestres atrás)
+            yoy = income[4] if len(income) > 4 else None
+            if yoy:
+                yoy_rev = yoy.get('revenue', 0)
+                yoy_eps = yoy.get('eps', 0)
+                
+                if yoy_rev > 0:
+                    revenue_growth = ((current_rev - yoy_rev) / yoy_rev) * 100
+                if yoy_eps != 0:
+                    eps_growth = ((current_eps - yoy_eps) / abs(yoy_eps)) * 100
+        except:
+            pass
+    
+    return {
+        'date': latest.get('date', 'N/D'),
+        'period': latest.get('period', 'N/D'),
+        'revenue': latest.get('revenue', 0),
+        'net_income': latest.get('netIncome', 0),
+        'eps': latest.get('eps', 0),
+        'ebitda': latest.get('ebitda', 0),
+        'gross_profit': latest.get('grossProfit', 0),
+        'operating_income': latest.get('operatingIncome', 0),
+        'revenue_growth_yoy': revenue_growth,
+        'eps_growth_yoy': eps_growth,
+        'eps_surprise_pct': latest_surprise.get('surprisePercentage', 0),
+        'eps_beat': latest_surprise.get('actualEarningResult', 0) > latest_surprise.get('estimatedEarning', 0) if latest_surprise else False
+    }
+
 # ────────────────────────────────────────────────
-# OBTENCIÓN DE DATOS YFINANCE
+# VISUALIZACIÓN DE EARNINGS ESTILO REPORT
+# ────────────────────────────────────────────────
+
+def render_earnings_report_section(data, fmp_data):
+    """Renderiza una sección de earnings report estilo las imágenes."""
+    
+    if not fmp_data:
+        st.info("📊 Datos de FMP no disponibles. Configura FMP_API_KEY en secrets para ver el reporte completo.")
+        return
+    
+    latest = get_latest_earnings_summary(fmp_data)
+    
+    if not latest:
+        st.warning("⚠️ No se pudieron obtener datos recientes de earnings")
+        return
+    
+    # Header del reporte
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 30px;">
+        <div style="color: #00ffad; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">
+            📅 {latest['date']} • {data['ticker']} Earnings Report
+        </div>
+        <h2 style="color: white; margin: 0; font-size: 2rem;">
+            {data['name']} {latest['period']} Earnings
+        </h2>
+        <p style="color: #888; margin-top: 10px;">
+            {data['sector']} • {data.get('industry', 'N/A')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # KPIs principales
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        revenue = latest['revenue']
+        rev_growth = latest['revenue_growth_yoy']
+        rev_color = "#00ffad" if rev_growth and rev_growth > 0 else "#f23645" if rev_growth and rev_growth < 0 else "#888"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
+            <div style="color: #666; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">Total Revenue</div>
+            <div style="color: white; font-size: 1.8rem; font-weight: bold;">${revenue/1e9:.2f}B</div>
+            {f'<div style="color: {rev_color}; font-size: 12px; margin-top: 5px;">{"▲" if rev_growth > 0 else "▼"} {abs(rev_growth):.1f}% YoY</div>' if rev_growth else '<div style="color: #666; font-size: 12px;">N/D</div>'}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        eps = latest['eps']
+        eps_growth = latest['eps_growth_yoy']
+        eps_surprise = latest['eps_surprise_pct']
+        eps_color = "#00ffad" if eps_growth and eps_growth > 0 else "#f23645"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
+            <div style="color: #666; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">EPS</div>
+            <div style="color: white; font-size: 1.8rem; font-weight: bold;">${eps:.2f}</div>
+            {f'<div style="color: {eps_color}; font-size: 12px; margin-top: 5px;">{"▲" if eps_growth > 0 else "▼"} {abs(eps_growth):.1f}% YoY</div>' if eps_growth else ''}
+            {f'<div style="color: #00ffad; font-size: 11px; margin-top: 3px;">Beat by {eps_surprise}%</div>' if latest['eps_beat'] and eps_surprise else ''}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        net_income = latest['net_income']
+        margin = (net_income / latest['revenue'] * 100) if latest['revenue'] > 0 else 0
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
+            <div style="color: #666; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">Net Income</div>
+            <div style="color: white; font-size: 1.8rem; font-weight: bold;">${net_income/1e6:.0f}M</div>
+            <div style="color: #888; font-size: 12px; margin-top: 5px;">{margin:.1f}% Margin</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        ebitda = latest['ebitda']
+        ebitda_margin = (ebitda / latest['revenue'] * 100) if latest['revenue'] > 0 else 0
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
+            <div style="color: #666; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">EBITDA</div>
+            <div style="color: white; font-size: 1.8rem; font-weight: bold;">${ebitda/1e6:.0f}M</div>
+            <div style="color: #888; font-size: 12px; margin-top: 5px;">{ebitda_margin:.1f}% Margin</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Gráfico de Revenue y EPS histórico
+    st.markdown("---")
+    render_earnings_history_chart(fmp_data)
+    
+    # Forward Guidance
+    st.markdown("---")
+    render_forward_guidance(fmp_data, data)
+    
+    # Análisis de sorpresas
+    st.markdown("---")
+    render_earnings_surprises(fmp_data)
+
+def render_earnings_history_chart(fmp_data):
+    """Renderiza gráfico histórico de revenue y EPS."""
+    income = fmp_data.get('income_statement', [])
+    
+    if not income or len(income) < 2:
+        st.info("📊 Datos históricos insuficientes")
+        return
+    
+    # Preparar datos (orden cronológico)
+    dates = []
+    revenues = []
+    eps_values = []
+    
+    for i in reversed(income[:8]):  # Últimos 8 trimestres, ordenados
+        dates.append(i.get('date', ''))
+        revenues.append(i.get('revenue', 0) / 1e9)  # Convertir a billones
+        eps_values.append(i.get('eps', 0))
+    
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    
+    # Revenue bars
+    fig.add_trace(
+        go.Bar(
+            x=dates,
+            y=revenues,
+            name='Revenue (B$)',
+            marker_color='#2a3f5f',
+            opacity=0.8
+        ),
+        secondary_y=False
+    )
+    
+    # EPS line
+    fig.add_trace(
+        go.Scatter(
+            x=dates,
+            y=eps_values,
+            name='EPS ($)',
+            mode='lines+markers',
+            line=dict(color='#00ffad', width=3),
+            marker=dict(size=8, color='#00ffad', symbol='diamond')
+        ),
+        secondary_y=True
+    )
+    
+    fig.update_layout(
+        title="📈 Revenue & EPS History (Quarterly)",
+        template="plotly_dark",
+        plot_bgcolor='#0c0e12',
+        paper_bgcolor='#11141a',
+        font=dict(color='white', size=11),
+        height=400,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=50, r=50, t=80, b=50),
+        hovermode='x unified'
+    )
+    
+    fig.update_xaxes(gridcolor='#1a1e26', showgrid=True, tickangle=-45)
+    fig.update_yaxes(title_text="Revenue (Billions $)", secondary_y=False, gridcolor='#1a1e26')
+    fig.update_yaxes(title_text="EPS ($)", secondary_y=True)
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_forward_guidance(fmp_data, data):
+    """Renderiza sección de forward guidance."""
+    
+    estimates = fmp_data.get('analyst_estimates', [])
+    calendar = fmp_data.get('earnings_calendar', [])
+    
+    st.markdown("### 🎯 Forward Guidance & Expectativas")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, rgba(0,255,173,0.1) 0%, rgba(0,255,173,0.02) 100%); border: 1px solid #00ffad33; border-radius: 12px; padding: 20px;">
+            <div style="color: #00ffad; font-size: 14px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center;">
+                <span style="margin-right: 8px;">📈</span> Expectativas Positivas
+            </div>
+            <ul style="color: #ccc; line-height: 1.8; margin: 0; padding-left: 20px;">
+        """, unsafe_allow_html=True)
+        
+        # Generar bullets basados en datos
+        positive_points = []
+        
+        if estimates:
+            next_eps = estimates[0].get('estimatedEps', 0)
+            curr_eps = estimates[1].get('estimatedEps', next_eps) if len(estimates) > 1 else next_eps
+            if next_eps > curr_eps:
+                positive_points.append(f"Crecimiento EPS esperado: ${curr_eps:.2f} → ${next_eps:.2f}")
+        
+        income = fmp_data.get('income_statement', [])
+        if income and len(income) >= 2:
+            latest_rev = income[0].get('revenue', 0)
+            prev_rev = income[1].get('revenue', 0)
+            if latest_rev > prev_rev:
+                growth = ((latest_rev - prev_rev) / prev_rev) * 100
+                positive_points.append(f"Momentum revenue: +{growth:.1f}% vs trimestre anterior")
+        
+        if data.get('rev_growth') and data['rev_growth'] > 0.1:
+            positive_points.append(f"Fuerte crecimiento anual de ingresos ({data['rev_growth']:.1%})")
+        
+        if not positive_points:
+            positive_points = [
+                "Tendencia de crecimiento en segmentos clave",
+                "Mejoras operativas esperadas",
+                "Demanda sostenida en mercados principales"
+            ]
+        
+        for point in positive_points[:4]:
+            st.markdown(f"<li>{point}</li>", unsafe_allow_html=True)
+        
+        st.markdown("</ul></div>", unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, rgba(242,54,69,0.1) 0%, rgba(242,54,69,0.02) 100%); border: 1px solid #f2364533; border-radius: 12px; padding: 20px;">
+            <div style="color: #f23645; font-size: 14px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center;">
+                <span style="margin-right: 8px;">⚠️</span> Riesgos a Monitorear
+            </div>
+            <ul style="color: #ccc; line-height: 1.8; margin: 0; padding-left: 20px;">
+        """, unsafe_allow_html=True)
+        
+        risk_points = []
+        
+        if data.get('beta') and data['beta'] > 1.5:
+            risk_points.append(f"Alta volatilidad (Beta: {data['beta']:.2f})")
+        
+        if data.get('pe_forward') and data['pe_forward'] > 30:
+            risk_points.append(f"Valoración exigente (P/E Forward: {data['pe_forward']:.1f}x)")
+        
+        surprises = fmp_data.get('earnings_surprises', [])
+        if surprises:
+            recent_misses = sum(1 for s in surprises[:4] if s.get('actualEarningResult', 0) < s.get('estimatedEarning', 0))
+            if recent_misses >= 2:
+                risk_points.append(f"Historial reciente de misses ({recent_misses}/4 últimos)")
+        
+        if not risk_points:
+            risk_points = [
+                "Incertidumbre macroeconómica global",
+                "Presión competitiva en el sector",
+                "Volatilidad en costos de materiales"
+            ]
+        
+        for point in risk_points[:4]:
+            st.markdown(f"<li>{point}</li>", unsafe_allow_html=True)
+        
+        st.markdown("</ul></div>", unsafe_allow_html=True)
+    
+    # Próximos earnings
+    if calendar:
+        st.markdown("---")
+        st.markdown("#### 📅 Próximos Earnings")
+        
+        cols = st.columns(min(len(calendar), 3))
+        for i, (col, event) in enumerate(zip(cols, calendar[:3])):
+            with col:
+                eps_est = event.get('epsEstimated', 'TBA')
+                rev_est = event.get('revenueEstimated', 0)
+                date = event.get('date', 'TBA')
+                
+                st.markdown(f"""
+                <div style="background: #0c0e12; border: 1px solid #2a3f5f; border-radius: 8px; padding: 15px; text-align: center;">
+                    <div style="color: #00ffad; font-size: 11px; font-weight: bold; margin-bottom: 5px;">{date}</div>
+                    <div style="color: white; font-size: 16px; font-weight: bold; margin: 5px 0;">EPS Est: ${eps_est}</div>
+                    <div style="color: #888; font-size: 11px;">Rev Est: ${rev_est/1e9:.2f}B</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+def render_earnings_surprises(fmp_data):
+    """Renderiza análisis de earnings surprises."""
+    surprises = fmp_data.get('earnings_surprises', [])
+    
+    if not surprises:
+        return
+    
+    st.markdown("### 🎯 Earnings Track Record")
+    
+    # Crear visualización de beats/misses
+    beats = sum(1 for s in surprises if s.get('actualEarningResult', 0) >= s.get('estimatedEarning', 0))
+    total = len(surprises)
+    
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        beat_rate = (beats / total * 100) if total > 0 else 0
+        color = "#00ffad" if beat_rate >= 75 else "#ffa500" if beat_rate >= 50 else "#f23645"
+        
+        st.markdown(f"""
+        <div style="text-align: center; padding: 20px;">
+            <div style="color: #666; font-size: 12px; margin-bottom: 10px;">Beat Rate (Últimos {total})</div>
+            <div style="color: {color}; font-size: 3rem; font-weight: bold;">{beat_rate:.0f}%</div>
+            <div style="color: {color}; font-size: 14px;">{beats}/{total} Beats</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        # Tabla de surprises
+        table_data = []
+        for s in surprises[:6]:
+            date = s.get('date', 'N/D')
+            actual = s.get('actualEarningResult', 0)
+            estimate = s.get('estimatedEarning', 0)
+            surprise_pct = s.get('surprisePercentage', 0)
+            
+            status = "✅ BEAT" if actual >= estimate else "❌ MISS"
+            status_color = "#00ffad" if actual >= estimate else "#f23645"
+            
+            table_data.append({
+                'Fecha': date,
+                'Actual': f"${actual:.2f}",
+                'Estimado': f"${estimate:.2f}",
+                'Sorpresa': f"{surprise_pct:+.1f}%",
+                'Resultado': status
+            })
+        
+        df_surprises = pd.DataFrame(table_data)
+        st.dataframe(df_surprises, use_container_width=True, hide_index=True)
+
+# ────────────────────────────────────────────────
+# RESTO DE FUNCIONES (mantenidas del código original)
 # ────────────────────────────────────────────────
 
 def get_yfinance_data(ticker_symbol):
@@ -203,18 +654,6 @@ def get_yfinance_data(ticker_symbol):
             hist_dict = None
         
         try:
-            earnings = ticker.earnings
-            earnings_dict = None
-            if earnings is not None and not earnings.empty:
-                earnings_dict = {
-                    'dates': earnings.index.strftime('%Y-%m-%d').tolist() if hasattr(earnings.index, 'strftime') else list(earnings.index),
-                    'revenue': earnings.get('Revenue', earnings.get('Total Revenue', [])).tolist() if hasattr(earnings, 'get') else [],
-                    'earnings': earnings.get('Earnings', earnings.get('Net Income', [])).tolist() if hasattr(earnings, 'get') else []
-                }
-        except:
-            earnings_dict = None
-        
-        try:
             calendar = ticker.calendar
             calendar_list = []
             if calendar is not None and not calendar.empty:
@@ -230,7 +669,7 @@ def get_yfinance_data(ticker_symbol):
         return {
             'info': info, 
             'history': hist_dict, 
-            'earnings': earnings_dict,
+            'earnings': None,
             'calendar': calendar_list,
             'source': 'yfinance'
         }
@@ -338,17 +777,6 @@ def process_data(raw_data, ticker):
         except:
             pass
     
-    earnings_df = pd.DataFrame()
-    earnings_data = raw_data.get('earnings')
-    if earnings_data and earnings_data.get('dates'):
-        try:
-            earnings_df = pd.DataFrame({
-                'Revenue': earnings_data.get('revenue', []),
-                'Earnings': earnings_data.get('earnings', [])
-            }, index=earnings_data['dates'])
-        except:
-            pass
-    
     data = {
         "ticker": ticker,
         "name": get(['longName', 'shortName', 'name'], ticker),
@@ -411,7 +839,7 @@ def process_data(raw_data, ticker):
         "num_analysts": int(get(['numberOfAnalystOpinions'], 0) or 0),
         
         "hist": hist_df,
-        "earnings_hist": earnings_df,
+        "earnings_hist": pd.DataFrame(),
         "earnings_calendar": raw_data.get('calendar', []),
         "beta": float(get(['beta'], 0) or 0),
         
@@ -592,78 +1020,8 @@ def generate_outlook_points(data):
     
     return positive[:4], challenges[:4]
 
-def render_earnings_chart(data):
-    """Renderiza gráfico de earnings históricos."""
-    if data.get('earnings_hist') is None or data['earnings_hist'].empty:
-        st.info("📊 Datos históricos de earnings no disponibles")
-        return
-    
-    earnings = data['earnings_hist']
-    
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    
-    if 'Revenue' in earnings.columns and not earnings['Revenue'].empty:
-        fig.add_trace(
-            go.Bar(
-                x=earnings.index,
-                y=earnings['Revenue'] / 1e9,
-                name='Ingresos',
-                marker_color='#2a3f5f',
-                opacity=0.7
-            ),
-            secondary_y=False
-        )
-    
-    if 'Earnings' in earnings.columns and not earnings['Earnings'].empty:
-        fig.add_trace(
-            go.Scatter(
-                x=earnings.index,
-                y=earnings['Earnings'] / 1e9,
-                name='Beneficio Neto',
-                mode='lines+markers',
-                line=dict(color='#00ffad', width=3),
-                marker=dict(size=8, color='#00ffad')
-            ),
-            secondary_y=True
-        )
-    
-    fig.update_layout(
-        title="📈 Historial de Ingresos y Beneficios",
-        template="plotly_dark",
-        plot_bgcolor='#0c0e12',
-        paper_bgcolor='#11141a',
-        font=dict(color='white', size=10),
-        height=350,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        margin=dict(l=40, r=40, t=60, b=40)
-    )
-    
-    fig.update_xaxes(gridcolor='#1a1e26', showgrid=True)
-    fig.update_yaxes(title_text="Ingresos (B$)", secondary_y=False, gridcolor='#1a1e26')
-    fig.update_yaxes(title_text="Beneficio (B$)", secondary_y=True)
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_earnings_calendar(data):
-    """Muestra próximos earnings."""
-    calendar = data.get('earnings_calendar', [])
-    if not calendar:
-        return
-    
-    st.markdown("#### 📅 Próximos Earnings")
-    cols = st.columns(min(len(calendar), 3))
-    for i, (col, event) in enumerate(zip(cols, calendar[:3])):
-        with col:
-            st.markdown(f"""
-            <div style="background: #0c0e12; border: 1px solid #2a3f5f; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="color: #00ffad; font-size: 11px; font-weight: bold;">📊 Q{((datetime.now().month-1)//3)+1} {datetime.now().year}</div>
-                <div style="color: white; font-size: 14px; font-weight: bold; margin: 5px 0;">{event.get('date', 'TBA')}</div>
-                <div style="color: #888; font-size: 10px;">EPS Est: {event.get('eps_est', 'N/A')}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU - CON FMP DATA - CORREGIDO
+# ANÁLISIS RSU - CON FMP DATA Y FECHA ACTUAL
 # ────────────────────────────────────────────────
 
 def render_rsu_earnings_analysis(data, fmp_data=None):
@@ -675,8 +1033,9 @@ def render_rsu_earnings_analysis(data, fmp_data=None):
         st.warning("⚠️ Prompt RSU no encontrado.")
         return
     
-    # Formatear datos de FMP
+    # Formatear datos de FMP con fecha actual
     fmp_formatted = format_fmp_earnings_data(fmp_data) if fmp_data else "No disponible"
+    current_date = datetime.now().strftime('%Y-%m-%d')
     
     # Construir datos para el prompt - FORMATO MÁS COMPACTO
     datos_ticker = f"""=== DATOS DEL TICKER ===
@@ -714,15 +1073,18 @@ DIVIDEND_RATE: ${data.get('dividend_rate', 0):.2f} | DIVIDEND_YIELD: {format_val
 RECOMMENDATION: {data.get('recommendation', 'N/A').upper()} | NUM_ANALYSTS: {data.get('num_analysts', 'N/A')}
 TARGET_MEAN: ${data.get('target_mean', 0):.2f} | TARGET_HIGH: ${data.get('target_high', 0):.2f} | TARGET_LOW: ${data.get('target_low', 0):.2f}
 
-{f"=== DATOS FMP (EARNINGS DETALLADOS) ===" if fmp_data else ""}
+{f"=== DATOS FMP (EARNINGS DETALLADOS - ACTUALIZADOS) ===" if fmp_data else ""}
 {fmp_formatted}
+
+=== FECHA DE ANÁLISIS ===
+{current_date}
 """
     
-    # USAR PROMPT SIMPLIFICADO SI ES DEMASIADO LARGO
-    prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español. Usa los datos proporcionados. Si algún dato es 0 o None, indícalo explícitamente."
+    prompt_completo = base_prompt.replace("{datos_ticker}", datos_ticker).replace("{current_date}", current_date)
     
-    # Debug: Mostrar longitud del prompt
-    st.caption(f"📊 Prompt length: {len(prompt_completo)} chars | Est. tokens: ~{len(prompt_completo)//4}")
+    # Si no hay placeholders, concatenar
+    if "{datos_ticker}" not in base_prompt:
+        prompt_completo = f"{base_prompt}\n\n{datos_ticker}\n\n=== INSTRUCCION ===\nGenera el reporte COMPLETO en español. Usa los datos proporcionados. La fecha actual es {current_date}. Si algún dato es 0 o None, indícalo explícitamente."
     
     model, name, err = get_ia_model()
     
@@ -733,14 +1095,13 @@ TARGET_MEAN: ${data.get('target_mean', 0):.2f} | TARGET_HIGH: ${data.get('target
     try:
         with st.spinner("🧠 Generando análisis... (puede tomar 30-60s)"):
             
-            # AUMENTAR MAX_OUTPUT_TOKENS Y USAR STREAMING
             response = model.generate_content(
                 prompt_completo,
                 generation_config={
-                    "temperature": 0.2,  # Ligeramente más alto para evitar repetición
+                    "temperature": 0.2,
                     "top_p": 0.95,
                     "top_k": 40,
-                    "max_output_tokens": 8192,  # AUMENTADO significativamente
+                    "max_output_tokens": 8192,
                 },
                 safety_settings={
                     'HATE': 'BLOCK_NONE',
@@ -750,17 +1111,14 @@ TARGET_MEAN: ${data.get('target_mean', 0):.2f} | TARGET_HIGH: ${data.get('target
                 }
             )
             
-            # VERIFICAR SI LA RESPUESTA ESTÁ COMPLETA
             response_text = response.text
             
             # Detectar si la respuesta parece truncada
             if not response_text.strip().endswith('---') and len(response_text) > 100:
-                # Intentar continuar la generación si parece incompleta
                 if '## 8. VEREDICTO RSU' not in response_text or len(response_text) < 2000:
                     st.warning("⚠️ La respuesta parece incompleta. Intentando regenerar...")
                     
-                    # Reintentar con prompt más corto
-                    short_prompt = f"""Análisis fundamental rápido de {data['ticker']}:
+                    short_prompt = f"""Análisis fundamental rápido de {data['ticker']} al {current_date}:
 
 Precio: ${data['price']:.2f} | Market Cap: {format_value(data['market_cap'], '$')}
 P/E: {format_value(data.get('pe_forward'), '', 'x', 2)} | ROE: {format_value(data.get('roe'), '', '%', 2)} | Margen: {format_value(data.get('profit_margin'), '', '%', 2)}
@@ -856,15 +1214,13 @@ Sé conciso pero completo."""
                 <div class="terminal-header">
                     <span style="color: #00ffad;">⬤</span>
                     <span class="terminal-title">RSU Hedge Fund Analysis Terminal</span>
-                    <span class="terminal-ticker">{data['ticker']} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</span>
+                    <span class="terminal-ticker">{data['ticker']} | {current_date}</span>
                 </div>
                 <div class="terminal-body">
             """, unsafe_allow_html=True)
             
-            # OUTPUT DIRECTO DEL PROMPT CON MARKDOWN
             st.markdown(response_text, unsafe_allow_html=True)
             
-            # Mostrar estadísticas de la respuesta
             word_count = len(response_text.split())
             char_count = len(response_text)
             
@@ -872,12 +1228,11 @@ Sé conciso pero completo."""
                 </div>
                 <div class="terminal-footer">
                     <span>{name} | {word_count} palabras | {char_count} caracteres</span>
-                    <span style="color: #00ffad;">RSU_TERMINAL_v1.1</span>
+                    <span style="color: #00ffad;">RSU_TERMINAL_v2.0</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Opción para ver el prompt completo (debug)
             with st.expander("🔧 Ver prompt enviado (debug)"):
                 st.text_area("Prompt", prompt_completo, height=300)
                 st.text_area("Respuesta raw", response_text, height=200)
@@ -885,15 +1240,11 @@ Sé conciso pero completo."""
     except Exception as e:
         st.error(f"❌ Error en generación: {e}")
         st.error(f"Detalles: {str(e)}")
-        
-        # Fallback: Mostrar análisis básico generado localmente
-        st.info("🔄 Mostrando análisis básico de fallback...")
         generate_fallback_analysis(data)
 
 def generate_fallback_analysis(data):
     """Genera un análisis básico localmente si la IA falla."""
     
-    # Calcular score simple
     score = 5.0
     factors = []
     
@@ -940,7 +1291,7 @@ def generate_fallback_analysis(data):
     """)
 
 # ────────────────────────────────────────────────
-# MAIN
+# MAIN - CON SECCIÓN DE EARNINGS REPORT
 # ────────────────────────────────────────────────
 
 def render():
@@ -966,7 +1317,6 @@ def render():
     st.title("📅 Análisis de Earnings")
     st.markdown('<div style="color: #888; margin-bottom: 20px;">Análisis fundamental con IA y datos en tiempo real</div>', unsafe_allow_html=True)
     
-    # SIN BOTÓN DEMO
     col1, col2 = st.columns([3, 1])
     with col1:
         ticker = st.text_input("Ticker", value="AAPL").upper().strip()
@@ -977,13 +1327,16 @@ def render():
     
     if analyze and ticker:
         with st.spinner("Cargando datos..."):
-            # Intentar obtener datos de FMP primero (mejores datos de earnings)
+            # Intentar obtener datos de FMP primero (CRÍTICO para earnings)
             fmp_api_key = st.secrets.get("FMP_API_KEY", None)
             fmp_data = None
+            
             if fmp_api_key:
                 fmp_data = get_fmp_data(ticker, fmp_api_key)
+                if fmp_data:
+                    st.success(f"✅ FMP API conectado - Datos actualizados al {fmp_data.get('last_updated', 'ahora')}")
             
-            # Datos de yfinance/Finnhub para fundamentales
+            # Datos de yfinance/Finnhub para fundamentales y precio
             raw = get_yfinance_data(ticker)
             if not raw:
                 finnhub_key = st.secrets.get("FINNHUB_API_KEY", None)
@@ -1003,14 +1356,7 @@ def render():
         source_color = {"yfinance": "#00ffad", "finnhub": "#4caf50", "mock": "#ff9800"}.get(data.get('data_source'), "#888")
         source_label = {"yfinance": "YAHOO FINANCE", "finnhub": "FINNHUB", "mock": "DEMO"}.get(data.get('data_source'), "UNKNOWN")
         
-        # Indicador si hay datos FMP
-        if fmp_data:
-            st.markdown("""
-            <div style="background: #00ffad22; border: 1px solid #00ffad; border-radius: 4px; padding: 8px 12px; margin-bottom: 15px; display: inline-block;">
-                <span style="color: #00ffad; font-size: 11px; font-weight: bold;">● FMP API CONECTADO - Datos de earnings disponibles</span>
-            </div>
-            """, unsafe_allow_html=True)
-        
+        # Header principal
         col1, col2 = st.columns([2, 1])
         with col1:
             st.markdown(f"""
@@ -1033,6 +1379,12 @@ def render():
             </div>
             """, unsafe_allow_html=True)
         
+        # === NUEVA SECCIÓN: EARNINGS REPORT ESTILO IMÁGENES ===
+        st.markdown("---")
+        render_earnings_report_section(data, fmp_data)
+        
+        # Métricas fundamentales
+        st.markdown("---")
         st.markdown("### 📊 Métricas Fundamentales")
         cols = st.columns(4)
         metrics = [
@@ -1055,6 +1407,7 @@ def render():
                 </div>
                 """, unsafe_allow_html=True)
         
+        # Gráfico de precio y métricas clave
         st.markdown("---")
         col_chart, col_info = st.columns([3, 2])
         
@@ -1070,7 +1423,7 @@ def render():
                     template="plotly_dark", plot_bgcolor='#0c0e12', paper_bgcolor='#11141a',
                     font=dict(color='white'), xaxis_rangeslider_visible=False,
                     height=350, margin=dict(l=30, r=30, t=30, b=30),
-                    title="Precio (6 meses)"
+                    title="Precio (1 año)"
                 )
                 st.plotly_chart(fig, use_container_width=True)
             else:
@@ -1091,10 +1444,7 @@ def render():
             </div>
             """, unsafe_allow_html=True)
         
-        st.markdown("---")
-        render_earnings_chart(data)
-        render_earnings_calendar(data)
-        
+        # Perspectivas y análisis RSU
         st.markdown("---")
         st.markdown("### 🔮 Perspectivas y Desafíos")
         
@@ -1129,10 +1479,11 @@ def render():
             </div>
             """, unsafe_allow_html=True)
         
+        # Análisis RSU con IA
         st.markdown("---")
         render_rsu_earnings_analysis(data, fmp_data)
         
-        # FOOTER SIN CITAS ALEATORIAS
+        # Footer
         st.markdown(f"""
         <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
             Datos proporcionados por Yahoo Finance & Financial Modeling Prep | Análisis generado por IA Gemini<br>

@@ -14,7 +14,7 @@ import os
 import json
 import sys
 import traceback
-import re
+import html
 
 # ────────────────────────────────────────────────
 # CONFIGURACIÓN Y DEBUGGING
@@ -141,19 +141,12 @@ def extract_fundamentals_from_av(av_data):
         f['summary'] = overview.get('Description', f"Empresa {f.get('name', '')}")
         f['exchange'] = overview.get('Exchange', 'N/A')
         
-        # Nuevos campos para segmentos (si están disponibles)
-        f['address'] = overview.get('Address', 'N/A')
-        f['fiscal_year_end'] = overview.get('FiscalYearEnd', 'N/A')
-        f['latest_quarter'] = overview.get('LatestQuarter', 'N/A')
-        
         # Institutional data
         f['institutional_ownership'] = safe_float(overview.get('PercentInstitutions'))
         f['insider_ownership'] = safe_float(overview.get('PercentInsiders'))
         
         f['sma_50'] = safe_float(overview.get('50DayMovingAverage'))
         f['sma_200'] = safe_float(overview.get('200DayMovingAverage'))
-        
-        f['price_av'] = safe_float(overview.get('AnalystTargetPrice'))
         
         # Ratios
         f['pe_trailing'] = safe_float(overview.get('TrailingPE'))
@@ -179,17 +172,13 @@ def extract_fundamentals_from_av(av_data):
         
         # Dividendos
         f['dividend_yield'] = safe_float(overview.get('DividendYield'))
-        f['dividend_per_share'] = safe_float(overview.get('DividendPerShare'))
         f['payout_ratio'] = safe_float(overview.get('PayoutRatio'))
-        f['ex_dividend_date'] = overview.get('ExDividendDate', 'N/A')
-        f['dividend_date'] = overview.get('DividendDate', 'N/A')
         
         f['beta'] = safe_float(overview.get('Beta'))
         f['eps'] = safe_float(overview.get('EPS'))
         f['eps_forward'] = safe_float(overview.get('ForwardEPS'))
         f['book_value_ps'] = safe_float(overview.get('BookValue'))
         f['revenue_ttm'] = safe_float(overview.get('RevenueTTM'))
-        f['gross_profit_ttm'] = safe_float(overview.get('GrossProfitTTM'))
         
         debug_log("Overview procesado", f"Name: {f['name']}, P/E: {f['pe_trailing']}, ROE: {f['roe']}")
         
@@ -199,14 +188,10 @@ def extract_fundamentals_from_av(av_data):
         
         if balance_reports and len(balance_reports) > 0:
             b = balance_reports[0]
-            debug_log("Balance sheet", f"Fecha: {b.get('fiscalDateEnding')}")
             f['cash'] = safe_float(b.get('cashAndCashEquivalentsAtCarryingValue'))
             f['debt'] = safe_float(b.get('shortLongTermDebtTotal') or b.get('longTermDebt'))
             f['total_equity'] = safe_float(b.get('totalShareholderEquity'))
             f['total_assets'] = safe_float(b.get('totalAssets'))
-            f['total_liabilities'] = safe_float(b.get('totalLiabilities'))
-            f['inventory'] = safe_float(b.get('inventory'))
-            f['goodwill'] = safe_float(b.get('goodwill'))
             
             if f['total_equity'] > 0:
                 f['debt_to_equity'] = (f['debt'] / f['total_equity']) * 100
@@ -223,10 +208,7 @@ def extract_fundamentals_from_av(av_data):
         
         if cf_reports and len(cf_reports) > 0:
             c = cf_reports[0]
-            debug_log("Cash flow", f"Fecha: {c.get('fiscalDateEnding')}")
             f['operating_cashflow'] = safe_float(c.get('operatingCashflow'))
-            f['financing_cashflow'] = safe_float(c.get('cashflowFromFinancing'))
-            f['investing_cashflow'] = safe_float(c.get('cashflowFromInvestment'))
             capex = safe_float(c.get('capitalExpenditures'))
             if f['operating_cashflow'] and capex:
                 f['free_cashflow'] = f['operating_cashflow'] - capex
@@ -240,12 +222,7 @@ def extract_fundamentals_from_av(av_data):
             f['latest_revenue'] = safe_float(latest.get('totalRevenue'))
             f['latest_net_income'] = safe_float(latest.get('netIncome'))
             f['latest_ebitda'] = safe_float(latest.get('ebitda'))
-            f['latest_operating_income'] = safe_float(latest.get('operatingIncome'))
-            f['research_dev'] = safe_float(latest.get('researchAndDevelopment'))
-            f['interest_expense'] = safe_float(latest.get('interestExpense'))
-            f['income_tax'] = safe_float(latest.get('incomeTaxExpense'))
             
-            # Calcular crecimiento YoY
             if len(income_reports) >= 5:
                 current_rev = safe_float(income_reports[0].get('totalRevenue'))
                 yoy_rev = safe_float(income_reports[4].get('totalRevenue'))
@@ -259,9 +236,8 @@ def extract_fundamentals_from_av(av_data):
         if earnings_reports and len(earnings_reports) > 0:
             f['eps_history'] = earnings_reports
             
-            # Procesar earnings surprises
             surprises = []
-            for report in earnings_reports[:8]:  # Últimos 8 trimestres
+            for report in earnings_reports[:8]:
                 surprise_data = {
                     'date': report.get('fiscalDateEnding', ''),
                     'eps_actual': safe_float(report.get('reportedEPS')),
@@ -273,8 +249,6 @@ def extract_fundamentals_from_av(av_data):
                     surprises.append(surprise_data)
             
             f['earnings_surprises'] = surprises
-            
-            # Calcular tasa de beat
             beats = sum(1 for s in surprises if s['surprise'] > 0)
             f['earnings_beat_rate'] = (beats / len(surprises) * 100) if surprises else 0
             f['avg_surprise_pct'] = sum(s['surprise_pct'] for s in surprises) / len(surprises) if surprises else 0
@@ -366,23 +340,15 @@ def get_yfinance_data(ticker_symbol, max_retries=3):
     return None
 
 # ────────────────────────────────────────────────
-# NEWS SENTIMENT (Simulado - requiere API key para producción)
+# NEWS SENTIMENT
 # ────────────────────────────────────────────────
 
 def get_news_sentiment(ticker):
-    """
-    Obtiene sentimiento de noticias.
-    En producción: usar NewsAPI, Finnhub, o Alpha Vantage News Sentiment
-    """
+    """Placeholder para sentimiento de noticias."""
     try:
-        # Placeholder - implementar con API real
-        # Ejemplo con Alpha Vantage NEWS_SENTIMENT
-        # response = requests.get(f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={ticker}&apikey={API_KEY}")
-        
-        # Simulación basada en datos disponibles
         return {
-            'overall_sentiment': 'neutral',  # bullish, bearish, neutral
-            'sentiment_score': 0.0,  # -1 a 1
+            'overall_sentiment': 'neutral',
+            'sentiment_score': 0.0,
             'news_count': 0,
             'bullish_pct': 0,
             'bearish_pct': 0,
@@ -566,7 +532,6 @@ def get_mock_data(ticker):
     seed = int(hashlib.md5(ticker.encode()).hexdigest(), 16) % 1000
     base_price = 50 + (seed % 950)
     
-    # Mock earnings surprises
     mock_surprises = []
     for i in range(8):
         mock_surprises.append({
@@ -693,38 +658,41 @@ def get_color_for_value(value, good_threshold=0, bad_threshold=0, inverse=False)
     return "#f5a623"
 
 # ────────────────────────────────────────────────
-# COMPONENTES UI MEJORADOS
+# COMPONENTES UI MEJORADOS - CORREGIDOS
 # ────────────────────────────────────────────────
 
 def render_metric_card(label, value, is_pct=False, decimals=2, good_threshold=0, bad_threshold=0, inverse=False):
-    """Renderiza una tarjeta de métrica individual."""
+    """Renderiza una tarjeta de métrica individual - CORREGIDO."""
+    
+    # Formatear valor
     if is_pct and value is not None and value != 0:
-        formatted, color = format_pct(value, decimals)
+        formatted_val, color = format_pct(value, decimals)
     elif value is not None and value != 0:
         if label in ["P/E Trailing", "P/E Forward", "PEG Ratio", "P/B", "Beta", "Current Ratio", "Quick Ratio"]:
-            formatted = format_value(value, '', '', decimals)
+            formatted_val = format_value(value, '', '', decimals)
         else:
-            formatted = format_value(value, '', '', decimals)
+            formatted_val = format_value(value, '', '', decimals)
         color = get_color_for_value(value, good_threshold, bad_threshold, inverse) if isinstance(value, (int, float)) else "#00ffad"
     else:
-        formatted = "N/A"
+        formatted_val = "N/A"
         color = "#666"
     
     is_real = value is not None and value != 0
     
-    st.markdown(
-        f"""
-        <div style="background: {'#0c0e12' if is_real else '#1a1e26'}; 
-                    border: 1px solid {'#00ffad33' if is_real else '#f2364533'}; 
-                    border-radius: 10px; padding: 16px; text-align: center;
-                    {'opacity: 0.6;' if not is_real else ''}
-                    transition: all 0.3s ease;">
-            <div style="color: #888; font-size: 10px; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">{label}</div>
-            <div style="color: {color}; font-size: 1.3rem; font-weight: bold;">{formatted}</div>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
+    # Usar st.container en lugar de markdown para evitar escaping
+    with st.container():
+        st.markdown(
+            f"""
+            <div style="background: {'#0c0e12' if is_real else '#1a1e26'}; 
+                        border: 1px solid {'#00ffad33' if is_real else '#f2364533'}; 
+                        border-radius: 10px; padding: 16px; text-align: center;
+                        {'opacity: 0.6;' if not is_real else ''}">
+                <div style="color: #888; font-size: 10px; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">{html.escape(label)}</div>
+                <div style="color: {color}; font-size: 1.3rem; font-weight: bold;">{html.escape(formatted_val)}</div>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
 def render_segment_chart(segments_data, title="Revenue by Segment"):
     """Renderiza gráfico de donut para segmentos."""
@@ -761,84 +729,24 @@ def render_segment_chart(segments_data, title="Revenue by Segment"):
 
 def render_forward_guidance(positive_outlook, challenges):
     """Renderiza sección de Forward Guidance con Positive Outlook y Challenges."""
-    st.markdown(
-        """
-        <style>
-        .guidance-container {
-            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
-            border: 1px solid #2a3f5f;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .guidance-header {
-            color: #00ffad;
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .positive-list, .challenge-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .positive-list li, .challenge-list li {
-            color: #e0e0e0;
-            font-size: 13px;
-            margin-bottom: 10px;
-            padding-left: 20px;
-            position: relative;
-            line-height: 1.5;
-        }
-        .positive-list li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #00ffad;
-            font-weight: bold;
-        }
-        .challenge-list li:before {
-            content: "!";
-            position: absolute;
-            left: 0;
-            color: #f23645;
-            font-weight: bold;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown(
-            f"""
-            <div class="guidance-container">
-                <div class="guidance-header">📈 Positive Outlook</div>
-                <ul class="positive-list">
-                    {''.join([f"<li>{item}</li>" for item in positive_outlook]) if positive_outlook else "<li style='color: #666;'>No data available</li>"}
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown("#### 📈 Positive Outlook")
+        if positive_outlook:
+            for item in positive_outlook:
+                st.markdown(f"✅ {item}")
+        else:
+            st.markdown("*No data available*")
     
     with col2:
-        st.markdown(
-            f"""
-            <div class="guidance-container">
-                <div class="guidance-header" style="color: #f23645;">⚠️ Challenges Ahead</div>
-                <ul class="challenge-list">
-                    {''.join([f"<li>{item}</li>" for item in challenges]) if challenges else "<li style='color: #666;'>No data available</li>"}
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown("#### ⚠️ Challenges Ahead")
+        if challenges:
+            for item in challenges:
+                st.markdown(f"❌ {item}")
+        else:
+            st.markdown("*No data available*")
 
 def render_earnings_surprise_chart(surprises):
     """Renderiza gráfico de earnings surprises."""
@@ -975,76 +883,43 @@ def render_earnings_section(data, av_data):
     net_income = safe_float(latest.get('netIncome'))
     ebitda = safe_float(latest.get('ebitda'))
     
-    st.markdown(
-        f"""
-        <div style="text-align: center; margin-bottom: 30px;">
-            <div style="color: #00ffad; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">
-                📅 {latest.get('fiscalDateEnding', 'N/D')} • {data['ticker']} Financials
-            </div>
-            <h2 style="color: white; margin: 0; font-size: 2rem;">
-                {data['name']}
-            </h2>
-            <p style="color: #888; margin-top: 10px;">
-                {data['sector']} • {data.get('industry', 'N/A')}
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Header
+    st.markdown(f"**{latest.get('fiscalDateEnding', 'N/D')}** • {data['ticker']} Financials")
+    st.markdown(f"## {data['name']}")
+    st.markdown(f"{data['sector']} • {data.get('industry', 'N/A')}")
+    st.markdown("")
     
+    # Métricas en 4 columnas usando métricas nativas de Streamlit
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        rev_color = "#00ffad" if revenue_growth and revenue_growth > 0 else "#f23645" if revenue_growth and revenue_growth < 0 else "#888"
-        growth_text = f"{'▲' if revenue_growth > 0 else '▼'} {abs(revenue_growth):.1f}% YoY" if revenue_growth else ""
-        
-        st.markdown(
-            f"""
-            <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
-                <div style="color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">Total Revenue (TTM)</div>
-                <div style="color: white; font-size: 1.8rem; font-weight: bold;">${revenue/1e9:.2f}B</div>
-                {f'<div style="color: {rev_color}; font-size: 12px; margin-top: 5px;">{growth_text}</div>' if revenue_growth else ''}
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            label="Total Revenue (TTM)",
+            value=f"${revenue/1e9:.2f}B",
+            delta=f"{revenue_growth:.1f}% YoY" if revenue_growth else None
         )
     
     with col2:
         margin = (net_income/revenue*100) if revenue > 0 else 0
-        st.markdown(
-            f"""
-            <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
-                <div style="color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">Net Income</div>
-                <div style="color: white; font-size: 1.8rem; font-weight: bold;">${net_income/1e6:.0f}M</div>
-                <div style="color: #888; font-size: 12px; margin-top: 5px;">{margin:.1f}% Margin</div>
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            label="Net Income",
+            value=f"${net_income/1e6:.0f}M",
+            delta=f"{margin:.1f}% Margin"
         )
     
     with col3:
         ebitda_margin = (ebitda/revenue*100) if revenue > 0 else 0
-        st.markdown(
-            f"""
-            <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
-                <div style="color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">EBITDA</div>
-                <div style="color: white; font-size: 1.8rem; font-weight: bold;">${ebitda/1e6:.0f}M</div>
-                <div style="color: #888; font-size: 12px; margin-top: 5px;">{ebitda_margin:.1f}% Margin</div>
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            label="EBITDA",
+            value=f"${ebitda/1e6:.0f}M",
+            delta=f"{ebitda_margin:.1f}% Margin"
         )
     
     with col4:
         eps = data.get('eps', 0)
-        st.markdown(
-            f"""
-            <div style="background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 12px; padding: 20px; text-align: center;">
-                <div style="color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">EPS (TTM)</div>
-                <div style="color: white; font-size: 1.8rem; font-weight: bold;">${eps:.2f}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            label="EPS (TTM)",
+            value=f"${eps:.2f}"
         )
 
 # ────────────────────────────────────────────────
@@ -1108,53 +983,27 @@ EARNINGS BEAT RATE: {data.get('earnings_beat_rate', 0):.0f}% | Avg Surprise: {da
                 generation_config={"temperature": 0.2, "max_output_tokens": 8192}
             )
             
+            st.markdown("---")
+            st.markdown("### 🤖 RSU AI Analysis")
+            
+            # Terminal box
             st.markdown(
                 """
                 <style>
-                .terminal-container {
+                .terminal-box {
                     background-color: #0c0e12;
                     border: 1px solid #00ffad;
                     border-radius: 8px;
+                    padding: 20px;
                     font-family: 'Courier New', monospace;
-                    margin: 20px 0;
-                    overflow: hidden;
-                }
-                .terminal-header {
-                    background: linear-gradient(90deg, #00ffad22 0%, #00ffad11 100%);
-                    border-bottom: 1px solid #00ffad;
-                    padding: 12px 16px;
-                }
-                .terminal-title {
-                    color: #00ffad;
-                    font-size: 13px;
-                    font-weight: bold;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                }
-                .terminal-body {
-                    padding: 24px;
                     color: #e0e0e0;
-                    line-height: 1.7;
-                    font-size: 14px;
                 }
                 </style>
                 """,
                 unsafe_allow_html=True
             )
             
-            st.markdown(
-                f"""
-                <div class="terminal-container">
-                    <div class="terminal-header">
-                        <span class="terminal-title">RSU Hedge Fund Analysis Terminal v2.0</span>
-                    </div>
-                    <div class="terminal-body">
-                        {response.text}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            st.markdown(f'<div class="terminal-box">{html.escape(response.text)}</div>', unsafe_allow_html=True)
             
     except Exception as e:
         st.error(f"❌ Error en generación: {e}")
@@ -1181,10 +1030,13 @@ def render():
             color: #0c0e12; 
             font-weight: bold; 
         }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0c0e12; }
-        ::-webkit-scrollbar-thumb { background: #2a3f5f; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #00ffad; }
+        [data-testid="stMetricValue"] {
+            font-size: 1.5rem;
+            color: #00ffad;
+        }
+        [data-testid="stMetricDelta"] {
+            color: #888;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1287,11 +1139,10 @@ def render():
         st.markdown("### 1️⃣ Financial Overview")
         render_earnings_section(data, av_data)
         
-        # 2. REVENUE BY SEGMENT (Mock data - requiere integración real)
+        # 2. REVENUE BY SEGMENT
         st.markdown("---")
         st.markdown("### 2️⃣ Revenue by Segment")
         
-        # Datos de ejemplo - en producción vendrían de API de segmentos
         segment_data = {
             'Product A': 65,
             'Product B': 25,
@@ -1299,12 +1150,10 @@ def render():
         }
         render_segment_chart(segment_data, f"{data['ticker']} Revenue by Segment")
         
-        # 3. FORWARD GUIDANCE (Generado por IA o datos reales si disponibles)
+        # 3. FORWARD GUIDANCE
         st.markdown("---")
         st.markdown("### 3️⃣ Forward Guidance")
         
-        # Placeholder - en implementación real, esto vendría del último earnings call
-        # o sería generado por IA basado en tendencias
         positive_outlook = [
             "Revenue growth expected to accelerate in next quarter driven by new product launches",
             "Operating margins expanding due to cost optimization initiatives",
@@ -1321,14 +1170,14 @@ def render():
         
         render_forward_guidance(positive_outlook, challenges)
         
-        # 4. METRICS GRID (CORREGIDO - sin HTML escaped)
+        # 4. METRICS GRID - CORREGIDO
         st.markdown("---")
         st.markdown("### 4️⃣ Fundamental Metrics")
         
         if data['data_source'] == 'mock':
             st.error("⚠️ Datos de demostración. Configura ALPHA_VANTAGE_API_KEY.")
         
-        # Grid 4x3 usando la función corregida
+        # Grid 4x3 - usando la función corregida con html.escape
         row1 = st.columns(4)
         with row1[0]:
             render_metric_card("Crec. Ingresos", data.get('rev_growth'), is_pct=True, decimals=1)
@@ -1388,7 +1237,6 @@ def render():
                     name='Price'
                 ), row=1, col=1)
                 
-                # SMAs
                 if len(hist) >= 50:
                     hist['SMA50'] = hist['Close'].rolling(window=50).mean()
                     fig.add_trace(go.Scatter(
@@ -1407,7 +1255,6 @@ def render():
                         name='SMA 200'
                     ), row=1, col=1)
                 
-                # Volumen
                 colors = ['#00ffad' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] else '#f23645' 
                          for i in range(len(hist))]
                 fig.add_trace(go.Bar(
@@ -1456,28 +1303,22 @@ def render():
             st.markdown("#### 📋 Company Info")
             summary = data.get('summary', 'N/A')
             if len(summary) > 300:
-                st.markdown(
-                    f"<div style='color: #aaa; font-size: 13px; line-height: 1.6;'>{summary[:300]}...</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(summary[:300] + "...")
             else:
-                st.markdown(
-                    f"<div style='color: #aaa; font-size: 13px; line-height: 1.6;'>{summary}</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(summary)
             
             st.markdown("#### 💰 Key Financials")
             
             metrics_list = [
-                ("Cash", data.get('cash'), "#00ffad", True),
-                ("Debt", data.get('debt'), "#f23645", True),
-                ("FCF", data.get('free_cashflow'), "#00ffad", True),
-                ("Op. Cash Flow", data.get('operating_cashflow'), "#5b8ff9", True),
-                ("Employees", data.get('employees'), "white", False),
-                ("Book Value/Share", data.get('book_value_ps'), "white", False),
+                ("Cash", data.get('cash'), True),
+                ("Debt", data.get('debt'), True),
+                ("FCF", data.get('free_cashflow'), True),
+                ("Op. Cash Flow", data.get('operating_cashflow'), True),
+                ("Employees", data.get('employees'), False),
+                ("Book Value/Share", data.get('book_value_ps'), False),
             ]
             
-            for label, value, color, is_currency in metrics_list:
+            for label, value, is_currency in metrics_list:
                 if is_currency:
                     val_str = format_value(value, '$')
                 elif label == "Employees":
@@ -1485,39 +1326,13 @@ def render():
                 else:
                     val_str = f"${value:.2f}" if value else "N/A"
                 
-                is_na = val_str == "N/A" or val_str == "0" or val_str == "$0.00"
-                
-                st.markdown(
-                    f"""
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #1a1e26;">
-                        <span style="color: #888; font-size: 13px;">{label}</span>
-                        <span style="color: {'#666' if is_na else color}; font-weight: 600; font-size: 14px;">{val_str}</span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"**{label}:** {val_str}")
             
-            # Institutional Ownership
             if data.get('institutional_ownership', 0) > 0:
                 st.markdown("#### 🏛️ Ownership")
-                inst_pct = data.get('institutional_ownership', 0)
-                insider_pct = data.get('insider_ownership', 0)
-                
-                st.markdown(
-                    f"""
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
-                        <span style="color: #888; font-size: 13px;">Institutional</span>
-                        <span style="color: #5b8ff9; font-weight: 600;">{inst_pct:.1f}%</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
-                        <span style="color: #888; font-size: 13px;">Insider</span>
-                        <span style="color: #00ffad; font-weight: 600;">{insider_pct:.1f}%</span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"Institutional: **{data.get('institutional_ownership', 0):.1f}%**")
+                st.markdown(f"Insider: **{data.get('insider_ownership', 0):.1f}%**")
             
-            # Analyst ratings
             if data.get('num_analysts', 0) > 0:
                 st.markdown("#### 👥 Analyst Consensus")
                 
@@ -1531,24 +1346,9 @@ def render():
                 
                 total = sum(ratings.values())
                 if total > 0:
-                    colors_rating = ['#00ffad', '#5b8ff9', '#f5a623', '#f23645', '#d32f2f']
-                    
-                    for (rating, count), color in zip(ratings.items(), colors_rating):
+                    for rating, count in ratings.items():
                         pct = (count / total) * 100
-                        st.markdown(
-                            f"""
-                            <div style="margin-bottom: 8px;">
-                                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
-                                    <span style="color: #888;">{rating}</span>
-                                    <span style="color: {color};">{count} ({pct:.0f}%)</span>
-                                </div>
-                                <div style="background: #1a1e26; height: 6px; border-radius: 3px; overflow: hidden;">
-                                    <div style="background: {color}; width: {pct}%; height: 100%; border-radius: 3px;"></div>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
+                        st.markdown(f"{rating}: {count} ({pct:.0f}%)")
         
         # 6. EARNINGS SURPRISE HISTORY
         st.markdown("---")
@@ -1577,4 +1377,3 @@ def render():
 
 if __name__ == "__main__":
     render()
-

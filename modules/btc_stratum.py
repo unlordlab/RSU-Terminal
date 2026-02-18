@@ -9,13 +9,13 @@ from plotly.subplots import make_subplots
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RSU BITCOIN ACCUMULATION MODEL
-# Basado en el indicador 200W MA de Gold-Tourist1996 (r/mltraders)
+# Basado en el indicador 200W MA 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Solo configurar página si se ejecuta standalone (no como módulo importado)
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="RSU | Bitcoin Accumulation Model",
+        page_title="RSU BTC STRATUM | Bitcoin Accumulation Model",
         page_icon="₿",
         layout="wide",
         initial_sidebar_state="collapsed"
@@ -671,7 +671,7 @@ def main():
         <div style="font-size: 48px; margin-bottom: 10px;">₿</div>
         <h1 style="margin: 0; font-size: 2rem;">Modelo de Acumulación RSU Bitcoin</h1>
         <p style="color: {COLORS['text_dim']}; font-family: 'Courier New', monospace; font-size: 14px; margin-top: 10px;">
-            Estrategia de Zonas basada en Media Móvil de 200 Semanas | Metodología de r/mltraders por Gold-Tourist1996
+            Estrategia de Zonas basada en Media Móvil de 200 Semanas | Metodología de RSU
         </p>
     </div>
     """, unsafe_allow_html=True)

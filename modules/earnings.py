@@ -712,7 +712,6 @@ def render_metric_card(label, value, is_pct=False, decimals=2, good_threshold=0,
     
     is_real = value is not None and value != 0
     
-    # Usar st.markdown con unsafe_allow_html=False para evitar escape de HTML
     st.markdown(
         f"""
         <div style="background: {'#0c0e12' if is_real else '#1a1e26'}; 
@@ -1543,34 +1542,39 @@ def render():
                                     <span style="color: #888;">{rating}</span>
                                     <span style="color: {color};">{count} ({pct:.0f}%)</span>
                                 </div>
-                                <div style="background: #1a1e26; height: 6px; border-radius: 3
-                                """,
-unsafe_allow_html=True
-)
-                           # 6. EARNINGS SURPRISE HISTORY
-    st.markdown("---")
-    st.markdown("### 6️⃣ Earnings Surprise History")
-    render_earnings_surprise_chart(data.get('earnings_surprises', []))
-    
-    # 7. NEWS SENTIMENT
-    st.markdown("---")
-    st.markdown("### 7️⃣ News Sentiment")
-    render_news_sentiment(data.get('news_sentiment'))
-    
-    # 8. RSU ANALYSIS TERMINAL
-    st.markdown("---")
-    st.markdown("### 8️⃣ RSU AI Analysis")
-    render_rsu_analysis(data)
-    
-    # Footer
-    st.markdown(
-        f"""
-        <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
-            RSU Dashboard Pro • Alpha Vantage + Yahoo Finance • {datetime.now().year}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    if name == "main":
-render()
+                                <div style="background: #1a1e26; height: 6px; border-radius: 3px; overflow: hidden;">
+                                    <div style="background: {color}; width: {pct}%; height: 100%; border-radius: 3px;"></div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+        
+        # 6. EARNINGS SURPRISE HISTORY
+        st.markdown("---")
+        st.markdown("### 6️⃣ Earnings Surprise History")
+        render_earnings_surprise_chart(data.get('earnings_surprises', []))
+        
+        # 7. NEWS SENTIMENT
+        st.markdown("---")
+        st.markdown("### 7️⃣ News Sentiment")
+        render_news_sentiment(data.get('news_sentiment'))
+        
+        # 8. RSU ANALYSIS TERMINAL
+        st.markdown("---")
+        st.markdown("### 8️⃣ RSU AI Analysis")
+        render_rsu_analysis(data)
+        
+        # Footer
+        st.markdown(
+            f"""
+            <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
+                RSU Dashboard Pro • Alpha Vantage + Yahoo Finance • {datetime.now().year}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+if __name__ == "__main__":
+    render()
 

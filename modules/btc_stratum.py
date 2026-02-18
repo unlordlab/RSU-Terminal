@@ -12,12 +12,14 @@ from plotly.subplots import make_subplots
 # Basado en el indicador 200W MA de Gold-Tourist1996 (r/mltraders)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.set_page_config(
-    page_title="RSU | Bitcoin Accumulation Model",
-    page_icon="₿",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Solo configurar página si se ejecuta standalone (no como módulo importado)
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="RSU | Bitcoin Accumulation Model",
+        page_icon="₿",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
 
 # ───────────────────────────────────────────────────────────────────────────────
 # PALETA DE COLORES RSU TERMINAL
@@ -884,5 +886,18 @@ Light Buy/Wait:       {hist_data['zones']['LIGHT BUY']['pct']:.1f}% of time
     with tab_risks:
         render_warning_section()
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# FUNCIÓN RENDER PARA INTEGRACIÓN CON APP PRINCIPAL RSU
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render():
+    """
+    Punto de entrada principal para la sección BTC STRATUM.
+    Esta función es llamada por la aplicación principal RSU cuando el usuario
+    selecciona esta opción del menú lateral.
+    """
+    main()
+
+# Mantener compatibilidad con ejecución directa (python btc_stratum.py)
 if __name__ == "__main__":
     main()

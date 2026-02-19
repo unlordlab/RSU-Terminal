@@ -30,6 +30,212 @@ def debug_log(msg, data=None):
     return full_msg
 
 # ────────────────────────────────────────────────
+# API KEYS DESDE SECRETS
+# ────────────────────────────────────────────────
+
+def get_api_keys():
+    """Obtiene las API keys desde secrets."""
+    return {
+        'alpha_vantage': st.secrets.get("ALPHA_VANTAGE_API_KEY", ""),
+        'finnhub': st.secrets.get("FINNHUB_API_KEY", ""),
+    }
+
+# ────────────────────────────────────────────────
+# FINNHUB API - DATOS DE SEGMENTOS Y NOTICIAS
+# ────────────────────────────────────────────────
+
+def get_finnhub_data(ticker, api_key):
+    """Obtiene datos de segmentos y noticias de Finnhub."""
+    if not api_key:
+        debug_log("ERROR: FINNHUB_API_KEY no proporcionada")
+        return None
+    
+    base_url = "https://finnhub.io/api/v1"
+    headers = {"X-Finnhub-Token": api_key}
+    result = {}
+    
+    try:
+        # 1. Revenue Breakdown by Segment
+        debug_log("Solicitando revenue breakdown de Finnhub")
+        rev_response = requests.get(
+            f"{base_url}/stock/revenue-breakdown",
+            params={"symbol": ticker},
+            headers=headers,
+            timeout=10
+        )
+        
+        if rev_response.status_code == 200:
+            rev_data = rev_response.json()
+            debug_log("Revenue breakdown OK", list(rev_data.keys())[:5])
+            result['revenue_breakdown'] = rev_data
+        else:
+            debug_log(f"Revenue breakdown error: {rev_response.status_code}")
+            result['revenue_breakdown'] = {}
+        
+        time.sleep(0.5)  # Rate limiting
+        
+        # 2. Revenue Breakdown by Geographic
+        debug_log("Solicitando geographic revenue de Finnhub")
+        geo_response = requests.get(
+            f"{base_url}/stock/revenue-breakdown",
+            params={"symbol": ticker, "breakdown": "geographic"},
+            headers=headers,
+            timeout=10
+        )
+        
+        if geo_response.status_code == 200:
+            geo_data = geo_response.json()
+            debug_log("Geographic revenue OK")
+            result['geographic_revenue'] = geo_data
+        else:
+            debug_log(f"Geographic revenue error: {geo_response.status_code}")
+            result['geographic_revenue'] = {}
+        
+        time.sleep(0.5)
+        
+        # 3. Company News con Sentiment
+        debug_log("Solicitando noticias de Finnhub")
+        to_date = datetime.now().strftime('%Y-%m-%d')
+        from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        
+        news_response = requests.get(
+            f"{base_url}/company-news",
+            params={
+                "symbol": ticker,
+                "from": from_date,
+                "to": to_date
+            },
+            headers=headers,
+            timeout=10
+        )
+        
+        if news_response.status_code == 200:
+            news_data = news_response.json()
+            debug_log(f"Noticias OK: {len(news_data)} artículos")
+            result['news'] = news_response.json()
+        else:
+            debug_log(f"Noticias error: {news_response.status_code}")
+            result['news'] = []
+        
+        time.sleep(0.5)
+        
+        # 4. Social Sentiment
+        debug_log("Solicitando social sentiment de Finnhub")
+        sentiment_response = requests.get(
+            f"{base_url}/stock/social-sentiment",
+            params={"symbol": ticker},
+            headers=headers,
+            timeout=10
+        )
+        
+        if sentiment_response.status_code == 200:
+            sentiment_data = sentiment_response.json()
+            debug_log("Social sentiment OK")
+            result['social_sentiment'] = sentiment_data
+        else:
+            debug_log(f"Social sentiment error: {sentiment_response.status_code}")
+            result['social_sentiment'] = {}
+        
+        result['source'] = 'finnhub'
+        result['last_updated'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        return result
+        
+    except Exception as e:
+        debug_log("ERROR en Finnhub", str(e))
+        return None
+
+def process_finnhub_segments(finnhub_data):
+    """Procesa los datos de segmentos de Finnhub."""
+    if not finnhub_data:
+        return None
+    
+    segments = {}
+    
+    # Procesar revenue breakdown por segmento de negocio
+    rev_breakdown = finnub_data.get('revenue_breakdown', {})
+    if rev_breakdown and 'data' in rev_breakdown:
+        for item in rev_breakdown['data']:
+            segment_name = item.get('segment', 'Unknown')
+            revenue = item.get('revenue', 0)
+            if revenue > 0:
+                segments[segment_name] = revenue
+    
+    # Si no hay segmentos de negocio, usar geográficos
+    if not segments:
+        geo_breakdown = finnhub_data.get('geographic_revenue', {})
+        if geo_breakdown and 'data' in geo_breakdown:
+            for item in geo_breakdown['data']:
+                region = item.get('region', 'Unknown')
+                revenue = item.get('revenue', 0)
+                if revenue > 0:
+                    segments[region] = revenue
+    
+    return segments if segments else None
+
+def calculate_news_sentiment(finnhub_data):
+    """Calcula sentimiento basado en noticias de Finnhub."""
+    if not finnhub_data or 'news' not in finnhub_data:
+        return None
+    
+    news = finnhub_data['news']
+    if not news:
+        return None
+    
+    # Análisis simple basado en palabras clave en títulos
+    bullish_words = ['beat', 'strong', 'growth', 'profit', 'gain', 'rise', 'surge', 'bull', 'upgrade', 'buy']
+    bearish_words = ['miss', 'weak', 'loss', 'decline', 'fall', 'drop', 'bear', 'downgrade', 'sell', 'cut']
+    
+    bullish_count = 0
+    bearish_count = 0
+    
+    for article in news[:20]:  # Últimas 20 noticias
+        title = article.get('headline', '').lower()
+        
+        for word in bullish_words:
+            if word in title:
+                bullish_count += 1
+                break
+        
+        for word in bearish_words:
+            if word in title:
+                bearish_count += 1
+                break
+    
+    total = bullish_count + bearish_count
+    if total == 0:
+        return {
+            'overall_sentiment': 'neutral',
+            'sentiment_score': 0,
+            'news_count': len(news),
+            'bullish_pct': 0,
+            'bearish_pct': 0,
+            'source': 'finnhub'
+        }
+    
+    bullish_pct = (bullish_count / total) * 100
+    bearish_pct = (bearish_count / total) * 100
+    
+    if bullish_pct > 60:
+        sentiment = 'bullish'
+        score = 0.5 + (bullish_pct - 60) / 80  # 0.5 a 1.0
+    elif bearish_pct > 60:
+        sentiment = 'bearish'
+        score = -0.5 - (bearish_pct - 60) / 80  # -0.5 a -1.0
+    else:
+        sentiment = 'neutral'
+        score = (bullish_pct - bearish_pct) / 100  # -0.5 a 0.5
+    
+    return {
+        'overall_sentiment': sentiment,
+        'sentiment_score': max(-1, min(1, score)),
+        'news_count': len(news),
+        'bullish_pct': bullish_pct,
+        'bearish_pct': bearish_pct,
+        'source': 'finnhub'
+    }
+
+# ────────────────────────────────────────────────
 # ALPHA VANTAGE API - DATOS FUNDAMENTALES
 # ────────────────────────────────────────────────
 
@@ -155,13 +361,11 @@ def extract_fundamentals_from_av(av_data):
         f['price_to_book'] = safe_float(overview.get('PriceToBookRatio'))
         f['price_to_sales'] = safe_float(overview.get('PriceToSalesRatioTTM'))
         
-        # Márgenes - IMPORTANTE: Alpha Vantage ya devuelve estos valores como porcentajes decimales
-        # Ejemplo: 0.15 para 15%, pero a veces vienen como 15 para 15%
+        # Márgenes - Normalización
         gross_margin_raw = safe_float(overview.get('GrossProfitTTM'))
         revenue_ttm_raw = safe_float(overview.get('RevenueTTM'))
         
         if revenue_ttm_raw > 0 and gross_margin_raw > 0:
-            # Si el valor es mayor que 1, probablemente ya es porcentaje (15 en lugar de 0.15)
             if gross_margin_raw > 1:
                 f['gross_margin'] = gross_margin_raw / 100
             else:
@@ -171,7 +375,7 @@ def extract_fundamentals_from_av(av_data):
         f['profit_margin'] = safe_float(overview.get('ProfitMargin'))
         f['ebitda_margin'] = safe_float(overview.get('EBITDA')) / safe_float(overview.get('RevenueTTM')) if overview.get('RevenueTTM') else 0
         
-        # Normalizar márgenes si vienen como porcentajes (>1)
+        # Normalizar márgenes
         for margin_key in ['operating_margin', 'profit_margin', 'ebitda_margin']:
             if f.get(margin_key, 0) > 1:
                 f[margin_key] = f[margin_key] / 100
@@ -181,7 +385,7 @@ def extract_fundamentals_from_av(av_data):
         f['roa'] = safe_float(overview.get('ReturnOnAssetsTTM'))
         f['roi'] = safe_float(overview.get('ReturnOnInvestmentTTM'))
         
-        # Normalizar ratios de rentabilidad si vienen como porcentajes
+        # Normalizar ratios
         for ratio_key in ['roe', 'roa', 'roi']:
             if f.get(ratio_key, 0) > 1:
                 f[ratio_key] = f[ratio_key] / 100
@@ -190,7 +394,7 @@ def extract_fundamentals_from_av(av_data):
         f['rev_growth'] = safe_float(overview.get('QuarterlyRevenueGrowthYOY'))
         f['eps_growth'] = safe_float(overview.get('QuarterlyEarningsGrowthYOY'))
         
-        # Normalizar crecimiento si viene como porcentaje
+        # Normalizar crecimiento
         for growth_key in ['rev_growth', 'eps_growth']:
             if abs(f.get(growth_key, 0)) > 1:
                 f[growth_key] = f[growth_key] / 100
@@ -199,8 +403,7 @@ def extract_fundamentals_from_av(av_data):
         f['dividend_yield'] = safe_float(overview.get('DividendYield'))
         f['payout_ratio'] = safe_float(overview.get('PayoutRatio'))
         
-        # Normalizar dividend yield si viene como porcentaje
-        if f.get('dividend_yield', 0) > 0.5:  # Si es mayor que 50%, probablemente es 5.0 en lugar de 0.05
+        if f.get('dividend_yield', 0) > 0.5:
             f['dividend_yield'] = f['dividend_yield'] / 100
         
         f['beta'] = safe_float(overview.get('Beta'))
@@ -247,7 +450,7 @@ def extract_fundamentals_from_av(av_data):
             if f['operating_cashflow'] and capex:
                 f['free_cashflow'] = f['operating_cashflow'] - capex
         
-        # Income Statement - PARA REVENUE, NET INCOME, EBITDA REALES
+        # Income Statement
         income = av_data.get('income_statement', {})
         income_reports = income.get('quarterlyReports', [])
         
@@ -270,7 +473,7 @@ def extract_fundamentals_from_av(av_data):
                 if yoy_rev > 0:
                     f['rev_growth_calculated'] = (current_rev - yoy_rev) / yoy_rev
         
-        # Earnings - Procesar Earnings Surprise History
+        # Earnings
         earnings = av_data.get('earnings', {})
         earnings_reports = earnings.get('quarterlyEarnings', [])
         
@@ -381,30 +584,11 @@ def get_yfinance_data(ticker_symbol, max_retries=3):
     return None
 
 # ────────────────────────────────────────────────
-# NEWS SENTIMENT
-# ────────────────────────────────────────────────
-
-def get_news_sentiment(ticker):
-    """Placeholder para sentimiento de noticias."""
-    try:
-        return {
-            'overall_sentiment': 'neutral',
-            'sentiment_score': 0.0,
-            'news_count': 0,
-            'bullish_pct': 0,
-            'bearish_pct': 0,
-            'articles': [],
-            'source': 'placeholder'
-        }
-    except:
-        return None
-
-# ────────────────────────────────────────────────
 # PROCESAMIENTO DE DATOS COMBINADO
 # ────────────────────────────────────────────────
 
-def process_combined_data(ticker, av_data, yf_data):
-    """Combina datos de Alpha Vantage y Yahoo Finance."""
+def process_combined_data(ticker, av_data, yf_data, finnhub_data=None):
+    """Combina datos de Alpha Vantage, Yahoo Finance y Finnhub."""
     debug_log("Iniciando process_combined_data")
     
     data = {
@@ -471,7 +655,7 @@ def process_combined_data(ticker, av_data, yf_data):
         'institutional_ownership': 0,
         'insider_ownership': 0,
         'news_sentiment': None,
-        # Campos para financial overview
+        'segments': None,
         'latest_revenue': 0,
         'latest_net_income': 0,
         'latest_ebitda': 0,
@@ -479,6 +663,7 @@ def process_combined_data(ticker, av_data, yf_data):
     
     has_valid_price = False
     
+    # Procesar Alpha Vantage
     if av_data:
         debug_log("Procesando datos Alpha Vantage")
         av_fund = extract_fundamentals_from_av(av_data)
@@ -493,8 +678,8 @@ def process_combined_data(ticker, av_data, yf_data):
             
             data['data_source'] = 'alpha_vantage'
             data['is_real_data'] = True
-            debug_log("Datos AV aplicados", f"Name: {data['name']}, ROE: {data['roe']}, P/E: {data['pe_trailing']}")
     
+    # Procesar Yahoo Finance
     if yf_data:
         debug_log("Procesando datos Yahoo Finance")
         yf_specific = yf_data.get('yf_specific', {})
@@ -532,6 +717,22 @@ def process_combined_data(ticker, av_data, yf_data):
             except Exception as e:
                 debug_log("Error cargando histórico", str(e))
     
+    # Procesar Finnhub
+    if finnhub_data:
+        debug_log("Procesando datos Finnhub")
+        
+        # Segmentos
+        segments = process_finnhub_segments(finnhub_data)
+        if segments:
+            data['segments'] = segments
+            debug_log("Segmentos procesados", list(segments.keys()))
+        
+        # Sentimiento
+        sentiment = calculate_news_sentiment(finnhub_data)
+        if sentiment:
+            data['news_sentiment'] = sentiment
+            debug_log("Sentimiento calculado", sentiment['overall_sentiment'])
+    
     # Fallback de precio
     if not has_valid_price and data['eps'] > 0 and data['pe_trailing'] > 0:
         estimated_price = data['eps'] * data['pe_trailing']
@@ -541,7 +742,6 @@ def process_combined_data(ticker, av_data, yf_data):
             data['change_pct'] = 0
             has_valid_price = True
             data['data_source'] = 'alpha_vantage_estimated'
-            debug_log("Precio estimado desde AV", f"{estimated_price}")
     
     # Calcular campos derivados
     if data['price'] > 0 and data['prev_close'] > 0:
@@ -555,9 +755,6 @@ def process_combined_data(ticker, av_data, yf_data):
     
     if data['market_cap'] > 0 and data['debt'] > 0 and data['cash'] > 0:
         data['enterprise_value'] = data['market_cap'] + data['debt'] - data['cash']
-    
-    # Obtener news sentiment
-    data['news_sentiment'] = get_news_sentiment(ticker)
     
     if data['price'] == 0 and not has_valid_price:
         debug_log("ERROR: Precio sigue siendo 0")
@@ -658,6 +855,19 @@ def get_mock_data(ticker):
         'latest_revenue': float(base_price) * 1e9 * 2,
         'latest_net_income': float(base_price) * 1e9 * 0.1,
         'latest_ebitda': float(base_price) * 1e9 * 0.3,
+        'segments': {
+            'Producto A': 65,
+            'Producto B': 25,
+            'Servicios': 10
+        },
+        'news_sentiment': {
+            'overall_sentiment': 'neutral',
+            'sentiment_score': 0.1,
+            'news_count': 15,
+            'bullish_pct': 55,
+            'bearish_pct': 45,
+            'source': 'mock'
+        }
     }
 
 # ────────────────────────────────────────────────
@@ -666,7 +876,7 @@ def get_mock_data(ticker):
 
 def format_value(value, prefix="", suffix="", decimals=2):
     if value is None or value == 0 or (isinstance(value, float) and pd.isna(value)):
-        return "N/A"
+        return "N/D"
     try:
         val = float(value)
         if abs(val) >= 1e12:
@@ -683,13 +893,13 @@ def format_value(value, prefix="", suffix="", decimals=2):
 
 def format_pct(value, decimals=2):
     if value is None or (isinstance(value, float) and pd.isna(value)):
-        return "N/A", "#888"
+        return "N/D", "#888"
     try:
         val = float(value) * 100 if abs(float(value)) < 1 else float(value)
         color = "#00ffad" if val >= 0 else "#f23645"
         return f"{val:.{decimals}f}%", color
     except:
-        return "N/A", "#888"
+        return "N/D", "#888"
 
 def get_color_for_value(value, good_threshold=0, bad_threshold=0, inverse=False):
     """Retorna color basado en valor."""
@@ -706,13 +916,12 @@ def get_color_for_value(value, good_threshold=0, bad_threshold=0, inverse=False)
     return "#f5a623"
 
 # ────────────────────────────────────────────────
-# COMPONENTES UI MEJORADOS
+# COMPONENTES UI
 # ────────────────────────────────────────────────
 
 def render_metric_card(label, value, is_pct=False, decimals=2, good_threshold=0, bad_threshold=0, inverse=False):
     """Renderiza una tarjeta de métrica individual."""
     
-    # Formatear valor
     if is_pct and value is not None and value != 0:
         formatted_val, color = format_pct(value, decimals)
     elif value is not None and value != 0:
@@ -740,7 +949,7 @@ def render_metric_card(label, value, is_pct=False, decimals=2, good_threshold=0,
         unsafe_allow_html=True
     )
 
-def render_segment_chart(segments_data, title="Revenue by Segment"):
+def render_segment_chart(segments_data, title="Ingresos por Segmento"):
     """Renderiza gráfico de donut para segmentos."""
     if not segments_data:
         st.info("Datos de segmentos no disponibles")
@@ -774,28 +983,21 @@ def render_segment_chart(segments_data, title="Revenue by Segment"):
     st.plotly_chart(fig, use_container_width=True)
 
 def render_forward_guidance(data, av_data):
-    """Renderiza sección de Forward Guidance con datos reales si están disponibles."""
-    
-    # Intentar extraer guidance real de los datos de earnings o income statement
-    # Por ahora, generamos guidance basado en tendencias reales
+    """Renderiza sección de Forward Guidance basado en datos reales."""
     
     income = av_data.get('income_statement', {}) if av_data else {}
     income_reports = income.get('quarterlyReports', [])
     
-    # Calcular tendencias para generar guidance realista
+    # Calcular tendencias
     if len(income_reports) >= 2:
         latest = income_reports[0]
         previous = income_reports[1]
         
         rev_growth = ((safe_float(latest.get('totalRevenue')) - safe_float(previous.get('totalRevenue'))) / 
                      safe_float(previous.get('totalRevenue')) * 100) if safe_float(previous.get('totalRevenue')) > 0 else 0
-        
-        margin_trend = "mejorando" if safe_float(latest.get('netIncome')) > safe_float(previous.get('netIncome')) else "presionado"
     else:
         rev_growth = 0
-        margin_trend = "estable"
     
-    # Generar guidance basado en datos reales (no hardcodeado)
     positive_outlook = []
     challenges = []
     
@@ -820,7 +1022,6 @@ def render_forward_guidance(data, av_data):
     elif data.get('debt_to_equity', 0) > 100:
         challenges.append(f"Alto nivel de apalancamiento ({data['debt_to_equity']:.1f}%) expone a riesgos de tipos de interés")
     
-    # Añadir items genéricos si no hay suficientes
     if len(positive_outlook) < 2:
         positive_outlook.append("Posición de mercado estable en segmentos core")
     if len(challenges) < 2:
@@ -887,8 +1088,8 @@ def render_earnings_surprise_chart(surprises):
 
 def render_news_sentiment(sentiment_data):
     """Renderiza indicador de sentimiento de noticias."""
-    if not sentiment_data or sentiment_data.get('source') == 'placeholder':
-        st.info("Análisis de sentimiento requiere configuración de API (NewsAPI/Finnhub)")
+    if not sentiment_data:
+        st.info("Análisis de sentimiento no disponible")
         return
     
     sentiment = sentiment_data.get('overall_sentiment', 'neutral')
@@ -902,6 +1103,21 @@ def render_news_sentiment(sentiment_data):
     
     color = colors.get(sentiment, '#888')
     
+    # Mostrar métricas de sentimiento
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Sentimiento", sentiment.upper(), f"{score*100:+.0f}")
+    
+    with col2:
+        bullish_pct = sentiment_data.get('bullish_pct', 0)
+        st.metric("Noticias Alcistas", f"{bullish_pct:.0f}%")
+    
+    with col3:
+        bearish_pct = sentiment_data.get('bearish_pct', 0)
+        st.metric("Noticias Bajistas", f"{bearish_pct:.0f}%")
+    
+    # Gauge chart
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score * 100,
@@ -941,7 +1157,7 @@ def render_news_sentiment(sentiment_data):
 # ────────────────────────────────────────────────
 
 def render_earnings_section(data, av_data):
-    """Renderiza sección de earnings con datos reales de Alpha Vantage."""
+    """Renderiza sección de earnings con datos reales."""
     
     if not av_data:
         st.info("📊 Datos fundamentales no disponibles.")
@@ -967,7 +1183,6 @@ def render_earnings_section(data, av_data):
         except:
             pass
     
-    # Usar datos reales del último trimestre
     revenue = safe_float(latest.get('totalRevenue'))
     net_income = safe_float(latest.get('netIncome'))
     ebitda = safe_float(latest.get('ebitda'))
@@ -977,7 +1192,6 @@ def render_earnings_section(data, av_data):
     st.markdown(f"{data['sector']} • {data.get('industry', 'N/A')}")
     st.markdown("")
     
-    # Métricas en 4 columnas
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -1011,7 +1225,7 @@ def render_earnings_section(data, av_data):
         )
 
 # ────────────────────────────────────────────────
-# ANÁLISIS RSU CON IA - TÍTULO ASCII MEJORADO
+# ANÁLISIS RSU CON IA
 # ────────────────────────────────────────────────
 
 def get_embedded_prompt():
@@ -1091,7 +1305,6 @@ EARNINGS BEAT RATE: {data.get('earnings_beat_rate', 0):.0f}% | Avg Surprise: {da
             st.markdown("---")
             st.markdown("### 🤖 Análisis RSU AI")
             
-            # Terminal box con título ASCII incluido
             st.markdown(
                 """
                 <style>
@@ -1105,17 +1318,11 @@ EARNINGS BEAT RATE: {data.get('earnings_beat_rate', 0):.0f}% | Avg Surprise: {da
                     white-space: pre-wrap;
                     overflow-x: auto;
                 }
-                .terminal-title {
-                    color: #00ffad;
-                    font-weight: bold;
-                    margin-bottom: 20px;
-                }
                 </style>
                 """,
                 unsafe_allow_html=True
             )
             
-            # El título ASCII ya está en el prompt, solo renderizamos la respuesta
             st.markdown(f'<div class="terminal-box">{html.escape(response.text)}</div>', unsafe_allow_html=True)
             
     except Exception as e:
@@ -1157,14 +1364,27 @@ def render():
     
     st.title("📅 Análisis de Earnings")
     st.markdown(
-        '<div style="color: #888; margin-bottom: 20px;">Datos fundamentales por Alpha Vantage + Precios por Yahoo Finance</div>',
+        '<div style="color: #888; margin-bottom: 20px;">Datos fundamentales por Alpha Vantage + Precios por Yahoo Finance + Segmentos por Finnhub</div>',
         unsafe_allow_html=True
     )
     
-    av_key = st.secrets.get("ALPHA_VANTAGE_API_KEY", "")
-    if not av_key:
+    # Obtener API keys
+    api_keys = get_api_keys()
+    
+    # Verificar API keys
+    if not api_keys['alpha_vantage']:
         st.warning("⚠️ **ALPHA_VANTAGE_API_KEY no configurada**")
         st.info("💡 Obtén tu API key gratuita en: https://www.alphavantage.co/support/#api-key")
+    
+    if not api_keys['finnhub']:
+        st.info("ℹ️ **FINNHUB_API_KEY no configurada** - Los datos de segmentos y sentimiento usarán datos de ejemplo")
+        st.markdown("""
+        💡 **Para obtener API key de Finnhub (GRATIS):**
+        1. Ve a https://finnhub.io/
+        2. Clic en "Get free api key"
+        3. Regístrate con email
+        4. Copia tu API key del dashboard
+        """)
     
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -1189,10 +1409,13 @@ def render():
         sys.stdout = LogCapture()
         
         try:
-            with st.spinner("Cargando datos (esto puede tomar 1 minuto)..."):
-                av_data = get_alpha_vantage_data(ticker, av_key) if av_key else None
+            with st.spinner("Cargando datos (esto puede tomar 1-2 minutos)..."):
+                # Obtener datos de todas las fuentes
+                av_data = get_alpha_vantage_data(ticker, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
                 yf_data = get_yfinance_data(ticker)
-                data = process_combined_data(ticker, av_data, yf_data)
+                finnhub_data = get_finnhub_data(ticker, api_keys['finnhub']) if api_keys['finnhub'] else None
+                
+                data = process_combined_data(ticker, av_data, yf_data, finnhub_data)
                 
                 if not data:
                     st.error("❌ No se pudieron obtener datos válidos.")
@@ -1252,20 +1475,24 @@ def render():
         st.markdown("### 1️⃣ Resumen Financiero")
         render_earnings_section(data, av_data)
         
-        # 2. REVENUE BY SEGMENT - DATOS SIMULADOS (requiere API adicional)
+        # 2. REVENUE BY SEGMENT
         st.markdown("---")
         st.markdown("### 2️⃣ Ingresos por Segmento")
-        st.info("ℹ️ Los datos de segmentos requieren una API adicional (Finnhub, FMP) o scraping de informes 10-K. Actualmente se muestran datos de ejemplo.")
         
-        # Datos de ejemplo - en producción vendrían de API de segmentos
-        segment_data = {
-            'Producto A': 65,
-            'Producto B': 25,
-            'Servicios': 10
-        }
-        render_segment_chart(segment_data, f"{data['ticker']} - Ingresos por Segmento")
+        if data.get('segments'):
+            st.success("✅ Datos de segmentos reales de Finnhub")
+            render_segment_chart(data['segments'], f"{data['ticker']} - Ingresos por Segmento")
+        else:
+            st.info("ℹ️ Datos de segmentos no disponibles. Configura FINNHUB_API_KEY para datos reales.")
+            # Datos de ejemplo
+            segment_data = {
+                'Producto A': 65,
+                'Producto B': 25,
+                'Servicios': 10
+            }
+            render_segment_chart(segment_data, f"{data['ticker']} - Ingresos por Segmento (Ejemplo)")
         
-        # 3. FORWARD GUIDANCE - BASADO EN DATOS REALES
+        # 3. FORWARD GUIDANCE
         st.markdown("---")
         st.markdown("### 3️⃣ Perspectivas Futuras")
         st.info("ℹ️ Este análisis se genera automáticamente basado en tendencias reales de los últimos trimestres.")
@@ -1460,6 +1687,10 @@ def render():
         # 7. NEWS SENTIMENT
         st.markdown("---")
         st.markdown("### 7️⃣ Sentimiento de Noticias")
+        
+        if data.get('news_sentiment') and data['news_sentiment'].get('source') == 'finnhub':
+            st.success("✅ Sentimiento calculado con noticias reales de Finnhub")
+        
         render_news_sentiment(data.get('news_sentiment'))
         
         # 8. RSU ANALYSIS TERMINAL
@@ -1471,7 +1702,7 @@ def render():
         st.markdown(
             f"""
             <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
-                RSU Dashboard Pro • Alpha Vantage + Yahoo Finance • {datetime.now().year}
+                RSU Dashboard Pro • Alpha Vantage + Yahoo Finance + Finnhub • {datetime.now().year}
             </div>
             """,
             unsafe_allow_html=True

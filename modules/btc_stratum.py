@@ -6,11 +6,11 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import requests
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RSU BITCOIN ACCUMULATION MODEL v2.0
+# RSU BITCOIN ACCUMULATION MODEL v2.1
 # Basado en: 200W MA + MVRV Z-Score + Puell Multiple + AHR999 + Macro Conditions
+# Nuevas features: Stress Test Scenarios + Alertas Progresivas
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Solo configurar página si se ejecuta standalone (no como módulo importado)
@@ -49,7 +49,10 @@ COLORS = {
     'rsu_strong': '#00ff88',        # RSU Score 20-40
     'rsu_moderate': '#ffff00',      # RSU Score 40-60
     'rsu_weak': '#ff8800',          # RSU Score 60-80
-    'rsu_poor': '#ff0044'           # RSU Score > 80
+    'rsu_poor': '#ff0044',           # RSU Score > 80
+    'stress_extreme': '#ff0000',    # Stress test extremo
+    'stress_moderate': '#ff6600',   # Stress test moderado
+    'alert_info': '#00d4ff'         # Alertas informativas
 }
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -92,37 +95,51 @@ def calculate_200w_ma(data):
     close = ensure_1d_series(data['Close'])
     return close.rolling(window=1400, min_periods=100).mean()
 
+def calculate_ma_curvature(data):
+    """
+    Calcula la curvatura (segunda derivada) de la MA200W
+    Positiva = tendencia alcista acelerándose, Negativa = desacelerándose
+    """
+    ma200 = calculate_200w_ma(data)
+    # Primera derivada (pendiente)
+    ma_slope = ma200.diff(30)  # Cambio en 30 días
+    # Segunda derivada (curvatura)
+    curvature = ma_slope.diff(30)
+    
+    current_slope = ma_slope.iloc[-1] if not pd.isna(ma_slope.iloc[-1]) else 0
+    current_curvature = curvature.iloc[-1] if not pd.isna(curvature.iloc[-1]) else 0
+    
+    # Normalizar para interpretación
+    slope_pct = (current_slope / ma200.iloc[-1]) * 100 if ma200.iloc[-1] > 0 else 0
+    
+    return {
+        'slope': slope_pct,
+        'curvature': current_curvature,
+        'trend': 'ALCISTA FUERTE' if slope_pct > 1 else 'ALCISTA' if slope_pct > 0.2 else 'LATERAL' if slope_pct > -0.2 else 'BAJISTA',
+        'acceleration': 'ACELERANDO' if current_curvature > 0 else 'DESACELERANDO',
+        'ma_value': ma200.iloc[-1]
+    }
+
 def calculate_mvrv_z_score(data, market_cap_data=None):
     """
     Calcula MVRV Z-Score simplificado basado en desviación del precio vs MA200W
-    En producción, esto debería conectarse a datos reales de market cap realizados
     """
     close = ensure_1d_series(data['Close'])
     ma200 = calculate_200w_ma(data)
     
-    # Simulación: MVRV correlaciona fuertemente con desviación de la media móvil larga
-    # Valores típicos: <-1.5 = sobreventa extrema, >3.5 = sobrecompra extrema
     deviation = (close - ma200) / ma200
-    
-    # Aproximación del Z-score basada en desviación histórica
-    mvrv_z = deviation * 3.5  # Factor de escala empírico
+    mvrv_z = deviation * 3.5
     
     return mvrv_z
 
 def calculate_puell_multiple(data):
     """
     Calcula Puell Multiple simplificado basado en momentum de emisión
-    En producción: requiere datos de minería y emisión diaria
     """
     close = ensure_1d_series(data['Close'])
-    
-    # SMA de 365 días como proxy de "costo de producción" promedio
     sma_365 = close.rolling(window=365).mean()
-    
-    # Puell = Precio actual / Media móvil de emisión (aproximada por SMA365)
     puell = close / sma_365
     
-    # Normalizar a escala típica (0.5 = bottom, 4.0 = top)
     return puell
 
 def calculate_ahr999(data):
@@ -132,10 +149,7 @@ def calculate_ahr999(data):
     """
     close = ensure_1d_series(data['Close'])
     ma200 = calculate_200w_ma(data)
-    
-    # Evitar división por cero
     ma200_safe = ma200.replace(0, np.nan)
-    
     ahr999 = (close / ma200_safe) / np.log(ma200_safe)
     
     return ahr999
@@ -143,25 +157,20 @@ def calculate_ahr999(data):
 def get_macro_conditions():
     """
     Obtiene condiciones macroeconómicas relevantes
-    En producción: conectar a APIs de FRED, Yahoo Finance para DXY
     """
     try:
-        # DXY (Dollar Index) - proxy de liquidez global inversa
         dxy = yf.download("DX-Y.NYB", period="1y", interval="1d", progress=False, auto_adjust=True)
         dxy = flatten_columns(dxy)
         dxy_current = float(ensure_1d_series(dxy['Close']).iloc[-1])
         dxy_ma50 = ensure_1d_series(dxy['Close']).rolling(50).mean().iloc[-1]
         
-        # Tendencia DXY: >50MA = restrictivo (malo para BTC), <50MA = expansivo (bueno)
         dxy_score = 50 if pd.isna(dxy_ma50) else (50 - ((dxy_current / dxy_ma50 - 1) * 500))
-        dxy_score = max(0, min(100, dxy_score))  # Clamp 0-100
+        dxy_score = max(0, min(100, dxy_score))
         
-        # FED Funds Rate proxy usando datos de mercado (TLT inverso)
         tlt = yf.download("TLT", period="1y", interval="1d", progress=False, auto_adjust=True)
         tlt = flatten_columns(tlt)
-        tlt_yield = 20 - (float(ensure_1d_series(tlt['Close']).iloc[-1]) / 10)  # Aproximación
+        tlt_yield = 20 - (float(ensure_1d_series(tlt['Close']).iloc[-1]) / 10)
         
-        # Score de liquidez: 100 = muy expansiva, 0 = muy restrictiva
         liquidity_score = max(0, min(100, 100 - (tlt_yield * 10)))
         
         return {
@@ -183,7 +192,6 @@ def get_macro_conditions():
 def get_halving_cycle():
     """
     Calcula la posición en el ciclo de halving de Bitcoin
-    Halvings: 2012-11-28, 2016-07-09, 2020-05-11, 2024-04-19 (próximo ~2028)
     """
     halving_dates = [
         datetime(2012, 11, 28),
@@ -194,14 +202,12 @@ def get_halving_cycle():
     
     now = datetime.now()
     last_halving = max([h for h in halving_dates if h <= now])
-    next_halving = datetime(2028, 4, 1)  # Estimado
+    next_halving = datetime(2028, 4, 1)
     
     days_since = (now - last_halving).days
     days_total = (next_halving - last_halving).days
     progress = days_since / days_total
     
-    # Fases del ciclo: Acumulación (0-20%), Bull Early (20-40%), Bull Late (40-60%), 
-    # Distribución (60-80%), Bear (80-100%)
     if progress < 0.2:
         phase = "ACUMULACIÓN"
         phase_color = COLORS['zone_max']
@@ -231,36 +237,30 @@ def calculate_rsu_score(data):
     """
     Calcula el RSU Score Compuesto
     Ponderaciones: 200W MA (40%) + MVRV Z-Score (30%) + Puell (20%) + AHR999 (10%)
-    Score: 0-100 (0 = máxima oportunidad, 100 = máximo riesgo)
     """
     close = ensure_1d_series(data['Close'])
     ma200 = calculate_200w_ma(data)
     
     # 1. Score de 200W MA (40%)
     ma_deviation = ((close - ma200) / ma200).iloc[-1]
-    # Normalizar: -50% = 0, 0% = 50, +50% = 100
     ma_score = ((ma_deviation + 0.5) / 1.0) * 100
     ma_score = max(0, min(100, ma_score))
     
     # 2. MVRV Z-Score (30%)
     mvrv = calculate_mvrv_z_score(data).iloc[-1]
-    # Normalizar: -1.5 = 0, 0 = 50, 3.5 = 100
     mvrv_score = ((mvrv + 1.5) / 5.0) * 100
     mvrv_score = max(0, min(100, mvrv_score))
     
     # 3. Puell Multiple (20%)
     puell = calculate_puell_multiple(data).iloc[-1]
-    # Normalizar: 0.5 = 0, 1.0 = 50, 4.0 = 100
     puell_score = ((puell - 0.5) / 3.5) * 100
     puell_score = max(0, min(100, puell_score))
     
     # 4. AHR999 (10%)
     ahr = calculate_ahr999(data).iloc[-1]
-    # Normalizar: 0.5 = 0, 1.2 = 50, 5.0 = 100
     ahr_score = ((ahr - 0.5) / 4.5) * 100
     ahr_score = max(0, min(100, ahr_score))
     
-    # Score ponderado
     rsu_score = (
         ma_score * 0.40 +
         mvrv_score * 0.30 +
@@ -268,7 +268,6 @@ def calculate_rsu_score(data):
         ahr_score * 0.10
     )
     
-    # Determinar señal
     if rsu_score < 20:
         signal = "OPORTUNIDAD EXTREMA"
         signal_color = COLORS['rsu_extreme']
@@ -304,6 +303,205 @@ def calculate_rsu_score(data):
     }
 
 # ───────────────────────────────────────────────────────────────────────────────
+# SISTEMA DE ALERTAS PROGRESIVAS
+# ───────────────────────────────────────────────────────────────────────────────
+
+def calculate_progressive_alerts(data, zone_data):
+    """
+    Calcula alertas progresivas de proximidad a zonas y condiciones de mercado
+    """
+    close = ensure_1d_series(data['Close'])
+    current_price = float(close.iloc[-1])
+    ma200 = zone_data['ma200']
+    levels = zone_data['levels']
+    
+    alerts = []
+    
+    # 1. Proximidad a zonas
+    if current_price > levels['ma200']:
+        distance_to_strong = ((current_price - levels['ma200']) / levels['ma200']) * 100
+        if distance_to_strong <= 15:
+            alerts.append({
+                'type': 'proximity',
+                'level': 'info',
+                'icon': '📉',
+                'message': f"A {distance_to_strong:.1f}% de entrar en COMPRA FUERTE",
+                'color': COLORS['alert_info']
+            })
+    else:
+        distance_to_max = ((levels['minus_50'] - current_price) / current_price) * 100 if current_price > 0 else 999
+        if 0 < distance_to_max <= 20:
+            alerts.append({
+                'type': 'proximity',
+                'level': 'opportunity',
+                'icon': '🔥',
+                'message': f"A {distance_to_max:.1f}% de OPORTUNIDAD MÁXIMA",
+                'color': COLORS['zone_max']
+            })
+    
+    # 2. Curvatura MA200
+    ma_curvature = calculate_ma_curvature(data)
+    if ma_curvature['slope'] > 0.5 and ma_curvature['curvature'] > 0:
+        alerts.append({
+            'type': 'trend',
+            'level': 'positive',
+            'icon': '📈',
+            'message': f"MA200W {ma_curvature['trend']} y {ma_curvature['acceleration']}",
+            'color': COLORS['accent_green']
+        })
+    elif ma_curvature['slope'] < -0.2:
+        alerts.append({
+            'type': 'trend',
+            'level': 'warning',
+            'icon': '⚠️',
+            'message': f"MA200W mostrando tendencia {ma_curvature['trend']}",
+            'color': COLORS['accent_orange']
+        })
+    
+    # 3. Divergencias entre indicadores
+    rsu = zone_data['rsu_score']
+    if rsu['components']['ma200']['score'] > 60 and rsu['components']['mvrv']['score'] < 40:
+        alerts.append({
+            'type': 'divergence',
+            'level': 'opportunity',
+            'icon': '💎',
+            'message': "Divergencia: Precio bajo MA200 pero MVRV muestra valoración justa",
+            'color': COLORS['accent_cyan']
+        })
+    
+    # 4. Niveles históricos
+    all_time_high = close.max()
+    drawdown_from_ath = ((current_price - all_time_high) / all_time_high) * 100
+    if drawdown_from_ath < -70:
+        alerts.append({
+            'type': 'historical',
+            'level': 'extreme',
+            'icon': '🚨',
+            'message': f"Drawdown del {drawdown_from_ath:.1f}% desde ATH - Zona histórica de capitulación",
+            'color': COLORS['accent_red']
+        })
+    elif drawdown_from_ath < -50:
+        alerts.append({
+            'type': 'historical',
+            'level': 'opportunity',
+            'icon': '💰',
+            'message': f"Drawdown del {drawdown_from_ath:.1f}% desde ATH - Considerar acumulación",
+            'color': COLORS['zone_agg']
+        })
+    
+    return alerts
+
+# ───────────────────────────────────────────────────────────────────────────────
+# SISTEMA DE STRESS TEST
+# ─────────────────════════════════════════════════════════════════════════════──
+
+def run_stress_tests(data, zone_data):
+    """
+    Simula escenarios alternativos y colapsos estructurales para gestión de expectativas
+    """
+    close = ensure_1d_series(data['Close'])
+    current_price = float(close.iloc[-1])
+    current_position = zone_data['allocation_pct']
+    
+    scenarios = []
+    
+    # Escenario 1: "2017 fue el top" (Bear market perpetuo)
+    max_price_2017 = close[close.index.year <= 2017].max() if len(close[close.index.year <= 2017]) > 0 else close.max()
+    if current_price > max_price_2017:
+        drop_to_2017 = ((current_price - max_price_2017) / current_price) * 100
+        pnl_2017_scenario = -(current_position * 2)  # Pérdida acelerada si el modelo falla
+        
+        scenarios.append({
+            'name': 'TOP 2017 DEFINITIVO',
+            'description': 'Si 2017 fue el máximo histórico permanente',
+            'price_target': max_price_2017,
+            'drop_pct': drop_to_2017,
+            'pnl_scenario': pnl_2017_scenario,
+            'probability': 'BAJA (5%)',
+            'hedge': 'Stop loss en -30% o diversificación a 50% stablecoins',
+            'severity': 'extreme'
+        })
+    
+    # Escenario 2: Colapso de exchange mayor (FTX 2.0)
+    ftx_scenario_drop = 50
+    ftx_price = current_price * 0.5
+    pnl_ftx = -(current_position * 1.5)
+    
+    scenarios.append({
+        'name': 'COLAPSO EXCHANGE MAYOR',
+        'description': 'Evento tipo FTX/Celsius - Pánico sistémico temporal',
+        'price_target': ftx_price,
+        'drop_pct': ftx_scenario_drop,
+        'pnl_scenario': pnl_ftx,
+        'probability': 'MEDIA (15%)',
+        'hedge': 'Mantener 70% en cold wallet, límite de exposición por exchange',
+        'severity': 'high'
+    })
+    
+    # Escenario 3: Regulación severa (Ban China 2.0)
+    regulation_drop = 35
+    reg_price = current_price * 0.65
+    pnl_reg = -(current_position * 1.2)
+    
+    scenarios.append({
+        'name': 'BAN REGULATORIO GLOBAL',
+        'description': 'Prohibición amplia en G7 + confiscación parcial',
+        'price_target': reg_price,
+        'drop_pct': regulation_drop,
+        'pnl_scenario': pnl_reg,
+        'probability': 'MEDIA-BAJA (10%)',
+        'hedge': 'Diversificación geográfica, monederos auto-custodiales',
+        'severity': 'high'
+    })
+    
+    # Escenario 4: Ruptura técnica (Quantum/SHA256 roto)
+    tech_drop = 80
+    tech_price = current_price * 0.2
+    pnl_tech = -(current_position * 3)
+    
+    scenarios.append({
+        'name': 'RUPTURA CRIPTOGRÁFICA',
+        'description': 'Ataque cuántico o vulnerabilidad SHA256 descubierta',
+        'price_target': tech_price,
+        'drop_pct': tech_drop,
+        'pnl_scenario': pnl_tech,
+        'probability': 'MUY BAJA (2%)',
+        'hedge': 'Imposible de hedgear - aceptar riesgo de colapso total',
+        'severity': 'extreme'
+    })
+    
+    # Escenario 5: Estanflación macro prolongada
+    stagflation_drop = 60
+    stag_price = current_price * 0.4
+    pnl_stag = -(current_position * 1.8)
+    
+    scenarios.append({
+        'name': 'ESTANFLACIÓN 5+ AÑOS',
+        'description': 'DXY >120, tasas >10%, recesión global prolongada',
+        'price_target': stag_price,
+        'drop_pct': stagflation_drop,
+        'pnl_scenario': pnl_stag,
+        'probability': 'MEDIA (20%)',
+        'hedge': 'Oro, bienes raíces, exposición mínima a risk-on assets',
+        'severity': 'moderate'
+    })
+    
+    # Calcular métricas agregadas
+    max_drawdown = max([s['drop_pct'] for s in scenarios])
+    avg_pnl = np.mean([s['pnl_scenario'] for s in scenarios])
+    worst_pnl = min([s['pnl_scenario'] for s in scenarios])
+    
+    return {
+        'scenarios': scenarios,
+        'summary': {
+            'max_drawdown_tested': max_drawdown,
+            'avg_pnl_scenario': avg_pnl,
+            'worst_case_pnl': worst_pnl,
+            'capital_at_risk': current_position
+        }
+    }
+
+# ───────────────────────────────────────────────────────────────────────────────
 # CÁLCULOS DEL MODELO DE ACUMULACIÓN (ORIGINAL + RSU)
 # ───────────────────────────────────────────────────────────────────────────────
 
@@ -325,7 +523,6 @@ def calculate_accumulation_zones(data):
     
     deviation = ((current_price - current_ma) / current_ma) * 100 if current_ma > 0 else 0
     
-    # Priorizar señal RSU Score sobre MA200 simple
     rsu_signal = rsu_data['signal']
     rsu_score = rsu_data['total_score']
     
@@ -534,7 +731,7 @@ def create_main_chart(data, zone_data, symbol="BTC-USD"):
     
     fig.update_layout(
         title=dict(
-            text=f'₿ {symbol} | MODELO RSU v2.0 - ACUMULACIÓN MULTI-INDICADOR',
+            text=f'₿ {symbol} | MODELO RSU v2.1 - ACUMULACIÓN MULTI-INDICADOR',
             font=dict(family='Courier New, monospace', size=20, color=COLORS['accent_cyan']),
             x=0.5
         ),
@@ -850,9 +1047,168 @@ def create_historical_distribution(hist_data):
     
     return fig
 
+def create_stress_test_chart(stress_data):
+    """Visualización de escenarios de stress test"""
+    
+    scenarios = stress_data['scenarios']
+    
+    names = [s['name'] for s in scenarios]
+    drops = [s['drop_pct'] for s in scenarios]
+    pnls = [s['pnl_scenario'] for s in scenarios]
+    
+    colors = [COLORS['stress_extreme'] if s['severity'] == 'extreme' else COLORS['stress_moderate'] for s in scenarios]
+    
+    fig = make_subplots(rows=1, cols=2, subplot_titles=('Caída del Precio (%)', 'P&L Escenario (%)'),
+                        horizontal_spacing=0.15)
+    
+    # Gráfico de caídas
+    fig.add_trace(
+        go.Bar(
+            x=names,
+            y=drops,
+            marker_color=colors,
+            text=[f"{d:.0f}%" for d in drops],
+            textposition='outside',
+            textfont=dict(color='white', family='Courier New, monospace'),
+            hovertemplate='<b>%{x}</b><br>Caída: %{y:.1f}%<extra></extra>',
+            showlegend=False
+        ),
+        row=1, col=1
+    )
+    
+    # Gráfico de P&L
+    fig.add_trace(
+        go.Bar(
+            x=names,
+            y=pnls,
+            marker_color=colors,
+            text=[f"{p:.0f}%" for p in pnls],
+            textposition='outside',
+            textfont=dict(color='white', family='Courier New, monospace'),
+            hovertemplate='<b>%{x}</b><br>P&L: %{y:.1f}%<extra></extra>',
+            showlegend=False
+        ),
+        row=1, col=2
+    )
+    
+    fig.update_layout(
+        paper_bgcolor=COLORS['bg_dark'],
+        plot_bgcolor=COLORS['bg_panel'],
+        font=dict(family='Courier New, monospace', color=COLORS['text']),
+        height=400,
+        margin=dict(l=60, r=40, t=80, b=100),
+        title=dict(
+            text='STRESS TEST - ESCENARIOS EXTREMOS',
+            font=dict(color=COLORS['accent_red'], family='Courier New, monospace', size=16),
+            x=0.5
+        )
+    )
+    
+    fig.update_xaxes(tickangle=45, tickfont=dict(size=9))
+    fig.update_yaxes(gridcolor=COLORS['grid'], color=COLORS['text_dim'])
+    
+    return fig
+
 # ───────────────────────────────────────────────────────────────────────────────
 # COMPONENTES UI
 # ───────────────────────────────────────────────────────────────────────────────
+
+def render_alerts_panel(alerts):
+    """Renderiza el panel de alertas progresivas"""
+    
+    if not alerts:
+        st.info("No hay alertas activas en este momento. El mercado está en rango neutral.")
+        return
+    
+    st.markdown("---")
+    st.markdown(f"<h3 style='color: {COLORS['accent_yellow']};'>🔔 ALERTAS DE MERCADO</h3>", unsafe_allow_html=True)
+    
+    for alert in alerts:
+        alert_color = alert['color']
+        icon = alert['icon']
+        message = alert['message']
+        
+        st.markdown(f"""
+        <div style="
+            background: {hex_to_rgba(alert_color, 0.1)};
+            border-left: 4px solid {alert_color};
+            padding: 12px 20px;
+            margin: 8px 0;
+            border-radius: 4px;
+        ">
+            <span style="font-size: 20px; margin-right: 10px;">{icon}</span>
+            <span style="color: {alert_color}; font-weight: bold; font-family: 'Courier New', monospace;">
+                {message}
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+
+def render_stress_test_panel(stress_data):
+    """Renderiza el panel de stress test"""
+    
+    st.markdown("---")
+    st.markdown(f"<h3 style='color: {COLORS['stress_extreme']};'>💥 STRESS TEST - GESTIÓN DE EXPECTATIVAS</h3>", unsafe_allow_html=True)
+    
+    summary = stress_data['summary']
+    
+    # Resumen ejecutivo
+    cols = st.columns(4)
+    with cols[0]:
+        st.metric("Máx Drawdown Testeado", f"{summary['max_drawdown_tested']:.0f}%", delta=None)
+    with cols[1]:
+        st.metric("P&L Promedio", f"{summary['avg_pnl_scenario']:.1f}%", delta=None)
+    with cols[2]:
+        st.metric("Peor Caso P&L", f"{summary['worst_case_pnl']:.1f}%", delta=None)
+    with cols[3]:
+        st.metric("Capital en Riesgo", f"{summary['capital_at_risk']}%", delta=None)
+    
+    # Gráfico de stress
+    st.plotly_chart(create_stress_test_chart(stress_data), use_container_width=True)
+    
+    # Detalle de escenarios
+    with st.expander("📋 DETALLE DE ESCENARIOS", expanded=False):
+        for scenario in stress_data['scenarios']:
+            severity_color = COLORS['stress_extreme'] if scenario['severity'] == 'extreme' else COLORS['stress_moderate']
+            
+            st.markdown(f"""
+            <div style="
+                background: {COLORS['bg_panel']};
+                border: 1px solid {severity_color};
+                border-radius: 8px;
+                padding: 15px;
+                margin: 10px 0;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h4 style="color: {severity_color}; margin: 0;">{scenario['name']}</h4>
+                    <span style="background: {severity_color}; color: black; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">
+                        {scenario['probability']}
+                    </span>
+                </div>
+                <p style="color: {COLORS['text_dim']}; font-size: 13px; margin: 8px 0;">
+                    {scenario['description']}
+                </p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; font-family: monospace; font-size: 12px;">
+                    <div>
+                        <span style="color: {COLORS['text_dim']};">Objetivo:</span><br>
+                        <span style="color: {COLORS['accent_red']};">${scenario['price_target']:,.0f}</span>
+                    </div>
+                    <div>
+                        <span style="color: {COLORS['text_dim']};">Caída:</span><br>
+                        <span style="color: {COLORS['accent_red']};">-{scenario['drop_pct']:.0f}%</span>
+                    </div>
+                    <div>
+                        <span style="color: {COLORS['text_dim']};">P&L:</span><br>
+                        <span style="color: {COLORS['accent_red']};">{scenario['pnl_scenario']:.0f}%</span>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid {COLORS['grid']};">
+                    <span style="color: {COLORS['accent_cyan']}; font-size: 11px;">🛡️ HEDGE:</span>
+                    <span style="color: {COLORS['text']}; font-size: 12px;"> {scenario['hedge']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 def render_rsu_dashboard(zone_data, macro_data, halving_data):
     """Renderiza el dashboard principal del RSU Score"""
@@ -861,7 +1217,6 @@ def render_rsu_dashboard(zone_data, macro_data, halving_data):
     
     st.markdown("---")
     
-    # Header del RSU Score
     cols = st.columns([2, 1, 1])
     
     with cols[0]:
@@ -891,7 +1246,6 @@ def render_rsu_dashboard(zone_data, macro_data, halving_data):
         """, unsafe_allow_html=True)
     
     with cols[1]:
-        # Macro Conditions
         liquidity_color = COLORS['accent_green'] if macro_data['liquidity_score'] > 60 else COLORS['accent_yellow'] if macro_data['liquidity_score'] > 40 else COLORS['accent_red']
         
         st.markdown(f"""
@@ -921,7 +1275,6 @@ def render_rsu_dashboard(zone_data, macro_data, halving_data):
         """, unsafe_allow_html=True)
     
     with cols[2]:
-        # Halving Cycle
         st.markdown(f"""
         <div style="
             background: {COLORS['bg_panel']};
@@ -1011,24 +1364,23 @@ def render_warning_section():
         <div style='color: {COLORS['text_dim']};'>
         
         **1. RSU Score es un Modelo Probabilístico**
-        La combinación de indicadores (MA200W 40% + MVRV 30% + Puell 20% + AHR999 10%) mejora la filtración de falsos positivos,
-        pero no elimina el riesgo. Los mercados pueden comportarse de manera irracional más tiempo del que puedes mantener solvente.
+        La combinación de indicadores mejora la filtración de falsos positivos,
+        pero no elimina el riesgo. Los mercados pueden comportarse de manera irracional.
         
-        **2. Condiciones Macro No Consideradas en Score**
-        El DXY y tasas de la FED son mostrados como referencia pero NO están incluidos en el cálculo del RSU Score para mantener
-        la pureza de los indicadores on-chain. Un DXY alcista fuerte (>105) puede anular señales de compra técnicamente válidas.
+        **2. Stress Test son Simulaciones**
+        Los escenarios presentados son hipotéticos. Las probabilidades asignadas 
+        son estimaciones subjetivas basadas en eventos históricos similares.
         
-        **3. Ciclos de Halving son Guías, no Garantías**
-        Aunque el halving reduce la oferta, la demanda puede no materializarse como en ciclos anteriores. La correlación
-        halving-precio ha disminuido con la maduración del mercado.
+        **3. Alertas Progresivas No son Señales de Trading**
+        Las alertas de proximidad a zonas son informativas. No garantizan que 
+        el precio alcance dichos niveles.
         
-        **4. Datos On-Chain Son Aproximaciones**
-        MVRV Z-Score, Puell Multiple y AHR999 en esta implementación usan cálculos proxy basados en precio/volumen.
-        Para análisis institucional, usar APIs especializadas (Glassnode, CryptoQuant).
+        **4. Curvatura MA200 es Rezagada**
+        La detección de tendencia usa medias móviles de 30 días sobre la MA200W,
+        lo que introduce retraso en la señal.
         
         **5. Esto NO es Asesoramiento Financiero**
-        Nunca inviertas más de lo que puedas permitirte perder. El modelo RSU es para acumulación a largo plazo (3-5 años),
-        no para trading de corto plazo.
+        Nunca inviertas más de lo que puedas permitirte perder.
         </div>
         """, unsafe_allow_html=True)
 
@@ -1092,9 +1444,9 @@ def main():
     st.markdown(f"""
     <div style="text-align: center; margin-bottom: 30px; padding: 20px; border-bottom: 1px solid {COLORS['grid']};">
         <div style="font-size: 48px; margin-bottom: 10px;">₿</div>
-        <h1 style="margin: 0; font-size: 2rem;">Modelo RSU Bitcoin v2.0</h1>
+        <h1 style="margin: 0; font-size: 2rem;">Modelo RSU Bitcoin v2.1</h1>
         <p style="color: {COLORS['text_dim']}; font-family: 'Courier New', monospace; font-size: 14px; margin-top: 10px;">
-            Multi-Indicador: MA200S + MVRV + Puell + AHR999 + Macro | Ciclo Halving Integrado
+            Multi-Indicador + Alertas Progresivas + Stress Test | Ciclo Halving Integrado
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1112,7 +1464,7 @@ def main():
             analyze_btn = st.button("⟳ CARGAR DATOS", use_container_width=True, type="primary")
         
         if analyze_btn or symbol:
-            with st.spinner("Calculando RSU Score y condiciones de mercado..."):
+            with st.spinner("Calculando RSU Score, alertas y escenarios de stress..."):
                 try:
                     data = yf.download(symbol, start="2015-01-01", interval="1d", progress=False, auto_adjust=True)
                     
@@ -1128,8 +1480,17 @@ def main():
                     halving_data = get_halving_cycle()
                     hist_data = get_historical_zones_analysis(data)
                     
+                    # NUEVO: Calcular alertas progresivas
+                    alerts = calculate_progressive_alerts(data, zone_data)
+                    
+                    # NUEVO: Calcular stress test
+                    stress_data = run_stress_tests(data, zone_data)
+                    
                     # Dashboard RSU Principal
                     render_rsu_dashboard(zone_data, macro_data, halving_data)
+                    
+                    # NUEVO: Panel de alertas progresivas
+                    render_alerts_panel(alerts)
                     
                     # Gráfico principal
                     st.plotly_chart(create_main_chart(data, zone_data, symbol), use_container_width=True)
@@ -1156,6 +1517,9 @@ def main():
                     with col_h2:
                         st.plotly_chart(create_historical_distribution(hist_data), use_container_width=True)
                     
+                    # NUEVO: Panel de Stress Test
+                    render_stress_test_panel(stress_data)
+                    
                     # Niveles de zona clásicos
                     render_zone_levels(zone_data)
                     
@@ -1166,9 +1530,10 @@ def main():
                     # Detalles técnicos
                     with st.expander("🔬 ESPECIFICACIONES TÉCNICAS RSU", expanded=False):
                         rsu = zone_data['rsu_score']
+                        ma_curv = calculate_ma_curvature(data)
                         st.code(f"""
 ╔══════════════════════════════════════════════════════════════════╗
-║                    RSU SCORE BREAKDOWN v2.0                      ║
+║                    RSU SCORE BREAKDOWN v2.1                      ║
 ╠══════════════════════════════════════════════════════════════════╣
   ACTIVO: {symbol}
   RANGO:  {data.index[0].strftime('%Y-%m-%d')} a {data.index[-1].strftime('%Y-%m-%d')}
@@ -1178,6 +1543,14 @@ def main():
 │ MVRV Z (30%):      Score {rsu['components']['mvrv']['score']:.1f} | Raw: {rsu['components']['mvrv']['raw']:.3f}
 │ Puell (20%):       Score {rsu['components']['puell']['score']:.1f} | Raw: {rsu['components']['puell']['raw']:.3f}
 │ AHR999 (10%):      Score {rsu['components']['ahr999']['score']:.1f} | Raw: {rsu['components']['ahr999']['raw']:.3f}
+└────────────────────────────────────────────────────────────────┘
+
+┌─ ANÁLISIS DE TENDENCIA (MA200W) ───────────────────────────────┐
+│ Valor MA200:       ${ma_curv['ma_value']:,.2f}
+│ Pendiente:         {ma_curv['slope']:.2f}% (30d)
+│ Curvatura:         {ma_curv['curvature']:.4f}
+│ Tendencia:         {ma_curv['trend']}
+│ Aceleración:       {ma_curv['acceleration']}
 └────────────────────────────────────────────────────────────────┘
 
 ┌─ CONDICIONES MACRO ────────────────────────────────────────────┐
@@ -1204,49 +1577,61 @@ ASIGNACIÓN: {rsu['allocation']}%
     with tab_methodology:
         with st.container():
             st.markdown(f"""
-            ### 📚 Metodología RSU v2.0
+            ### 📚 Metodología RSU v2.1
             
             **1. RSU Score Compuesto (Ponderado)**
             
-            El RSU Score combina múltiples indicadores on-chain probados para filtrar falsos positivos:
+            El RSU Score combina múltiples indicadores on-chain probados:
             
             - **MA 200S (40%)**: Tendencia a largo plazo, "piso" histórico de Bitcoin
-            - **MVRV Z-Score (30%)**: Valor de mercado vs valor realizado, identifica tops/bottoms
-            - **Puell Multiple (20%)**: Ingresos de mineros, señal de costo de producción
-            - **AHR999 (10%)**: Índice específico de acumulación para Bitcoin
+            - **MVRV Z-Score (30%)**: Valor de mercado vs valor realizado
+            - **Puell Multiple (20%)**: Ingresos de mineros
+            - **AHR999 (10%)**: Índice específico de acumulación
             
-            **Fórmula**: `RSU = (MA×0.4) + (MVRV×0.3) + (Puell×0.2) + (AHR999×0.1)`
+            **2. Alertas Progresivas**
             
-            **Interpretación**:
-            - **0-20**: Oportunidad extrema (acumulación agresiva)
-            - **20-40**: Acumulación fuerte
-            - **40-60**: Acumulación moderada/DCA
-            - **60-80**: Neutral/espera
-            - **80-100**: Sobrecompra/riesgo alto
+            El sistema monitorea continuamente:
+            
+            - **Proximidad a zonas**: Avisa cuando el precio se acerca a umbrales clave (ej: "A 12% de STRONG_BUY")
+            - **Curvatura MA200W**: Detecta cambios en la tendencia de la media móvil larga
+            - **Divergencias**: Señala cuando indicadores discrepan (ej: precio bajo pero MVRV saludable)
+            - **Niveles históricos**: Alerta de drawdowns significativos desde ATH
+            
+            **3. Stress Test**
+            
+            Simulación de escenarios extremos para gestión de expectativas:
+            
+            - **Top 2017 definitivo**: Si el ciclo actual fracasa
+            - **Colapso de exchange**: Evento tipo FTX
+            - **Ban regulatorio global**: Prohibición amplia
+            - **Ruptura criptográfica**: Ataque cuántico
+            - **Estanflación prolongada**: Macro adverso extendido
+            
+            Cada escenario incluye: probabilidad estimada, P&L proyectado, y estrategia de hedge sugerida.
             """)
             
             col_m1, col_m2 = st.columns(2)
             with col_m1:
                 st.markdown(f"""
-                **2. Condiciones Macro (Referencia)**
+                **4. Curvatura de MA200W**
                 
-                Mostradas pero NO incluidas en el score para mantener pureza on-chain:
+                Calculada como la segunda derivada de la media móvil:
                 
-                - **DXY > 105**: Restrictivo para BTC (dólar fuerte)
-                - **DXY < 100**: Expansivo para BTC (dólar débil)
-                - **FED Pivot**: Cambio en política monetaria
+                - **Pendiente > 1%**: Tendencia alcista fuerte
+                - **Pendiente 0.2-1%**: Tendencia alcista moderada
+                - **Pendiente -0.2 a 0.2**: Lateralización
+                - **Pendiente < -0.2%**: Tendencia bajista
                 
-                **3. Ciclo de Halving**
+                **Aceleración positiva**: La tendencia se fortalece
+                **Aceleración negativa**: La tendencia se debilita
                 
-                Bitcoin tiene ciclos de ~4 años correlacionados con halvings:
-                - **Año 1 post-halving**: Acumulación/Bull temprano
-                - **Año 2**: Bull market principal
-                - **Año 3**: Distribución/top
-                - **Año 4**: Bear market/pre-halving
+                **5. Ciclo de Halving**
+                
+                Bitcoin tiene ciclos de ~4 años correlacionados con halvings.
                 """)
             with col_m2:
                 st.markdown(f"""
-                **4. Estrategia de Asignación Dinámica**
+                **6. Estrategia de Asignación Dinámica**
                 
                 El modelo ajusta asignación basada en RSU Score + Zona MA200:
                 

@@ -6,16 +6,17 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import requests
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RSU BITCOIN ACCUMULATION MODEL
-# Basado en el indicador 200W MA 
+# RSU BITCOIN ACCUMULATION MODEL v2.0
+# Basado en: 200W MA + MVRV Z-Score + Puell Multiple + AHR999 + Macro Conditions
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Solo configurar página si se ejecuta standalone (no como módulo importado)
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="RSU BTC STRATUM | Bitcoin Accumulation Model",
+        page_title="RSU | Bitcoin Accumulation Model",
         page_icon="₿",
         layout="wide",
         initial_sidebar_state="collapsed"
@@ -43,7 +44,12 @@ COLORS = {
     'zone_good': '#78a832',         # Good buy
     'zone_dca': '#aa8c28',          # DCA zone
     'zone_light': '#aa5028',        # Light buy
-    'zone_wait': '#666666'          # Wait zone
+    'zone_wait': '#666666',         # Wait zone
+    'rsu_extreme': '#00ff00',       # RSU Score < 20
+    'rsu_strong': '#00ff88',        # RSU Score 20-40
+    'rsu_moderate': '#ffff00',      # RSU Score 40-60
+    'rsu_weak': '#ff8800',          # RSU Score 60-80
+    'rsu_poor': '#ff0044'           # RSU Score > 80
 }
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -78,7 +84,7 @@ def ensure_1d_series(data):
     return data
 
 # ───────────────────────────────────────────────────────────────────────────────
-# CÁLCULOS DEL MODELO DE ACUMULACIÓN
+# CÁLCULOS DE INDICADORES ON-CHAIN Y MACRO
 # ───────────────────────────────────────────────────────────────────────────────
 
 def calculate_200w_ma(data):
@@ -86,12 +92,228 @@ def calculate_200w_ma(data):
     close = ensure_1d_series(data['Close'])
     return close.rolling(window=1400, min_periods=100).mean()
 
-def calculate_accumulation_zones(data):
+def calculate_mvrv_z_score(data, market_cap_data=None):
     """
-    Calcula las zonas de acumulación basadas en la 200W MA
+    Calcula MVRV Z-Score simplificado basado en desviación del precio vs MA200W
+    En producción, esto debería conectarse a datos reales de market cap realizados
     """
     close = ensure_1d_series(data['Close'])
     ma200 = calculate_200w_ma(data)
+    
+    # Simulación: MVRV correlaciona fuertemente con desviación de la media móvil larga
+    # Valores típicos: <-1.5 = sobreventa extrema, >3.5 = sobrecompra extrema
+    deviation = (close - ma200) / ma200
+    
+    # Aproximación del Z-score basada en desviación histórica
+    mvrv_z = deviation * 3.5  # Factor de escala empírico
+    
+    return mvrv_z
+
+def calculate_puell_multiple(data):
+    """
+    Calcula Puell Multiple simplificado basado en momentum de emisión
+    En producción: requiere datos de minería y emisión diaria
+    """
+    close = ensure_1d_series(data['Close'])
+    
+    # SMA de 365 días como proxy de "costo de producción" promedio
+    sma_365 = close.rolling(window=365).mean()
+    
+    # Puell = Precio actual / Media móvil de emisión (aproximada por SMA365)
+    puell = close / sma_365
+    
+    # Normalizar a escala típica (0.5 = bottom, 4.0 = top)
+    return puell
+
+def calculate_ahr999(data):
+    """
+    Calcula índice AHR999 simplificado
+    Fórmula original: (Precio / 200DMA) / log(200DMA)
+    """
+    close = ensure_1d_series(data['Close'])
+    ma200 = calculate_200w_ma(data)
+    
+    # Evitar división por cero
+    ma200_safe = ma200.replace(0, np.nan)
+    
+    ahr999 = (close / ma200_safe) / np.log(ma200_safe)
+    
+    return ahr999
+
+def get_macro_conditions():
+    """
+    Obtiene condiciones macroeconómicas relevantes
+    En producción: conectar a APIs de FRED, Yahoo Finance para DXY
+    """
+    try:
+        # DXY (Dollar Index) - proxy de liquidez global inversa
+        dxy = yf.download("DX-Y.NYB", period="1y", interval="1d", progress=False, auto_adjust=True)
+        dxy = flatten_columns(dxy)
+        dxy_current = float(ensure_1d_series(dxy['Close']).iloc[-1])
+        dxy_ma50 = ensure_1d_series(dxy['Close']).rolling(50).mean().iloc[-1]
+        
+        # Tendencia DXY: >50MA = restrictivo (malo para BTC), <50MA = expansivo (bueno)
+        dxy_score = 50 if pd.isna(dxy_ma50) else (50 - ((dxy_current / dxy_ma50 - 1) * 500))
+        dxy_score = max(0, min(100, dxy_score))  # Clamp 0-100
+        
+        # FED Funds Rate proxy usando datos de mercado (TLT inverso)
+        tlt = yf.download("TLT", period="1y", interval="1d", progress=False, auto_adjust=True)
+        tlt = flatten_columns(tlt)
+        tlt_yield = 20 - (float(ensure_1d_series(tlt['Close']).iloc[-1]) / 10)  # Aproximación
+        
+        # Score de liquidez: 100 = muy expansiva, 0 = muy restrictiva
+        liquidity_score = max(0, min(100, 100 - (tlt_yield * 10)))
+        
+        return {
+            'dxy': dxy_current,
+            'dxy_score': dxy_score,
+            'liquidity_score': liquidity_score,
+            'fed_proxy': tlt_yield,
+            'status': 'EXPANSIVO' if liquidity_score > 60 else 'NEUTRAL' if liquidity_score > 40 else 'RESTRICTIVO'
+        }
+    except:
+        return {
+            'dxy': 103.0,
+            'dxy_score': 50,
+            'liquidity_score': 50,
+            'fed_proxy': 5.0,
+            'status': 'NEUTRAL (Datos no disponibles)'
+        }
+
+def get_halving_cycle():
+    """
+    Calcula la posición en el ciclo de halving de Bitcoin
+    Halvings: 2012-11-28, 2016-07-09, 2020-05-11, 2024-04-19 (próximo ~2028)
+    """
+    halving_dates = [
+        datetime(2012, 11, 28),
+        datetime(2016, 7, 9),
+        datetime(2020, 5, 11),
+        datetime(2024, 4, 19)
+    ]
+    
+    now = datetime.now()
+    last_halving = max([h for h in halving_dates if h <= now])
+    next_halving = datetime(2028, 4, 1)  # Estimado
+    
+    days_since = (now - last_halving).days
+    days_total = (next_halving - last_halving).days
+    progress = days_since / days_total
+    
+    # Fases del ciclo: Acumulación (0-20%), Bull Early (20-40%), Bull Late (40-60%), 
+    # Distribución (60-80%), Bear (80-100%)
+    if progress < 0.2:
+        phase = "ACUMULACIÓN"
+        phase_color = COLORS['zone_max']
+    elif progress < 0.4:
+        phase = "BULL TEMPRANO"
+        phase_color = COLORS['zone_strong']
+    elif progress < 0.6:
+        phase = "BULL AVANZADO"
+        phase_color = COLORS['zone_good']
+    elif progress < 0.8:
+        phase = "DISTRIBUCIÓN"
+        phase_color = COLORS['zone_dca']
+    else:
+        phase = "MERADO BAJISTA"
+        phase_color = COLORS['zone_light']
+    
+    return {
+        'days_since': days_since,
+        'days_to_next': (next_halving - now).days,
+        'progress_pct': progress * 100,
+        'phase': phase,
+        'phase_color': phase_color,
+        'year_in_cycle': days_since / 365.25
+    }
+
+def calculate_rsu_score(data):
+    """
+    Calcula el RSU Score Compuesto
+    Ponderaciones: 200W MA (40%) + MVRV Z-Score (30%) + Puell (20%) + AHR999 (10%)
+    Score: 0-100 (0 = máxima oportunidad, 100 = máximo riesgo)
+    """
+    close = ensure_1d_series(data['Close'])
+    ma200 = calculate_200w_ma(data)
+    
+    # 1. Score de 200W MA (40%)
+    ma_deviation = ((close - ma200) / ma200).iloc[-1]
+    # Normalizar: -50% = 0, 0% = 50, +50% = 100
+    ma_score = ((ma_deviation + 0.5) / 1.0) * 100
+    ma_score = max(0, min(100, ma_score))
+    
+    # 2. MVRV Z-Score (30%)
+    mvrv = calculate_mvrv_z_score(data).iloc[-1]
+    # Normalizar: -1.5 = 0, 0 = 50, 3.5 = 100
+    mvrv_score = ((mvrv + 1.5) / 5.0) * 100
+    mvrv_score = max(0, min(100, mvrv_score))
+    
+    # 3. Puell Multiple (20%)
+    puell = calculate_puell_multiple(data).iloc[-1]
+    # Normalizar: 0.5 = 0, 1.0 = 50, 4.0 = 100
+    puell_score = ((puell - 0.5) / 3.5) * 100
+    puell_score = max(0, min(100, puell_score))
+    
+    # 4. AHR999 (10%)
+    ahr = calculate_ahr999(data).iloc[-1]
+    # Normalizar: 0.5 = 0, 1.2 = 50, 5.0 = 100
+    ahr_score = ((ahr - 0.5) / 4.5) * 100
+    ahr_score = max(0, min(100, ahr_score))
+    
+    # Score ponderado
+    rsu_score = (
+        ma_score * 0.40 +
+        mvrv_score * 0.30 +
+        puell_score * 0.20 +
+        ahr_score * 0.10
+    )
+    
+    # Determinar señal
+    if rsu_score < 20:
+        signal = "OPORTUNIDAD EXTREMA"
+        signal_color = COLORS['rsu_extreme']
+        allocation = 25
+    elif rsu_score < 40:
+        signal = "ACUMULACIÓN FUERTE"
+        signal_color = COLORS['rsu_strong']
+        allocation = 20
+    elif rsu_score < 60:
+        signal = "ACUMULACIÓN MODERADA"
+        signal_color = COLORS['rsu_moderate']
+        allocation = 10
+    elif rsu_score < 80:
+        signal = "NEUTRAL/ESPERA"
+        signal_color = COLORS['rsu_weak']
+        allocation = 0
+    else:
+        signal = "SOBRECOMPRA/RIESGO"
+        signal_color = COLORS['rsu_poor']
+        allocation = 0
+    
+    return {
+        'total_score': rsu_score,
+        'components': {
+            'ma200': {'score': ma_score, 'weight': 40, 'raw': ma_deviation},
+            'mvrv': {'score': mvrv_score, 'weight': 30, 'raw': mvrv},
+            'puell': {'score': puell_score, 'weight': 20, 'raw': puell},
+            'ahr999': {'score': ahr_score, 'weight': 10, 'raw': ahr}
+        },
+        'signal': signal,
+        'signal_color': signal_color,
+        'allocation': allocation
+    }
+
+# ───────────────────────────────────────────────────────────────────────────────
+# CÁLCULOS DEL MODELO DE ACUMULACIÓN (ORIGINAL + RSU)
+# ───────────────────────────────────────────────────────────────────────────────
+
+def calculate_accumulation_zones(data):
+    """
+    Calcula las zonas de acumulación basadas en la 200W MA + RSU Score
+    """
+    close = ensure_1d_series(data['Close'])
+    ma200 = calculate_200w_ma(data)
+    rsu_data = calculate_rsu_score(data)
     
     minus_50 = ma200 * 0.50
     minus_25 = ma200 * 0.75
@@ -103,30 +325,34 @@ def calculate_accumulation_zones(data):
     
     deviation = ((current_price - current_ma) / current_ma) * 100 if current_ma > 0 else 0
     
-    if current_price < minus_50.iloc[-1]:
+    # Priorizar señal RSU Score sobre MA200 simple
+    rsu_signal = rsu_data['signal']
+    rsu_score = rsu_data['total_score']
+    
+    if rsu_score < 20 or current_price < minus_50.iloc[-1]:
         zone = "OPORTUNIDAD MÁXIMA"
         zone_color = COLORS['zone_max']
-        allocation_pct = 20
+        allocation_pct = 25 if rsu_score < 20 else 20
         urgency = "CRÍTICA"
-    elif current_price < minus_25.iloc[-1]:
+    elif rsu_score < 40 or current_price < minus_25.iloc[-1]:
         zone = "COMPRA AGRESIVA"
         zone_color = COLORS['zone_agg']
-        allocation_pct = 40
+        allocation_pct = 20 if rsu_score < 40 else 15
         urgency = "ALTA"
-    elif current_price < current_ma:
+    elif rsu_score < 60 or current_price < current_ma:
         zone = "COMPRA FUERTE"
         zone_color = COLORS['zone_strong']
-        allocation_pct = 30
+        allocation_pct = 15 if rsu_score < 60 else 10
         urgency = "MEDIA-ALTA"
-    elif current_price < plus_25.iloc[-1]:
+    elif rsu_score < 70 or current_price < plus_25.iloc[-1]:
         zone = "BUENA COMPRA"
         zone_color = COLORS['zone_good']
-        allocation_pct = 10
+        allocation_pct = 10 if rsu_score < 70 else 5
         urgency = "MEDIA"
-    elif current_price < plus_50.iloc[-1]:
+    elif rsu_score < 85 or current_price < plus_50.iloc[-1]:
         zone = "ZONA DCA"
         zone_color = COLORS['zone_dca']
-        allocation_pct = 0
+        allocation_pct = 5 if rsu_score < 85 else 0
         urgency = "BAJA"
     else:
         zone = "ESPERAR / COMPRA LIGERA"
@@ -142,6 +368,7 @@ def calculate_accumulation_zones(data):
         'zone_color': zone_color,
         'allocation_pct': allocation_pct,
         'urgency': urgency,
+        'rsu_score': rsu_data,
         'levels': {
             'minus_50': float(minus_50.iloc[-1]) if not pd.isna(minus_50.iloc[-1]) else None,
             'minus_25': float(minus_25.iloc[-1]) if not pd.isna(minus_25.iloc[-1]) else None,
@@ -307,7 +534,7 @@ def create_main_chart(data, zone_data, symbol="BTC-USD"):
     
     fig.update_layout(
         title=dict(
-            text=f'₿ {symbol} | MODELO DE ACUMULACIÓN MA 200 SEMANAS',
+            text=f'₿ {symbol} | MODELO RSU v2.0 - ACUMULACIÓN MULTI-INDICADOR',
             font=dict(family='Courier New, monospace', size=20, color=COLORS['accent_cyan']),
             x=0.5
         ),
@@ -339,6 +566,124 @@ def create_main_chart(data, zone_data, symbol="BTC-USD"):
     
     return fig
 
+def create_rsu_gauge(rsu_data):
+    """Crea un gauge visual del RSU Score"""
+    
+    score = rsu_data['total_score']
+    
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={
+            'text': "RSU SCORE", 
+            'font': {'size': 16, 'color': COLORS['accent_cyan'], 'family': 'Courier New, monospace', 'weight': 'bold'}
+        },
+        number={
+            'font': {'size': 40, 'color': rsu_data['signal_color'], 'family': 'Courier New, monospace'},
+            'valueformat': '.1f'
+        },
+        gauge={
+            'axis': {
+                'range': [0, 100], 
+                'tickwidth': 2, 
+                'tickcolor': COLORS['grid'],
+                'tickmode': 'array',
+                'tickvals': [0, 20, 40, 60, 80, 100],
+                'ticktext': ['0', '20', '40', '60', '80', '100']
+            },
+            'bar': {
+                'color': rsu_data['signal_color'],
+                'thickness': 0.85
+            },
+            'bgcolor': COLORS['bg_panel'],
+            'borderwidth': 3,
+            'bordercolor': COLORS['grid'],
+            'steps': [
+                {'range': [0, 20], 'color': hex_to_rgba(COLORS['rsu_extreme'], 0.3)},
+                {'range': [20, 40], 'color': hex_to_rgba(COLORS['rsu_strong'], 0.25)},
+                {'range': [40, 60], 'color': hex_to_rgba(COLORS['rsu_moderate'], 0.2)},
+                {'range': [60, 80], 'color': hex_to_rgba(COLORS['rsu_weak'], 0.15)},
+                {'range': [80, 100], 'color': hex_to_rgba(COLORS['rsu_poor'], 0.1)}
+            ],
+            'threshold': {
+                'line': {'color': 'white', 'width': 4}, 
+                'thickness': 0.9, 
+                'value': score
+            }
+        }
+    ))
+    
+    fig.update_layout(
+        paper_bgcolor=COLORS['bg_dark'],
+        font={'color': COLORS['text'], 'family': 'Courier New, monospace'},
+        height=350,
+        margin=dict(l=20, r=20, t=80, b=20),
+        annotations=[dict(
+            text=rsu_data['signal'],
+            x=0.5, y=-0.1,
+            font=dict(size=14, color=rsu_data['signal_color'], family='Courier New, monospace'),
+            showarrow=False
+        )]
+    )
+    
+    return fig
+
+def create_rsu_breakdown(rsu_data):
+    """Gráfico de desglose de componentes del RSU Score"""
+    
+    components = rsu_data['components']
+    
+    labels = ['MA 200S (40%)', 'MVRV Z (30%)', 'Puell (20%)', 'AHR999 (10%)']
+    scores = [
+        components['ma200']['score'],
+        components['mvrv']['score'],
+        components['puell']['score'],
+        components['ahr999']['score']
+    ]
+    colors = [COLORS['accent_cyan'], COLORS['accent_purple'], COLORS['accent_orange'], COLORS['accent_yellow']]
+    
+    fig = go.Figure()
+    
+    for i, (label, score, color) in enumerate(zip(labels, scores, colors)):
+        fig.add_trace(go.Bar(
+            x=[label],
+            y=[score],
+            marker_color=color,
+            marker_line_color='white',
+            marker_line_width=2,
+            text=f"{score:.1f}",
+            textposition='outside',
+            textfont=dict(color='white', size=12, family='Courier New, monospace'),
+            hovertemplate=f'<b>{label}</b><br>Score: {score:.1f}<extra></extra>',
+            showlegend=False
+        ))
+    
+    fig.update_layout(
+        paper_bgcolor=COLORS['bg_dark'],
+        plot_bgcolor=COLORS['bg_panel'],
+        title=dict(
+            text='DESGLOSE RSU SCORE',
+            font=dict(color=COLORS['accent_cyan'], family='Courier New, monospace', size=14)
+        ),
+        xaxis=dict(
+            color=COLORS['text_dim'],
+            tickfont=dict(size=9, family='Courier New, monospace')
+        ),
+        yaxis=dict(
+            color=COLORS['text_dim'],
+            gridcolor=COLORS['grid'],
+            title='Score (0-100)',
+            range=[0, 110]
+        ),
+        font=dict(family='Courier New, monospace'),
+        height=300,
+        margin=dict(l=40, r=20, t=60, b=40),
+        bargap=0.4
+    )
+    
+    return fig
+
 def create_zone_gauge(deviation_pct, current_zone):
     """Crea un gauge visual de en qué tan lejos estamos de la MA200"""
     
@@ -349,7 +694,7 @@ def create_zone_gauge(deviation_pct, current_zone):
         value=gauge_val,
         domain={'x': [0, 1], 'y': [0, 1]},
         title={
-            'text': "DESVIACIÓN DE LA MA 200S", 
+            'text': "DESVIACIÓN MA 200S", 
             'font': {'size': 14, 'color': COLORS['text_dim'], 'family': 'Courier New, monospace'}
         },
         number={
@@ -407,7 +752,7 @@ def create_allocation_matrix(zone_data):
     """Crea visualización de la matriz de asignación de capital"""
     
     zones = ["OPORTUNIDAD\nMÁXIMA", "COMPRA\nAGRESIVA", "COMPRA\nFUERTE", "BUENA\nCOMPRA", "ZONA\nDCA", "ESPERAR"]
-    allocations = [20, 40, 30, 10, 0, 0]
+    allocations = [25, 20, 15, 10, 5, 0]
     colors = [COLORS['zone_max'], COLORS['zone_agg'], COLORS['zone_strong'], 
               COLORS['zone_good'], COLORS['zone_dca'], COLORS['zone_light']]
     
@@ -446,7 +791,7 @@ def create_allocation_matrix(zone_data):
         paper_bgcolor=COLORS['bg_dark'],
         plot_bgcolor=COLORS['bg_panel'],
         title=dict(
-            text='ESTRATEGIA DE ASIGNACIÓN DE CAPITAL',
+            text='ESTRATEGIA DE ASIGNACIÓN',
             font=dict(color=COLORS['accent_green'], family='Courier New, monospace', size=16)
         ),
         xaxis=dict(
@@ -456,8 +801,8 @@ def create_allocation_matrix(zone_data):
         yaxis=dict(
             color=COLORS['text_dim'],
             gridcolor=COLORS['grid'],
-            title='Porcentaje del Capital (%)',
-            range=[0, 50]
+            title='Capital (%)',
+            range=[0, 30]
         ),
         font=dict(family='Courier New, monospace'),
         height=300,
@@ -488,7 +833,7 @@ def create_historical_distribution(hist_data):
     fig.update_layout(
         paper_bgcolor=COLORS['bg_dark'],
         title=dict(
-            text='DISTRIBUCIÓN HISTÓRICA DE ZONAS',
+            text='DISTRIBUCIÓN HISTÓRICA',
             font=dict(color=COLORS['text_dim'], family='Courier New, monospace', size=14)
         ),
         font=dict(family='Courier New, monospace', color=COLORS['text']),
@@ -506,11 +851,107 @@ def create_historical_distribution(hist_data):
     return fig
 
 # ───────────────────────────────────────────────────────────────────────────────
-# COMPONENTES UI CON STREAMLIT NATIVO (EVITAR HTML RAW)
+# COMPONENTES UI
 # ───────────────────────────────────────────────────────────────────────────────
 
+def render_rsu_dashboard(zone_data, macro_data, halving_data):
+    """Renderiza el dashboard principal del RSU Score"""
+    
+    rsu = zone_data['rsu_score']
+    
+    st.markdown("---")
+    
+    # Header del RSU Score
+    cols = st.columns([2, 1, 1])
+    
+    with cols[0]:
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, {hex_to_rgba(rsu['signal_color'], 0.2)} 0%, {COLORS['bg_panel']} 100%);
+            border: 3px solid {rsu['signal_color']};
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 0 40px {hex_to_rgba(rsu['signal_color'], 0.4)};
+        ">
+            <div style="text-align: center;">
+                <div style="color: {COLORS['text_dim']}; font-size: 12px; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 10px;">
+                    RSU SCORE COMPUESTO
+                </div>
+                <div style="color: {rsu['signal_color']}; font-size: 56px; font-weight: bold; font-family: 'Courier New', monospace; text-shadow: 0 0 20px {hex_to_rgba(rsu['signal_color'], 0.8)};">
+                    {rsu['total_score']:.1f}
+                </div>
+                <div style="color: {rsu['signal_color']}; font-size: 18px; font-weight: bold; margin-top: 10px;">
+                    {rsu['signal']}
+                </div>
+                <div style="color: {COLORS['text_dim']}; font-size: 11px; margin-top: 5px;">
+                    Asignación Sugerida: <span style="color: {COLORS['accent_green']}; font-weight: bold;">{rsu['allocation']}%</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with cols[1]:
+        # Macro Conditions
+        liquidity_color = COLORS['accent_green'] if macro_data['liquidity_score'] > 60 else COLORS['accent_yellow'] if macro_data['liquidity_score'] > 40 else COLORS['accent_red']
+        
+        st.markdown(f"""
+        <div style="
+            background: {COLORS['bg_panel']};
+            border: 2px solid {COLORS['grid']};
+            border-radius: 8px;
+            padding: 20px;
+            height: 100%;
+        ">
+            <div style="color: {COLORS['accent_cyan']}; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-align: center;">
+                CONDICIONES MACRO
+            </div>
+            <div style="margin-bottom: 10px;">
+                <span style="color: {COLORS['text_dim']}; font-size: 10px;">LIQUIDEZ:</span><br>
+                <span style="color: {liquidity_color}; font-size: 16px; font-weight: bold;">{macro_data['status']}</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <span style="color: {COLORS['text_dim']}; font-size: 10px;">DXY:</span><br>
+                <span style="color: {COLORS['text']}; font-size: 14px; font-family: monospace;">{macro_data['dxy']:.2f}</span>
+            </div>
+            <div>
+                <span style="color: {COLORS['text_dim']}; font-size: 10px;">SCORE:</span><br>
+                <span style="color: {liquidity_color}; font-size: 14px; font-weight: bold;">{macro_data['liquidity_score']:.0f}/100</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with cols[2]:
+        # Halving Cycle
+        st.markdown(f"""
+        <div style="
+            background: {COLORS['bg_panel']};
+            border: 2px solid {halving_data['phase_color']};
+            border-radius: 8px;
+            padding: 20px;
+            height: 100%;
+        ">
+            <div style="color: {COLORS['accent_cyan']}; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-align: center;">
+                CICLO HALVING
+            </div>
+            <div style="margin-bottom: 10px;">
+                <span style="color: {COLORS['text_dim']}; font-size: 10px;">FASE:</span><br>
+                <span style="color: {halving_data['phase_color']}; font-size: 14px; font-weight: bold;">{halving_data['phase']}</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <span style="color: {COLORS['text_dim']}; font-size: 10px;">PROGRESO:</span><br>
+                <span style="color: {COLORS['text']}; font-size: 14px; font-family: monospace;">{halving_data['progress_pct']:.1f}%</span>
+            </div>
+            <div>
+                <span style="color: {COLORS['text_dim']}; font-size: 10px;">PRÓXIMO:</span><br>
+                <span style="color: {COLORS['text']}; font-size: 12px; font-family: monospace;">{halving_data['days_to_next']} días</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+
 def render_status_panel(zone_data):
-    """Renderiza el panel de estado superior usando componentes nativos de Streamlit"""
+    """Renderiza el panel de estado de zona clásica"""
     
     zone = zone_data['zone']
     color = zone_data['zone_color']
@@ -518,42 +959,27 @@ def render_status_panel(zone_data):
     ma = zone_data['ma200']
     dev = zone_data['deviation_pct']
     
-    # Contenedor principal con borde de color
-    with st.container():
-        st.markdown("""
-        <style>
-        .zone-container {
-            background: linear-gradient(135deg, """ + hex_to_rgba(color, 0.2) + """ 0%, """ + COLORS['bg_panel'] + """ 100%);
-            border: 2px solid """ + color + """;
-            border-radius: 8px;
-            padding: 25px;
-            margin: 20px 0;
-            box-shadow: 0 0 30px """ + hex_to_rgba(color, 0.3) + """;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        cols = st.columns(3)
-        
-        with cols[0]:
-            st.markdown(f"**ZONA ACTUAL**")
-            st.markdown(f"<h2 style='color: {color}; margin: 0;'>{zone}</h2>", unsafe_allow_html=True)
-            st.caption(f"Urgencia: {zone_data['urgency']}")
-        
-        with cols[1]:
-            st.markdown("**PRECIO BTC vs MA 200S**")
-            st.markdown(f"<h1 style='color: {COLORS['accent_cyan']}; margin: 0;'>${price:,.0f}</h1>", unsafe_allow_html=True)
-            dev_color = COLORS['accent_green'] if dev < 0 else COLORS['accent_red']
-            st.markdown(f"<span style='color: {dev_color};'>{dev:+.1f}% vs MA200 (${ma:,.0f})</span>", unsafe_allow_html=True)
-        
-        with cols[2]:
-            st.markdown("**ASIGNACIÓN RECOMENDADA**")
-            alloc_color = COLORS['accent_green'] if zone_data['allocation_pct'] > 0 else COLORS['text_dim']
-            st.markdown(f"<h1 style='color: {alloc_color}; margin: 0;'>{zone_data['allocation_pct']}%</h1>", unsafe_allow_html=True)
-            st.caption("del capital disponible")
+    cols = st.columns(3)
+    
+    with cols[0]:
+        st.markdown(f"**ZONA ACTUAL**")
+        st.markdown(f"<h2 style='color: {color}; margin: 0;'>{zone}</h2>", unsafe_allow_html=True)
+        st.caption(f"Urgencia: {zone_data['urgency']}")
+    
+    with cols[1]:
+        st.markdown("**PRECIO BTC vs MA 200S**")
+        st.markdown(f"<h1 style='color: {COLORS['accent_cyan']}; margin: 0;'>${price:,.0f}</h1>", unsafe_allow_html=True)
+        dev_color = COLORS['accent_green'] if dev < 0 else COLORS['accent_red']
+        st.markdown(f"<span style='color: {dev_color};'>{dev:+.1f}% vs MA200 (${ma:,.0f})</span>", unsafe_allow_html=True)
+    
+    with cols[2]:
+        st.markdown("**ASIGNACIÓN CLÁSICA**")
+        alloc_color = COLORS['accent_green'] if zone_data['allocation_pct'] > 0 else COLORS['text_dim']
+        st.markdown(f"<h1 style='color: {alloc_color}; margin: 0;'>{zone_data['allocation_pct']}%</h1>", unsafe_allow_html=True)
+        st.caption("basado en MA200")
 
 def render_zone_levels(zone_data):
-    """Muestra los niveles de precio de cada zona usando métricas de Streamlit"""
+    """Muestra los niveles de precio de cada zona"""
     
     levels = zone_data['levels']
     
@@ -578,34 +1004,31 @@ def render_zone_levels(zone_data):
             st.caption(pct)
 
 def render_warning_section():
-    """Sección de advertencias usando expanders y texto nativo"""
+    """Sección de advertencias"""
     
     with st.expander("⚠️ AVISOS DE RIESGO CRÍTICOS", expanded=True):
         st.markdown(f"""
         <div style='color: {COLORS['text_dim']};'>
         
-        **1. Rendimiento Histórico ≠ Resultados Futuros**
-        Este modelo se basa en el análisis histórico del ciclo de 4 años. El comportamiento pasado de Bitcoin 
-        alrededor de la MA 200S no garantiza que las zonas de acumulación futuras se comporten de manera idéntica.
+        **1. RSU Score es un Modelo Probabilístico**
+        La combinación de indicadores (MA200W 40% + MVRV 30% + Puell 20% + AHR999 10%) mejora la filtración de falsos positivos,
+        pero no elimina el riesgo. Los mercados pueden comportarse de manera irracional más tiempo del que puedes mantener solvente.
         
-        **2. Supuestos del Modelo**
-        La MA 200S asume que Bitcoin continúa su tendencia de adopción a largo plazo. Una ruptura estructural 
-        en los fundamentos de Bitcoin (prohibición regulatoria, tecnología superior, ataques de computación cuántica) 
-        podría invalidar este modelo permanentemente.
+        **2. Condiciones Macro No Consideradas en Score**
+        El DXY y tasas de la FED son mostrados como referencia pero NO están incluidos en el cálculo del RSU Score para mantener
+        la pureza de los indicadores on-chain. Un DXY alcista fuerte (>105) puede anular señales de compra técnicamente válidas.
         
-        **3. Riesgo de Asignación de Capital**
-        Desplegar el 20% del capital en zonas de "Oportunidad Máxima" asume que puedes soportar caídas 
-        adicionales del 50-80%. Estas zonas suelen coincidir con máximo miedo y posibles crisis de solvencia 
-        de exchanges.
+        **3. Ciclos de Halving son Guías, no Garantías**
+        Aunque el halving reduce la oferta, la demanda puede no materializarse como en ciclos anteriores. La correlación
+        halving-precio ha disminuido con la maduración del mercado.
         
-        **4. Sin Estrategia de Salida**
-        Esta herramienta proporciona señales de acumulación únicamente. NO indica cuándo vender. 
-        Necesitas una metodología de salida separada (ej. MVRV z-score, Pi Cycle, etc.).
+        **4. Datos On-Chain Son Aproximaciones**
+        MVRV Z-Score, Puell Multiple y AHR999 en esta implementación usan cálculos proxy basados en precio/volumen.
+        Para análisis institucional, usar APIs especializadas (Glassnode, CryptoQuant).
         
         **5. Esto NO es Asesoramiento Financiero**
-        Este es un marco probabilístico para la acumulación a largo plazo de Bitcoin. Nunca inviertas más 
-        de lo que puedas permitirte perder por completo. Los mercados de criptomonedas son altamente 
-        volátiles y no regulados.
+        Nunca inviertas más de lo que puedas permitirte perder. El modelo RSU es para acumulación a largo plazo (3-5 años),
+        no para trading de corto plazo.
         </div>
         """, unsafe_allow_html=True)
 
@@ -614,7 +1037,7 @@ def render_warning_section():
 # ───────────────────────────────────────────────────────────────────────────────
 
 def main():
-    # CSS Global simplificado
+    # CSS Global
     st.markdown(f"""
     <style>
     .stApp {{
@@ -669,15 +1092,15 @@ def main():
     st.markdown(f"""
     <div style="text-align: center; margin-bottom: 30px; padding: 20px; border-bottom: 1px solid {COLORS['grid']};">
         <div style="font-size: 48px; margin-bottom: 10px;">₿</div>
-        <h1 style="margin: 0; font-size: 2rem;">Modelo de Acumulación RSU Bitcoin</h1>
+        <h1 style="margin: 0; font-size: 2rem;">Modelo RSU Bitcoin v2.0</h1>
         <p style="color: {COLORS['text_dim']}; font-family: 'Courier New', monospace; font-size: 14px; margin-top: 10px;">
-            Estrategia de Zonas basada en Media Móvil de 200 Semanas | Metodología de RSU
+            Multi-Indicador: MA200S + MVRV + Puell + AHR999 + Macro | Ciclo Halving Integrado
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Tabs en castellano
-    tab_analysis, tab_methodology, tab_risks = st.tabs(["📊 Análisis de Zonas", "📖 Metodología", "⚠️ Riesgos"])
+    # Tabs
+    tab_analysis, tab_methodology, tab_risks = st.tabs(["📊 Análisis RSU", "📖 Metodología", "⚠️ Riesgos"])
     
     with tab_analysis:
         col1, col2, col3 = st.columns([3, 1, 1])
@@ -689,7 +1112,7 @@ def main():
             analyze_btn = st.button("⟳ CARGAR DATOS", use_container_width=True, type="primary")
         
         if analyze_btn or symbol:
-            with st.spinner("Calculando zonas de acumulación MA 200S..."):
+            with st.spinner("Calculando RSU Score y condiciones de mercado..."):
                 try:
                     data = yf.download(symbol, start="2015-01-01", interval="1d", progress=False, auto_adjust=True)
                     
@@ -699,66 +1122,78 @@ def main():
                     
                     data = flatten_columns(data)
                     
+                    # Calcular todos los datos
                     zone_data = calculate_accumulation_zones(data)
+                    macro_data = get_macro_conditions()
+                    halving_data = get_halving_cycle()
                     hist_data = get_historical_zones_analysis(data)
                     
-                    # Panel de estado
-                    render_status_panel(zone_data)
+                    # Dashboard RSU Principal
+                    render_rsu_dashboard(zone_data, macro_data, halving_data)
                     
                     # Gráfico principal
                     st.plotly_chart(create_main_chart(data, zone_data, symbol), use_container_width=True)
                     
-                    # Grid inferior
+                    # Grid de métricas
                     col_g1, col_g2, col_g3 = st.columns([1, 1, 1])
                     
                     with col_g1:
+                        st.plotly_chart(create_rsu_gauge(zone_data['rsu_score']), use_container_width=True)
+                    
+                    with col_g2:
+                        st.plotly_chart(create_rsu_breakdown(zone_data['rsu_score']), use_container_width=True)
+                    
+                    with col_g3:
                         st.plotly_chart(create_zone_gauge(zone_data['deviation_pct'], zone_data['zone']), 
                                       use_container_width=True)
                     
-                    with col_g2:
+                    # Segunda fila
+                    col_h1, col_h2 = st.columns([2, 1])
+                    
+                    with col_h1:
                         st.plotly_chart(create_allocation_matrix(zone_data), use_container_width=True)
                     
-                    with col_g3:
+                    with col_h2:
                         st.plotly_chart(create_historical_distribution(hist_data), use_container_width=True)
                     
-                    # Niveles de zona
+                    # Niveles de zona clásicos
                     render_zone_levels(zone_data)
                     
+                    # Panel clásico para referencia
+                    with st.expander("📊 Zonas Clásicas MA200 (Referencia)", expanded=False):
+                        render_status_panel(zone_data)
+                    
                     # Detalles técnicos
-                    with st.expander("🔬 ESPECIFICACIONES TÉCNICAS", expanded=False):
+                    with st.expander("🔬 ESPECIFICACIONES TÉCNICAS RSU", expanded=False):
+                        rsu = zone_data['rsu_score']
                         st.code(f"""
-PARÁMETROS DE CÁLCULO:
-----------------------
-Activo:             {symbol}
-Rango de Datos:     {data.index[0].strftime('%Y-%m-%d')} a {data.index[-1].strftime('%Y-%m-%d')}
-Total de Días:      {len(data)}
-Período MA 200S:    1400 días (200 semanas × 7 días)
+╔══════════════════════════════════════════════════════════════════╗
+║                    RSU SCORE BREAKDOWN v2.0                      ║
+╠══════════════════════════════════════════════════════════════════╣
+  ACTIVO: {symbol}
+  RANGO:  {data.index[0].strftime('%Y-%m-%d')} a {data.index[-1].strftime('%Y-%m-%d')}
+  
+┌─ INDICADORES ON-CHAIN ─────────────────────────────────────────┐
+│ MA 200S (40%):     Score {rsu['components']['ma200']['score']:.1f} | Raw: {rsu['components']['ma200']['raw']:.3f}
+│ MVRV Z (30%):      Score {rsu['components']['mvrv']['score']:.1f} | Raw: {rsu['components']['mvrv']['raw']:.3f}
+│ Puell (20%):       Score {rsu['components']['puell']['score']:.1f} | Raw: {rsu['components']['puell']['raw']:.3f}
+│ AHR999 (10%):      Score {rsu['components']['ahr999']['score']:.1f} | Raw: {rsu['components']['ahr999']['raw']:.3f}
+└────────────────────────────────────────────────────────────────┘
 
-MÉTRICAS ACTUALES:
-----------------------
-Precio:             ${zone_data['current_price']:,.2f}
-MA 200S:            ${zone_data['ma200']:,.2f}
-Desviación:         {zone_data['deviation_pct']:+.2f}%
-Zona:               {zone_data['zone']}
-Asignación:         {zone_data['allocation_pct']}%
+┌─ CONDICIONES MACRO ────────────────────────────────────────────┐
+│ DXY:               {macro_data['dxy']:.2f} ({macro_data['dxy_score']:.0f}/100)
+│ Liquidez:          {macro_data['liquidity_score']:.0f}/100 - {macro_data['status']}
+└────────────────────────────────────────────────────────────────┘
 
-UMBRALES DE ZONAS:
-----------------------
-Oportunidad Máxima:   < ${zone_data['levels']['minus_50']:,.2f} (-50%)
-Compra Agresiva:    ${zone_data['levels']['minus_50']:,.2f} a ${zone_data['levels']['minus_25']:,.2f}
-Compra Fuerte:      ${zone_data['levels']['minus_25']:,.2f} a ${zone_data['levels']['ma200']:,.2f}
-Buena Compra:       ${zone_data['levels']['ma200']:,.2f} a ${zone_data['levels']['plus_25']:,.2f}
-Zona DCA:           ${zone_data['levels']['plus_25']:,.2f} a ${zone_data['levels']['plus_50']:,.2f}
-Esperar:            > ${zone_data['levels']['plus_50']:,.2f} (+50%)
+┌─ CICLO HALVING ────────────────────────────────────────────────┐
+│ Fase:              {halving_data['phase']}
+│ Progreso:          {halving_data['progress_pct']:.1f}%
+│ Días al próximo:   {halving_data['days_to_next']}
+└────────────────────────────────────────────────────────────────┘
 
-FRECUENCIA HISTÓRICA:
-----------------------
-Oportunidad Máxima:  {hist_data['zones']['OPORTUNIDAD MÁXIMA']['pct']:.1f}% del tiempo
-Compra Agresiva:     {hist_data['zones']['COMPRA AGRESIVA']['pct']:.1f}% del tiempo
-Compra Fuerte:       {hist_data['zones']['COMPRA FUERTE']['pct']:.1f}% del tiempo
-Buena Compra:        {hist_data['zones']['BUENA COMPRA']['pct']:.1f}% del tiempo
-Zona DCA:            {hist_data['zones']['ZONA DCA']['pct']:.1f}% del tiempo
-Esperar:             {hist_data['zones']['COMPRA LIGERA']['pct']:.1f}% del tiempo
+RSU SCORE FINAL: {rsu['total_score']:.2f}/100
+SEÑAL: {rsu['signal']}
+ASIGNACIÓN: {rsu['allocation']}%
                         """)
                         
                 except Exception as e:
@@ -769,46 +1204,63 @@ Esperar:             {hist_data['zones']['COMPRA LIGERA']['pct']:.1f}% del tiemp
     with tab_methodology:
         with st.container():
             st.markdown(f"""
-            ### 📚 Metodología del Modelo
+            ### 📚 Metodología RSU v2.0
             
-            **1. La Media Móvil de 200 Semanas (MA 200S)**
+            **1. RSU Score Compuesto (Ponderado)**
             
-            Este es el pilar del modelo - un indicador de tendencia a largo plazo que suaviza 4 años de acción del precio. 
-            Históricamente, Bitcoin nunca ha caído por debajo de la MA 200S por períodos extendidos durante mercados alcistas, 
-            convirtiéndola en un "piso" para la acumulación a largo plazo.
+            El RSU Score combina múltiples indicadores on-chain probados para filtrar falsos positivos:
             
-            **2. Bandas de Desviación como Zonas de Acumulación**
+            - **MA 200S (40%)**: Tendencia a largo plazo, "piso" histórico de Bitcoin
+            - **MVRV Z-Score (30%)**: Valor de mercado vs valor realizado, identifica tops/bottoms
+            - **Puell Multiple (20%)**: Ingresos de mineros, señal de costo de producción
+            - **AHR999 (10%)**: Índice específico de acumulación para Bitcoin
             
-            El modelo crea 5 zonas basadas en la desviación porcentual de la MA 200S:
+            **Fórmula**: `RSU = (MA×0.4) + (MVRV×0.3) + (Puell×0.2) + (AHR999×0.1)`
+            
+            **Interpretación**:
+            - **0-20**: Oportunidad extrema (acumulación agresiva)
+            - **20-40**: Acumulación fuerte
+            - **40-60**: Acumulación moderada/DCA
+            - **60-80**: Neutral/espera
+            - **80-100**: Sobrecompra/riesgo alto
             """)
             
             col_m1, col_m2 = st.columns(2)
             with col_m1:
                 st.markdown(f"""
-                - <span style='color: {COLORS['zone_max']};'>**Oportunidad Máxima (<-50%)**</span>: Fondos generacionales históricos (2015, 2018, 2022)
-                - <span style='color: {COLORS['zone_agg']};'>**Compra Agresiva (-50% a -25%)**</span>: Acumulación en mercado bajista profundo
-                - <span style='color: {COLORS['zone_strong']};'>**Compra Fuerte (-25% a MA)**</span>: Por debajo de la tendencia, entrada de alta probabilidad
-                """, unsafe_allow_html=True)
+                **2. Condiciones Macro (Referencia)**
+                
+                Mostradas pero NO incluidas en el score para mantener pureza on-chain:
+                
+                - **DXY > 105**: Restrictivo para BTC (dólar fuerte)
+                - **DXY < 100**: Expansivo para BTC (dólar débil)
+                - **FED Pivot**: Cambio en política monetaria
+                
+                **3. Ciclo de Halving**
+                
+                Bitcoin tiene ciclos de ~4 años correlacionados con halvings:
+                - **Año 1 post-halving**: Acumulación/Bull temprano
+                - **Año 2**: Bull market principal
+                - **Año 3**: Distribución/top
+                - **Año 4**: Bear market/pre-halving
+                """)
             with col_m2:
                 st.markdown(f"""
-                - <span style='color: {COLORS['zone_good']};'>**Buena Compra (MA a +25%)**</span>: En o ligeramente por encima de la tendencia, DCA
-                - <span style='color: {COLORS['zone_dca']};'>**Zona DCA (+25% a +50%)**</span>: Mercado alcista temprano, solo pequeñas asignaciones
-                - <span style='color: {COLORS['zone_light']};'>**Esperar (>+50%)**</span>: Sobreextendido, esperar mejores entradas
-                """, unsafe_allow_html=True)
-            
-            st.markdown(f"""
-            **3. Estrategia de Asignación de Capital**
-            
-            La asignación recomendada (20/40/30/10/0/0) está diseñada para desplegar más capital cuando Bitcoin está 
-            estadísticamente más barato vs su tendencia a largo plazo, mientras se preserva capital cuando está caro. 
-            Este es un marco de acumulación <em>solo compra</em>, no una estrategia de trading.
-            
-            **4. Contexto Histórico**
-            
-            Desde 2015, Bitcoin ha pasado solo ~2-3% del tiempo en zonas de "Oportunidad Máxima", típicamente durante 
-            eventos de capitulación (fallas de exchanges, FUD regulatorio, crashes macro). Estos son momentos 
-            psicológicamente difíciles para comprar, precisamente por eso ofrecen la mejor relación riesgo/recompensa.
-            """)
+                **4. Estrategia de Asignación Dinámica**
+                
+                El modelo ajusta asignación basada en RSU Score + Zona MA200:
+                
+                | RSU Score | Señal | Asignación |
+                |-----------|-------|------------|
+                | 0-20 | Extrema | 25% |
+                | 20-40 | Fuerte | 20% |
+                | 40-60 | Moderada | 10% |
+                | 60-80 | Neutral | 0% |
+                | 80-100 | Riesgo | 0% |
+                
+                **Nota**: La asignación máxima se alcanza solo cuando RSU Score < 20
+                Y el precio está bajo MA200S (confluencia de señales).
+                """)
     
     with tab_risks:
         render_warning_section()

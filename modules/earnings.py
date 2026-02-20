@@ -1,3 +1,4 @@
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -46,25 +47,25 @@ def get_api_keys():
 
 @st.cache_data(ttl=3600)  # Cache por 1 hora
 def get_alpha_vantage_data_cached(ticker, api_key):
-    """Versión cacheada de get_alpha_vantage_data."""
-    return get_alpha_vantage_data(ticker, api_key)
+    """Versión cacheada de get_alpha_vantage_data - SIN elementos de UI."""
+    return _fetch_alpha_vantage_data(ticker, api_key)
 
 @st.cache_data(ttl=1800)  # Cache por 30 minutos para precios
 def get_yfinance_data_cached(ticker_symbol):
-    """Versión cacheada de get_yfinance_data."""
-    return get_yfinance_data(ticker_symbol)
+    """Versión cacheada de get_yfinance_data - SIN elementos de UI."""
+    return _fetch_yfinance_data(ticker_symbol)
 
 @st.cache_data(ttl=900)  # Cache por 15 minutos para noticias (más frecuente)
 def get_finnhub_data_cached(ticker, api_key):
-    """Versión cacheada de get_finnhub_data."""
-    return get_finnhub_data(ticker, api_key)
+    """Versión cacheada de get_finnhub_data - SIN elementos de UI."""
+    return _fetch_finnhub_data(ticker, api_key)
 
 # ────────────────────────────────────────────────
 # FINNHUB API - DATOS DE SEGMENTOS Y NOTICIAS
 # ────────────────────────────────────────────────
 
-def get_finnhub_data(ticker, api_key):
-    """Obtiene datos de segmentos y noticias de Finnhub."""
+def _fetch_finnhub_data(ticker, api_key):
+    """Función interna que obtiene datos de Finnhub (sin UI)."""
     if not api_key:
         debug_log("ERROR: FINNHUB_API_KEY no proporcionada")
         return None
@@ -163,6 +164,13 @@ def get_finnhub_data(ticker, api_key):
     except Exception as e:
         debug_log("ERROR en Finnhub", str(e))
         return None
+
+def get_finnhub_data(ticker, api_key):
+    """Versión pública con spinner (no cacheada)."""
+    if not api_key:
+        return None
+    with st.spinner("📰 Cargando datos de Finnhub..."):
+        return _fetch_finnhub_data(ticker, api_key)
 
 def process_finnhub_segments(finnhub_data):
     """Procesa los datos de segmentos de Finnhub."""
@@ -280,8 +288,8 @@ def calculate_news_sentiment(finnhub_data):
 # ALPHA VANTAGE API - DATOS FUNDAMENTALES
 # ────────────────────────────────────────────────
 
-def get_alpha_vantage_data(ticker, api_key):
-    """Obtiene datos fundamentales de Alpha Vantage."""
+def _fetch_alpha_vantage_data(ticker, api_key):
+    """Función interna que obtiene datos de Alpha Vantage (sin UI)."""
     if not api_key:
         debug_log("ERROR: ALPHA_VANTAGE_API_KEY no proporcionada")
         return None
@@ -343,6 +351,13 @@ def get_alpha_vantage_data(ticker, api_key):
         'source': 'alpha_vantage',
         'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
+
+def get_alpha_vantage_data(ticker, api_key):
+    """Versión pública con spinner (no cacheada)."""
+    if not api_key:
+        return None
+    with st.spinner("📊 Cargando datos fundamentales de Alpha Vantage..."):
+        return _fetch_alpha_vantage_data(ticker, api_key)
 
 # ────────────────────────────────────────────────
 # EXTRACCIÓN DE DATOS ALPHA VANTAGE
@@ -562,8 +577,8 @@ def extract_fundamentals_from_av(av_data):
 # YFINANCE CON RETRY
 # ────────────────────────────────────────────────
 
-def get_yfinance_data(ticker_symbol, max_retries=3):
-    """Obtiene datos de precios de yfinance con retry logic."""
+def _fetch_yfinance_data(ticker_symbol, max_retries=3):
+    """Función interna que obtiene datos de yfinance (sin UI)."""
     for attempt in range(max_retries):
         try:
             debug_log(f"YFinance intento {attempt + 1}/{max_retries}")
@@ -623,6 +638,11 @@ def get_yfinance_data(ticker_symbol, max_retries=3):
                 return None
     
     return None
+
+def get_yfinance_data(ticker_symbol):
+    """Versión pública con spinner (no cacheada)."""
+    with st.spinner("📈 Cargando precios de Yahoo Finance..."):
+        return _fetch_yfinance_data(ticker_symbol)
 
 # ────────────────────────────────────────────────
 # PROCESAMIENTO DE DATOS COMBINADO
@@ -1292,7 +1312,23 @@ def render_earnings_section(data, av_data):
 def get_embedded_prompt():
     return """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                    RSU ANALYSIS TERMINAL v2.0                                ║
+║                                                                              ║
+║           ██╗░░░██╗███████╗██╗░░██╗         ██████╗ ███████╗██╗   ██╗        ║
+║           ██║░░░██║██╔════╝╚██╗██╔╝         ██╔══██╗██╔════╝██║   ██║        ║
+║           ╚██╗░██╔╝█████╗░░░╚███╔╝░         ██████╔╝█████╗░░██║   ██║        ║
+║           ░╚████╔╝░██╔══╝░░░██╔██╗░         ██╔══██╗██╔══╝░░╚██╗ ██╔╝        ║
+║           ░░╚██╔╝░░███████╗██╔╝╚██╗         ██║░░██║███████╗░╚████╔╝░        ║
+║           ░░░╚═╝░░░╚══════╝╚═╝░░╚═╝         ╚═╝░░╚═╝╚══════╝░░╚═══╝░░        ║
+║                                                                              ║
+║     ██████╗  █████╗ ███╗   ██╗ █████╗ ██╗     ██╗███████╗██╗███████╗         ║
+║     ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║     ██║██╔════╝██║██╔════╝         ║
+║     ██████╔╝███████║██╔██╗ ██║███████║██║     ██║█████╗  ██║███████╗         ║
+║     ██╔══██╗██╔══██║██║╚██╗██║██╔══██║██║     ██║██╔══╝  ██║╚════██║         ║
+║     ██║  ██║██║  ██║██║ ╚████║██║  ██║███████╗██║██║     ██║███████║         ║
+║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝     ╚═╝╚══════╝         ║
+║                                                                              ║
+║                    TERMINAL DE ANÁLISIS DE RENTA VARIABLE                    ║
+║                              v2.0 - RSU Edition                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 DATOS DE ENTRADA:
@@ -1302,11 +1338,11 @@ INSTRUCCIONES:
 Genera análisis fundamental completo en español con:
 
 1. SNAPSHOT EJECUTIVO
-2. VALORACIÓN RELATIVA
+2. VALORACIÓN RELATIVA  
 3. CALIDAD DEL NEGOCIO (Moat)
 4. SALUD FINANCIERA
-5. POSITIVE OUTLOOK (3-4 bullets con catalizadores)
-6. CHALLENGES AHEAD (3-4 bullets con riesgos específicos)
+5. PERSPECTIVAS POSITIVAS (3-4 bullets con catalizadores)
+6. DESAFÍOS POR DELANTE (3-4 bullets con riesgos específicos)
 7. ANÁLISIS TÉCNICO
 8. DECISIÓN DE INVERSIÓN (Score /10, recomendación, target price)
 
@@ -1455,7 +1491,7 @@ def render():
         
         try:
             with st.spinner("Cargando datos (esto puede tomar 1-2 minutos)..."):
-                # USAR FUNCIONES CACHEADAS
+                # USAR FUNCIONES CACHEADAS (sin spinner interno)
                 av_data = get_alpha_vantage_data_cached(ticker, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
                 yf_data = get_yfinance_data_cached(ticker)
                 finnhub_data = get_finnhub_data_cached(ticker, api_keys['finnhub']) if api_keys['finnhub'] else None

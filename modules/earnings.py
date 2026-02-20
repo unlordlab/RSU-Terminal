@@ -1,3 +1,4 @@
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -153,7 +154,7 @@ def process_finnhub_segments(finnhub_data):
     segments = {}
     
     # Procesar revenue breakdown por segmento de negocio
-    rev_breakdown = finnub_data.get('revenue_breakdown', {})
+    rev_breakdown = finnhub_data.get('revenue_breakdown', {})
     if rev_breakdown and 'data' in rev_breakdown:
         for item in rev_breakdown['data']:
             segment_name = item.get('segment', 'Unknown')
@@ -182,40 +183,61 @@ def calculate_news_sentiment(finnhub_data):
     if not news:
         return None
     
-    # Análisis simple basado en palabras clave en títulos
-    bullish_words = ['beat', 'strong', 'growth', 'profit', 'gain', 'rise', 'surge', 'bull', 'upgrade', 'buy']
-    bearish_words = ['miss', 'weak', 'loss', 'decline', 'fall', 'drop', 'bear', 'downgrade', 'sell', 'cut']
+    # Análisis basado en palabras clave en títulos
+    bullish_words = [
+        'beat', 'strong', 'growth', 'profit', 'gain', 'rise', 'surge', 'bull', 
+        'upgrade', 'buy', 'outperform', 'exceeds', 'beats', 'record', 'soar',
+        'rally', 'boom', 'breakthrough', 'partnership', 'deal', 'expansion',
+        'innovation', 'launch', 'success', 'positive', 'optimistic', 'surge',
+        'moon', 'rocket', ' ATH', 'all time high', 'dividend increase'
+    ]
+    bearish_words = [
+        'miss', 'weak', 'loss', 'decline', 'fall', 'drop', 'bear', 'downgrade', 
+        'sell', 'cut', 'underperform', 'misses', 'plunge', 'crash', 'concern',
+        'risk', 'investigation', 'lawsuit', 'layoff', 'recession', 'inflation',
+        'bankruptcy', 'debt crisis', 'fraud', 'scandal', 'delay', 'postpone',
+        'warning', 'cut forecast', 'bearish', 'dump', 'correction', 'dip'
+    ]
     
     bullish_count = 0
     bearish_count = 0
+    total_analyzed = 0
     
-    for article in news[:20]:  # Últimas 20 noticias
+    for article in news[:30]:  # Últimas 30 noticias para más precisión
         title = article.get('headline', '').lower()
+        if not title:
+            continue
+            
+        total_analyzed += 1
         
+        # Buscar palabras alcistas
         for word in bullish_words:
             if word in title:
                 bullish_count += 1
                 break
         
+        # Buscar palabras bajistas
         for word in bearish_words:
             if word in title:
                 bearish_count += 1
                 break
     
-    total = bullish_count + bearish_count
-    if total == 0:
+    total_sentiment = bullish_count + bearish_count
+    if total_sentiment == 0:
         return {
             'overall_sentiment': 'neutral',
             'sentiment_score': 0,
             'news_count': len(news),
             'bullish_pct': 0,
             'bearish_pct': 0,
+            'analyzed_count': total_analyzed,
             'source': 'finnhub'
         }
     
-    bullish_pct = (bullish_count / total) * 100
-    bearish_pct = (bearish_count / total) * 100
+    bullish_pct = (bullish_count / total_sentiment) * 100
+    bearish_pct = (bearish_count / total_sentiment) * 100
     
+    # Calcular score entre -1 y 1
     if bullish_pct > 60:
         sentiment = 'bullish'
         score = 0.5 + (bullish_pct - 60) / 80  # 0.5 a 1.0
@@ -230,8 +252,9 @@ def calculate_news_sentiment(finnhub_data):
         'overall_sentiment': sentiment,
         'sentiment_score': max(-1, min(1, score)),
         'news_count': len(news),
-        'bullish_pct': bullish_pct,
-        'bearish_pct': bearish_pct,
+        'bullish_pct': round(bullish_pct, 1),
+        'bearish_pct': round(bearish_pct, 1),
+        'analyzed_count': total_analyzed,
         'source': 'finnhub'
     }
 
@@ -731,7 +754,7 @@ def process_combined_data(ticker, av_data, yf_data, finnhub_data=None):
         sentiment = calculate_news_sentiment(finnhub_data)
         if sentiment:
             data['news_sentiment'] = sentiment
-            debug_log("Sentimiento calculado", sentiment['overall_sentiment'])
+            debug_log("Sentimiento calculado", f"{sentiment['overall_sentiment']} ({sentiment['sentiment_score']:.2f})")
     
     # Fallback de precio
     if not has_valid_price and data['eps'] > 0 and data['pe_trailing'] > 0:
@@ -866,6 +889,7 @@ def get_mock_data(ticker):
             'news_count': 15,
             'bullish_pct': 55,
             'bearish_pct': 45,
+            'analyzed_count': 12,
             'source': 'mock'
         }
     }
@@ -1089,11 +1113,12 @@ def render_earnings_surprise_chart(surprises):
 def render_news_sentiment(sentiment_data):
     """Renderiza indicador de sentimiento de noticias."""
     if not sentiment_data:
-        st.info("Análisis de sentimiento no disponible")
+        st.info("📰 Análisis de sentimiento no disponibles - Configura FINNHUB_API_KEY")
         return
     
     sentiment = sentiment_data.get('overall_sentiment', 'neutral')
     score = sentiment_data.get('sentiment_score', 0)
+    source = sentiment_data.get('source', 'unknown')
     
     colors = {
         'bullish': '#00ffad',
@@ -1103,11 +1128,17 @@ def render_news_sentiment(sentiment_data):
     
     color = colors.get(sentiment, '#888')
     
-    # Mostrar métricas de sentimiento
-    col1, col2, col3 = st.columns(3)
+    # Mostrar badge de fuente
+    if source == 'finnhub':
+        st.success("✅ Sentimiento basado en noticias reales de Finnhub")
+    else:
+        st.info("ℹ️ Datos de sentimiento de ejemplo")
+    
+    # Métricas en columnas
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Sentimiento", sentiment.upper(), f"{score*100:+.0f}")
+        st.metric("Sentimiento", sentiment.upper())
     
     with col2:
         bullish_pct = sentiment_data.get('bullish_pct', 0)
@@ -1117,26 +1148,32 @@ def render_news_sentiment(sentiment_data):
         bearish_pct = sentiment_data.get('bearish_pct', 0)
         st.metric("Noticias Bajistas", f"{bearish_pct:.0f}%")
     
-    # Gauge chart
+    with col4:
+        score_pct = score * 100
+        delta_color = "normal" if score_pct >= 0 else "inverse"
+        st.metric("Score", f"{score_pct:+.0f}", delta_color=delta_color)
+    
+    # Gauge chart mejorado
     fig = go.Figure(go.Indicator(
-        mode="gauge+number",
+        mode="gauge+number+delta",
         value=score * 100,
+        delta={'reference': 0, 'increasing': {'color': "#00ffad"}, 'decreasing': {'color': "#f23645"}},
         domain={'x': [0, 1], 'y': [0, 1]},
         title={'text': "Sentimiento de Noticias", 'font': {'color': 'white', 'size': 14}},
         gauge={
-            'axis': {'range': [-100, 100], 'tickcolor': 'white'},
-            'bar': {'color': color},
+            'axis': {'range': [-100, 100], 'tickcolor': 'white', 'tickwidth': 1},
+            'bar': {'color': color, 'thickness': 0.75},
             'bgcolor': '#1a1e26',
             'borderwidth': 2,
             'bordercolor': '#2a3f5f',
             'steps': [
-                {'range': [-100, -33], 'color': '#f2364522'},
-                {'range': [-33, 33], 'color': '#f5a62322'},
-                {'range': [33, 100], 'color': '#00ffad22'}
+                {'range': [-100, -33], 'color': '#f2364522', 'name': 'Bearish'},
+                {'range': [-33, 33], 'color': '#f5a62322', 'name': 'Neutral'},
+                {'range': [33, 100], 'color': '#00ffad22', 'name': 'Bullish'}
             ],
             'threshold': {
-                'line': {'color': 'white', 'width': 4},
-                'thickness': 0.75,
+                'line': {'color': 'white', 'width': 3},
+                'thickness': 0.8,
                 'value': score * 100
             }
         }
@@ -1146,11 +1183,17 @@ def render_news_sentiment(sentiment_data):
         template="plotly_dark",
         paper_bgcolor='#11141a',
         font=dict(color='white'),
-        height=250,
+        height=280,
         margin=dict(l=30, r=30, t=50, b=30)
     )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Información adicional
+    news_count = sentiment_data.get('news_count', 0)
+    analyzed = sentiment_data.get('analyzed_count', 0)
+    
+    st.caption(f"📊 Análisis basado en {analyzed} noticias relevantes de las últimas {news_count} disponibles")
 
 # ────────────────────────────────────────────────
 # VISUALIZACIÓN DE EARNINGS
@@ -1479,7 +1522,7 @@ def render():
         st.markdown("---")
         st.markdown("### 2️⃣ Ingresos por Segmento")
         
-        if data.get('segments'):
+        if data.get('segments') and data['data_source'] != 'mock':
             st.success("✅ Datos de segmentos reales de Finnhub")
             render_segment_chart(data['segments'], f"{data['ticker']} - Ingresos por Segmento")
         else:
@@ -1688,9 +1731,6 @@ def render():
         st.markdown("---")
         st.markdown("### 7️⃣ Sentimiento de Noticias")
         
-        if data.get('news_sentiment') and data['news_sentiment'].get('source') == 'finnhub':
-            st.success("✅ Sentimiento calculado con noticias reales de Finnhub")
-        
         render_news_sentiment(data.get('news_sentiment'))
         
         # 8. RSU ANALYSIS TERMINAL
@@ -1710,4 +1750,3 @@ def render():
 
 if __name__ == "__main__":
     render()
-

@@ -1292,23 +1292,7 @@ def render_earnings_section(data, av_data):
 def get_embedded_prompt():
     return """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║           ██╗░░░██╗███████╗██╗░░██╗         ██████╗ ███████╗██╗   ██╗        ║
-║           ██║░░░██║██╔════╝╚██╗██╔╝         ██╔══██╗██╔════╝██║   ██║        ║
-║           ╚██╗░██╔╝█████╗░░░╚███╔╝░         ██████╔╝█████╗░░██║   ██║        ║
-║           ░╚████╔╝░██╔══╝░░░██╔██╗░         ██╔══██╗██╔══╝░░╚██╗ ██╔╝        ║
-║           ░░╚██╔╝░░███████╗██╔╝╚██╗         ██║░░██║███████╗░╚████╔╝░        ║
-║           ░░░╚═╝░░░╚══════╝╚═╝░░╚═╝         ╚═╝░░╚═╝╚══════╝░░╚═══╝░░        ║
-║                                                                              ║
-║     ██████╗  █████╗ ███╗   ██╗ █████╗ ██╗     ██╗███████╗██╗███████╗         ║
-║     ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║     ██║██╔════╝██║██╔════╝         ║
-║     ██████╔╝███████║██╔██╗ ██║███████║██║     ██║█████╗  ██║███████╗         ║
-║     ██╔══██╗██╔══██║██║╚██╗██║██╔══██║██║     ██║██╔══╝  ██║╚════██║         ║
-║     ██║  ██║██║  ██║██║ ╚████║██║  ██║███████╗██║██║     ██║███████║         ║
-║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝     ╚═╝╚══════╝         ║
-║                                                                              ║
-║                    TERMINAL DE ANÁLISIS DE RENTA VARIABLE                    ║
-║                              v2.0 - RSU Edition                              ║
+║                    RSU ANALYSIS TERMINAL v2.0                                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 DATOS DE ENTRADA:
@@ -1318,11 +1302,11 @@ INSTRUCCIONES:
 Genera análisis fundamental completo en español con:
 
 1. SNAPSHOT EJECUTIVO
-2. VALORACIÓN RELATIVA  
+2. VALORACIÓN RELATIVA
 3. CALIDAD DEL NEGOCIO (Moat)
 4. SALUD FINANCIERA
-5. PERSPECTIVAS POSITIVAS (3-4 bullets con catalizadores)
-6. DESAFÍOS POR DELANTE (3-4 bullets con riesgos específicos)
+5. POSITIVE OUTLOOK (3-4 bullets con catalizadores)
+6. CHALLENGES AHEAD (3-4 bullets con riesgos específicos)
 7. ANÁLISIS TÉCNICO
 8. DECISIÓN DE INVERSIÓN (Score /10, recomendación, target price)
 
@@ -1768,4 +1752,5 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 

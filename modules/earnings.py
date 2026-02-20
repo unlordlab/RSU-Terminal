@@ -42,6 +42,25 @@ def get_api_keys():
     }
 
 # ────────────────────────────────────────────────
+# CACHE DE DATOS PARA OPTIMIZAR LLAMADAS API
+# ────────────────────────────────────────────────
+
+@st.cache_data(ttl=3600)  # Cache por 1 hora
+def get_alpha_vantage_data_cached(ticker, api_key):
+    """Versión cacheada de get_alpha_vantage_data."""
+    return get_alpha_vantage_data(ticker, api_key)
+
+@st.cache_data(ttl=1800)  # Cache por 30 minutos para precios
+def get_yfinance_data_cached(ticker_symbol):
+    """Versión cacheada de get_yfinance_data."""
+    return get_yfinance_data(ticker_symbol)
+
+@st.cache_data(ttl=900)  # Cache por 15 minutos para noticias (más frecuente)
+def get_finnhub_data_cached(ticker, api_key):
+    """Versión cacheada de get_finnhub_data."""
+    return get_finnhub_data(ticker, api_key)
+
+# ────────────────────────────────────────────────
 # FINNHUB API - DATOS DE SEGMENTOS Y NOTICIAS
 # ────────────────────────────────────────────────
 
@@ -1153,7 +1172,7 @@ def render_news_sentiment(sentiment_data):
         delta_color = "normal" if score_pct >= 0 else "inverse"
         st.metric("Score", f"{score_pct:+.0f}", delta_color=delta_color)
     
-    # Gauge chart mejorado
+    # Gauge chart - CORREGIDO: sin transparencia en steps
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=score * 100,
@@ -1167,9 +1186,9 @@ def render_news_sentiment(sentiment_data):
             'borderwidth': 2,
             'bordercolor': '#2a3f5f',
             'steps': [
-                {'range': [-100, -33], 'color': '#f2364522', 'name': 'Bearish'},
-                {'range': [-33, 33], 'color': '#f5a62322', 'name': 'Neutral'},
-                {'range': [33, 100], 'color': '#00ffad22', 'name': 'Bullish'}
+                {'range': [-100, -33], 'color': '#3d1f1f'},  # Rojo oscuro sin transparencia
+                {'range': [-33, 33], 'color': '#3d3520'},     # Amarillo oscuro sin transparencia
+                {'range': [33, 100], 'color': '#1f3d2e'}      # Verde oscuro sin transparencia
             ],
             'threshold': {
                 'line': {'color': 'white', 'width': 3},
@@ -1453,10 +1472,10 @@ def render():
         
         try:
             with st.spinner("Cargando datos (esto puede tomar 1-2 minutos)..."):
-                # Obtener datos de todas las fuentes
-                av_data = get_alpha_vantage_data(ticker, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
-                yf_data = get_yfinance_data(ticker)
-                finnhub_data = get_finnhub_data(ticker, api_keys['finnhub']) if api_keys['finnhub'] else None
+                # USAR FUNCIONES CACHEADAS
+                av_data = get_alpha_vantage_data_cached(ticker, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
+                yf_data = get_yfinance_data_cached(ticker)
+                finnhub_data = get_finnhub_data_cached(ticker, api_keys['finnhub']) if api_keys['finnhub'] else None
                 
                 data = process_combined_data(ticker, av_data, yf_data, finnhub_data)
                 

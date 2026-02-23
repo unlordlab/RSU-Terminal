@@ -22,62 +22,44 @@ def calcular_rsi(prices, period=14):
 def detectar_follow_through_day(df_daily):
     """
     Detecta Follow-Through Day según la teoría de William O'Neil (CANSLIM).
-    
-    Reglas:
-    1. Debe haber un nuevo mínimo previo (downtrend)
-    2. Día 1: Intento de rally (cierre > cierre anterior)
-    3. Días 2-3: El precio no debe hacer nuevo mínimo (mantenerse sobre el low del Día 1)
-    4. Día 4-7: FTD confirmado con:
-       - Subida >= 1.5% (ideal 2%+)
-       - Volumen > volumen del día anterior
-       - Vela verde fuerte cerrando sobre velas rojas previas
-    
-    Retorna: dict con estado del FTD o None
     """
     if df_daily is None or len(df_daily) < 20:
         return None
     
-    # Calcular cambios porcentuales y volumen
     df = df_daily.copy()
     df['returns'] = df['Close'].pct_change()
     df['volume_prev'] = df['Volume'].shift(1)
     df['volume_increase'] = df['Volume'] > df['volume_prev']
     df['price_up'] = df['returns'] > 0
     
-    # Buscar últimos 60 días para encontrar contexto
     recent = df.tail(60).copy()
-    
-    # Encontrar mínimos locales recientes (últimos 20 días)
     recent_low = recent['Close'].min()
     recent_low_idx = recent['Close'].idxmin()
-    
-    # Verificar si estamos en contexto de posible reversión (cerca de mínimos)
     current_price = df['Close'].iloc[-1]
     distancia_minimo = (current_price - recent_low) / recent_low
     
-    # Si estamos lejos del mínimo reciente (>10%), no estamos en contexto de FTD
     if distancia_minimo > 0.10:
         return {
             'estado': 'NO_CONTEXT',
             'mensaje': 'Mercado lejos de mínimos recientes',
             'dias_rally': 0,
-            'signal': None
+            'signal': None,
+            'color': '#888888',
+            'icono': '⚪'
         }
     
-    # Buscar intento de rally (últimos 10 días desde el mínimo)
     min_idx_pos = recent.index.get_loc(recent_low_idx)
     if min_idx_pos >= len(recent) - 2:
         return {
             'estado': 'RALLY_TOO_RECENT',
             'mensaje': 'Mínimo muy reciente, esperando desarrollo',
             'dias_rally': 0,
-            'signal': None
+            'signal': None,
+            'color': '#2962ff',
+            'icono': '⏱️'
         }
     
-    # Analizar días desde el mínimo
     post_low = recent.iloc[min_idx_pos:].copy()
-    
-    # Día 1 del rally: primer cierre positivo después del mínimo
     rally_start = None
     rally_start_idx = None
     
@@ -92,13 +74,12 @@ def detectar_follow_through_day(df_daily):
             'estado': 'NO_RALLY',
             'mensaje': 'Sin intento de rally detectado',
             'dias_rally': 0,
-            'signal': None
+            'signal': None,
+            'color': '#555555',
+            'icono': '⚫'
         }
     
-    # Contar días desde inicio del rally
     dias_rally = len(post_low) - rally_start_idx
-    
-    # Verificar que no se haya roto el low del día 1
     low_dia_1 = post_low.iloc[rally_start_idx]['Low']
     rally_valido = True
     
@@ -112,15 +93,15 @@ def detectar_follow_through_day(df_daily):
             'estado': 'RALLY_FAILED',
             'mensaje': 'Rally invalidado (nuevo mínimo)',
             'dias_rally': dias_rally,
-            'signal': 'invalidated'
+            'signal': 'invalidated',
+            'color': '#f23645',
+            'icono': '❌'
         }
     
-    # Verificar condiciones de FTD (Día 4-7)
     if dias_rally >= 4 and dias_rally <= 10:
         ultimo_dia = post_low.iloc[-1]
         ret_ultimo = ultimo_dia['returns'] * 100
         
-        # Condiciones FTD: +1.5% y volumen creciente
         if ret_ultimo >= 1.5 and ultimo_dia['volume_increase']:
             return {
                 'estado': 'FTD_CONFIRMED',
@@ -135,7 +116,7 @@ def detectar_follow_through_day(df_daily):
         elif ret_ultimo >= 1.0:
             return {
                 'estado': 'FTD_POTENTIAL',
-                'mensaje': 'Posible FTD en desarrollo (+{}%)'.format(round(ret_ultimo, 1)),
+                'mensaje': f'Posible FTD en desarrollo (+{round(ret_ultimo, 1)}%)',
                 'dias_rally': dias_rally,
                 'retorno': ret_ultimo,
                 'signal': 'potential',
@@ -143,18 +124,16 @@ def detectar_follow_through_day(df_daily):
                 'icono': '⏳'
             }
     
-    # Días 1-3: Rally temprano
     if dias_rally < 4:
         return {
             'estado': 'RALLY_EARLY',
-            'mensaje': 'Rally día {} - Esperando día 4-7'.format(dias_rally),
+            'mensaje': f'Rally día {dias_rally} - Esperando día 4-7',
             'dias_rally': dias_rally,
             'signal': 'early',
             'color': '#2962ff',
             'icono': '⏱️'
         }
     
-    # Después del día 10 sin FTD
     if dias_rally > 10:
         return {
             'estado': 'FTD_LATE',
@@ -167,7 +146,7 @@ def detectar_follow_through_day(df_daily):
     
     return {
         'estado': 'RALLY_ACTIVE',
-        'mensaje': 'Rally activo (día {})'.format(dias_rally),
+        'mensaje': f'Rally activo (día {dias_rally})',
         'dias_rally': dias_rally,
         'signal': 'active',
         'color': '#888888',
@@ -175,34 +154,23 @@ def detectar_follow_through_day(df_daily):
     }
 
 def obtener_datos_spy():
-    """
-    Obtiene datos de SPY. Intenta usar backend primero, fallback a yfinance.
-    """
-    # === NUEVO: Intentar backend primero ===
     try:
         from modules.api_client import get_api_client
         client = get_api_client()
-        
-        # Obtener históricos de 6 meses (aprox 26 semanas)
         data_json = client.get_history("SPY", "6mo")
         
         if data_json and "data" in data_json:
             df = pd.DataFrame(data_json["data"])
-            
-            # Convertir fecha a índice
             date_col = 'Date' if 'Date' in df.columns else 'Datetime' if 'Datetime' in df.columns else None
             if date_col:
                 df[date_col] = pd.to_datetime(df[date_col])
                 df.set_index(date_col, inplace=True)
             
-            # Resamplear a semanal (igual que yfinance interval="1wk")
             df_weekly = df.resample('W').last().dropna()
+            df_daily = df.resample('D').last().dropna() if len(df) > 50 else None
             
             if len(df_weekly) < 14:
                 raise ValueError("Datos insuficientes del backend")
-            
-            # Para FTD necesitamos datos diarios
-            df_daily = df.resample('D').last().dropna() if len(df) > 50 else None
             
             df_weekly['rsi'] = calcular_rsi(df_weekly['Close'])
             rsi_val = float(df_weekly['rsi'].iloc[-1])
@@ -215,7 +183,6 @@ def obtener_datos_spy():
     except Exception as e:
         pass
     
-    # === ORIGINAL: Fallback a yfinance ===
     try:
         ticker = yf.Ticker("SPY")
         df_weekly = ticker.history(interval="1wk", period="6mo")
@@ -244,11 +211,116 @@ def calcular_estado(rsi):
     else:
         return "AMBAR", "NEUTRAL", "#ff9800", "RSI 30-70: Zona neutral"
 
+def render_ftd_panel(ftd_data):
+    """
+    Renderiza el panel FTD usando st.html() para evitar problemas de escape
+    """
+    if not ftd_data:
+        st.html("""
+        <div style="background: linear-gradient(135deg, #0c0e12 0%, #11141a 100%); border: 2px solid #1a1e26; border-radius: 12px; padding: 20px; margin-top: 20px; font-family: sans-serif;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                <div style="font-size: 32px;">📊</div>
+                <div>
+                    <div style="color: white; font-size: 18px; font-weight: bold; margin: 0;">Follow-Through Day</div>
+                    <div style="color: #888; font-size: 12px;">Sin datos suficientes</div>
+                </div>
+            </div>
+            <div style="color: #888; text-align: center; padding: 20px;">
+                No hay datos diarios disponibles para calcular FTD
+            </div>
+        </div>
+        """)
+        return
+    
+    ftd_color = ftd_data.get('color', '#888888')
+    ftd_icon = ftd_data.get('icono', '●')
+    ftd_signal = ftd_data.get('signal')
+    mensaje = ftd_data.get('mensaje', '')
+    dias_rally = ftd_data.get('dias_rally', 0)
+    
+    # Construir HTML base
+    glow_style = f"box-shadow: 0 0 20px {ftd_color}44;" if ftd_signal == 'confirmed' else ""
+    
+    html_parts = []
+    html_parts.append(f'<div style="background: linear-gradient(135deg, #0c0e12 0%, #11141a 100%); border: 2px solid {ftd_color}44; border-radius: 12px; padding: 20px; margin-top: 20px; {glow_style} font-family: sans-serif;">')
+    
+    # Header
+    html_parts.append(f'''
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+            <div style="font-size: 32px;">{ftd_icon}</div>
+            <div>
+                <div style="color: white; font-size: 18px; font-weight: bold; margin: 0;">Follow-Through Day</div>
+                <div style="color: #888; font-size: 12px;">CANSLIM - William O'Neil</div>
+            </div>
+        </div>
+    ''')
+    
+    # Status badge
+    html_parts.append(f'''
+        <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; margin-top: 10px; background: {ftd_color}22; color: {ftd_color}; border: 1px solid {ftd_color}44;">
+            {mensaje}
+        </div>
+    ''')
+    
+    # Progress bar si hay rally
+    if dias_rally > 0:
+        progress_width = min((dias_rally / 7) * 100, 100)
+        html_parts.append(f'''
+            <div style="width: 100%; height: 6px; background: #1a1e26; border-radius: 3px; margin-top: 15px; overflow: hidden;">
+                <div style="height: 100%; border-radius: 3px; transition: width 0.5s ease; width: {progress_width}%; background: {ftd_color};"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: #555;">
+                <span>Día 1 (Rally)</span>
+                <span style="color: {ftd_color}; font-weight: bold;">Día {dias_rally}</span>
+                <span>Ventana FTD (4-7)</span>
+            </div>
+        ''')
+    
+    # Grid con métricas si hay retorno
+    if 'retorno' in ftd_data:
+        vol_color = "#00ffad" if ftd_data.get('volumen_up') else "#ff9800"
+        vol_text = "↑ Sí" if ftd_data.get('volumen_up') else "→ No"
+        retorno = round(ftd_data['retorno'], 2)
+        estado_text = ftd_data['estado'].replace('_', ' ')
+        
+        html_parts.append(f'''
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">
+                <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">Retorno Día</div>
+                    <div style="color: {ftd_color}; font-size: 1.2rem; font-weight: bold;">{retorno}%</div>
+                </div>
+                <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">Volumen</div>
+                    <div style="color: {vol_color}; font-size: 1.2rem; font-weight: bold;">{vol_text}</div>
+                </div>
+                <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">Estado</div>
+                    <div style="color: white; font-size: 1.0rem; font-weight: bold;">{estado_text}</div>
+                </div>
+            </div>
+        ''')
+    
+    # Alerta especial para FTD confirmado
+    if ftd_signal == 'confirmed':
+        html_parts.append('''
+            <div style="background: rgba(0, 255, 173, 0.1); border-left: 3px solid #00ffad; padding: 12px; margin-top: 15px; border-radius: 0 8px 8px 0;">
+                <div style="color: #00ffad; font-size: 13px; font-weight: 500;">
+                    ⚠️ Señal de cambio de tendencia confirmada. Considerar entrada gradual en posiciones largas según reglas CANSLIM.
+                </div>
+            </div>
+        ''')
+    
+    html_parts.append('</div>')
+    
+    # Unir todo y renderizar
+    full_html = ''.join(html_parts)
+    st.html(full_html)
+
 def render():
     set_style()
     
-    # CSS expandido para FTD
-    css = """
+    # CSS global - usando st.markdown con cuidado
+    st.markdown("""
     <style>
     .rsu-box { background: #11141a; border: 1px solid #1a1e26; border-radius: 10px; margin-bottom: 20px; }
     .rsu-head { background: #0c0e12; padding: 15px 20px; border-bottom: 1px solid #1a1e26; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
@@ -278,26 +350,8 @@ def render():
     .rsu-tip-icon:hover { border-color: #2962ff; color: #2962ff; }
     .rsu-tip-text { visibility: hidden; width: 280px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px; border-radius: 8px; position: absolute; z-index: 9999; top: 35px; right: 0; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 20px rgba(0,0,0,0.8); line-height: 1.4; }
     .rsu-tip:hover .rsu-tip-text { visibility: visible; opacity: 1; }
-    
-    /* Nuevos estilos FTD */
-    .ftd-panel { background: linear-gradient(135deg, #0c0e12 0%, #11141a 100%); border: 2px solid #1a1e26; border-radius: 12px; padding: 20px; margin-top: 20px; }
-    .ftd-header { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
-    .ftd-icon { font-size: 32px; }
-    .ftd-title { color: white; font-size: 18px; font-weight: bold; margin: 0; }
-    .ftd-subtitle { color: #888; font-size: 12px; }
-    .ftd-status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; margin-top: 10px; }
-    .ftd-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; }
-    .ftd-item { background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center; }
-    .ftd-label { color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px; }
-    .ftd-value { color: white; font-size: 1.2rem; font-weight: bold; }
-    .ftd-progress { width: 100%; height: 6px; background: #1a1e26; border-radius: 3px; margin-top: 15px; overflow: hidden; }
-    .ftd-progress-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
-    .ftd-days { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: #555; }
-    .ftd-alert { background: rgba(0, 255, 173, 0.1); border-left: 3px solid #00ffad; padding: 12px; margin-top: 15px; border-radius: 0 8px 8px 0; }
-    .ftd-alert-text { color: #00ffad; font-size: 13px; font-weight: 500; }
     </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     
     st.markdown('<div style="max-width:1200px;margin:0 auto;padding:20px;">', unsafe_allow_html=True)
     
@@ -339,16 +393,17 @@ def render():
     trend_arrow = "↑" if rsi_trend >= 0 else "↓"
     hora = pd.Timestamp.now().strftime('%H:%M')
     
-    # Layout de 3 columnas: Semáforo RSI, Métricas, y Panel FTD
+    # Layout de 2 columnas
     col1, col2 = st.columns([1, 1])
     
-    # Columna 1: Semáforo RSI (original)
+    # Columna 1: Semáforo RSI
     with col1:
         luz_r = "on" if estado == "ROJO" else ""
         luz_a = "on" if estado == "AMBAR" else ""
         luz_v = "on" if estado == "VERDE" else ""
         
-        html_semaforo = """
+        # Usar f-strings simples sin anidamientos complejos
+        semaforo_html = f"""
         <div class="rsu-box">
             <div class="rsu-head">
                 <span class="rsu-title">Señal RSI Semanal</span>
@@ -365,152 +420,41 @@ def render():
                 <p style="color:#888;font-size:13px;margin-top:15px;">{desc}</p>
             </div>
         </div>
-        """.format(
-            color=color,
-            luz_r=luz_r,
-            luz_a=luz_a,
-            luz_v=luz_v,
-            senal=senal,
-            desc=desc
-        )
-        st.markdown(html_semaforo, unsafe_allow_html=True)
+        """
+        st.markdown(semaforo_html, unsafe_allow_html=True)
         
         # Métricas bajo el semáforo
         m1, m2 = st.columns(2)
         with m1:
-            st.markdown("""
+            metric_html = f"""
             <div class="rsu-metric">
                 <div class="rsu-small">RSI</div>
-                <div class="rsu-big" style="color:{color};">{rsi:.2f}</div>
-                <div style="color:{trend_color};font-size:0.9rem;">{arrow} {trend:.2f}</div>
+                <div class="rsu-big" style="color:{color};">{rsi_val:.2f}</div>
+                <div style="color:{trend_color};font-size:0.9rem;">{trend_arrow} {abs(rsi_trend):.2f}</div>
             </div>
-            """.format(
-                color=color,
-                rsi=rsi_val,
-                trend_color=trend_color,
-                arrow=trend_arrow,
-                trend=abs(rsi_trend)
-            ), unsafe_allow_html=True)
+            """
+            st.markdown(metric_html, unsafe_allow_html=True)
         
         with m2:
-            st.markdown("""
+            price_html = f"""
             <div class="rsu-metric">
                 <div class="rsu-small">SPY</div>
-                <div class="rsu-big">${price:.2f}</div>
+                <div class="rsu-big">${precio_val:.2f}</div>
                 <div style="color:#888;font-size:0.8rem;">{hora}</div>
             </div>
-            """.format(
-                price=precio_val,
-                hora=hora
-            ), unsafe_allow_html=True)
+            """
+            st.markdown(price_html, unsafe_allow_html=True)
     
-    # Columna 2: Panel Follow-Through Day
+    # Columna 2: Panel FTD usando la nueva función
     with col2:
-        if ftd_data:
-            ftd_color = ftd_data.get('color', '#888888')
-            ftd_icon = ftd_data.get('icono', '●')
-            ftd_signal = ftd_data.get('signal')
-            
-            # Determinar clase CSS especial para FTD confirmado
-            glow_style = "box-shadow: 0 0 20px {}44;".format(ftd_color) if ftd_signal == 'confirmed' else ""
-            
-            ftd_html = """
-            <div class="ftd-panel" style="border-color: {ftd_color}44; {glow_style}">
-                <div class="ftd-header">
-                    <div class="ftd-icon">{icon}</div>
-                    <div>
-                        <div class="ftd-title">Follow-Through Day</div>
-                        <div class="ftd-subtitle">CANSLIM - William O'Neil</div>
-                    </div>
-                </div>
-                
-                <div class="ftd-status" style="background: {ftd_color}22; color: {ftd_color}; border: 1px solid {ftd_color}44;">
-                    {mensaje}
-                </div>
-            """.format(
-                ftd_color=ftd_color,
-                glow_style=glow_style,
-                icon=ftd_icon,
-                mensaje=ftd_data['mensaje']
-            )
-            
-            # Agregar métricas específicas si hay rally en progreso
-            if ftd_data['dias_rally'] > 0:
-                progress_width = min((ftd_data['dias_rally'] / 7) * 100, 100)
-                ftd_html += """
-                <div class="ftd-progress">
-                    <div class="ftd-progress-bar" style="width: {width}%; background: {color};"></div>
-                </div>
-                <div class="ftd-days">
-                    <span>Día 1 (Rally)</span>
-                    <span style="color: {color}; font-weight: bold;">Día {dias}</span>
-                    <span>Ventana FTD (4-7)</span>
-                </div>
-                """.format(
-                    width=progress_width,
-                    color=ftd_color,
-                    dias=ftd_data['dias_rally']
-                )
-            
-            # Agregar detalles de retorno si existe
-            if 'retorno' in ftd_data:
-                ftd_html += """
-                <div class="ftd-grid" style="margin-top: 15px;">
-                    <div class="ftd-item">
-                        <div class="ftd-label">Retorno Día</div>
-                        <div class="ftd-value" style="color: {color};">{ret}%</div>
-                    </div>
-                    <div class="ftd-item">
-                        <div class="ftd-label">Volumen</div>
-                        <div class="ftd-value" style="color: {vol_color};">{vol}</div>
-                    </div>
-                    <div class="ftd-item">
-                        <div class="ftd-label">Estado</div>
-                        <div class="ftd-value" style="font-size: 0.9rem;">{estado}</div>
-                    </div>
-                </div>
-                """.format(
-                    color=ftd_color,
-                    ret=round(ftd_data['retorno'], 2),
-                    vol_color="#00ffad" if ftd_data.get('volumen_up') else "#ff9800",
-                    vol="↑ Sí" if ftd_data.get('volumen_up') else "→ No",
-                    estado=ftd_data['estado'].replace('_', ' ')
-                )
-            
-            # Alerta especial para FTD confirmado
-            if ftd_signal == 'confirmed':
-                ftd_html += """
-                <div class="ftd-alert">
-                    <div class="ftd-alert-text">
-                        ⚠️ Señal de cambio de tendencia confirmada. Considerar entrada gradual en posiciones largas según reglas CANSLIM.
-                    </div>
-                </div>
-                """
-            
-            ftd_html += "</div>"
-            st.markdown(ftd_html, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="ftd-panel">
-                <div class="ftd-header">
-                    <div class="ftd-icon">📊</div>
-                    <div>
-                        <div class="ftd-title">Follow-Through Day</div>
-                        <div class="ftd-subtitle">Sin datos suficientes</div>
-                    </div>
-                </div>
-                <div style="color: #888; text-align: center; padding: 20px;">
-                    No hay datos diarios disponibles para calcular FTD
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        render_ftd_panel(ftd_data)
     
-    # Barra de progreso RSI (debajo de todo)
-    bar_html = """
+    # Barra de progreso RSI
+    bar_html = f"""
     <div class="rsu-bar-box" style="margin-top: 20px;">
         <div style="color:#888;font-size:11px;margin-bottom:8px;text-transform:uppercase;">Posición RSI Semanal</div>
         <div class="rsu-bar-line">
-            <div class="rsu-bar-fill" style="width:{width}%;background:linear-gradient(90deg,#00ffad,#ff9800,#f23645);"></div>
+            <div class="rsu-bar-fill" style="width:{rsi_val}%;background:linear-gradient(90deg,#00ffad,#ff9800,#f23645);"></div>
         </div>
         <div class="rsu-flex">
             <span>0</span>
@@ -519,31 +463,26 @@ def render():
             <span>100</span>
         </div>
         <div style="text-align:center;margin-top:8px;color:{color};font-weight:bold;font-size:13px;">
-            {rsi:.1f} → {estado}
+            {rsi_val:.1f} → {estado}
         </div>
     </div>
-    """.format(
-        width=rsi_val,
-        color=color,
-        rsi=rsi_val,
-        estado=estado
-    )
+    """
     st.markdown(bar_html, unsafe_allow_html=True)
     
-    # Zonas (mantenidas abajo)
+    # Zonas
     st.markdown("<h3 style='color:white;margin-top:30px;'>📊 Zonas RSI</h3>", unsafe_allow_html=True)
     z1, z2, z3 = st.columns(3)
     
-    zonas = [
-        ("#f23645", "red", "VENTA", "> 70", "🔴", "Sobrecompra"),
-        ("#ff9800", "yel", "NEUTRAL", "30-70", "🟡", "Esperar"),
-        ("#00ffad", "grn", "COMPRA", "< 30", "🟢", "Sobreventa")
+    zonas_data = [
+        ("#f23645", "VENTA", "> 70", "🔴", "Sobrecompra"),
+        ("#ff9800", "NEUTRAL", "30-70", "🟡", "Esperar"),
+        ("#00ffad", "COMPRA", "< 30", "🟢", "Sobreventa")
     ]
     
     cols = [z1, z2, z3]
-    for i, (col, (col_hex, col_name, title, range_txt, emoji, sub)) in enumerate(zip(cols, zonas)):
+    for col, (col_hex, title, range_txt, emoji, sub) in zip(cols, zonas_data):
         with col:
-            zona_html = """
+            zona_html = f"""
             <div class="rsu-box" style="border-color:{col_hex}44;">
                 <div style="text-align:center;padding:20px;">
                     <div style="width:50px;height:50px;background:{col_hex}22;border:2px solid {col_hex};border-radius:50%;margin:0 auto 15px;display:flex;align-items:center;justify-content:center;font-size:20px;color:{col_hex};">{emoji}</div>
@@ -552,13 +491,7 @@ def render():
                     <p style="color:#888;font-size:12px;margin:10px 0 0 0;">{sub}</p>
                 </div>
             </div>
-            """.format(
-                col_hex=col_hex,
-                emoji=emoji,
-                title=title,
-                range_txt=range_txt,
-                sub=sub
-            )
+            """
             st.markdown(zona_html, unsafe_allow_html=True)
     
     # Leyenda FTD
@@ -583,3 +516,4 @@ def render():
         st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
+

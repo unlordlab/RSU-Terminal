@@ -777,5 +777,6 @@ def render_tzu_terminal():
 if __name__ == "__main__":
     if 'scan_triggered' not in st.session_state:
         st.session_state.scan_triggered = False
-    render_tzu_terminal()
+    render()
+
 

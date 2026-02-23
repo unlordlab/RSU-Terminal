@@ -2,14 +2,14 @@
 """
 RSU STRATEGIC TERMINAL v2.0
 Estética TZU Strategic Momentum - Dark Tactical Interface
-Fuentes: Monospace | Colores: Cyan #00ffd1, Rojo #ff4757, Negro #0a0a0a
+Función principal: render()
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time
@@ -112,12 +112,12 @@ TIMEFRAMES_TZU = {
 }
 
 # ────────────────────────────────────────────────
-# FUNCIONES DE DATOS REALES
+# FUNCIONES DE DATOS
 # ────────────────────────────────────────────────
 
 @st.cache_data(ttl=300)
 def fetch_market_data(symbol, period, interval):
-    """Fetch datos reales con manejo de errores TZU"""
+    """Fetch datos reales"""
     try:
         data = yf.download(symbol, period=period, interval=interval, 
                           progress=False, auto_adjust=True, timeout=10)
@@ -133,28 +133,24 @@ def flatten_cols(df):
     return df
 
 def calculate_tech_indicators(data, fast, slow):
-    """Calcula indicadores técnicos estilo TZU"""
+    """Calcula indicadores técnicos"""
     data = flatten_cols(data)
     close = data['Close'].squeeze()
     
-    # EMAs
     ema_fast = close.ewm(span=fast, adjust=False).mean()
     ema_slow = close.ewm(span=slow, adjust=False).mean()
     
-    # RSI
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     
-    # Bollinger Bands
     sma_20 = close.rolling(window=20).mean()
     std_20 = close.rolling(window=20).std()
     upper_band = sma_20 + (std_20 * 2)
     lower_band = sma_20 - (std_20 * 2)
     
-    # ATR (volatilidad)
     high = data['High'].squeeze()
     low = data['Low'].squeeze()
     tr1 = high - low
@@ -175,7 +171,7 @@ def calculate_tech_indicators(data, fast, slow):
     }
 
 def analyze_symbol_tzu(symbol, tf_config):
-    """Análisis completo estilo TZU Strategic Momentum"""
+    """Análisis completo estilo TZU"""
     data = fetch_market_data(symbol, tf_config['period'], tf_config['interval'])
     if data is None:
         return None
@@ -187,7 +183,6 @@ def analyze_symbol_tzu(symbol, tf_config):
         prev_close = float(ind['close'].iloc[-2])
         change_pct = ((last_close - prev_close) / prev_close) * 100
         
-        # Señales
         ema_bull = ind['ema_fast'].iloc[-1] > ind['ema_slow'].iloc[-1]
         price_above_ema = last_close > ind['ema_fast'].iloc[-1]
         rsi_val = float(ind['rsi'].iloc[-1])
@@ -202,14 +197,12 @@ def analyze_symbol_tzu(symbol, tf_config):
             regime = "NEUTRAL"
             regime_color = TZU_COLORS['text_secondary']
         
-        # Score 0-100
         score = 0
         if ema_bull: score += 30
         if price_above_ema: score += 20
         if 40 < rsi_val < 60: score += 20
         elif 30 < rsi_val < 70: score += 10
         
-        # Tendencia
         if score >= 60:
             signal = "LONG"
             signal_color = TZU_COLORS['accent_cyan']
@@ -241,231 +234,11 @@ def analyze_symbol_tzu(symbol, tf_config):
         return None
 
 # ────────────────────────────────────────────────
-# COMPONENTES UI TZU STYLE
+# COMPONENTES UI
 # ────────────────────────────────────────────────
 
-def tzu_header():
-    """Header estilo TZU Strategic Momentum"""
-    st.markdown(f"""
-    <div style="background: {TZU_COLORS['bg_secondary']}; 
-                border-bottom: 1px solid {TZU_COLORS['border']};
-                padding: 15px 25px;
-                margin: -1rem -1rem 2rem -1rem;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;">
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <div style="font-family: monospace; font-size: 24px; font-weight: bold; 
-                        color: {TZU_COLORS['accent_cyan']}; letter-spacing: 2px;">
-                TZU
-            </div>
-            <div style="width: 1px; height: 30px; background: {TZU_COLORS['border']};"></div>
-            <div style="font-family: monospace; font-size: 11px; color: {TZU_COLORS['text_secondary']}; 
-                        text-transform: uppercase; letter-spacing: 1px;">
-                Strategic Momentum<br>
-                <span style="color: {TZU_COLORS['accent_cyan']};">● SYSTEM ACTIVE</span>
-            </div>
-        </div>
-        <div style="font-family: monospace; font-size: 11px; color: {TZU_COLORS['text_muted']}; text-align: right;">
-            {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC<br>
-            MARKET STATUS: <span style="color: {TZU_COLORS['accent_cyan']};">OPERATIONAL</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def tzu_panel(title, subtitle="", accent=TZU_COLORS['accent_cyan']):
-    """Panel container estilo TZU"""
-    st.markdown(f"""
-    <div style="background: {TZU_COLORS['bg_secondary']}; 
-                border: 1px solid {TZU_COLORS['border']};
-                border-left: 3px solid {accent};
-                border-radius: 0 8px 8px 0;
-                margin-bottom: 15px;">
-        <div style="padding: 12px 15px; border-bottom: 1px solid {TZU_COLORS['border']};">
-            <div style="font-family: monospace; font-size: 13px; font-weight: bold; 
-                        color: {TZU_COLORS['text_primary']}; letter-spacing: 1px;">
-                {title}
-            </div>
-            {f'<div style="font-family: monospace; font-size: 10px; color: {TZU_COLORS["text_muted"]}; margin-top: 2px;">{subtitle}</div>' if subtitle else ''}
-        </div>
-        <div style="padding: 15px;">
-    """, unsafe_allow_html=True)
-
-def tzu_panel_end():
-    st.markdown("</div></div>", unsafe_allow_html=True)
-
-def tzu_metric(label, value, delta=None, unit="", color=None):
-    """Métrica estilo TZU terminal"""
-    if color is None:
-        color = TZU_COLORS['accent_cyan'] if (delta is None or delta >= 0) else TZU_COLORS['accent_red']
-    
-    delta_html = ""
-    if delta is not None:
-        delta_color = TZU_COLORS['accent_cyan'] if delta >= 0 else TZU_COLORS['accent_red']
-        delta_sign = "+" if delta >= 0 else ""
-        delta_html = f'<div style="font-family: monospace; font-size: 11px; color: {delta_color}; margin-top: 4px;">{delta_sign}{delta:.2f}{unit}</div>'
-    
-    st.markdown(f"""
-    <div style="text-align: center;">
-        <div style="font-family: monospace; font-size: 9px; color: {TZU_COLORS['text_muted']}; 
-                    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">
-            {label}
-        </div>
-        <div style="font-family: monospace; font-size: 22px; font-weight: bold; color: {color};">
-            {value}
-        </div>
-        {delta_html}
-    </div>
-    """, unsafe_allow_html=True)
-
-def tzu_signal_badge(signal, color):
-    """Badge de señal estilo TZU"""
-    st.markdown(f"""
-    <div style="display: inline-block; background: {color}22; 
-                border: 1px solid {color}66; color: {color};
-                font-family: monospace; font-size: 11px; font-weight: bold;
-                padding: 4px 12px; border-radius: 4px; letter-spacing: 1px;">
-        {signal}
-    </div>
-    """, unsafe_allow_html=True)
-
-def tzu_progress_bar(value, max_val=100, color=TZU_COLORS['accent_cyan']):
-    """Barra de progreso estilo TZU"""
-    pct = min((value / max_val) * 100, 100)
-    st.markdown(f"""
-    <div style="background: {TZU_COLORS['bg_tertiary']}; height: 6px; border-radius: 3px; overflow: hidden;">
-        <div style="background: {color}; width: {pct}%; height: 100%; 
-                    box-shadow: 0 0 10px {color}66; transition: width 0.3s ease;">
-        </div>
-    </div>
-    <div style="font-family: monospace; font-size: 9px; color: {TZU_COLORS['text_muted']}; 
-                text-align: right; margin-top: 3px;">
-        {value:.0f}/{max_val}
-    </div>
-    """, unsafe_allow_html=True)
-
-# ────────────────────────────────────────────────
-# VISUALIZACIONES TZU STYLE
-# ────────────────────────────────────────────────
-
-def create_tzu_chart(data, ind, symbol, theme_color):
-    """Gráfico de velas estilo TZU dark"""
-    data = flatten_cols(data)
-    
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
-                        vertical_spacing=0.03, row_heights=[0.7, 0.3])
-    
-    # Candlestick
-    fig.add_trace(go.Candlestick(
-        x=data.index,
-        open=data['Open'].squeeze(),
-        high=data['High'].squeeze(),
-        low=data['Low'].squeeze(),
-        close=data['Close'].squeeze(),
-        increasing_line_color=TZU_COLORS['accent_cyan'],
-        decreasing_line_color=TZU_COLORS['accent_red'],
-        increasing_fillcolor=TZU_COLORS['accent_cyan'],
-        decreasing_fillcolor=TZU_COLORS['accent_red'],
-        line=dict(width=1),
-        name=symbol
-    ), row=1, col=1)
-    
-    # EMAs
-    fig.add_trace(go.Scatter(x=data.index, y=ind['ema_fast'], 
-                            line=dict(color=TZU_COLORS['accent_cyan'], width=1.5),
-                            name=f"EMA{9}"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=ind['ema_slow'], 
-                            line=dict(color=TZU_COLORS['accent_orange'], width=1.5),
-                            name=f"EMA{21}"), row=1, col=1)
-    
-    # Bollinger Bands
-    fig.add_trace(go.Scatter(x=data.index, y=ind['upper_band'], 
-                            line=dict(color=TZU_COLORS['text_muted'], width=1, dash='dash'),
-                            name="Upper BB", opacity=0.5), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=ind['lower_band'], 
-                            line=dict(color=TZU_COLORS['text_muted'], width=1, dash='dash'),
-                            name="Lower BB", opacity=0.5), row=1, col=1)
-    
-    # RSI
-    fig.add_trace(go.Scatter(x=data.index, y=ind['rsi'], 
-                            line=dict(color=TZU_COLORS['accent_cyan'], width=1.5),
-                            name="RSI"), row=2, col=1)
-    
-    # Líneas RSI referencia
-    fig.add_hline(y=70, line_dash="dash", line_color=TZU_COLORS['accent_red'], 
-                  opacity=0.5, row=2, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color=TZU_COLORS['accent_cyan'], 
-                  opacity=0.5, row=2, col=1)
-    
-    fig.update_layout(
-        paper_bgcolor=TZU_COLORS['bg_secondary'],
-        plot_bgcolor=TZU_COLORS['bg_primary'],
-        font=dict(family="monospace", color=TZU_COLORS['text_secondary']),
-        xaxis_rangeslider_visible=False,
-        height=400,
-        margin=dict(l=50, r=50, t=30, b=30),
-        showlegend=False,
-        xaxis=dict(gridcolor=TZU_COLORS['grid'], showgrid=True),
-        yaxis=dict(gridcolor=TZU_COLORS['grid'], showgrid=True),
-        xaxis2=dict(gridcolor=TZU_COLORS['grid']),
-        yaxis2=dict(gridcolor=TZU_COLORS['grid'], range=[0, 100])
-    )
-    
-    return fig
-
-def create_tzu_heatmap(themes_data):
-    """Heatmap de fuerza sectorial estilo TZU"""
-    sectors = []
-    scores = []
-    colors = []
-    
-    for theme_key, data in themes_data.items():
-        if data and len(data) > 0:
-            avg_score = np.mean([d['score'] for d in data if d])
-            sectors.append(THEMES_TZU[theme_key]['ticker'])
-            scores.append(avg_score)
-            
-            if avg_score >= 60:
-                colors.append(TZU_COLORS['accent_cyan'])
-            elif avg_score >= 40:
-                colors.append(TZU_COLORS['accent_orange'])
-            else:
-                colors.append(TZU_COLORS['accent_red'])
-    
-    fig = go.Figure(data=[go.Bar(
-        x=scores,
-        y=sectors,
-        orientation='h',
-        marker=dict(
-            color=colors,
-            line=dict(color=TZU_COLORS['text_secondary'], width=1)
-        ),
-        text=[f"{s:.0f}" for s in scores],
-        textposition="outside",
-        textfont=dict(family="monospace", color=TZU_COLORS['text_primary'], size=11)
-    )])
-    
-    fig.update_layout(
-        paper_bgcolor=TZU_COLORS['bg_secondary'],
-        plot_bgcolor=TZU_COLORS['bg_primary'],
-        font=dict(family="monospace", color=TZU_COLORS['text_secondary']),
-        height=300,
-        margin=dict(l=80, r=50, t=30, b=30),
-        xaxis=dict(gridcolor=TZU_COLORS['grid'], range=[0, 100], title="STRENGTH SCORE"),
-        yaxis=dict(gridcolor=TZU_COLORS['grid']),
-        showlegend=False
-    )
-    
-    return fig
-
-# ────────────────────────────────────────────────
-# RENDER PRINCIPAL TZU TERMINAL
-# ────────────────────────────────────────────────
-
-def render_tzu_terminal():
-    """Render completo del terminal TZU"""
-    
-    # CSS Global TZU
+def tzu_css():
+    """Inyecta CSS global TZU"""
     st.markdown(f"""
     <style>
         .stApp {{
@@ -508,13 +281,10 @@ def render_tzu_terminal():
             color: {TZU_COLORS['accent_cyan']};
             box-shadow: 0 0 15px {TZU_COLORS['accent_cyan']}33;
         }}
-        div[data-testid="stMetricValue"] {{
-            font-family: monospace;
+        div[data-testid="stButton"] > button[kind="primary"] {{
+            background: {TZU_COLORS['accent_cyan']}22;
+            border-color: {TZU_COLORS['accent_cyan']};
             color: {TZU_COLORS['accent_cyan']};
-        }}
-        .stDataFrame {{
-            font-family: monospace;
-            font-size: 11px;
         }}
         ::-webkit-scrollbar {{
             width: 8px;
@@ -532,42 +302,264 @@ def render_tzu_terminal():
         }}
     </style>
     """, unsafe_allow_html=True)
+
+def tzu_header():
+    """Header estilo TZU"""
+    st.markdown(f"""
+    <div style="background: {TZU_COLORS['bg_secondary']}; 
+                border-bottom: 1px solid {TZU_COLORS['border']};
+                padding: 15px 25px;
+                margin: -1rem -1rem 2rem -1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="font-family: monospace; font-size: 24px; font-weight: bold; 
+                        color: {TZU_COLORS['accent_cyan']}; letter-spacing: 2px;">
+                TZU
+            </div>
+            <div style="width: 1px; height: 30px; background: {TZU_COLORS['border']};"></div>
+            <div style="font-family: monospace; font-size: 11px; color: {TZU_COLORS['text_secondary']}; 
+                        text-transform: uppercase; letter-spacing: 1px;">
+                Strategic Momentum<br>
+                <span style="color: {TZU_COLORS['accent_cyan']};">● SYSTEM ACTIVE</span>
+            </div>
+        </div>
+        <div style="font-family: monospace; font-size: 11px; color: {TZU_COLORS['text_muted']}; text-align: right;">
+            {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC<br>
+            MARKET STATUS: <span style="color: {TZU_COLORS['accent_cyan']};">OPERATIONAL</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def tzu_panel_start(title, subtitle="", accent=TZU_COLORS['accent_cyan']):
+    """Inicia panel TZU"""
+    st.markdown(f"""
+    <div style="background: {TZU_COLORS['bg_secondary']}; 
+                border: 1px solid {TZU_COLORS['border']};
+                border-left: 3px solid {accent};
+                border-radius: 0 8px 8px 0;
+                margin-bottom: 15px;">
+        <div style="padding: 12px 15px; border-bottom: 1px solid {TZU_COLORS['border']};">
+            <div style="font-family: monospace; font-size: 13px; font-weight: bold; 
+                        color: {TZU_COLORS['text_primary']}; letter-spacing: 1px;">
+                {title}
+            </div>
+            {f'<div style="font-family: monospace; font-size: 10px; color: {TZU_COLORS["text_muted"]}; margin-top: 2px;">{subtitle}</div>' if subtitle else ''}
+        </div>
+        <div style="padding: 15px;">
+    """, unsafe_allow_html=True)
+
+def tzu_panel_end():
+    """Cierra panel TZU"""
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+def tzu_metric(label, value, delta=None, unit="", color=None):
+    """Métrica estilo TZU"""
+    if color is None:
+        color = TZU_COLORS['accent_cyan'] if (delta is None or (isinstance(delta, (int, float)) and delta >= 0)) else TZU_COLORS['accent_red']
     
+    delta_html = ""
+    if delta is not None:
+        delta_color = TZU_COLORS['accent_cyan'] if (isinstance(delta, (int, float)) and delta >= 0) else TZU_COLORS['accent_red']
+        delta_sign = "+" if (isinstance(delta, (int, float)) and delta >= 0) else ""
+        delta_str = f"{delta:.2f}" if isinstance(delta, (int, float)) else str(delta)
+        delta_html = f'<div style="font-family: monospace; font-size: 11px; color: {delta_color}; margin-top: 4px;">{delta_sign}{delta_str}{unit}</div>'
+    
+    st.markdown(f"""
+    <div style="text-align: center;">
+        <div style="font-family: monospace; font-size: 9px; color: {TZU_COLORS['text_muted']}; 
+                    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">
+            {label}
+        </div>
+        <div style="font-family: monospace; font-size: 22px; font-weight: bold; color: {color};">
+            {value}
+        </div>
+        {delta_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+def tzu_progress_bar(value, max_val=100, color=TZU_COLORS['accent_cyan']):
+    """Barra de progreso TZU"""
+    pct = min((value / max_val) * 100, 100)
+    st.markdown(f"""
+    <div style="background: {TZU_COLORS['bg_tertiary']}; height: 6px; border-radius: 3px; overflow: hidden;">
+        <div style="background: {color}; width: {pct}%; height: 100%; 
+                    box-shadow: 0 0 10px {color}66;"></div>
+    </div>
+    <div style="font-family: monospace; font-size: 9px; color: {TZU_COLORS['text_muted']}; 
+                text-align: right; margin-top: 3px;">
+        {value:.0f}/{max_val}
+    </div>
+    """, unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
+# VISUALIZACIONES
+# ────────────────────────────────────────────────
+
+def create_tzu_chart(data, ind, symbol):
+    """Gráfico estilo TZU"""
+    data = flatten_cols(data)
+    
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                        vertical_spacing=0.03, row_heights=[0.7, 0.3])
+    
+    fig.add_trace(go.Candlestick(
+        x=data.index,
+        open=data['Open'].squeeze(),
+        high=data['High'].squeeze(),
+        low=data['Low'].squeeze(),
+        close=data['Close'].squeeze(),
+        increasing_line_color=TZU_COLORS['accent_cyan'],
+        decreasing_line_color=TZU_COLORS['accent_red'],
+        increasing_fillcolor=TZU_COLORS['accent_cyan'],
+        decreasing_fillcolor=TZU_COLORS['accent_red'],
+        line=dict(width=1),
+        name=symbol
+    ), row=1, col=1)
+    
+    fig.add_trace(go.Scatter(x=data.index, y=ind['ema_fast'], 
+                            line=dict(color=TZU_COLORS['accent_cyan'], width=1.5),
+                            name="EMA Fast"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=ind['ema_slow'], 
+                            line=dict(color=TZU_COLORS['accent_orange'], width=1.5),
+                            name="EMA Slow"), row=1, col=1)
+    
+    fig.add_trace(go.Scatter(x=data.index, y=ind['upper_band'], 
+                            line=dict(color=TZU_COLORS['text_muted'], width=1, dash='dash'),
+                            name="Upper BB", opacity=0.5), row=1, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=ind['lower_band'], 
+                            line=dict(color=TZU_COLORS['text_muted'], width=1, dash='dash'),
+                            name="Lower BB", opacity=0.5), row=1, col=1)
+    
+    fig.add_trace(go.Scatter(x=data.index, y=ind['rsi'], 
+                            line=dict(color=TZU_COLORS['accent_cyan'], width=1.5),
+                            name="RSI"), row=2, col=1)
+    
+    fig.add_hline(y=70, line_dash="dash", line_color=TZU_COLORS['accent_red'], 
+                  opacity=0.5, row=2, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color=TZU_COLORS['accent_cyan'], 
+                  opacity=0.5, row=2, col=1)
+    
+    fig.update_layout(
+        paper_bgcolor=TZU_COLORS['bg_secondary'],
+        plot_bgcolor=TZU_COLORS['bg_primary'],
+        font=dict(family="monospace", color=TZU_COLORS['text_secondary']),
+        xaxis_rangeslider_visible=False,
+        height=400,
+        margin=dict(l=50, r=50, t=30, b=30),
+        showlegend=False,
+        xaxis=dict(gridcolor=TZU_COLORS['grid'], showgrid=True),
+        yaxis=dict(gridcolor=TZU_COLORS['grid'], showgrid=True),
+        xaxis2=dict(gridcolor=TZU_COLORS['grid']),
+        yaxis2=dict(gridcolor=TZU_COLORS['grid'], range=[0, 100])
+    )
+    
+    return fig
+
+def create_tzu_heatmap(themes_data):
+    """Heatmap sectorial TZU"""
+    sectors = []
+    scores = []
+    colors = []
+    
+    for theme_key, data in themes_data.items():
+        if data and len(data) > 0:
+            avg_score = np.mean([d['score'] for d in data if d])
+            sectors.append(THEMES_TZU[theme_key]['ticker'])
+            scores.append(avg_score)
+            
+            if avg_score >= 60:
+                colors.append(TZU_COLORS['accent_cyan'])
+            elif avg_score >= 40:
+                colors.append(TZU_COLORS['accent_orange'])
+            else:
+                colors.append(TZU_COLORS['accent_red'])
+    
+    fig = go.Figure(data=[go.Bar(
+        x=scores,
+        y=sectors,
+        orientation='h',
+        marker=dict(color=colors, line=dict(color=TZU_COLORS['text_secondary'], width=1)),
+        text=[f"{s:.0f}" for s in scores],
+        textposition="outside",
+        textfont=dict(family="monospace", color=TZU_COLORS['text_primary'], size=11)
+    )])
+    
+    fig.update_layout(
+        paper_bgcolor=TZU_COLORS['bg_secondary'],
+        plot_bgcolor=TZU_COLORS['bg_primary'],
+        font=dict(family="monospace", color=TZU_COLORS['text_secondary']),
+        height=300,
+        margin=dict(l=80, r=50, t=30, b=30),
+        xaxis=dict(gridcolor=TZU_COLORS['grid'], range=[0, 100], title="STRENGTH SCORE"),
+        yaxis=dict(gridcolor=TZU_COLORS['grid']),
+        showlegend=False
+    )
+    
+    return fig
+
+# ────────────────────────────────────────────────
+# FUNCIÓN PRINCIPAL RENDER()
+# ────────────────────────────────────────────────
+
+def render():
+    """
+    FUNCIÓN PRINCIPAL - Punto de entrada para el módulo
+    Esta es la función que el sistema espera encontrar
+    """
+    
+    # Inicializar estado
+    if 'scan_triggered' not in st.session_state:
+        st.session_state.scan_triggered = False
+    if 'selected_tf' not in st.session_state:
+        st.session_state.selected_tf = "SWING"
+    
+    # Aplicar CSS
+    tzu_css()
+    
+    # Header
     tzu_header()
     
-    # Control Panel Superior
+    # Panel de Control
     st.markdown(f"""
     <div style="background: {TZU_COLORS['bg_secondary']}; 
                 border: 1px solid {TZU_COLORS['border']};
                 border-radius: 8px;
                 padding: 15px;
                 margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
         st.markdown(f'<div style="font-family: monospace; font-size: 10px; color: {TZU_COLORS["text_muted"]}; margin-bottom: 5px;">TIMEFRAME SELECTOR</div>', unsafe_allow_html=True)
-        tf_selected = st.selectbox("", list(TIMEFRAMES_TZU.keys()), 
-                                   format_func=lambda x: f"◈ {TIMEFRAMES_TZU[x]['label']}",
-                                   label_visibility="collapsed")
+        tf_selected = st.selectbox(
+            "", 
+            list(TIMEFRAMES_TZU.keys()), 
+            index=list(TIMEFRAMES_TZU.keys()).index(st.session_state.selected_tf),
+            format_func=lambda x: f"◈ {TIMEFRAMES_TZU[x]['label']}",
+            label_visibility="collapsed",
+            key="tf_selector"
+        )
+        st.session_state.selected_tf = tf_selected
     
     with col2:
         st.markdown(f'<div style="font-family: monospace; font-size: 10px; color: {TZU_COLORS["text_muted"]}; margin-bottom: 5px;">SYSTEM MODE</div>', unsafe_allow_html=True)
-        mode = st.selectbox("", ["LIVE DATA", "SIMULATION"], label_visibility="collapsed")
+        mode = st.selectbox("", ["LIVE DATA", "SIMULATION"], label_visibility="collapsed", key="mode_selector")
     
     with col3:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("◉ EXECUTE SCAN", use_container_width=True):
+        if st.button("◉ EXECUTE SCAN", use_container_width=True, key="execute_scan"):
             st.session_state.scan_triggered = True
+            st.rerun()
     
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     
-    tf_config = TIMEFRAMES_TZU[tf_selected]
+    tf_config = TIMEFRAMES_TZU[st.session_state.selected_tf]
     
-    # Si no hay scan, mostrar estado standby
-    if not st.session_state.get('scan_triggered'):
+    # Estado Standby
+    if not st.session_state.scan_triggered:
         st.markdown(f"""
         <div style="text-align: center; padding: 100px 0; opacity: 0.5;">
             <div style="font-family: monospace; font-size: 48px; color: {TZU_COLORS['accent_cyan']}; margin-bottom: 20px;">
@@ -583,37 +575,36 @@ def render_tzu_terminal():
         """, unsafe_allow_html=True)
         return
     
-    # Ejecutar Scan
-    with st.spinner(""):
-        progress_text = st.empty()
-        progress_bar = st.progress(0)
-        
-        all_results = {}
-        total_symbols = sum(len(t["symbols"]) for t in THEMES_TZU.values())
-        processed = 0
-        
-        for theme_key, theme in THEMES_TZU.items():
-            progress_text.markdown(f"""
-            <div style="font-family: monospace; font-size: 11px; color: {TZU_COLORS['accent_cyan']};">
-                > SCANNING SECTOR: {theme['ticker']} // {theme['name'].upper()}
-            </div>
-            """, unsafe_allow_html=True)
-            
-            theme_results = []
-            for symbol in theme["symbols"]:
-                result = analyze_symbol_tzu(symbol, tf_config)
-                if result:
-                    theme_results.append(result)
-                processed += 1
-                progress_bar.progress(processed / total_symbols)
-                time.sleep(0.05)
-            
-            all_results[theme_key] = theme_results
-        
-        progress_text.empty()
-        progress_bar.empty()
+    # Ejecutar Análisis
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
     
-    # Dashboard Principal - Grid Layout
+    all_results = {}
+    total_symbols = sum(len(t["symbols"]) for t in THEMES_TZU.values())
+    processed = 0
+    
+    for theme_key, theme in THEMES_TZU.items():
+        progress_text.markdown(f"""
+        <div style="font-family: monospace; font-size: 11px; color: {TZU_COLORS['accent_cyan']};">
+            > SCANNING SECTOR: {theme['ticker']} // {theme['name'].upper()}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        theme_results = []
+        for symbol in theme["symbols"]:
+            result = analyze_symbol_tzu(symbol, tf_config)
+            if result:
+                theme_results.append(result)
+            processed += 1
+            progress_bar.progress(processed / total_symbols)
+            time.sleep(0.05)
+        
+        all_results[theme_key] = theme_results
+    
+    progress_text.empty()
+    progress_bar.empty()
+    
+    # Dashboard
     st.markdown(f"""
     <div style="font-family: monospace; font-size: 10px; color: {TZU_COLORS['accent_cyan']}; 
                 margin-bottom: 15px; letter-spacing: 1px;">
@@ -621,46 +612,46 @@ def render_tzu_terminal():
     </div>
     """, unsafe_allow_html=True)
     
-    # Fila 1: Market Overview
+    # Métricas Principales
     st.markdown("### MARKET BREADTH")
     cols_overview = st.columns(4)
     
-    total_symbols = sum(len(r) for r in all_results.values())
-    long_signals = sum(len([x for x in r if x['signal'] == 'LONG']) for r in all_results.values())
-    short_signals = sum(len([x for x in r if x['signal'] == 'SHORT']) for r in all_results.values())
-    avg_score = np.mean([x['score'] for r in all_results.values() for x in r]) if total_symbols > 0 else 0
+    total_syms = sum(len(r) for r in all_results.values())
+    long_sigs = sum(len([x for x in r if x['signal'] == 'LONG']) for r in all_results.values())
+    short_sigs = sum(len([x for x in r if x['signal'] == 'SHORT']) for r in all_results.values())
+    avg_score = np.mean([x['score'] for r in all_results.values() for x in r]) if total_syms > 0 else 0
     
     with cols_overview[0]:
-        tzu_panel("ACTIVE ASSETS", f"TOTAL MONITORED")
-        tzu_metric("COUNT", f"{total_symbols}", unit="")
+        tzu_panel_start("ACTIVE ASSETS", "TOTAL MONITORED")
+        tzu_metric("COUNT", f"{total_syms}")
         tzu_panel_end()
     
     with cols_overview[1]:
-        tzu_panel("LONG EXPOSURE", f"BULLISH SIGNALS", TZU_COLORS['accent_cyan'])
-        tzu_metric("POSITIONS", f"{long_signals}", delta=(long_signals/total_symbols*100 if total_symbols else 0), unit="%", color=TZU_COLORS['accent_cyan'])
+        tzu_panel_start("LONG EXPOSURE", "BULLISH SIGNALS", TZU_COLORS['accent_cyan'])
+        tzu_metric("POSITIONS", f"{long_sigs}", delta=(long_sigs/total_syms*100 if total_syms else 0), unit="%", color=TZU_COLORS['accent_cyan'])
         tzu_panel_end()
     
     with cols_overview[2]:
-        tzu_panel("SHORT EXPOSURE", f"BEARISH SIGNALS", TZU_COLORS['accent_red'])
-        tzu_metric("POSITIONS", f"{short_signals}", delta=-(short_signals/total_symbols*100 if total_symbols else 0), unit="%", color=TZU_COLORS['accent_red'])
+        tzu_panel_start("SHORT EXPOSURE", "BEARISH SIGNALS", TZU_COLORS['accent_red'])
+        tzu_metric("POSITIONS", f"{short_sigs}", delta=-(short_sigs/total_syms*100 if total_syms else 0), unit="%", color=TZU_COLORS['accent_red'])
         tzu_panel_end()
     
     with cols_overview[3]:
-        tzu_panel("SYSTEM SCORE", f"AGGREGATE STRENGTH", TZU_COLORS['accent_orange'])
+        tzu_panel_start("SYSTEM SCORE", "AGGREGATE STRENGTH", TZU_COLORS['accent_orange'])
         tzu_metric("AVG", f"{avg_score:.0f}", unit="/100", color=TZU_COLORS['accent_orange'])
         tzu_progress_bar(avg_score, 100, TZU_COLORS['accent_orange'])
         tzu_panel_end()
     
-    # Fila 2: Heatmap y Top Movers
+    # Heatmap y Top Movers
     col_left, col_right = st.columns([1, 1])
     
     with col_left:
-        tzu_panel("SECTORIAL HEATMAP", "STRENGTH BY THEME")
+        tzu_panel_start("SECTORIAL HEATMAP", "STRENGTH BY THEME")
         st.plotly_chart(create_tzu_heatmap(all_results), use_container_width=True, key="heatmap")
         tzu_panel_end()
     
     with col_right:
-        tzu_panel("TOP MOMENTUM", "HIGHEST SCORE ASSETS")
+        tzu_panel_start("TOP MOMENTUM", "HIGHEST SCORE ASSETS")
         
         all_assets = [x for r in all_results.values() for x in r]
         top_assets = sorted(all_assets, key=lambda x: x['score'], reverse=True)[:5]
@@ -694,7 +685,7 @@ def render_tzu_terminal():
         
         tzu_panel_end()
     
-    # Fila 3: Detalle por Sector (Tabs)
+    # Detalle por Sector
     st.markdown("---")
     st.markdown("### SECTOR DETAIL // TECHNICAL ANALYSIS")
     
@@ -707,7 +698,7 @@ def render_tzu_terminal():
                 st.warning("NO DATA AVAILABLE")
                 continue
             
-            # Grid de métricas del sector
+            # Grid de assets
             metric_cols = st.columns(len(results))
             
             for j, asset in enumerate(results):
@@ -746,7 +737,7 @@ def render_tzu_terminal():
                     </div>
                     """, unsafe_allow_html=True)
             
-            # Gráfico del líder del sector
+            # Chart del líder
             leader = max(results, key=lambda x: x['score'])
             st.markdown(f"""
             <div style="font-family: monospace; font-size: 10px; color: {TZU_COLORS['text_muted']}; 
@@ -755,10 +746,10 @@ def render_tzu_terminal():
             </div>
             """, unsafe_allow_html=True)
             
-            fig = create_tzu_chart(leader['data'], leader['indicators'], leader['symbol'], theme['color'])
+            fig = create_tzu_chart(leader['data'], leader['indicators'], leader['symbol'])
             st.plotly_chart(fig, use_container_width=True, key=f"chart_{theme_key}")
     
-    # Footer TZU
+    # Footer
     st.markdown(f"""
     <div style="border-top: 1px solid {TZU_COLORS['border']}; margin-top: 40px; padding-top: 20px;
                 font-family: monospace; font-size: 9px; color: {TZU_COLORS['text_muted']};
@@ -774,9 +765,8 @@ def render_tzu_terminal():
     </div>
     """, unsafe_allow_html=True)
 
+# Punto de entrada directo (para testing)
 if __name__ == "__main__":
-    if 'scan_triggered' not in st.session_state:
-        st.session_state.scan_triggered = False
     render()
 
 

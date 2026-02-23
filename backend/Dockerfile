@@ -2,14 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias
+# Copiar requirements primero (optimización)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código
+# Copiar el código del backend
 COPY main.py .
 
-# Puerto que usará Railway (se asigna automáticamente)
+# Puerto que usará Railway
 EXPOSE 8000
 
 # Comando para iniciar

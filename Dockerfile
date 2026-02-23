@@ -7,8 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/main.py .
 
-# NO exponer puerto fijo, Railway lo asigna
-# EXPOSE 8000
+EXPOSE 8000
 
-# Usar $PORT que Railway asigna automáticamente
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

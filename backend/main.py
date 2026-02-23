@@ -89,4 +89,77 @@ def get_price(symbol: str):
         return {**result, "from_cache": False}
         
     except Exception as e:
-        raise HTTPException(500, f"Error obteniendo datos: {
+        raise HTTPException(500, f"Error obteniendo datos: {str(e)}")
+
+@app.get("/api/history/{symbol}")
+def get_history(symbol: str, period: str = "1mo"):
+    """
+    Datos históricos con cache de 5 minutos.
+    """
+    symbol = symbol.upper()
+    cache_key = f"history:{symbol}:{period}"
+    
+    # Intentar leer de Redis
+    try:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return {**json.loads(cached), "from_cache": True}
+    except:
+        pass
+    
+    # Fetch de Yahoo
+    try:
+        data = yf.download(symbol, period=period, progress=False)
+        if data.empty:
+            raise HTTPException(404, f"Símbolo {symbol} no encontrado")
+        
+        result = {
+            "symbol": symbol,
+            "period": period,
+            "data": data.reset_index().to_dict("records"),
+            "columns": list(data.columns),
+            "last_price": float(data['Close'].iloc[-1])
+        }
+        
+        # Guardar en Redis por 5 minutos (300 segundos)
+        try:
+            redis_client.setex(cache_key, 300, json.dumps(result))
+        except:
+            pass
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error: {str(e)}")
+
+@app.get("/api/batch")
+def get_batch_prices(symbols: str):
+    """
+    Obtiene múltiples precios en UNA sola llamada.
+    Ejemplo: /api/batch?symbols=AAPL,MSFT,NVDA
+    """
+    symbol_list = [s.strip().upper() for s in symbols.split(",")]
+    results = {}
+    
+    for symbol in symbol_list:
+        try:
+            # Reutilizar la función get_price (con su cache)
+            data = get_price(symbol)
+            results[symbol] = {
+                "price": data.get("price"),
+                "change": data.get("change"),
+                "cached": data.get("from_cache", False) != False
+            }
+        except Exception as e:
+            results[symbol] = {"error": str(e)}
+    
+    return {
+        "count": len(results),
+        "data": results,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/health")
+def health():
+    """Para que Railway sepa que estamos vivos"""
+    return {"status": "ok"}

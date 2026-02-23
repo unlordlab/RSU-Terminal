@@ -19,6 +19,47 @@ def calcular_rsi(prices, period=14):
     return rsi
 
 def obtener_datos_spy():
+    """
+    Obtiene datos de SPY. Intenta usar backend primero, fallback a yfinance.
+    """
+    # === NUEVO: Intentar backend primero ===
+    try:
+        from modules.api_client import get_api_client
+        client = get_api_client()
+        
+        # Obtener históricos de 6 meses (aprox 26 semanas)
+        data_json = client.get_history("SPY", "6mo")
+        
+        if data_json and "data" in data_json:
+            df = pd.DataFrame(data_json["data"])
+            
+            # Convertir fecha a índice
+            date_col = 'Date' if 'Date' in df.columns else 'Datetime' if 'Datetime' in df.columns else None
+            if date_col:
+                df[date_col] = pd.to_datetime(df[date_col])
+                df.set_index(date_col, inplace=True)
+            
+            # Resamplear a semanal (igual que yfinance interval="1wk")
+            df = df.resample('W').last().dropna()
+            
+            if len(df) < 14:
+                raise ValueError("Datos insuficientes del backend")
+            
+            df['rsi'] = calcular_rsi(df['Close'])
+            rsi_val = float(df['rsi'].iloc[-1])
+            precio_val = float(df['Close'].iloc[-1])
+            rsi_prev = float(df['rsi'].iloc[-2]) if len(df) > 1 else rsi_val
+            rsi_trend = rsi_val - rsi_prev
+            
+            # Indicador silencioso de que usó backend (solo en desarrollo)
+            # st.caption("🟢 Backend")  # Descomenta para debug
+            return rsi_val, precio_val, rsi_trend
+            
+    except Exception as e:
+        # Silencioso: no mostrar error, solo fallback
+        pass
+    
+    # === ORIGINAL: Fallback a yfinance ===
     try:
         ticker = yf.Ticker("SPY")
         df = ticker.history(interval="1wk", period="6mo")
@@ -45,7 +86,7 @@ def calcular_estado(rsi):
 def render():
     set_style()
     
-    # CSS
+    # CSS (sin cambios)
     css = """
     <style>
     .rsu-box { background: #11141a; border: 1px solid #1a1e26; border-radius: 10px; margin-bottom: 20px; }

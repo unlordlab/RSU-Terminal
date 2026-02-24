@@ -13,6 +13,9 @@ from config import set_style
 # Constantes de sectores para el McClellan mejorado
 SECTOR_ETFS = ['XLK', 'XLF', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLRE', 'XLU']
 
+# Ventana de "memoria" para condiciones recientes
+VENTANA_CONDICIONES = 10  # días
+
 def calcular_rsi(prices, period=14):
     delta = prices.diff()
     gain = delta.where(delta > 0, 0)
@@ -38,10 +41,6 @@ def detectar_divergencia_bullish(df, lookback=30):
     rsi_series = rsi.iloc[-lookback:]
     
     # Buscar dos mínimos consecutivos
-    price_min_idx = price.rolling(window=5, center=True).min().dropna()
-    rsi_min_idx = rsi_series.rolling(window=5, center=True).min().dropna()
-    
-    # Encontrar índices de mínimos locales
     price_lows = []
     rsi_lows = []
     
@@ -170,16 +169,17 @@ def verificar_ftd_follow_through(df, ftd_idx, dias_verificacion=3):
 
 def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
     """
-    Sistema de detección de fondos multi-factor V2.0
-    Pesos rebalanceados y nuevos filtros de calidad.
+    Sistema de detección de fondos multi-factor V2.1 - MÁS PERMISIVO
+    - Permite condiciones en ventana de 10 días (no solo hoy)
+    - Convierte penalizaciones en advertencias visuales
     """
     score = 0
     max_score = 100
     detalles = []
     metricas = {}
-    penalizaciones = []
+    advertencias = []  # Reemplaza penalizaciones - no restan puntos
     
-    # Obtener métricas de medias móviles
+    # Obtener métricas de medias móviles (para contexto, no penalización)
     mm = calcular_medias_moviles(df_spy)
     price = mm['price']
     
@@ -193,7 +193,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
         detalles.append("• Sin divergencia detectada (0)")
         metricas['Divergencia'] = {'score': 0, 'max': 15, 'color': '#ffd700'}
     
-    # 2. FTD Detection (35 pts - subido de 30)
+    # 2. FTD Detection (35 pts)
     ftd_data = detectar_follow_through_day(df_spy)
     ftd_score = 0
     ftd_idx = None
@@ -204,17 +204,13 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
             ftd_idx = ftd_data.get('index')
             detalles.append("✓ FTD Confirmado (+35)")
             
-            # Penalización si no supera EMA21 (trampa para toros)
+            # ADVERTENCIA (no penalización) si FTD bajo EMA21
             if price < mm['ema_21']:
-                penalizacion = -10
-                score += penalizacion
-                penalizaciones.append(f"⚠️ FTD bajo EMA21 ({price:.2f} < {mm['ema_21']:.2f}) ({penalizacion})")
+                advertencias.append(f"⚠️ FTD bajo EMA21 - Posible trampa para toros")
             
-            # Verificación de seguimiento (Time Stop)
+            # Verificación de seguimiento (Time Stop) - solo advertencia
             if ftd_idx and not verificar_ftd_follow_through(df_spy, ftd_idx, 3):
-                penalizacion = -5
-                score += penalizacion
-                penalizaciones.append(f"⚠️ FTD sin seguimiento en 3 días ({penalizacion})")
+                advertencias.append(f"⚠️ FTD sin seguimiento en 3 días - Confirmación débil")
                 
         elif ftd_data.get('signal') in ['potential', 'early']:
             ftd_score = 15
@@ -230,57 +226,77 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
     score += ftd_score
     metricas['FTD'] = {'score': max(0, ftd_score), 'max': 35, 'color': '#2962ff', 'raw_value': ftd_data}
     
-    # 3. RSI Diario (15 pts - bajado de 25 para evitar redundancia con VIX)
+    # 3. RSI Diario (15 pts) - AHORA CON VENTANA DE 10 DÍAS
     rsi_series = calcular_rsi(df_spy['Close'], 14)
-    rsi = rsi_series.iloc[-1]
-    rsi_score = 0
     
-    if rsi < 25:
+    # Buscar RSI mínimo en los últimos VENTANA_CONDICIONES días
+    rsi_ventana = rsi_series.tail(VENTANA_CONDICIONES)
+    rsi_minimo = rsi_ventana.min()
+    rsi_actual = rsi_series.iloc[-1]
+    rsi_fecha_min = rsi_ventana.idxmin()
+    
+    rsi_score = 0
+    if rsi_minimo < 25:
         rsi_score = 15
-        detalles.append(f"✓ RSI {rsi:.1f} < 25 (Sobreventa extrema) (+15)")
-    elif rsi < 35:
+        detalles.append(f"✓ RSI mínimo {rsi_minimo:.1f} < 25 en últimos {VENTANA_CONDICIONES} días (+15)")
+    elif rsi_minimo < 35:
         rsi_score = 12
-        detalles.append(f"✓ RSI {rsi:.1f} < 35 (Sobreventa fuerte) (+12)")
-    elif rsi < 45:
+        detalles.append(f"✓ RSI mínimo {rsi_minimo:.1f} < 35 en últimos {VENTANA_CONDICIONES} días (+12)")
+    elif rsi_minimo < 45:
         rsi_score = 5
-        detalles.append(f"~ RSI {rsi:.1f} < 45 (Sobreventa moderada) (+5)")
-    elif rsi > 75:
-        rsi_score = -10
-        detalles.append(f"✗ RSI {rsi:.1f} > 75 (Sobrecompra) (-10)")
+        detalles.append(f"~ RSI mínimo {rsi_minimo:.1f} < 45 en últimos {VENTANA_CONDICIONES} días (+5)")
+    elif rsi_actual > 75:
+        rsi_score = -5  # Penalización leve solo por sobrecompra extrema actual
+        detalles.append(f"✗ RSI actual {rsi_actual:.1f} > 75 (Sobrecompra) (-5)")
     else:
-        detalles.append(f"• RSI {rsi:.1f} neutral (0)")
+        detalles.append(f"• RSI en rango neutral (0)")
     
     score += rsi_score
-    metricas['RSI'] = {'score': max(0, rsi_score), 'max': 15, 'color': '#00ffad', 'raw_value': rsi}
+    metricas['RSI'] = {
+        'score': max(0, rsi_score), 
+        'max': 15, 
+        'color': '#00ffad', 
+        'raw_value': rsi_actual,
+        'minimo_reciente': rsi_minimo,
+        'fecha_minimo': rsi_fecha_min.strftime('%Y-%m-%d') if pd.notna(rsi_fecha_min) else 'N/A'
+    }
     
-    # 4. VIX / Volatilidad (20 pts - se mantiene como validador)
+    # 4. VIX / Volatilidad (20 pts) - AHORA CON VENTANA DE 10 DÍAS
     vix_score = 0
     vix_valor = None
+    vix_maximo = None
     
     if df_vix is not None and len(df_vix) > 20:
+        # Buscar VIX máximo en ventana reciente
+        vix_ventana = df_vix['Close'].tail(VENTANA_CONDICIONES)
+        vix_maximo = vix_ventana.max()
         vix_actual = df_vix['Close'].iloc[-1]
-        vix_sma20 = df_vix['Close'].rolling(20).mean().iloc[-1]
-        vix_valor = vix_actual
+        vix_fecha_max = vix_ventana.idxmax()
         
-        if vix_actual > 35:
+        if vix_maximo > 35:
             vix_score = 20
-            detalles.append(f"✓ VIX {vix_actual:.1f} > 35 (Pánico extremo) (+20)")
-        elif vix_actual > 30:
+            detalles.append(f"✓ VIX máximo {vix_maximo:.1f} > 35 en últimos {VENTANA_CONDICIONES} días (+20)")
+        elif vix_maximo > 30:
             vix_score = 15
-            detalles.append(f"✓ VIX {vix_actual:.1f} > 30 (Miedo significativo) (+15)")
-        elif vix_actual > vix_sma20 * 1.3:
+            detalles.append(f"✓ VIX máximo {vix_maximo:.1f} > 30 en últimos {VENTANA_CONDICIONES} días (+15)")
+        elif vix_maximo > 25:
             vix_score = 10
-            detalles.append(f"~ VIX elevado vs media (+10)")
+            detalles.append(f"~ VIX máximo {vix_maximo:.1f} > 25 en últimos {VENTANA_CONDICIONES} días (+10)")
         else:
-            detalles.append(f"• VIX {vix_actual:.1f} normal (0)")
+            detalles.append(f"• VIX sin spike significativo (0)")
         
-        # Validador: Si score técnico es alto pero VIX < 20 (complacencia), reducir confianza
+        # Advertencia si score alto pero VIX bajo actual (complacencia)
         if score > 50 and vix_actual < 20:
-            penalizacion = -10
-            score += penalizacion
-            penalizaciones.append(f"⚠️ Alta complacencia (VIX {vix_actual:.1f} < 20) ({penalizacion})")
+            advertencias.append(f"⚠️ VIX actual bajo ({vix_actual:.1f}) - Posible complacencia post-pánico")
         
-        metricas['VIX'] = {'score': vix_score, 'max': 20, 'color': '#ff9800', 'raw_value': vix_actual}
+        metricas['VIX'] = {
+            'score': vix_score, 
+            'max': 20, 
+            'color': '#ff9800', 
+            'raw_value': vix_actual,
+            'maximo_reciente': vix_maximo,
+            'fecha_maximo': vix_fecha_max.strftime('%Y-%m-%d') if pd.notna(vix_fecha_max) else 'N/A'
+        }
     else:
         # Proxy usando ATR de SPY
         atr = calcular_atr(df_spy).iloc[-1]
@@ -288,95 +304,133 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
         ratio_atr = atr / atr_medio if atr_medio > 0 else 1
         vix_valor = ratio_atr
         
-        if ratio_atr > 2.0:
+        # Buscar máximo ATR en ventana
+        atr_series = calcular_atr(df_spy)
+        atr_ventana = atr_series.tail(VENTANA_CONDICIONES)
+        atr_max = atr_ventana.max()
+        atr_medio_ventana = atr_series.rolling(20).mean().tail(VENTANA_CONDICIONES).mean()
+        ratio_max = atr_max / atr_medio_ventana if atr_medio_ventana > 0 else 1
+        
+        if ratio_max > 2.0:
             vix_score = 15
-            detalles.append(f"~ ATR {ratio_atr:.1f}x normal (proxy VIX alto) (+15)")
-        elif ratio_atr > 1.5:
+            detalles.append(f"~ ATR máximo {ratio_max:.1f}x normal en últimos {VENTANA_CONDICIONES} días (+15)")
+        elif ratio_max > 1.5:
             vix_score = 10
-            detalles.append(f"~ ATR {ratio_atr:.1f}x normal (proxy VIX medio) (+10)")
+            detalles.append(f"~ ATR máximo {ratio_max:.1f}x normal en últimos {VENTANA_CONDICIONES} días (+10)")
         else:
             detalles.append(f"• Volatilidad normal (0)")
         
-        metricas['VIX'] = {'score': vix_score, 'max': 20, 'color': '#ff9800', 'raw_value': ratio_atr, 'is_proxy': True}
+        metricas['VIX'] = {
+            'score': vix_score, 
+            'max': 20, 
+            'color': '#ff9800', 
+            'raw_value': ratio_atr, 
+            'is_proxy': True,
+            'maximo_reciente': ratio_max
+        }
     
     score += vix_score
     
-    # 5. McClellan Oscillator Proxy Mejorado (20 pts - subido de 15)
+    # 5. McClellan Oscillator Proxy Mejorado (20 pts)
     mcclellan, metodo = calcular_mcclellan_proxy_mejorado(df_spy, sector_data)
     breadth_score = 0
     
-    if mcclellan < -80:
-        breadth_score = 20
-        detalles.append(f"✓ McClellan {mcclellan:.0f} < -80 (Oversold extremo) (+20) [{metodo}]")
-    elif mcclellan < -50:
-        breadth_score = 15
-        detalles.append(f"~ McClellan {mcclellan:.0f} < -50 (Oversold) (+15) [{metodo}]")
-    elif mcclellan < -20:
-        breadth_score = 5
-        detalles.append(f"• McClellan {mcclellan:.0f} < -20 (Débil) (+5) [{metodo}]")
+    # Buscar mínimo McClellan en ventana
+    if isinstance(mcclellan, (int, float)):
+        mcclellan_valor = mcclellan
     else:
-        detalles.append(f"• McClellan {mcclellan:.0f} neutral (0) [{metodo}]")
+        mcclellan_valor = mcclellan.iloc[-1] if hasattr(mcclellan, 'iloc') else 0
+    
+    if mcclellan_valor < -80:
+        breadth_score = 20
+        detalles.append(f"✓ McClellan {mcclellan_valor:.0f} < -80 (Oversold extremo) (+20) [{metodo}]")
+    elif mcclellan_valor < -50:
+        breadth_score = 15
+        detalles.append(f"~ McClellan {mcclellan_valor:.0f} < -50 (Oversold) (+15) [{metodo}]")
+    elif mcclellan_valor < -20:
+        breadth_score = 5
+        detalles.append(f"• McClellan {mcclellan_valor:.0f} < -20 (Débil) (+5) [{metodo}]")
+    else:
+        detalles.append(f"• McClellan {mcclellan_valor:.0f} neutral (0) [{metodo}]")
     
     score += breadth_score
-    metricas['Breadth'] = {'score': breadth_score, 'max': 20, 'color': '#9c27b0', 'raw_value': mcclellan, 'metodo': metodo}
+    metricas['Breadth'] = {'score': breadth_score, 'max': 20, 'color': '#9c27b0', 'raw_value': mcclellan_valor, 'metodo': metodo}
     
-    # 6. Volume Analysis (10 pts - se mantiene)
-    vol_actual = df_spy['Volume'].iloc[-1]
+    # 6. Volume Analysis (10 pts) - CON VENTANA
+    vol_ventana = df_spy['Volume'].tail(VENTANA_CONDICIONES)
+    vol_maximo = vol_ventana.max()
     vol_media = df_spy['Volume'].rolling(20).mean().iloc[-1]
-    vol_ratio = vol_actual / vol_media if vol_media > 0 else 1
+    vol_ratio_max = vol_maximo / vol_media if vol_media > 0 else 1
+    vol_actual = df_spy['Volume'].iloc[-1]
+    vol_ratio_actual = vol_actual / vol_media if vol_media > 0 else 1
     vol_score = 0
     
-    if vol_ratio > 2.0:
+    if vol_ratio_max > 2.0:
         vol_score = 10
-        detalles.append(f"✓ Volumen {vol_ratio:.1f}x media (Capitulación) (+10)")
-    elif vol_ratio > 1.5:
+        detalles.append(f"✓ Volumen máximo {vol_ratio_max:.1f}x media (Capitulación) (+10)")
+    elif vol_ratio_max > 1.5:
         vol_score = 7
-        detalles.append(f"~ Volumen {vol_ratio:.1f}x media (Alto) (+7)")
-    elif vol_ratio > 1.2:
+        detalles.append(f"~ Volumen máximo {vol_ratio_max:.1f}x media (Alto) (+7)")
+    elif vol_ratio_max > 1.2:
         vol_score = 3
-        detalles.append(f"• Volumen {vol_ratio:.1f}x media (+3)")
+        detalles.append(f"• Volumen máximo {vol_ratio_max:.1f}x media (+3)")
     else:
-        detalles.append(f"• Volumen normal (0)")
+        detalles.append(f"• Volumen sin spike significativo (0)")
     
     score += vol_score
-    metricas['Volume'] = {'score': vol_score, 'max': 10, 'color': '#f23645', 'raw_value': vol_ratio}
-    
-    # 7. FILTRO DE SEGURIDAD: SMA 200 (Penalización importante)
-    sma200_penalty = 0
-    if price < mm['sma_200']:
-        sma200_penalty = -10
-        score += sma200_penalty
-        penalizaciones.append(f"⚠️ Precio bajo SMA200 ({price:.2f} < {mm['sma_200']:.2f}) ({sma200_penalty})")
-        detalles.append(f"✗ Bajo SMA200 (Mercado bajista) ({sma200_penalty})")
-    else:
-        detalles.append(f"✓ Sobre SMA200 (Tendencia alcista) (0)")
-    
-    metricas['SMA200'] = {
-        'score': 0 if sma200_penalty == 0 else abs(sma200_penalty), 
-        'max': 0, 
-        'color': '#ff5722', 
-        'raw_value': price - mm['sma_200'],
-        'is_penalty': sma200_penalty < 0
+    metricas['Volume'] = {
+        'score': vol_score, 
+        'max': 10, 
+        'color': '#f23645', 
+        'raw_value': vol_ratio_actual,
+        'maximo_reciente': vol_ratio_max
     }
     
-    # Determinar estado con nuevo sistema de filtros
-    volumen_bajo = vol_score < 3
+    # 7. ADVERTENCIAS DE CONTEXTO (no penalizaciones)
+    # SMA200 - Advertencia si estamos bajo, pero NO resta puntos
+    if price < mm['sma_200']:
+        distancia_sma200 = (price - mm['sma_200']) / mm['sma_200'] * 100
+        advertencias.append(f"⚠️ Precio {distancia_sma200:.1f}% bajo SMA200 - Fondo en mercado bajista")
+        detalles.append(f"• Bajo SMA200 (Contexto: Mercado bajista)")
+    else:
+        detalles.append(f"• Sobre SMA200 (Contexto: Tendencia alcista)")
     
-    if score >= 70 and not volumen_bajo:
-        estado = "VERDE"
-        senal = "FONDO PROBABLE"
-        color = "#00ffad"
-        recomendacion = "Setup óptimo: Considerar entrada gradual (25% posición inicial) con stop-loss -7%. Múltiples factores alineados con volumen confirmado."
-    elif score >= 70 and volumen_bajo:
-        estado = "AMBAR"
-        senal = "SETUP SIN VOLUMEN"
-        color = "#ff9800"
-        recomendacion = "Score alto pero volumen insuficiente. Esperar confirmación de volumen en siguiente sesión o reducir tamaño de posición (10-15%)."
+    metricas['SMA200'] = {
+        'score': 0,  # No suma ni resta
+        'max': 0, 
+        'color': '#ff9800' if price < mm['sma_200'] else '#00ffad', 
+        'raw_value': price - mm['sma_200'],
+        'distancia_pct': (price - mm['sma_200']) / mm['sma_200'] * 100,
+        'advertencia': price < mm['sma_200']
+    }
+    
+    # EMA21 - Advertencia si FTD bajo ella
+    if price < mm['ema_21']:
+        advertencias.append(f"📉 Precio bajo EMA21 - Resistencia dinámica cercana")
+    
+    # Determinar estado con sistema permisivo
+    volumen_confirmado = vol_score >= 3
+    
+    if score >= 70:
+        if volumen_confirmado:
+            estado = "VERDE"
+            senal = "FONDO PROBABLE"
+            color = "#00ffad"
+            recomendacion = f"Setup óptimo detectado. Score: {score}/100. "
+            if len(advertencias) > 0:
+                recomendacion += f"⚠️ {len(advertencias)} advertencia(s): Revisar condiciones de riesgo antes de entrar."
+            else:
+                recomendacion += "Múltiples factores alineados con volumen. Considerar entrada gradual (25%) con stop -7%."
+        else:
+            estado = "VERDE-VOL"
+            senal = "SETUP SIN VOLUMEN"
+            color = "#00ffad"
+            recomendacion = f"Score alto ({score}) pero volumen insuficiente. Esperar confirmación o reducir posición (10-15%)."
     elif score >= 50:
         estado = "AMBAR"
         senal = "DESARROLLANDO"
         color = "#ff9800"
-        recomendacion = "Condiciones mejorando: Preparar watchlist, esperar confirmación adicional o entrada parcial (10-15%)."
+        recomendacion = "Condiciones mejorando. Preparar watchlist, esperar confirmación adicional o entrada parcial (10-15%)."
     elif score >= 30:
         estado = "AMBAR-BAJO"
         senal = "PRE-SETUP"
@@ -386,7 +440,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
         estado = "ROJO"
         senal = "SIN FONDO"
         color = "#f23645"
-        recomendacion = "Sin condiciones de fondo detectadas. Preservar capital, evitar compras agresivas."
+        recomendacion = "Sin condiciones de fondo detectadas. Preservar capital."
     
     return {
         'score': score,
@@ -396,11 +450,12 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
         'color': color,
         'recomendacion': recomendacion,
         'detalles': detalles,
-        'penalizaciones': penalizaciones,
+        'advertencias': advertencias,
         'ftd_data': ftd_data,
         'metricas': metricas,
         'medias_moviles': mm,
-        'divergencia_data': div_data
+        'divergencia_data': div_data,
+        'ventana_dias': VENTANA_CONDICIONES
     }
 
 def calcular_atr(df, periodo=14):
@@ -498,10 +553,6 @@ def descargar_datos_sectores():
 def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_sectores=False):
     """
     Backtesting robusto con umbral configurable.
-    
-    Args:
-        umbral_señal: Score mínimo para considerar entrada (comparar 50 vs 70 vs 80)
-        usar_sectores: Si True, descarga datos sectoriales para cada punto (más lento pero preciso)
     """
     try:
         # Descargar datos históricos
@@ -518,10 +569,10 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
         except:
             vix_hist = None
         
-        # Pre-cargar datos sectoriales si se solicita (para backtest preciso pero lento)
+        # Pre-cargar datos sectoriales si se solicita
         sectores_hist = {}
         if usar_sectores:
-            st.info("Modo preciso: Descargando datos sectoriales para cada punto de análisis (esto puede tardar varios minutos)...")
+            st.info("Modo preciso: Descargando datos sectoriales...")
             for etf in SECTOR_ETFS:
                 try:
                     t = yf.Ticker(etf)
@@ -546,7 +597,7 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
             
             resultado = detectar_fondo_comprehensivo(ventana_df, vix_window, sector_window)
             
-            # Usar el umbral configurable en lugar de fijo 50
+            # Usar el umbral configurable
             if resultado['score'] >= umbral_señal:
                 precio_entrada = df_hist['Close'].iloc[i]
                 precio_salida_5d = df_hist['Close'].iloc[min(i + 5, len(df_hist) - 1)]
@@ -561,6 +612,7 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
                     'fecha': df_hist.index[i].strftime('%Y-%m-%d'),
                     'score': resultado['score'],
                     'estado': resultado['estado'],
+                    'advertencias': len(resultado['advertencias']),
                     'precio_entrada': round(precio_entrada, 2),
                     'retorno_5d': round(retorno_5d, 2),
                     'retorno_10d': round(retorno_10d, 2),
@@ -602,97 +654,101 @@ def crear_grafico_acumulacion(df, resultado):
     """
     Crea un gráfico de velas con zonas de acumulación sombreadas cuando score > 70.
     """
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    
-    # Calcular score histórico para sombreado
-    scores_historicos = []
-    fechas = []
-    
-    # Solo calcular para los últimos 60 días para rendimiento
-    ventana = min(60, len(df))
-    
-    for i in range(ventana, 0, -1):
-        idx = len(df) - i
-        ventana_df = df.iloc[:idx]
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
         
-        # Calcular score simplificado para visualización
-        rsi = calcular_rsi(ventana_df['Close'], 14).iloc[-1]
-        vol_ratio = ventana_df['Volume'].iloc[-1] / ventana_df['Volume'].rolling(20).mean().iloc[-1]
+        # Calcular score histórico para sombreado
+        scores_historicos = []
+        fechas = []
         
-        score_simple = 0
-        if rsi < 35:
-            score_simple += 40
-        elif rsi < 45:
-            score_simple += 20
+        # Solo calcular para los últimos 60 días para rendimiento
+        ventana = min(60, len(df))
         
-        if vol_ratio > 1.5:
-            score_simple += 20
+        for i in range(ventana, 0, -1):
+            idx = len(df) - i
+            ventana_df = df.iloc[:idx]
+            
+            # Calcular score simplificado para visualización
+            rsi = calcular_rsi(ventana_df['Close'], 14).iloc[-1]
+            vol_ratio = ventana_df['Volume'].iloc[-1] / ventana_df['Volume'].rolling(20).mean().iloc[-1]
+            
+            score_simple = 0
+            if rsi < 35:
+                score_simple += 40
+            elif rsi < 45:
+                score_simple += 20
+            
+            if vol_ratio > 1.5:
+                score_simple += 20
+            
+            scores_historicos.append(score_simple)
+            fechas.append(df.index[idx])
         
-        scores_historicos.append(score_simple)
-        fechas.append(df.index[idx])
-    
-    # Crear figura
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
-                        vertical_spacing=0.03, 
-                        row_heights=[0.7, 0.3])
-    
-    # Gráfico de velas
-    fig.add_trace(go.Candlestick(
-        x=df.index[-ventana:],
-        open=df['Open'].iloc[-ventana:],
-        high=df['High'].iloc[-ventana:],
-        low=df['Low'].iloc[-ventana:],
-        close=df['Close'].iloc[-ventana:],
-        name='SPY'
-    ), row=1, col=1)
-    
-    # Añadir zona de acumulación (score > 70)
-    for i, (fecha, score) in enumerate(zip(fechas, scores_historicos)):
-        if score >= 70:
-            fig.add_vrect(
-                x0=fecha,
-                x1=df.index[min(len(df)-ventana+i+1, len(df)-1)],
-                fillcolor="rgba(0, 255, 173, 0.2)",
-                layer="below",
-                line_width=0,
-                row=1, col=1
-            )
-    
-    # Añadir EMA21 y SMA200
-    ema21 = df['Close'].ewm(span=21).mean()
-    sma200 = df['Close'].rolling(window=200).mean()
-    
-    fig.add_trace(go.Scatter(x=df.index[-ventana:], y=ema21.iloc[-ventana:],
-                            mode='lines', name='EMA21', line=dict(color='#ff9800', width=1)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index[-ventana:], y=sma200.iloc[-ventana:],
-                            mode='lines', name='SMA200', line=dict(color='#f23645', width=1, dash='dash')), row=1, col=1)
-    
-    # Volumen
-    colors = ['#00ffad' if df['Close'].iloc[i] > df['Open'].iloc[i] else '#f23645' 
-              for i in range(len(df)-ventana, len(df))]
-    
-    fig.add_trace(go.Bar(
-        x=df.index[-ventana:],
-        y=df['Volume'].iloc[-ventana:],
-        marker_color=colors,
-        name='Volumen'
-    ), row=2, col=1)
-    
-    fig.update_layout(
-        title='Análisis Técnico con Zonas de Acumulación (Score > 70)',
-        yaxis_title='Precio ($)',
-        yaxis2_title='Volumen',
-        xaxis_rangeslider_visible=False,
-        template='plotly_dark',
-        paper_bgcolor='#11141a',
-        plot_bgcolor='#11141a',
-        font=dict(color='white'),
-        showlegend=True,
-        height=600
-    )
-    
-    return fig
+        # Crear figura
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                            vertical_spacing=0.03, 
+                            row_heights=[0.7, 0.3])
+        
+        # Gráfico de velas
+        fig.add_trace(go.Candlestick(
+            x=df.index[-ventana:],
+            open=df['Open'].iloc[-ventana:],
+            high=df['High'].iloc[-ventana:],
+            low=df['Low'].iloc[-ventana:],
+            close=df['Close'].iloc[-ventana:],
+            name='SPY'
+        ), row=1, col=1)
+        
+        # Añadir zona de acumulación (score > 70)
+        for i, (fecha, score) in enumerate(zip(fechas, scores_historicos)):
+            if score >= 70:
+                fig.add_vrect(
+                    x0=fecha,
+                    x1=df.index[min(len(df)-ventana+i+1, len(df)-1)],
+                    fillcolor="rgba(0, 255, 173, 0.2)",
+                    layer="below",
+                    line_width=0,
+                    row=1, col=1
+                )
+        
+        # Añadir EMA21 y SMA200
+        ema21 = df['Close'].ewm(span=21).mean()
+        sma200 = df['Close'].rolling(window=200).mean()
+        
+        fig.add_trace(go.Scatter(x=df.index[-ventana:], y=ema21.iloc[-ventana:],
+                                mode='lines', name='EMA21', line=dict(color='#ff9800', width=1)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index[-ventana:], y=sma200.iloc[-ventana:],
+                                mode='lines', name='SMA200', line=dict(color='#f23645', width=1, dash='dash')), row=1, col=1)
+        
+        # Volumen
+        colors = ['#00ffad' if df['Close'].iloc[i] > df['Open'].iloc[i] else '#f23645' 
+                  for i in range(len(df)-ventana, len(df))]
+        
+        fig.add_trace(go.Bar(
+            x=df.index[-ventana:],
+            y=df['Volume'].iloc[-ventana:],
+            marker_color=colors,
+            name='Volumen'
+        ), row=2, col=1)
+        
+        fig.update_layout(
+            title='Análisis Técnico con Zonas de Acumulación (Score > 70)',
+            yaxis_title='Precio ($)',
+            yaxis2_title='Volumen',
+            xaxis_rangeslider_visible=False,
+            template='plotly_dark',
+            paper_bgcolor='#11141a',
+            plot_bgcolor='#11141a',
+            font=dict(color='white'),
+            showlegend=True,
+            height=600
+        )
+        
+        return fig
+    except Exception as e:
+        st.error(f"Error al crear gráfico: {e}")
+        return None
 
 def render():
     set_style()
@@ -723,13 +779,15 @@ def render():
     .progress-bg { width: 100%; height: 8px; background: #1a1e26; border-radius: 4px; overflow: hidden; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
     .recommendation-box { background: rgba(0, 255, 173, 0.05); border-left: 4px solid #00ffad; padding: 15px; margin-top: 20px; border-radius: 0 8px 8px 0; }
-    .penalty-box { background: rgba(242, 54, 69, 0.05); border-left: 4px solid #f23645; padding: 10px; margin: 5px 0; border-radius: 0 4px 4px 0; font-size: 12px; }
+    .warning-box { background: rgba(255, 152, 0, 0.1); border-left: 4px solid #ff9800; padding: 10px; margin: 5px 0; border-radius: 0 4px 4px 0; font-size: 12px; color: #ff9800; }
+    .warning-box.danger { background: rgba(242, 54, 69, 0.1); border-left-color: #f23645; color: #f23645; }
     .detail-item { padding: 8px 0; border-bottom: 1px solid #1a1e26; color: #ccc; font-size: 13px; }
     .detail-item:last-child { border-bottom: none; }
     .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; }
     .metric-card { background: #0c0e12; border-radius: 8px; padding: 15px; text-align: center; border: 1px solid #1a1e26; }
     .metric-value { font-size: 1.5rem; font-weight: bold; color: white; }
     .metric-label { font-size: 0.8rem; color: #888; margin-top: 5px; }
+    .ventana-badge { display: inline-block; background: #1a1e26; color: #00ffad; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-left: 10px; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -738,8 +796,8 @@ def render():
     # Header
     col1, col2 = st.columns([6, 1])
     with col1:
-        st.markdown("<h1 style='color:white;margin-bottom:5px;'>🚦 RSU ALGORITMO PRO v2.0</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#888;font-size:14px;margin-top:0;'>Detección de Fondos Multi-Factor con Análisis Sectorial y Divergencias</p>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:white;margin-bottom:5px;'>🚦 RSU ALGORITMO PRO v2.1</h1>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:#888;font-size:14px;margin-top:0;'>Detección de Fondos Multi-Factor <span class='ventana-badge'>Ventana: {VENTANA_CONDICIONES} días</span></p>", unsafe_allow_html=True)
     
     # Tabs
     tab1, tab2, tab3 = st.tabs(["📊 Análisis Actual", "📈 Backtesting", "ℹ️ Metodología"])
@@ -777,8 +835,8 @@ def render():
         with col_left:
             # Semáforo con Score
             luz_r = "on" if resultado['estado'] in ["ROJO"] else ""
-            luz_a = "on" if resultado['estado'] in ["AMBAR", "AMBAR-BAJO", "SETUP SIN VOLUMEN"] else ""
-            luz_v = "on" if resultado['estado'] == "VERDE" else ""
+            luz_a = "on" if resultado['estado'] in ["AMBAR", "AMBAR-BAJO"] else ""
+            luz_v = "on" if resultado['estado'] in ["VERDE", "VERDE-VOL"] else ""
             
             st.markdown(f"""
             <div class="rsu-box">
@@ -805,22 +863,24 @@ def render():
             with col_mm1:
                 st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['ema_21'] else '#f23645'};">{mm['ema_21']:.2f}</div>
+                    <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['ema_21'] else '#ff9800'};">{mm['ema_21']:.2f}</div>
                     <div class="metric-label">EMA 21</div>
                 </div>
                 """, unsafe_allow_html=True)
             with col_mm2:
                 st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['sma_50'] else '#f23645'};">{mm['sma_50']:.2f}</div>
+                    <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['sma_50'] else '#ff9800'};">{mm['sma_50']:.2f}</div>
                     <div class="metric-label">SMA 50</div>
                 </div>
                 """, unsafe_allow_html=True)
             with col_mm3:
+                distancia_sma200 = mm.get('distancia_pct', 0)
+                color_sma200 = '#00ffad' if mm['price'] > mm['sma_200'] else '#f23645'
                 st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['sma_200'] else '#f23645'};">{mm['sma_200']:.2f}</div>
-                    <div class="metric-label">SMA 200</div>
+                    <div class="metric-value" style="color:{color_sma200};">{mm['sma_200']:.2f}</div>
+                    <div class="metric-label">SMA 200 ({distancia_sma200:+.1f}%)</div>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -832,18 +892,20 @@ def render():
             </div>
             """, unsafe_allow_html=True)
             
-            # Penalizaciones si existen
-            if resultado['penalizaciones']:
-                st.markdown("<div style='margin-top:15px;'><strong style='color:#f23645;'>⚠️ Penalizaciones aplicadas:</strong></div>", unsafe_allow_html=True)
-                for pen in resultado['penalizaciones']:
-                    st.markdown(f'<div class="penalty-box">{pen}</div>', unsafe_allow_html=True)
+            # Advertencias (no penalizaciones)
+            if resultado['advertencias']:
+                st.markdown("<div style='margin-top:15px;'><strong style='color:#ff9800;'>⚠️ Advertencias de Contexto:</strong></div>", unsafe_allow_html=True)
+                for adv in resultado['advertencias']:
+                    es_danger = "bajo SMA200" in adv or "trampa" in adv
+                    clase = "danger" if es_danger else ""
+                    st.markdown(f'<div class="warning-box {clase}">{adv}</div>', unsafe_allow_html=True)
         
         with col_right:
             # Panel de Factores
             st.markdown("""
             <div class="rsu-box">
                 <div class="rsu-head">
-                    <span class="rsu-title">Desglose de Factores v2.0</span>
+                    <span class="rsu-title">Desglose de Factores v2.1</span>
                 </div>
                 <div class="rsu-body">
             """, unsafe_allow_html=True)
@@ -857,38 +919,44 @@ def render():
                     # Nombres personalizados
                     nombres_display = {
                         'FTD': 'Follow-Through Day',
-                        'RSI': 'RSI Diario',
-                        'VIX': 'VIX / Volatilidad',
+                        'RSI': 'RSI (Ventana 10d)',
+                        'VIX': 'VIX / Volatilidad (Ventana 10d)',
                         'Breadth': 'Breadth (McClellan)',
-                        'Volume': 'Volumen Capitulación',
+                        'Volume': 'Volumen (Ventana 10d)',
                         'Divergencia': 'Divergencia Alcista',
-                        'SMA200': 'Filtro SMA200'
+                        'SMA200': 'Contexto SMA200'
                     }
                     
                     nombre_display = nombres_display.get(factor_key, factor_key)
                     pct = (m['score'] / m['max']) * 100 if m['max'] > 0 else 0
                     raw_val = m.get('raw_value', 0)
                     
-                    # Formatear valor raw
+                    # Formatear valor raw con información de ventana
                     if factor_key == 'RSI':
-                        raw_text = f"RSI: {raw_val:.1f}"
+                        min_rec = m.get('minimo_reciente', raw_val)
+                        fecha_min = m.get('fecha_minimo', 'N/A')
+                        raw_text = f"Actual: {raw_val:.1f} | Mín: {min_rec:.1f} ({fecha_min})"
                     elif factor_key == 'VIX':
-                        raw_text = f"{raw_val:.1f}" if not m.get('is_proxy') else f"ATR: {raw_val:.1f}x"
+                        max_rec = m.get('maximo_reciente', raw_val)
+                        fecha_max = m.get('fecha_maximo', 'N/A')
+                        raw_text = f"Actual: {raw_val:.1f} | Máx: {max_rec:.1f} ({fecha_max})"
                     elif factor_key == 'Breadth':
                         raw_text = f"{raw_val:.0f} ({m.get('metodo', 'Proxy')})"
                     elif factor_key == 'Volume':
-                        raw_text = f"{raw_val:.1f}x media"
+                        max_rec = m.get('maximo_reciente', raw_val)
+                        raw_text = f"Actual: {raw_val:.1f}x | Máx: {max_rec:.1f}x"
                     elif factor_key == 'Divergencia':
                         raw_text = "Detectada" if m['score'] > 0 else "No detectada"
                     elif factor_key == 'SMA200':
-                        raw_text = f"Distancia: {raw_val:.2f}$" if not m.get('is_penalty') else "Bajo SMA200"
-                        if m.get('is_penalty'):
-                            pct = 100  # Mostrar barra completa en rojo para penalización
+                        distancia = m.get('distancia_pct', 0)
+                        raw_text = f"Distancia: {distancia:+.1f}%"
                     else:
                         raw_text = ""
                     
-                    # Color especial para penalizaciones
-                    bar_color = m['color'] if not m.get('is_penalty') else '#f23645'
+                    # Color especial para advertencias
+                    bar_color = m['color']
+                    if factor_key == 'SMA200' and m.get('advertencia'):
+                        bar_color = '#ff9800'  # Naranja para advertencia
                     
                     st.markdown(f"""
                     <div class="factor-container">
@@ -909,7 +977,8 @@ def render():
         st.markdown("### 📊 Zonas de Acumulación (Score > 70)")
         try:
             fig = crear_grafico_acumulacion(df_daily, resultado)
-            st.plotly_chart(fig, use_container_width=True)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"Error al generar gráfico: {e}")
         
@@ -949,22 +1018,27 @@ def render():
                     st.write(f"**Retorno FTD**: {ftd.get('retorno', 'N/A')}%")
                     if ftd.get('date'):
                         st.write(f"**Fecha FTD**: {ftd['date'].strftime('%Y-%m-%d')}")
+                
+                st.markdown("### Contexto de Medias Móviles:")
+                st.write(f"**Precio vs EMA21**: {((mm['price'] - mm['ema_21'])/mm['ema_21']*100):+.2f}%")
+                st.write(f"**Precio vs SMA50**: {((mm['price'] - mm['sma_50'])/mm['sma_50']*100):+.2f}%")
+                st.write(f"**Precio vs SMA200**: {((mm['price'] - mm['sma_200'])/mm['sma_200']*100):+.2f}%")
     
     with tab2:
-        st.markdown("### 📊 Backtesting Histórico v2.0")
-        st.info("Análisis de performance con umbral configurable. Compara resultados entre diferentes niveles de exigencia (50 vs 70 vs 80).")
+        st.markdown("### 📊 Backtesting Histórico v2.1")
+        st.info(f"Análisis con ventana de {VENTANA_CONDICIONES} días. Las condiciones pueden haber ocurrido en cualquier día de la ventana, no solo el día de la señal.")
         
         col_bt1, col_bt2, col_bt3 = st.columns([1, 1, 2])
         with col_bt1:
             umbral_bt = st.slider("Umbral de señal", min_value=30, max_value=85, value=50, step=5, 
-                                  help="Score mínimo para considerar entrada. Umbral alto = menos señales pero mayor calidad.")
-            años_bt = st.selectbox("Período", options=[1, 2, 3, 5], index=1)
+                                  help="Score mínimo para considerar entrada.")
+            años_bt = st.selectbox("Período", options=[1, 2, 3, 5], index=3)  # Default 5 años
         
         with col_bt2:
             modo_preciso = st.checkbox("Modo Preciso (Sectores)", value=False, 
-                                   help="Descarga datos sectoriales para cada punto (muy lento pero preciso)")
+                                   help="Descarga datos sectoriales (lento)")
             comparar_umbrales = st.checkbox("Comparar umbrales 50/70/80", value=False,
-                                          help="Ejecuta backtest con 3 umbrales diferentes para comparar")
+                                          help="Ejecuta 3 backtests para comparar")
         
         with col_bt3:
             if st.button("🚀 Ejecutar Backtest", type="primary", use_container_width=True):
@@ -1010,7 +1084,7 @@ def render():
                             m_col3.metric("Win Rate (20d)", f"{resultados_bt['win_rate_20d']:.1f}%")
                             m_col4.metric("Retorno Medio (20d)", f"{resultados_bt['retorno_medio_20d']:.2f}%")
                             
-                            # Gráfico de distribución
+                            # Distribución de retornos
                             st.markdown("#### Distribución de Retornos")
                             chart_data = resultados_bt['detalle'][['retorno_5d', 'retorno_10d', 'retorno_20d']].rename(columns={
                                 'retorno_5d': '5 días',
@@ -1026,58 +1100,65 @@ def render():
                                     use_container_width=True,
                                     hide_index=True
                                 )
+                            
+                            # Análisis por año
+                            st.markdown("#### Distribución Temporal")
+                            resultados_bt['detalle']['año'] = pd.to_datetime(resultados_bt['detalle']['fecha']).dt.year
+                            señales_por_año = resultados_bt['detalle'].groupby('año').size()
+                            st.bar_chart(señales_por_año)
     
     with tab3:
-        st.markdown("""
-        ### 🔬 Metodología Científica v2.0
+        st.markdown(f"""
+        ### 🔬 Metodología Científica v2.1 - MÁS PERMISIVA
         
-        **ADVERTENCIA**: Esta herramienta es un asistente de análisis técnico, no un sistema de trading automático garantizado.
+        **CAMBIO CLAVE**: Ventana de {VENTANA_CONDICIONES} días para condiciones
         
-        #### Nuevo Sistema de Puntuación Rebalanceado (0-100 puntos)
+        #### Problema de la Versión Anterior
+        El algoritmo requería que RSI < 35, VIX > 30, etc. **ocurrieran exactamente el mismo día**.
+        Esto es irrealista: el pánico (VIX alto) suele ocurrir 2-5 días antes que el RSI toque fondo.
         
-        | Factor | Peso v1 | Peso v2 | Razón del Cambio |
-        |--------|---------|---------|------------------|
-        | **FTD** | 30 | 35 | Más predictivo, pero con filtros de calidad |
-        | **RSI** | 25 | 15 | Reducido para evitar redundancia con VIX |
-        | **VIX** | 20 | 20 | Se mantiene como validador de pánico |
-        | **Breadth** | 15 | 20 | Ahora con datos sectoriales reales (XLK, XLF, etc.) |
-        | **Volumen** | 10 | 10 | Filtro de seguridad obligatorio |
-        | **Divergencia** | 0 | 15 | **NUEVO**: Bono por divergencia alcista RSI |
+        #### Solución: Condiciones en Ventana
+        Ahora el algoritmo busca:
+        - **RSI**: Mínimo en últimos {VENTANA_CONDICIONES} días < 35 (no solo hoy)
+        - **VIX**: Máximo en últimos {VENTANA_CONDICIONES} días > 30 (captura spike reciente)
+        - **Volumen**: Máximo en últimos {VENTANA_CONDICIONES} días > 1.5x media
         
-        #### Nuevos Filtros de Calidad (Penalizaciones)
+        Esto permite capturar la "confluencia temporal" de factores, no solo la instantánea.
         
-        1. **FTD bajo EMA21 (-10 pts)**: Trampa para toros clásica de O'Neil
-        2. **FTD sin seguimiento (-5 pts)**: Si no supera máximo del FTD en 3 días
-        3. **Precio bajo SMA200 (-10 pts)**: Evitar "catching a falling knife" en mercado bajista
-        4. **VIX < 20 con score alto (-10 pts)**: Complacencia en mercado alcista maduro
+        #### Sistema de Advertencias (no Penalizaciones)
         
-        #### Umbrales de Decisión Mejorados
+        **Antes**: Restar -10 pts por estar bajo SMA200
+        **Ahora**: Mostrar advertencia naranja/roja pero mantener score
         
-        - **Score 70+ + Volumen alto**: 🟢 VERDE - Fondo probable
-        - **Score 70+ + Volumen bajo**: 🟡 AMBAR - Setup sin confirmación
+        Por qué: Los fondos **naturalmente** ocurren bajo las medias móviles. Penalizar esto es contraproducente.
+        
+        Las advertencias indican:
+        - 🔴 **Riesgo alto**: FTD bajo EMA21, precio lejos de SMA200
+        - 🟡 **Precaución**: VIX bajo post-pánico, falta de seguimiento del FTD
+        
+        #### Nuevo Sistema de Puntuación
+        
+        | Factor | Peso | Tipo | Lógica |
+        |--------|------|------|--------|
+        | **FTD** | 35 | Binario | Confirmado o no |
+        | **RSI** | 15 | Ventana 10d | Mínimo < 35 en ventana |
+        | **VIX** | 20 | Ventana 10d | Máximo > 30 en ventana |
+        | **Breadth** | 20 | Actual | McClellan < -50 |
+        | **Volumen** | 10 | Ventana 10d | Máximo > 1.5x en ventana |
+        | **Divergencia** | 15 | Binario | RSI vs Precio |
+        
+        #### Umbrales de Decisión
+        
+        - **Score 70+**: 🟢 VERDE - Fondo probable (con o sin volumen)
         - **Score 50-69**: 🟡 AMBAR - Desarrollando
         - **Score < 50**: 🔴 ROJO - Sin fondo
         
-        #### Mejoras en el McClellan Proxy
+        #### Gestión de Riesgo con Advertencias
         
-        **Antes**: Solo usaba retornos del SPY (proxy débil)
-        **Ahora**: Descarga XLK, XLF, XLV, XLY, XLP, XLI, XLB, XLRE, XLU
-        - Calcula % de sectores en alza vs baja
-        - Más sensible a fondos "anchos" vs "estrechos"
-        
-        #### Detección de Divergencia
-        
-        Algoritmo busca:
-        - Precio hace **Lower Low** (mínimo más bajo)
-        - RSI hace **Higher Low** (mínimo más alto)
-        - Señal de agotamiento de venta antes del FTD
-        
-        #### Gestión de Riesgo
-        
-        1. **Posición inicial**: 25% máximo en señal VERDE
-        2. **Stop-loss**: -7% obligatorio
-        3. **Time-stop**: Reevaluar si no hay movimiento en 10 días
-        4. **Escalado**: Añadir 25% solo si funciona (pyramiding)
+        Cuando hay advertencias activas:
+        1. Reducir tamaño de posición (15% en lugar de 25%)
+        2. Stop-loss más ajustado (-5% en lugar de -7%)
+        3. Esperar confirmación adicional (cierre sobre EMA21)
         
         #### Referencias
         
@@ -1087,3 +1168,4 @@ def render():
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
+

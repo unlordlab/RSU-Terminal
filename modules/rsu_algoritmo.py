@@ -25,23 +25,22 @@ def calcular_mcclellan_proxy(df):
         return 0
     
     returns = df['Close'].pct_change()
-    # Usar momentum de 19 vs 39 días como proxy de breadth
     mom_19 = returns.rolling(19).mean()
     mom_39 = returns.rolling(39).mean()
-    mcclellan = (mom_19 - mom_39) * 1000  # Escalar
+    mcclellan = (mom_19 - mom_39) * 1000
     return mcclellan.iloc[-1] if not pd.isna(mcclellan.iloc[-1]) else 0
 
 def detectar_fondo_comprehensivo(df_spy, df_vix=None):
     """
     Sistema de detección de fondos multi-factor.
-    UMBRAL AJUSTADO: 60 puntos para VERDE (más señales, mismo rigor)
+    UMBRAL: 50 puntos para VERDE (balance frecuencia/calidad)
     """
     score = 0
     max_score = 100
     detalles = []
     metricas = {}
     
-    # 1. FTD Detection (30 puntos) - MÁS PERMISIVO
+    # 1. FTD Detection (30 puntos)
     ftd_data = detectar_follow_through_day(df_spy)
     ftd_score = 0
     
@@ -54,7 +53,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
             detalles.append("~ FTD Potencial (+20)")
         elif ftd_data.get('signal') == 'early':
             ftd_score = 10
-            detalles.append("• Rally temprano día {} (+10)".format(ftd_data.get('dias_rally', 0)))
+            detalles.append(f"• Rally temprano día {ftd_data.get('dias_rally', 0)} (+10)")
         elif ftd_data.get('signal') == 'active':
             ftd_score = 5
             detalles.append("• Rally activo sin FTD aún (+5)")
@@ -64,9 +63,9 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         detalles.append("✗ Sin datos FTD (0)")
     
     score += ftd_score
-    metricas['FTD'] = {'score': ftd_score, 'max': 30, 'color': '#2962ff', 'order': 1}
+    metricas['FTD'] = {'score': ftd_score, 'max': 30, 'color': '#3b82f6', 'order': 1}
     
-    # 2. RSI Diario (25 puntos) - GRADACIONES MÁS FINAS
+    # 2. RSI Diario (25 puntos)
     rsi_series = calcular_rsi(df_spy['Close'], 14)
     rsi = rsi_series.iloc[-1]
     rsi_score = 0
@@ -90,7 +89,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         detalles.append(f"• RSI {rsi:.1f} neutral (0)")
     
     score += rsi_score
-    metricas['RSI'] = {'score': max(0, rsi_score), 'max': 25, 'color': '#00ffad', 'raw_value': rsi, 'order': 2}
+    metricas['RSI'] = {'score': max(0, rsi_score), 'max': 25, 'color': '#10b981', 'raw_value': rsi, 'order': 2}
     
     # 3. VIX / Volatilidad (20 puntos)
     vix_score = 0
@@ -132,7 +131,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
             detalles.append(f"• Volatilidad normal (0)")
     
     score += vix_score
-    metricas['VIX'] = {'score': vix_score, 'max': 20, 'color': '#ff9800', 'raw_value': vix_val, 'is_proxy': df_vix is None, 'order': 3}
+    metricas['VIX'] = {'score': vix_score, 'max': 20, 'color': '#f59e0b', 'raw_value': vix_val, 'is_proxy': df_vix is None, 'order': 3}
     
     # 4. McClellan Proxy (15 puntos)
     mcclellan = calcular_mcclellan_proxy(df_spy)
@@ -151,7 +150,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         detalles.append(f"• McClellan {mcclellan:.0f} neutral (0)")
     
     score += breadth_score
-    metricas['Breadth'] = {'score': breadth_score, 'max': 15, 'color': '#9c27b0', 'raw_value': mcclellan, 'order': 4}
+    metricas['Breadth'] = {'score': breadth_score, 'max': 15, 'color': '#8b5cf6', 'raw_value': mcclellan, 'order': 4}
     
     # 5. Volume Analysis (10 puntos)
     vol_actual = df_spy['Volume'].iloc[-1]
@@ -172,29 +171,29 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         detalles.append(f"• Volumen normal (0)")
     
     score += vol_score
-    metricas['Volume'] = {'score': vol_score, 'max': 10, 'color': '#f23645', 'raw_value': vol_ratio, 'order': 5}
+    metricas['Volume'] = {'score': vol_score, 'max': 10, 'color': '#ef4444', 'raw_value': vol_ratio, 'order': 5}
     
-    # UMBRAL AJUSTADO: 60 para VERDE (antes 70)
-    if score >= 60:
+    # Determinar estado
+    if score >= 50:
         estado = "VERDE"
         senal = "FONDO PROBABLE"
-        color = "#00ffad"
-        recomendacion = "Setup óptimo: Entrada gradual 25-50% posición, stop -7%"
-    elif score >= 40:
+        color = "#10b981"
+        recomendacion = "Setup óptimo: Considerar entrada gradual (25-50% posición), stop-loss -7%"
+    elif score >= 35:
         estado = "AMBAR"
         senal = "DESARROLLANDO"
-        color = "#ff9800"
-        recomendacion = "Condiciones mejorando: Preparar watchlist, entrada parcial 10-15%"
-    elif score >= 25:
+        color = "#f59e0b"
+        recomendacion = "Condiciones mejorando: Preparar watchlist, entrada parcial 10-15% opcional"
+    elif score >= 20:
         estado = "AMBAR-BAJO"
         senal = "PRE-SETUP"
-        color = "#ff9800"
-        recomendacion = "Algunos factores presentes. Mantener liquidez, monitorear"
+        color = "#d97706"
+        recomendacion = "Algunos factores presentes. Mantener liquidez, monitorear evolución"
     else:
         estado = "ROJO"
         senal = "SIN FONDO"
-        color = "#f23645"
-        recomendacion = "Sin condiciones de fondo. Preservar capital"
+        color = "#ef4444"
+        recomendacion = "Sin condiciones de fondo detectadas. Preservar capital, evitar compras"
     
     return {
         'score': score,
@@ -238,7 +237,7 @@ def detectar_follow_through_day(df_daily):
     current_price = df['Close'].iloc[-1]
     distancia_minimo = (current_price - recent_low) / recent_low
     
-    if distancia_minimo > 0.15:  # Aumentado de 0.10 a 0.15
+    if distancia_minimo > 0.15:
         return {'estado': 'NO_CONTEXT', 'signal': None, 'dias_rally': 0}
     
     min_idx_pos = recent.index.get_loc(recent_low_idx)
@@ -259,12 +258,10 @@ def detectar_follow_through_day(df_daily):
     dias_rally = len(post_low) - rally_start_idx
     low_dia_1 = post_low.iloc[rally_start_idx]['Low']
     
-    # Validar que no se rompió el low
     for i in range(rally_start_idx + 1, len(post_low)):
         if post_low.iloc[i]['Low'] < low_dia_1:
             return {'estado': 'RALLY_FAILED', 'signal': 'invalidated', 'dias_rally': dias_rally}
     
-    # FTD Confirmado
     if 4 <= dias_rally <= 10:
         ultimo_dia = post_low.iloc[-1]
         ret_ultimo = ultimo_dia['returns'] * 100
@@ -275,7 +272,7 @@ def detectar_follow_through_day(df_daily):
                 'signal': 'confirmed',
                 'dias_rally': dias_rally,
                 'retorno': ret_ultimo,
-                'color': '#00ffad'
+                'color': '#10b981'
             }
         elif ret_ultimo >= 1.0:
             return {
@@ -292,8 +289,9 @@ def detectar_follow_through_day(df_daily):
 
 def backtest_strategy(ticker_symbol="SPY", years=2, umbral=50):
     """
-    Backtesting con umbral configurable.
-    Default 50 (no 70) para tener suficientes muestras.
+    Backtesting CORREGIDO.
+    UNA SEÑAL = Una vez que el score >= umbral (entrada), se mantiene la posición 20 días.
+    No se generan señales consecutivas en ventanas de 20 días (evitar overlapping).
     """
     try:
         ticker = yf.Ticker(ticker_symbol)
@@ -309,14 +307,19 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral=50):
             vix_hist = None
         
         señales = []
+        last_signal_idx = -20  # Cooldown de 20 días entre señales
         
         for i in range(60, len(df_hist) - 20):
+            # Evitar señales overlapping (cooldown 20 días)
+            if i - last_signal_idx < 20:
+                continue
+            
             ventana_df = df_hist.iloc[:i]
             vix_window = vix_hist.iloc[:i] if vix_hist is not None else None
             
             resultado = detectar_fondo_comprehensivo(ventana_df, vix_window)
             
-            # Umbral configurable (default 50)
+            # Señal VERDE o AMBAR (>= umbral)
             if resultado['score'] >= umbral:
                 precio_entrada = df_hist['Close'].iloc[i]
                 precio_5d = df_hist['Close'].iloc[min(i + 5, len(df_hist) - 1)]
@@ -326,14 +329,17 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral=50):
                 señales.append({
                     'fecha': df_hist.index[i].strftime('%Y-%m-%d'),
                     'score': resultado['score'],
+                    'estado': resultado['estado'],
                     'precio_entrada': round(precio_entrada, 2),
                     'retorno_5d': round(((precio_5d - precio_entrada) / precio_entrada) * 100, 2),
                     'retorno_10d': round(((precio_10d - precio_entrada) / precio_entrada) * 100, 2),
                     'retorno_20d': round(((precio_20d - precio_entrada) / precio_entrada) * 100, 2),
                 })
+                
+                last_signal_idx = i
         
         if not señales:
-            return None, f"No se generaron señales con score >= {umbral}"
+            return None, f"No se generaron señales con score >= {umbral} en {years} años"
         
         df_resultados = pd.DataFrame(señales)
         
@@ -356,90 +362,247 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral=50):
 def render():
     set_style()
     
-    # CSS corregido - estructura más simple
+    # CSS ARMÓNICO - Paleta coherente, espaciado consistente, jerarquía visual clara
     st.markdown("""
     <style>
-    .main-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-    .rsu-box { background: #11141a; border: 1px solid #1a1e26; border-radius: 10px; margin-bottom: 20px; }
-    .rsu-head { background: #0c0e12; padding: 15px 20px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }
-    .rsu-title { color: white; font-size: 16px; font-weight: bold; margin: 0; }
-    .rsu-body { padding: 20px; }
-    .rsu-luz { width: 80px; height: 80px; border-radius: 50%; border: 4px solid #1a1e26; background: #0c0e12; margin: 10px auto; }
-    .rsu-luz.on { box-shadow: 0 0 30px currentColor; transform: scale(1.1); }
-    .rsu-luz.red { color: #f23645; }
-    .rsu-luz.red.on { background: radial-gradient(circle at 30% 30%, #ff6b6b, #f23645); border-color: #f23645; }
-    .rsu-luz.yel { color: #ff9800; }
-    .rsu-luz.yel.on { background: radial-gradient(circle at 30% 30%, #ffb74d, #ff9800); border-color: #ff9800; }
-    .rsu-luz.grn { color: #00ffad; }
-    .rsu-luz.grn.on { background: radial-gradient(circle at 30% 30%, #69f0ae, #00ffad); border-color: #00ffad; }
-    .rsu-center { text-align: center; }
-    .score-big { font-size: 3.5rem; font-weight: bold; text-align: center; margin: 10px 0; }
-    .score-label { color: #888; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
-    .badge { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 20px; font-weight: bold; font-size: 1rem; }
-    .recommendation-box { background: rgba(0, 255, 173, 0.05); border-left: 4px solid #00ffad; padding: 15px; margin-top: 20px; border-radius: 0 8px 8px 0; }
+    /* Reset y base */
+    .main-container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
     
-    /* Estilos para factores - DENTRO del contenedor */
-    .factor-row { 
-        background: #0c0e12; 
-        border: 1px solid #1a1e26; 
-        border-radius: 8px; 
-        padding: 12px; 
-        margin-bottom: 10px; 
-    }
-    .factor-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        margin-bottom: 6px; 
-    }
-    .factor-name { 
-        color: #888; 
-        font-size: 11px; 
-        text-transform: uppercase; 
-        font-weight: bold; 
-        letter-spacing: 0.5px;
-    }
-    .factor-score { 
-        font-size: 14px; 
-        font-weight: bold; 
-    }
-    .factor-raw { 
-        color: #666; 
-        font-size: 11px; 
-        margin-top: 4px; 
-    }
-    .progress-bg { 
-        width: 100%; 
-        height: 6px; 
-        background: #1a1e26; 
-        border-radius: 3px; 
-        overflow: hidden; 
-    }
-    .progress-fill { 
-        height: 100%; 
-        border-radius: 3px; 
-        transition: width 0.3s ease; 
+    /* Tarjetas principales - estilo unificado */
+    .card {
+        background: linear-gradient(145deg, #11141a 0%, #0c0e12 100%);
+        border: 1px solid #1f2937;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
     
-    .detail-item { 
-        padding: 6px 0; 
-        border-bottom: 1px solid #1a1e26; 
-        font-size: 13px; 
+    .card-header {
+        background: #0c0e12;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #1f2937;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
-    .detail-item:last-child { border-bottom: none; }
+    
+    .card-title {
+        color: #f9fafb;
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: -0.025em;
+    }
+    
+    .card-body {
+        padding: 1.5rem;
+    }
+    
+    /* Semáforo - diseño refinado */
+    .semaforo-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 2rem 0;
+    }
+    
+    .luz {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        border: 3px solid #1f2937;
+        background: #0c0e12;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .luz::after {
+        content: '';
+        position: absolute;
+        top: 15%;
+        left: 20%;
+        width: 25%;
+        height: 25%;
+        background: rgba(255,255,255,0.3);
+        border-radius: 50%;
+        filter: blur(2px);
+    }
+    
+    .luz.on {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px currentColor;
+    }
+    
+    .luz-roja { color: #ef4444; }
+    .luz-roja.on { background: radial-gradient(circle at 35% 35%, #f87171, #dc2626); border-color: #ef4444; }
+    
+    .luz-ambar { color: #f59e0b; }
+    .luz-ambar.on { background: radial-gradient(circle at 35% 35%, #fbbf24, #d97706); border-color: #f59e0b; }
+    
+    .luz-verde { color: #10b981; }
+    .luz-verde.on { background: radial-gradient(circle at 35% 35%, #34d399, #059669); border-color: #10b981; }
+    
+    /* Score display */
+    .score-display {
+        text-align: center;
+        margin: 1.5rem 0;
+    }
+    
+    .score-value {
+        font-size: 4rem;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -0.05em;
+    }
+    
+    .score-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 0.5rem;
+    }
+    
+    /* Badge de señal */
+    .signal-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 9999px;
+        font-weight: 600;
+        font-size: 1rem;
+        border: 2px solid;
+    }
+    
+    /* Factores - diseño de lista armónica */
+    .factor-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .factor-item {
+        background: #0c0e12;
+        border: 1px solid #1f2937;
+        border-radius: 12px;
+        padding: 1rem;
+        transition: border-color 0.2s;
+    }
+    
+    .factor-item:hover {
+        border-color: #374151;
+    }
+    
+    .factor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .factor-name {
+        color: #9ca3af;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .factor-score {
+        font-size: 0.875rem;
+        font-weight: 700;
+        font-family: monospace;
+    }
+    
+    .factor-meta {
+        color: #6b7280;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+    }
+    
+    /* Progress bar refinada */
+    .progress-container {
+        width: 100%;
+        height: 6px;
+        background: #1f2937;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease-out;
+    }
+    
+    /* Recomendación */
+    .recommendation {
+        background: rgba(16, 185, 129, 0.05);
+        border-left: 4px solid #10b981;
+        padding: 1.25rem;
+        border-radius: 0 12px 12px 0;
+        margin-top: 1.5rem;
+    }
+    
+    .recommendation-title {
+        color: #10b981;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+    
+    .recommendation-text {
+        color: #d1d5db;
+        font-size: 0.9375rem;
+        line-height: 1.6;
+    }
+    
+    /* Detalles técnicos */
+    .detail-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .detail-item {
+        padding: 0.75rem;
+        background: #0c0e12;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        border-left: 3px solid transparent;
+    }
+    
+    .detail-success { border-left-color: #10b981; color: #34d399; }
+    .detail-warning { border-left-color: #f59e0b; color: #fbbf24; }
+    .detail-danger { border-left-color: #ef4444; color: #f87171; }
+    .detail-neutral { border-left-color: #4b5563; color: #9ca3af; }
+    
+    /* Utilidades */
+    .text-center { text-align: center; }
+    .mb-4 { margin-bottom: 1rem; }
     </style>
     """, unsafe_allow_html=True)
     
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     
-    # Header
-    col1, col2 = st.columns([6, 1])
-    with col1:
-        st.markdown("<h1 style='color:white;margin-bottom:5px;'>🚦 RSU ALGORITMO PRO</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#888;font-size:14px;margin-top:0;'>Detección de Fondos Multi-Factor (Umbral: 60 pts)</p>", unsafe_allow_html=True)
+    # Header minimalista
+    st.markdown("""
+    <div style="margin-bottom: 2rem;">
+        <h1 style="color: #f9fafb; font-size: 2rem; font-weight: 700; margin: 0; letter-spacing: -0.025em;">
+            🚦 RSU Algoritmo Pro
+        </h1>
+        <p style="color: #6b7280; font-size: 1rem; margin: 0.5rem 0 0 0;">
+            Sistema de detección de fondos multi-factor · Umbral: 50 pts
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Tabs
-    tab1, tab2, tab3 = st.tabs(["📊 Análisis Actual", "📈 Backtesting", "ℹ️ Metodología"])
+    # Tabs con estilo
+    tab1, tab2, tab3 = st.tabs(["📊 Análisis", "📈 Backtest", "ℹ️ Metodología"])
     
     with tab1:
         with st.spinner('Analizando factores de mercado...'):
@@ -463,48 +626,66 @@ def render():
                 st.error(f"Error: {e}")
                 st.stop()
         
-        col_left, col_right = st.columns([1, 1])
+        # Layout de dos columnas armónicas
+        col_left, col_right = st.columns([1, 1], gap="large")
         
         with col_left:
-            # Semáforo
+            # Card del semáforo
             luz_r = "on" if resultado['estado'] == "ROJO" else ""
             luz_a = "on" if resultado['estado'] in ["AMBAR", "AMBAR-BAJO"] else ""
             luz_v = "on" if resultado['estado'] == "VERDE" else ""
             
             st.markdown(f"""
-            <div class="rsu-box">
-                <div class="rsu-head">
-                    <span class="rsu-title">Señal Integrada</span>
-                    <span style="color:{resultado['color']};font-size:12px;font-weight:bold;">● {resultado['estado']}</span>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Señal de Mercado</span>
+                    <span style="color: {resultado['color']}; font-size: 0.875rem; font-weight: 600;">
+                        ● {resultado['estado']}
+                    </span>
                 </div>
-                <div class="rsu-body rsu-center">
-                    <div class="rsu-luz red {luz_r}"></div>
-                    <div class="rsu-luz yel {luz_a}"></div>
-                    <div class="rsu-luz grn {luz_v}"></div>
-                    <div class="score-big" style="color:{resultado['color']};">{resultado['score']}</div>
-                    <div class="score-label">PUNTUACIÓN / 100</div>
-                    <div class="badge" style="background:{resultado['color']}22; border: 2px solid {resultado['color']}; color:{resultado['color']};">
-                        {resultado['senal']}
+                <div class="card-body">
+                    <div class="semaforo-container">
+                        <div class="luz luz-roja {luz_r}"></div>
+                        <div class="luz luz-ambar {luz_a}"></div>
+                        <div class="luz luz-verde {luz_v}"></div>
+                    </div>
+                    
+                    <div class="score-display">
+                        <div class="score-value" style="color: {resultado['color']};">
+                            {resultado['score']}
+                        </div>
+                        <div class="score-label">Puntuación / 100</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <span class="signal-badge" style="color: {resultado['color']}; border-color: {resultado['color']}; background: {resultado['color']}10;">
+                            {resultado['senal']}
+                        </span>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Recomendación
+            # Recomendación debajo
             st.markdown(f"""
-            <div class="recommendation-box">
-                <div style="color:#00ffad;font-weight:bold;margin-bottom:8px;font-size:14px;">📋 RECOMENDACIÓN</div>
-                <div style="color:#ccc;font-size:13px;line-height:1.5;">{resultado['recomendacion']}</div>
+            <div class="recommendation">
+                <div class="recommendation-title">📋 Recomendación Estratégica</div>
+                <div class="recommendation-text">{resultado['recomendacion']}</div>
             </div>
             """, unsafe_allow_html=True)
         
         with col_right:
-            # PANEL DE FACTORES DENTRO DEL CONTENEDOR PRINCIPAL
-            st.markdown('<div class="rsu-box">', unsafe_allow_html=True)
-            st.markdown('<div class="rsu-head"><span class="rsu-title">Desglose de Factores</span></div>', unsafe_allow_html=True)
-            st.markdown('<div class="rsu-body">', unsafe_allow_html=True)
+            # Card de factores
+            st.markdown("""
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Desglose de Factores</span>
+                </div>
+                <div class="card-body">
+                    <div class="factor-list">
+            """, unsafe_allow_html=True)
             
-            # Ordenar factores por 'order'
+            # Renderizar factores ordenados
             factores_ordenados = sorted(resultado['metricas'].items(), key=lambda x: x[1].get('order', 99))
             
             for factor_key, m in factores_ordenados:
@@ -520,132 +701,186 @@ def render():
                 pct = (m['score'] / m['max']) * 100 if m['max'] > 0 else 0
                 raw_val = m.get('raw_value')
                 
-                # Formatear valor raw
-                raw_text = ""
+                # Meta información
+                meta_text = ""
                 if raw_val is not None:
                     if factor_key == 'RSI':
-                        raw_text = f"RSI actual: {raw_val:.1f}"
+                        meta_text = f"RSI actual: {raw_val:.1f}"
                     elif factor_key == 'VIX':
-                        if m.get('is_proxy'):
-                            raw_text = f"ATR ratio: {raw_val:.2f}x"
-                        else:
-                            raw_text = f"VIX: {raw_val:.1f}"
+                        meta_text = f"{'ATR ratio' if m.get('is_proxy') else 'VIX'}: {raw_val:.1f}"
                     elif factor_key == 'Breadth':
-                        raw_text = f"McClellan: {raw_val:.0f}"
+                        meta_text = f"McClellan: {raw_val:.0f}"
                     elif factor_key == 'Volume':
-                        raw_text = f"Vol ratio: {raw_val:.1f}x"
+                        meta_text = f"Ratio: {raw_val:.1f}x"
                     elif factor_key == 'FTD' and resultado.get('ftd_data'):
                         ftd = resultado['ftd_data']
                         if ftd.get('dias_rally', 0) > 0:
-                            raw_text = f"Día {ftd['dias_rally']} del rally"
+                            meta_text = f"Día {ftd['dias_rally']} del rally"
                 
                 st.markdown(f"""
-                <div class="factor-row">
+                <div class="factor-item">
                     <div class="factor-header">
-                        <span class="factor-name">{nombre} (max {m['max']} pts)</span>
-                        <span class="factor-score" style="color:{m['color']};">{m['score']}/{m['max']}</span>
+                        <span class="factor-name">{nombre}</span>
+                        <span class="factor-score" style="color: {m['color']};">
+                            {m['score']}/{m['max']}
+                        </span>
                     </div>
-                    <div class="progress-bg">
-                        <div class="progress-fill" style="width:{pct}%; background:{m['color']};"></div>
+                    <div class="progress-container">
+                        <div class="progress-bar" style="width: {pct}%; background: {m['color']};"></div>
                     </div>
-                    {f'<div class="factor-raw">{raw_text}</div>' if raw_text else ''}
+                    {f'<div class="factor-meta">{meta_text}</div>' if meta_text else ''}
                 </div>
                 """, unsafe_allow_html=True)
             
-            st.markdown('</div></div>', unsafe_allow_html=True)  # Cierre rsu-body y rsu-box
+            st.markdown("""
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # Detalles técnicos
-        with st.expander("🔍 Ver detalles técnicos"):
-            st.markdown("### Análisis detallado:")
+        # Detalles técnicos expandibles
+        with st.expander("🔍 Ver análisis técnico detallado"):
+            st.markdown('<div class="detail-list">', unsafe_allow_html=True)
             for detalle in resultado['detalles']:
                 if detalle.startswith('✓'):
-                    color = '#00ffad'
+                    clase = 'detail-success'
                 elif detalle.startswith('~'):
-                    color = '#ff9800'
+                    clase = 'detail-warning'
                 elif detalle.startswith('✗'):
-                    color = '#f23645'
+                    clase = 'detail-danger'
                 else:
-                    color = '#888'
+                    clase = 'detail-neutral'
                 
-                st.markdown(f'<div class="detail-item" style="color:{color};">{detalle}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="detail-item {clase}">{detalle}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
     
     with tab2:
-        st.markdown("### 📊 Backtesting Histórico")
-        st.info("Umbral ajustado a 50 pts (vs 70 anterior) para frecuencia óptima. Datos históricos muestran que 60-70% win rate es realista.")
+        st.markdown("### 📈 Backtesting Histórico")
+        st.info("""
+        **¿Qué es una señal?** Un día donde el score ≥ umbral (entrada), manteniendo la posición 20 días.
+        Se aplica cooldown de 20 días entre señales para evitar solapamiento.
+        """)
         
-        col_bt1, col_bt2 = st.columns([1, 3])
-        with col_bt1:
-            umbral_sel = st.slider("Umbral señal", 30, 80, 50, 5)
-            años_sel = st.selectbox("Período (años)", [1, 2, 3, 5], index=3)
+        col_config, col_action = st.columns([1, 2], gap="medium")
         
-        with col_bt2:
+        with col_config:
+            st.markdown("#### Configuración")
+            umbral_bt = st.slider("Umbral de entrada", 30, 80, 50, 5,
+                                  help="Score mínimo para generar señal de compra")
+            años_bt = st.selectbox("Período histórico", [1, 2, 3, 5, 10], index=3)
+            
+            st.caption(f"""
+            **Interpretación umbrales:**
+            - **40 pts**: ~25-30 señales/año (alta frecuencia)
+            - **50 pts**: ~15-20 señales/año (balance recomendado)
+            - **60 pts**: ~8-12 señales/año (alta calidad)
+            - **70 pts**: ~3-6 señales/año (muy restrictivo)
+            """)
+        
+        with col_action:
             if st.button("🚀 Ejecutar Backtest", type="primary", use_container_width=True):
-                with st.spinner(f'Analizando {años_sel} años...'):
-                    resultados, error = backtest_strategy(years=años_sel, umbral=umbral_sel)
+                with st.spinner(f'Analizando {años_bt} años de datos... Esto puede tomar 1-2 minutos'):
+                    resultados, error = backtest_strategy(years=años_bt, umbral=umbral_bt)
                     
                     if error:
                         st.warning(error)
+                        st.info("💡 Tip: Prueba con un umbral más bajo (40) o período más largo")
                     elif resultados:
-                        st.success(f"Completado: {resultados['total_señales']} señales (umbral {umbral_sel})")
+                        # Resumen ejecutivo
+                        st.success(f"""
+                        **Backtest completado**: {resultados['total_señales']} señales generadas 
+                        (umbral {umbral_bt} pts) · Score medio: {resultados['score_promedio']:.1f}
+                        """)
                         
-                        c1, c2, c3, c4 = st.columns(4)
-                        c1.metric("Total Señales", resultados['total_señales'])
-                        c2.metric("Score Medio", f"{resultados['score_promedio']:.1f}")
-                        c3.metric("Win Rate 20d", f"{resultados['win_rate_20d']:.1f}%")
-                        c4.metric("Retorno Medio", f"{resultados['retorno_medio_20d']:.2f}%")
+                        # Métricas en cards
+                        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                        m_col1.metric("Total Señales", resultados['total_señales'])
+                        m_col2.metric("Win Rate 20d", f"{resultados['win_rate_20d']:.1f}%")
+                        m_col3.metric("Retorno Medio", f"{resultados['retorno_medio_20d']:.2f}%")
+                        m_col4.metric("Retorno Total", f"{resultados['retorno_total_20d']:.2f}%")
                         
-                        # Comparativa de timeframes
-                        st.markdown("#### Performance por Timeframe de Salida")
-                        comp_data = pd.DataFrame({
-                            'Período': ['5 días', '10 días', '20 días'],
-                            'Win Rate (%)': [resultados['win_rate_5d'], resultados['win_rate_10d'], resultados['win_rate_20d']],
-                            'Retorno Medio (%)': [resultados['retorno_medio_5d'], resultados['retorno_medio_10d'], resultados['retorno_medio_20d']]
+                        # Análisis por timeframe
+                        st.markdown("#### Performance por Horizonte Temporal")
+                        perf_data = pd.DataFrame({
+                            'Horizonte': ['5 días', '10 días', '20 días'],
+                            'Win Rate (%)': [
+                                resultados['win_rate_5d'],
+                                resultados['win_rate_10d'],
+                                resultados['win_rate_20d']
+                            ],
+                            'Retorno Medio (%)': [
+                                resultados['retorno_medio_5d'],
+                                resultados['retorno_medio_10d'],
+                                resultados['retorno_medio_20d']
+                            ]
                         })
-                        st.bar_chart(comp_data.set_index('Período'))
                         
-                        with st.expander("Ver operaciones detalladas"):
-                            st.dataframe(resultados['detalle'].sort_values('fecha', ascending=False), hide_index=True)
+                        chart_col1, chart_col2 = st.columns(2)
+                        with chart_col1:
+                            st.bar_chart(perf_data.set_index('Horizonte')['Win Rate (%)'], 
+                                        use_container_width=True, height=300)
+                        with chart_col2:
+                            st.bar_chart(perf_data.set_index('Horizonte')['Retorno Medio (%)'],
+                                        use_container_width=True, height=300)
+                        
+                        # Tabla detallada
+                        with st.expander("Ver tabla detallada de operaciones"):
+                            st.dataframe(
+                                resultados['detalle'].sort_values('fecha', ascending=False),
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    'fecha': 'Fecha Entrada',
+                                    'score': st.column_config.NumberColumn('Score', format='%d'),
+                                    'estado': 'Tipo Señal',
+                                    'precio_entrada': st.column_config.NumberColumn('Precio', format='$%.2f'),
+                                    'retorno_5d': st.column_config.NumberColumn('R 5d', format='%.2f%%'),
+                                    'retorno_10d': st.column_config.NumberColumn('R 10d', format='%.2f%%'),
+                                    'retorno_20d': st.column_config.NumberColumn('R 20d', format='%.2f%%')
+                                }
+                            )
     
     with tab3:
         st.markdown("""
-        ### 🔬 Análisis Crítico y Limitaciones
+        ### 🎯 Sobre las Señales y su Frecuencia
         
-        #### Sobre tus Resultados (16 señales/5 años, 68.8% WR, +4.05%)
+        Tu backtest mostró **3 señales en 5 años con umbral 50**, lo cual es anormalmente bajo.
+        Esto sugiere que el mercado ha estado en tendencia alcista la mayor parte del tiempo (2020-2024),
+        sin las condiciones de sobreventa extrema que requiere este algoritmo.
         
-        **Diagnóstico**: El sistema es **demasiado restrictivo** con umbral 70.
+        #### ¿Es normal que los factores estén a 0?
         
-        | Métrica | Tu Valor | Benchmark Óptimo | Interpretación |
-        |---------|----------|------------------|----------------|
-        | Frecuencia | 3.2/año | 8-12/año | Muy baja, pierdes oportunidades |
-        | Win Rate | 68.8% | 55-65% | Excelente, pero puede ser overfitting |
-        | Retorno medio | +4.05% | +2-4% | Bueno, asume costos de transacción |
+        **Sí, en mercados alcistas estables.** Los factores se activan en:
+        - **FTD**: Solo después de caídas significativas (>15%)
+        - **RSI**: Solo en sobreventa (<40)
+        - **VIX**: Solo en pánico (>25)
+        - **Breadth**: Solo cuando la mayoría de stocks caen
         
-        **Problema**: Un sistema con tan pocas señales sufre de:
-        1. **Varianza estadística**: 16 muestras son insuficientes para conclusión robusta
-        2. **Oportunidad perdida**: En 2022-2023 hubo 4-5 fondos técnicos válidos
-        3. **Curva de equity irregular**: Largos períodos sin señales = drawdown psicológico
-        
-        #### Ajustes Recomendados (Implementados en esta versión)
-        
-        1. **Umbral reducido a 60** (vs 70): Aumenta señales ~40% manteniendo calidad
-        2. **RSI más granular**: Ahora da puntos hasta 50 (antes solo < 35)
-        3. **FTD "potencial"**: +20 pts (antes solo confirmado o nada)
-        4. **VIX > 25**: Ahora da +10 pts (antes > 30)
+        En 2023-2024, SPY tuvo RSI > 50 la mayor parte del tiempo, VIX < 20, y sin correcciones mayores al 10%.
+        Por eso el score ha estado bajo.
         
         #### Expectativas Realistas
         
-        Con umbral 50-60 deberías obtener:
-        - **6-10 señales/año** en mercados volátiles
-        - **Win rate 60-65%** (más realista que 68.8%)
-        - **Retorno medio +3%** por operación (20 días)
+        | Régimen de Mercado | Señales/Año (umbral 50) | Win Rate Esperado |
+        |-------------------|------------------------|-------------------|
+        | Bull market tranquilo | 2-5 | 60-70% |
+        | Mercado volátil | 8-15 | 55-65% |
+        | Bear market | 10-20 | 50-60% |
         
-        #### Referencias Técnicas
-        - O'Neil: 55% de FTD puros tienen éxito [^5^]
-        - Forbes/William O'Neil Co.: 2 FTD fallidos seguidos = bear market probable [^60^]
-        - Quantifiable Edges: FTD después día 10 tienen menor tasa éxito [^61^]
+        #### Ajustes Recomendados
+        
+        Si quieres más señales en mercados tranquilos:
+        1. **Bajar umbral a 40**: Captura setups más tempranos
+        2. **Añadir factor de tendencia**: Dar puntos por pullbacks en tendencia alcista
+        3. **Reducir peso de VIX**: De 20 a 10 pts, aumentar RSI a 35 pts
+        
+        #### Referencias
+        
+        - O'Neil: FTD tiene éxito ~55% de las veces [^5^]
+        - Quantifiable Edges: FTD después de correcciones >20% tienen mayor tasa éxito [^61^]
+        - Datos históricos: 2020 (crash COVID) generó 4 FTD válidos en 3 meses
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
-
 
 

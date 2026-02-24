@@ -1,7 +1,8 @@
-# modules/rsu_algoritmo.py
+# modules/rsu_algoritmo_pro.py
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import numpy as np
 import sys
 import os
 from datetime import datetime, timedelta
@@ -16,14 +17,159 @@ def calcular_rsi(prices, period=14):
     avg_gain = gain.ewm(com=period-1, min_periods=period).mean()
     avg_loss = loss.ewm(com=period-1, min_periods=period).mean()
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    return 100 - (100 / (1 + rs))
+
+def calcular_mcclellan_oscillator(df_breadth):
+    """
+    Calcula el McClellan Oscillator (breadth indicator).
+    Requiere datos de advancing/declining issues.
+    Simplificado: usamos ratio de stocks sobre/bajo medias móviles como proxy.
+    """
+    if df_breadth is None:
+        return None
+    
+    # Proxy: % de stocks sobre SMA 50
+    advances = (df_breadth['Close'] > df_breadth['Close'].rolling(50).mean()).sum()
+    declines = (df_breadth['Close'] < df_breadth['Close'].rolling(50).mean()).sum()
+    total = advances + declines
+    
+    if total == 0:
+        return None
+    
+    net_advances = ((advances - declines) / total) * 1000
+    
+    # EMAs 19 y 39
+    ema_19 = pd.Series(net_advances).ewm(span=19, adjust=False).mean()
+    ema_39 = pd.Series(net_advances).ewm(span=39, adjust=False).mean()
+    
+    return ema_19.iloc[-1] - ema_39.iloc[-1] if len(ema_19) > 0 else None
+
+def detectar_fondo_comprehensivo(df_spy, df_vix=None, df_breadth=None):
+    """
+    Sistema de detección de fondos multi-factor.
+    
+    Factores (pesos):
+    1. FTD (30%): Confirmación de cambio de tendencia O'Neil
+    2. RSI Diario < 35 (25%): Sobreventa extrema
+    3. VIX Spike > 30 (20%): Miedo extremo (contrarian)
+    4. McClellan Oscillator < -50 luego thrust (15%): Breadth thrust
+    5. Put/Call Ratio > 1.2 (10%): Sentimiento extremo bajista
+    
+    Score > 70% = Fondo probable (Semáforo Verde)
+    Score 40-70% = Condiciones desarrollándose (Ámbar)
+    Score < 40% = Sin fondo detectado (Rojo)
+    """
+    score = 0
+    detalles = []
+    
+    # 1. FTD Detection (30 puntos)
+    ftd_data = detectar_follow_through_day(df_spy)
+    if ftd_data and ftd_data.get('signal') == 'confirmed':
+        score += 30
+        detalles.append("✓ FTD Confirmado (+30)")
+    elif ftd_data and ftd_data.get('signal') in ['potential', 'early']:
+        score += 15
+        detalles.append("~ FTD en desarrollo (+15)")
+    
+    # 2. RSI Diario (25 puntos)
+    rsi = calcular_rsi(df_spy['Close'], 14).iloc[-1]
+    if rsi < 30:
+        score += 25
+        detalles.append("✓ RSI < 30 (Sobreventa extrema) (+25)")
+    elif rsi < 40:
+        score += 15
+        detalles.append("~ RSI < 40 (Sobreventa) (+15)")
+    elif rsi > 70:
+        score -= 10
+        detalles.append("✗ RSI > 70 (Sobrecompra) (-10)")
+    
+    # 3. VIX Analysis (20 puntos) - Proxy usando ATR si no hay VIX
+    if df_vix is not None and len(df_vix) > 20:
+        vix_actual = df_vix['Close'].iloc[-1]
+        vix_sma20 = df_vix['Close'].rolling(20).mean().iloc[-1]
+        
+        if vix_actual > 30:
+            score += 20
+            detalles.append("✓ VIX > 30 (Miedo extremo) (+20)")
+        elif vix_actual > vix_sma20 * 1.5:
+            score += 15
+            detalles.append("~ VIX elevado vs media (+15)")
+    else:
+        # Proxy: ATR de SPY
+        atr = calcular_atr(df_spy).iloc[-1]
+        atr_medio = calcular_atr(df_spy).rolling(20).mean().iloc[-1]
+        if atr > atr_medio * 1.5:
+            score += 10
+            detalles.append("~ Volatilidad elevada (proxy VIX) (+10)")
+    
+    # 4. McClellan Oscillator (15 puntos)
+    mcclellan = calcular_mcclellan_oscillator(df_breadth if df_breadth is not None else df_spy)
+    if mcclellan is not None:
+        if mcclellan < -50:
+            score += 15
+            detalles.append("✓ McClellan < -50 (Oversold breadth) (+15)")
+        elif mcclellan < -20:
+            score += 8
+            detalles.append("~ McClellan < -20 (+8)")
+    
+    # 5. Volume Analysis como proxy de Put/Call (10 puntos)
+    vol_actual = df_spy['Volume'].iloc[-1]
+    vol_media = df_spy['Volume'].rolling(20).mean().iloc[-1]
+    if vol_actual > vol_media * 1.5:
+        score += 10
+        detalles.append("✓ Volumen extremo (posible capitulación) (+10)")
+    
+    # Determinar estado
+    if score >= 70:
+        estado = "VERDE"
+        senal = "FONDO PROBABLE"
+        color = "#00ffad"
+        recomendacion = "Considerar entrada gradual (25% posición inicial)"
+    elif score >= 40:
+        estado = "AMBAR"
+        senal = "DESARROLLANDO"
+        color = "#ff9800"
+        recomendacion = "Preparar watchlist, esperar confirmación adicional"
+    else:
+        estado = "ROJO"
+        senal = "SIN FONDO"
+        color = "#f23645"
+        recomendacion = "Mantener efectivo, evitar compras agresivas"
+    
+    return {
+        'score': score,
+        'estado': estado,
+        'senal': senal,
+        'color': color,
+        'recomendacion': recomendacion,
+        'detalles': detalles,
+        'ftd_data': ftd_data,
+        'rsi': rsi,
+        'mcclellan': mcclellan,
+        'metricas': {
+            'FTD': 30 if ftd_data and ftd_data.get('signal') == 'confirmed' else 0,
+            'RSI': 25 if rsi < 30 else (15 if rsi < 40 else 0),
+            'VIX/Vol': 20 if (df_vix is not None and df_vix['Close'].iloc[-1] > 30) else 0,
+            'Breadth': 15 if (mcclellan is not None and mcclellan < -50) else 0,
+            'Volume': 10 if vol_actual > vol_media * 1.5 else 0
+        }
+    }
+
+def calcular_atr(df, periodo=14):
+    """Calcula Average True Range"""
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+    
+    tr1 = high - low
+    tr2 = abs(high - close.shift())
+    tr3 = abs(low - close.shift())
+    
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    return tr.rolling(window=periodo).mean()
 
 def detectar_follow_through_day(df_daily):
-    """
-    Detecta Follow-Through Day y calcula RSI diario contextual.
-    Retorna dict con estado FTD + RSI del momento del rally.
-    """
+    """Versión mejorada del FTD detection"""
     if df_daily is None or len(df_daily) < 20:
         return None
     
@@ -33,397 +179,99 @@ def detectar_follow_through_day(df_daily):
     df['volume_increase'] = df['Volume'] > df['volume_prev']
     df['price_up'] = df['returns'] > 0
     
-    # Calcular RSI diario (14 periodos)
-    df['rsi_daily'] = calcular_rsi(df['Close'], period=14)
-    
     recent = df.tail(60).copy()
     recent_low = recent['Close'].min()
     recent_low_idx = recent['Close'].idxmin()
     current_price = df['Close'].iloc[-1]
     distancia_minimo = (current_price - recent_low) / recent_low
     
-    # Contexto: ¿Estamos cerca de mínimos recientes? (condición para FTD válido)
     if distancia_minimo > 0.10:
-        rsi_actual = float(df['rsi_daily'].iloc[-1])
-        return {
-            'estado': 'NO_CONTEXT',
-            'mensaje': 'Mercado lejos de mínimos recientes',
-            'dias_rally': 0,
-            'signal': None,
-            'color': '#888888',
-            'icono': '⚪',
-            'rsi_contexto': rsi_actual,
-            'tipo_mercado': 'Tendencia establecida',
-            'recomendacion': 'Usar RSI clásico (30/70)'
-        }
+        return {'estado': 'NO_CONTEXT', 'signal': None}
     
     min_idx_pos = recent.index.get_loc(recent_low_idx)
     if min_idx_pos >= len(recent) - 2:
-        rsi_en_minimo = float(df.loc[recent_low_idx, 'rsi_daily']) if recent_low_idx in df.index else 30
-        return {
-            'estado': 'RALLY_TOO_RECENT',
-            'mensaje': 'Mínimo muy reciente, esperando desarrollo',
-            'dias_rally': 0,
-            'signal': None,
-            'color': '#2962ff',
-            'icono': '⏱️',
-            'rsi_contexto': rsi_en_minimo,
-            'tipo_mercado': 'Posible reversión',
-            'recomendacion': 'Monitorear día 4-7 para FTD'
-        }
+        return {'estado': 'RALLY_TOO_RECENT', 'signal': None}
     
     post_low = recent.iloc[min_idx_pos:].copy()
-    rally_start = None
-    rally_start_idx = None
     
+    # Encontrar día 1 del rally
+    rally_start_idx = None
     for i in range(1, len(post_low)):
         if post_low['price_up'].iloc[i]:
-            rally_start = post_low.iloc[i]
             rally_start_idx = i
             break
     
-    if rally_start is None:
-        rsi_actual = float(df['rsi_daily'].iloc[-1])
-        return {
-            'estado': 'NO_RALLY',
-            'mensaje': 'Sin intento de rally detectado',
-            'dias_rally': 0,
-            'signal': None,
-            'color': '#555555',
-            'icono': '⚫',
-            'rsi_contexto': rsi_actual,
-            'tipo_mercado': 'Bajista',
-            'recomendacion': 'Esperar día 1 de rally'
-        }
+    if rally_start_idx is None:
+        return {'estado': 'NO_RALLY', 'signal': None}
     
     dias_rally = len(post_low) - rally_start_idx
     low_dia_1 = post_low.iloc[rally_start_idx]['Low']
-    rally_valido = True
     
+    # Validar que no se rompió el low del día 1
     for i in range(rally_start_idx + 1, len(post_low)):
         if post_low.iloc[i]['Low'] < low_dia_1:
-            rally_valido = False
-            break
+            return {'estado': 'RALLY_FAILED', 'signal': 'invalidated', 'dias_rally': dias_rally}
     
-    # RSI en el día actual del rally
-    rsi_actual = float(df['rsi_daily'].iloc[-1])
-    rsi_tendencia = "Subiendo" if dias_rally > 1 and rsi_actual > float(post_low.iloc[-2]['rsi_daily']) else "Estable/Bajando"
-    
-    if not rally_valido:
-        return {
-            'estado': 'RALLY_FAILED',
-            'mensaje': 'Rally invalidado (nuevo mínimo)',
-            'dias_rally': dias_rally,
-            'signal': 'invalidated',
-            'color': '#f23645',
-            'icono': '❌',
-            'rsi_contexto': rsi_actual,
-            'tipo_mercado': 'Bajista continuo',
-            'recomendacion': 'Evitar longs, buscar shorts'
-        }
-    
-    # Verificar condiciones de FTD (Día 4-7)
-    if dias_rally >= 4 and dias_rally <= 10:
+    # Verificar FTD
+    if 4 <= dias_rally <= 10:
         ultimo_dia = post_low.iloc[-1]
         ret_ultimo = ultimo_dia['returns'] * 100
         
-        # INTEGRACIÓN CLAVE: RSI debe confirmar (no estar sobrecomprado >70)
-        rsi_confirmado = rsi_actual < 70  # Evitar comprar sobrecompra extrema
-        
-        if ret_ultimo >= 1.5 and ultimo_dia['volume_increase'] and rsi_confirmado:
+        if ret_ultimo >= 1.5 and ultimo_dia['volume_increase']:
             return {
                 'estado': 'FTD_CONFIRMED',
-                'mensaje': 'FOLLOW-THROUGH DAY CONFIRMADO',
-                'dias_rally': dias_rally,
-                'retorno': ret_ultimo,
-                'volumen_up': True,
                 'signal': 'confirmed',
-                'color': '#00ffad',
-                'icono': '🚀',
-                'rsi_contexto': rsi_actual,
-                'rsi_tendencia': rsi_tendencia,
-                'tipo_mercado': 'Reversión Alcista Confirmada',
-                'recomendacion': 'ENTRADA AGRESIVA: RSI {} confirma no sobrecompra'.format(int(rsi_actual))
-            }
-        elif ret_ultimo >= 1.5 and ultimo_dia['volume_increase'] and not rsi_confirmado:
-            # FTD técnico pero RSI en sobrecompra - señal de precaución
-            return {
-                'estado': 'FTD_OVERBOUGHT',
-                'mensaje': 'FTD Confirmado pero RSI > 70',
                 'dias_rally': dias_rally,
                 'retorno': ret_ultimo,
-                'volumen_up': True,
-                'signal': 'caution',
-                'color': '#ff9800',
-                'icono': '⚠️',
-                'rsi_contexto': rsi_actual,
-                'rsi_tendencia': rsi_tendencia,
-                'tipo_mercado': 'Reversión con Precaución',
-                'recomendacion': 'ESPERAR: RSI {} en sobrecompra, riesgo de pullback'.format(int(rsi_actual))
-            }
-        elif ret_ultimo >= 1.0:
-            return {
-                'estado': 'FTD_POTENTIAL',
-                'mensaje': f'Posible FTD en desarrollo (+{round(ret_ultimo, 1)}%)',
-                'dias_rally': dias_rally,
-                'retorno': ret_ultimo,
-                'signal': 'potential',
-                'color': '#ff9800',
-                'icono': '⏳',
-                'rsi_contexto': rsi_actual,
-                'rsi_tendencia': rsi_tendencia,
-                'tipo_mercado': 'Rally en progreso',
-                'recomendacion': 'Monitorear para confirmación'
+                'color': '#00ffad'
             }
     
-    if dias_rally < 4:
-        return {
-            'estado': 'RALLY_EARLY',
-            'mensaje': f'Rally día {dias_rally} - Esperando día 4-7',
-            'dias_rally': dias_rally,
-            'signal': 'early',
-            'color': '#2962ff',
-            'icono': '⏱️',
-            'rsi_contexto': rsi_actual,
-            'rsi_tendencia': rsi_tendencia,
-            'tipo_mercado': 'Rally temprano',
-            'recomendacion': 'Paciencia, ventana FTD no abierta'
-        }
+    return {'estado': 'RALLY_ACTIVE', 'signal': 'active', 'dias_rally': dias_rally}
+
+def backtest_strategy(df_historical, ventana=20):
+    """
+    Backtesting simple de la estrategia.
+    Detecta señales VERDE y calcula retorno a 20 días.
+    """
+    señales = []
     
-    if dias_rally > 10:
-        return {
-            'estado': 'FTD_LATE',
-            'mensaje': 'Ventana FTD cerrada (>10 días)',
-            'dias_rally': dias_rally,
-            'signal': 'expired',
-            'color': '#f23645',
-            'icono': '❌',
-            'rsi_contexto': rsi_actual,
-            'tipo_mercado': 'Rally maduro',
-            'recomendacion': 'No perseguir, esperar consolidación'
-        }
+    for i in range(60, len(df_historical) - ventana):
+        ventana_df = df_historical.iloc[:i]
+        resultado = detectar_fondo_comprehensivo(ventana_df)
+        
+        if resultado['estado'] == 'VERDE':
+            precio_entrada = df_historical['Close'].iloc[i]
+            precio_salida = df_historical['Close'].iloc[i + ventana]
+            retorno = (precio_salida - precio_entrada) / precio_entrada
+            
+            señales.append({
+                'fecha': df_historical.index[i],
+                'score': resultado['score'],
+                'precio_entrada': precio_entrada,
+                'precio_salida': precio_salida,
+                'retorno_20d': retorno * 100,
+                'exito': retorno > 0
+            })
+    
+    if not señales:
+        return None
+    
+    df_resultados = pd.DataFrame(señales)
+    win_rate = df_resultados['exito'].mean() * 100
+    retorno_medio = df_resultados['retorno_20d'].mean()
+    retorno_total = df_resultados['retorno_20d'].sum()
     
     return {
-        'estado': 'RALLY_ACTIVE',
-        'mensaje': f'Rally activo (día {dias_rally})',
-        'dias_rally': dias_rally,
-        'signal': 'active',
-        'color': '#888888',
-        'icono': '➡️',
-        'rsi_contexto': rsi_actual,
-        'tipo_mercado': 'Tendencia alcista',
-        'recomendacion': 'Gestionar posiciones existentes'
+        'total_señales': len(señales),
+        'win_rate': win_rate,
+        'retorno_medio': retorno_medio,
+        'retorno_total': retorno_total,
+        'detalle': df_resultados
     }
-
-def obtener_datos_spy():
-    try:
-        from modules.api_client import get_api_client
-        client = get_api_client()
-        data_json = client.get_history("SPY", "6mo")
-        
-        if data_json and "data" in data_json:
-            df = pd.DataFrame(data_json["data"])
-            date_col = 'Date' if 'Date' in df.columns else 'Datetime' if 'Datetime' in df.columns else None
-            if date_col:
-                df[date_col] = pd.to_datetime(df[date_col])
-                df.set_index(date_col, inplace=True)
-            
-            # Datos diarios para FTD + RSI diario
-            df_daily = df.resample('D').last().dropna()
-            
-            if len(df_daily) < 20:
-                raise ValueError("Datos insuficientes del backend")
-            
-            return df_daily
-            
-    except Exception as e:
-        pass
-    
-    try:
-        ticker = yf.Ticker("SPY")
-        df_daily = ticker.history(interval="1d", period="3mo")
-        
-        if df_daily.empty or len(df_daily) < 20:
-            return None
-        
-        return df_daily
-        
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return None
-
-def render_ftd_panel(ftd_data):
-    """
-    Renderiza el panel integrado FTD + RSI usando st.html()
-    """
-    if not ftd_data:
-        st.html("""
-        <div style="background: linear-gradient(135deg, #0c0e12 0%, #11141a 100%); border: 2px solid #1a1e26; border-radius: 12px; padding: 20px; margin-top: 20px; font-family: sans-serif;">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                <div style="font-size: 32px;">📊</div>
-                <div>
-                    <div style="color: white; font-size: 18px; font-weight: bold; margin: 0;">RSU Algoritmo Integrado</div>
-                    <div style="color: #888; font-size: 12px;">FTD + RSI Diario</div>
-                </div>
-            </div>
-            <div style="color: #888; text-align: center; padding: 20px;">
-                No hay datos disponibles
-            </div>
-        </div>
-        """)
-        return
-    
-    # Extraer datos
-    ftd_color = ftd_data.get('color', '#888888')
-    ftd_icon = ftd_data.get('icono', '●')
-    mensaje = ftd_data.get('mensaje', '')
-    dias_rally = ftd_data.get('dias_rally', 0)
-    rsi_val = ftd_data.get('rsi_contexto', 0)
-    tipo_mercado = ftd_data.get('tipo_mercado', 'Desconocido')
-    recomendacion = ftd_data.get('recomendacion', '')
-    signal = ftd_data.get('signal')
-    
-    # Determinar color del RSI para visualización
-    if rsi_val < 30:
-        rsi_color = '#00ffad'
-        rsi_estado = 'SOBREVENTA'
-    elif rsi_val > 70:
-        rsi_color = '#f23645'
-        rsi_estado = 'SOBRECOMPRA'
-    else:
-        rsi_color = '#ff9800'
-        rsi_estado = 'NEUTRAL'
-    
-    # Glow si es confirmado
-    glow_style = f"box-shadow: 0 0 20px {ftd_color}44;" if signal == 'confirmed' else ""
-    
-    html_parts = []
-    html_parts.append(f'<div style="background: linear-gradient(135deg, #0c0e12 0%, #11141a 100%); border: 2px solid {ftd_color}44; border-radius: 12px; padding: 20px; margin-top: 20px; {glow_style} font-family: sans-serif;">')
-    
-    # Header con icono y título
-    html_parts.append(f'''
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="font-size: 32px;">{ftd_icon}</div>
-                <div>
-                    <div style="color: white; font-size: 18px; font-weight: bold; margin: 0;">{tipo_mercado}</div>
-                    <div style="color: #888; font-size: 12px;">FTD + RSI Diario (14)</div>
-                </div>
-            </div>
-            <div style="text-align: right;">
-                <div style="color: {rsi_color}; font-size: 24px; font-weight: bold;">{rsi_val:.1f}</div>
-                <div style="color: #555; font-size: 10px;">RSI</div>
-            </div>
-        </div>
-    ''')
-    
-    # Status badge principal
-    html_parts.append(f'''
-        <div style="background: {ftd_color}22; color: {ftd_color}; border: 1px solid {ftd_color}44; padding: 12px 16px; border-radius: 8px; font-weight: bold; font-size: 1rem; margin-bottom: 15px; text-align: center;">
-            {mensaje}
-        </div>
-    ''')
-    
-    # Grid de métricas
-    html_parts.append('<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 15px;">')
-    
-    # Día del rally
-    if dias_rally > 0:
-        html_parts.append(f'''
-            <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">Día del Rally</div>
-                <div style="color: {ftd_color}; font-size: 1.5rem; font-weight: bold;">{dias_rally}/7</div>
-            </div>
-        ''')
-    
-    # RSI Estado
-    html_parts.append(f'''
-        <div style="background: #0c0e12; border: 1px solid {rsi_color}44; border-radius: 8px; padding: 12px; text-align: center;">
-            <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">RSI Estado</div>
-            <div style="color: {rsi_color}; font-size: 1.2rem; font-weight: bold;">{rsi_estado}</div>
-        </div>
-    ''')
-    
-    # Retorno si existe
-    if 'retorno' in ftd_data:
-        ret = round(ftd_data['retorno'], 2)
-        html_parts.append(f'''
-            <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">Retorno Día</div>
-                <div style="color: {"#00ffad" if ret > 0 else "#f23645"}; font-size: 1.2rem; font-weight: bold;">{ret}%</div>
-            </div>
-        ''')
-    
-    # Volumen
-    if 'volumen_up' in ftd_data:
-        vol_color = '#00ffad' if ftd_data['volumen_up'] else '#ff9800'
-        vol_text = '↑ Confirmado' if ftd_data['volumen_up'] else '→ Bajo'
-        html_parts.append(f'''
-            <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; text-align: center;">
-                <div style="color: #555; font-size: 10px; text-transform: uppercase; margin-bottom: 5px;">Volumen</div>
-                <div style="color: {vol_color}; font-size: 1.0rem; font-weight: bold;">{vol_text}</div>
-            </div>
-        ''')
-    
-    html_parts.append('</div>')  # Cierre grid
-    
-    # Barra de progreso del rally
-    if dias_rally > 0:
-        progress = min((dias_rally / 7) * 100, 100)
-        html_parts.append(f'''
-            <div style="margin-bottom: 15px;">
-                <div style="width: 100%; height: 8px; background: #1a1e26; border-radius: 4px; overflow: hidden;">
-                    <div style="height: 100%; border-radius: 4px; width: {progress}%; background: linear-gradient(90deg, {ftd_color}, {ftd_color}88);"></div>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: #555;">
-                    <span>Día 1</span>
-                    <span style="color: {ftd_color};">Ventana FTD (4-7)</span>
-                    <span>Día 10</span>
-                </div>
-            </div>
-        ''')
-    
-    # Recomendación final
-    html_parts.append(f'''
-        <div style="background: rgba(0, 255, 173, 0.05); border-left: 3px solid {ftd_color}; padding: 12px; border-radius: 0 8px 8px 0;">
-            <div style="color: #ccc; font-size: 12px; font-weight: 500; line-height: 1.4;">
-                <strong style="color: {ftd_color};">Estrategia:</strong> {recomendacion}
-            </div>
-        </div>
-    ''')
-    
-    # Alerta especial para FTD confirmado
-    if signal == 'confirmed':
-        html_parts.append('''
-            <div style="background: rgba(0, 255, 173, 0.1); border: 1px solid #00ffad44; padding: 12px; margin-top: 12px; border-radius: 8px; text-align: center;">
-                <div style="color: #00ffad; font-size: 13px; font-weight: bold;">
-                    🎯 SETUP COMPLETO: FTD Confirmado + RSI Favorable
-                </div>
-                <div style="color: #888; font-size: 11px; margin-top: 4px;">
-                    Condiciones óptimas para considerar posiciones largas según CANSLIM
-                </div>
-            </div>
-        ''')
-    elif signal == 'caution':
-        html_parts.append('''
-            <div style="background: rgba(255, 152, 0, 0.1); border: 1px solid #ff980044; padding: 12px; margin-top: 12px; border-radius: 8px; text-align: center;">
-                <div style="color: #ff9800; font-size: 13px; font-weight: bold;">
-                    ⚠️ SETUP PARCIAL: FTD Confirmado pero RSI Elevado
-                </div>
-                <div style="color: #888; font-size: 11px; margin-top: 4px;">
-                    Considerar entrada parcial o esperar pullback a RSI < 60
-                </div>
-            </div>
-        ''')
-    
-    html_parts.append('</div>')
-    
-    st.html(''.join(html_parts))
 
 def render():
     set_style()
     
-    # CSS global
     st.markdown("""
     <style>
     .rsu-box { background: #11141a; border: 1px solid #1a1e26; border-radius: 10px; margin-bottom: 20px; }
@@ -439,245 +287,175 @@ def render():
     .rsu-luz.grn { color: #00ffad; }
     .rsu-luz.grn.on { background: radial-gradient(circle at 30% 30%, #69f0ae, #00ffad); border-color: #00ffad; }
     .rsu-center { text-align: center; }
-    .rsu-metric { background: #0c0e12; border: 1px solid #1a1e26; border-radius: 10px; padding: 20px; text-align: center; }
-    .rsu-big { font-size: 2.2rem; font-weight: bold; color: white; margin: 10px 0; }
-    .rsu-small { color: #888; font-size: 0.85rem; text-transform: uppercase; }
-    .rsu-badge { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; margin-top: 10px; }
-    .rsu-dot { width: 10px; height: 10px; border-radius: 50%; animation: pulse 2s infinite; }
-    @keyframes pulse { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,255,255,0.4); } 70% { opacity: 0.8; box-shadow: 0 0 0 10px rgba(255,255,255,0); } 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
-    .rsu-bar-box { background: #0c0e12; border-radius: 10px; padding: 15px; margin-top: 15px; border: 1px solid #1a1e26; }
-    .rsu-bar-line { height: 10px; background: #1a1e26; border-radius: 5px; overflow: hidden; }
-    .rsu-bar-fill { height: 100%; border-radius: 5px; }
-    .rsu-flex { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-top: 5px; }
-    .rsu-tip { position: relative; display: inline-block; }
-    .rsu-tip-icon { width: 26px; height: 26px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }
-    .rsu-tip-icon:hover { border-color: #2962ff; color: #2962ff; }
-    .rsu-tip-text { visibility: hidden; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px; border-radius: 8px; position: absolute; z-index: 9999; top: 35px; right: 0; opacity: 0; transition: opacity 0.3s; font-size: 12px; border: 1px solid #444; box-shadow: 0 4px 20px rgba(0,0,0,0.8); line-height: 1.4; }
-    .rsu-tip:hover .rsu-tip-text { visibility: visible; opacity: 1; }
+    .score-big { font-size: 3rem; font-weight: bold; color: white; text-align: center; margin: 20px 0; }
+    .score-label { color: #888; font-size: 12px; text-align: center; text-transform: uppercase; }
+    .factor-box { background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 12px; margin: 8px 0; }
+    .factor-title { color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
+    .factor-value { color: white; font-size: 14px; font-weight: bold; }
+    .recommendation-box { background: rgba(0, 255, 173, 0.1); border-left: 4px solid #00ffad; padding: 15px; margin-top: 20px; border-radius: 0 8px 8px 0; }
     </style>
     """, unsafe_allow_html=True)
     
     st.markdown('<div style="max-width:1200px;margin:0 auto;padding:20px;">', unsafe_allow_html=True)
     
     # Header
-    c1, c2 = st.columns([6, 1])
-    with c1:
-        st.markdown("<h1 style='color:white;margin-bottom:5px;'>🚦 RSU ALGORITMO V2</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#888;font-size:14px;margin-top:0;'>Integración FTD + RSI Diario (CANSLIM)</p>", unsafe_allow_html=True)
-    with c2:
-        st.markdown("""
-        <div style="position:relative;height:50px;">
-            <div class="rsu-tip" style="position:absolute;top:10px;right:0;">
-                <div class="rsu-tip-icon">?</div>
-                <div class="rsu-tip-text">
-                    <strong>RSU Algoritmo V2</strong><br><br>
-                    <strong>FTD (Follow-Through Day):</strong><br>
-                    Señal de cambio de tendencia en días 4-7 después de un mínimo, con +1.5% y volumen creciente.<br><br>
-                    <strong>RSI Diario (14):</strong><br>
-                    Filtra el timing de entrada. FTD + RSI < 70 = Setup óptimo.<br><br>
-                    <strong>Regla:</strong> RSI diario sincroniza mejor con la velocidad del FTD que RSI semanal.
+    st.markdown("<h1 style='color:white;margin-bottom:5px;'>🚦 RSU ALGORITMO PRO</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#888;font-size:14px;margin-top:0;'>Detección de Fondos Multi-Factor (FTD + RSI + VIX + Breadth)</p>", unsafe_allow_html=True)
+    
+    # Tabs para diferentes vistas
+    tab1, tab2, tab3 = st.tabs(["📊 Análisis Actual", "📈 Backtesting", "ℹ️ Metodología"])
+    
+    with tab1:
+        with st.spinner('Analizando múltiples factores...'):
+            # Obtener datos
+            ticker = yf.Ticker("SPY")
+            df_daily = ticker.history(interval="1d", period="6mo")
+            
+            # Intentar obtener VIX
+            try:
+                vix = yf.Ticker("^VIX")
+                df_vix = vix.history(interval="1d", period="6mo")
+            except:
+                df_vix = None
+            
+            resultado = detectar_fondo_comprehensivo(df_daily, df_vix)
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            # Semáforo con Score
+            luz_r = "on" if resultado['estado'] == "ROJO" else ""
+            luz_a = "on" if resultado['estado'] == "AMBAR" else ""
+            luz_v = "on" if resultado['estado'] == "VERDE" else ""
+            
+            st.markdown(f"""
+            <div class="rsu-box">
+                <div class="rsu-head">
+                    <span class="rsu-title">Señal Integrada</span>
+                    <span style="color:{resultado['color']};font-size:12px;font-weight:bold;">● {resultado['estado']}</span>
+                </div>
+                <div class="rsu-body rsu-center">
+                    <div class="rsu-luz red {luz_r}"></div>
+                    <div class="rsu-luz yel {luz_a}"></div>
+                    <div class="rsu-luz grn {luz_v}"></div>
+                    <div class="score-big" style="color:{resultado['color']};">{resultado['score']}/100</div>
+                    <div class="score-label">Puntuación de Confianza</div>
+                    <div style="background:{resultado['color']}22;border:2px solid {resultado['color']};color:{resultado['color']};padding:10px 20px;border-radius:8px;font-weight:bold;margin-top:15px;display:inline-block;">
+                        {resultado['senal']}
+                    </div>
                 </div>
             </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            # Factores desglosados
+            st.markdown('<div class="rsu-box"><div class="rsu-head"><span class="rsu-title">Desglose de Factores</span></div><div class="rsu-body">', unsafe_allow_html=True)
+            
+            factores = [
+                ("Follow-Through Day", resultado['metricas']['FTD'], 30, "#2962ff"),
+                ("RSI Diario < 35", resultado['metricas']['RSI'], 25, "#00ffad"),
+                ("VIX Extremo", resultado['metricas']['VIX/Vol'], 20, "#ff9800"),
+                ("Breadth Thrust", resultado['metricas']['Breadth'], 15, "#9c27b0"),
+                ("Volumen Capitulación", resultado['metricas']['Volume'], 10, "#f23645")
+            ]
+            
+            for nombre, valor, maximo, color in factores:
+                porcentaje = (valor / maximo) * 100 if maximo > 0 else 0
+                st.markdown(f"""
+                <div class="factor-box">
+                    <div class="factor-title">{nombre} (max {maximo} pts)</div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:5px;">
+                        <div style="flex:1;height:8px;background:#1a1e26;border-radius:4px;overflow:hidden;">
+                            <div style="width:{porcentaje}%;height:100%;background:{color};border-radius:4px;"></div>
+                        </div>
+                        <div style="color:{color};font-weight:bold;min-width:30px;text-align:right;">{valor}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown('</div></div>', unsafe_allow_html=True)
+        
+        # Recomendación
+        st.markdown(f"""
+        <div class="recommendation-box">
+            <div style="color:#00ffad;font-weight:bold;margin-bottom:5px;">📋 RECOMENDACIÓN ESTRATÉGICA</div>
+            <div style="color:#ccc;font-size:14px;">{resultado['recomendacion']}</div>
         </div>
         """, unsafe_allow_html=True)
-    
-    # Datos
-    with st.spinner('Analizando FTD + RSI Diario...'):
-        df_daily = obtener_datos_spy()
-        if df_daily is not None:
-            ftd_data = detectar_follow_through_day(df_daily)
-            # Calcular RSI actual para el semáforo visual
-            df_daily['rsi'] = calcular_rsi(df_daily['Close'], period=14)
-            rsi_val = float(df_daily['rsi'].iloc[-1])
-            precio_val = float(df_daily['Close'].iloc[-1])
-            rsi_prev = float(df_daily['rsi'].iloc[-2]) if len(df_daily) > 1 else rsi_val
-            rsi_trend = rsi_val - rsi_prev
-        else:
-            ftd_data = None
-            rsi_val = None
-    
-    if rsi_val is None:
-        st.error("Error al obtener datos")
-        if st.button("🔄 Recargar"):
-            st.rerun()
-        return
-    
-    # Determinar estado del semáforo basado en FTD + RSI
-    signal_type = ftd_data.get('signal') if ftd_data else None
-    
-    # Lógica integrada del semáforo
-    if signal_type == 'confirmed':
-        estado = "VERDE"
-        senal = "COMPRA FTD"
-        color = "#00ffad"
-        desc = "FTD Confirmado + RSI Favorable"
-    elif signal_type == 'caution':
-        estado = "AMBAR"
-        senal = "PRECAUCIÓN"
-        color = "#ff9800"
-        desc = "FTD Confirmado pero RSI > 70"
-    elif signal_type == 'potential':
-        estado = "AMBAR"
-        senal = "POTENCIAL"
-        color = "#ff9800"
-        desc = "FTD en desarrollo"
-    elif signal_type == 'early':
-        estado = "AMBAR"
-        senal = "ESPERA"
-        color = "#2962ff"
-        desc = f"Rally día {ftd_data.get('dias_rally', 0)} - Esperar día 4-7"
-    elif signal_type == 'invalidated' or signal_type == 'expired':
-        estado = "ROJO"
-        senal = "NEUTRAL/BAJISTA"
-        color = "#f23645"
-        desc = "Sin setup válido"
-    else:
-        # Fallback a RSI clásico si no hay contexto FTD
-        if rsi_val < 30:
-            estado = "VERDE"
-            senal = "COMPRA"
-            color = "#00ffad"
-            desc = "RSI < 30: Sobreventa"
-        elif rsi_val > 70:
-            estado = "ROJO"
-            senal = "VENTA"
-            color = "#f23645"
-            desc = "RSI > 70: Sobrecompra"
-        else:
-            estado = "AMBAR"
-            senal = "NEUTRAL"
-            color = "#ff9800"
-            desc = "RSI 30-70: Zona neutral"
-    
-    trend_color = "#00ffad" if rsi_trend >= 0 else "#f23645"
-    trend_arrow = "↑" if rsi_trend >= 0 else "↓"
-    hora = pd.Timestamp.now().strftime('%H:%M')
-    
-    # Layout
-    col1, col2 = st.columns([1, 1])
-    
-    # Columna 1: Semáforo Integrado
-    with col1:
-        luz_r = "on" if estado == "ROJO" else ""
-        luz_a = "on" if estado == "AMBAR" else ""
-        luz_v = "on" if estado == "VERDE" else ""
         
-        semaforo_html = f"""
-        <div class="rsu-box">
-            <div class="rsu-head">
-                <span class="rsu-title">Señal Integrada FTD+RSI</span>
-                <span style="color:{color};font-size:12px;font-weight:bold;">● TIEMPO REAL</span>
-            </div>
-            <div class="rsu-body rsu-center">
-                <div class="rsu-luz red {luz_r}"></div>
-                <div class="rsu-luz yel {luz_a}"></div>
-                <div class="rsu-luz grn {luz_v}"></div>
-                <div class="rsu-badge" style="background:{color}22;border:2px solid {color};color:{color};">
-                    <span class="rsu-dot" style="background:{color};"></span>
-                    {senal}
-                </div>
-                <p style="color:#888;font-size:13px;margin-top:15px;">{desc}</p>
-            </div>
-        </div>
-        """
-        st.markdown(semaforo_html, unsafe_allow_html=True)
+        # Detalles técnicos
+        with st.expander("Ver detalles técnicos"):
+            for detalle in resultado['detalles']:
+                st.write(detalle)
+    
+    with tab2:
+        st.markdown("### 📊 Backtesting Histórico")
+        st.write("Análisis de performance de señales VERDE en los últimos 2 años")
         
-        # Métricas
-        m1, m2 = st.columns(2)
-        with m1:
-            st.markdown(f"""
-            <div class="rsu-metric">
-                <div class="rsu-small">RSI Diario (14)</div>
-                <div class="rsu-big" style="color:{color};">{rsi_val:.2f}</div>
-                <div style="color:{trend_color};font-size:0.9rem;">{trend_arrow} {abs(rsi_trend):.2f}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        if st.button("Ejecutar Backtest", type="primary"):
+            with st.spinner('Calculando... (puede tomar un minuto)'):
+                # Obtener 2 años de datos
+                df_hist = ticker.history(interval="1d", period="2y")
+                resultados_bt = backtest_strategy(df_hist)
+                
+                if resultados_bt:
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Total Señales", resultados_bt['total_señales'])
+                    col2.metric("Win Rate", f"{resultados_bt['win_rate']:.1f}%")
+                    col3.metric("Retorno Medio", f"{resultados_bt['retorno_medio']:.2f}%")
+                    col4.metric("Retorno Total", f"{resultados_bt['retorno_total']:.2f}%")
+                    
+                    st.line_chart(resultados_bt['detalle'].set_index('fecha')['retorno_20d'])
+                    
+                    st.write("**Detalle de operaciones:**")
+                    st.dataframe(resultados_bt['detalle'])
+                else:
+                    st.warning("No se generaron señales VERDE en el período analizado")
+    
+    with tab3:
+        st.markdown("""
+        ### 🔬 Metodología Científica
         
-        with m2:
-            st.markdown(f"""
-            <div class="rsu-metric">
-                <div class="rsu-small">Precio SPY</div>
-                <div class="rsu-big">${precio_val:.2f}</div>
-                <div style="color:#888;font-size:0.8rem;">{hora}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Columna 2: Panel FTD Integrado
-    with col2:
-        render_ftd_panel(ftd_data)
-    
-    # Barra de progreso RSI
-    st.markdown(f"""
-    <div class="rsu-bar-box" style="margin-top: 20px;">
-        <div style="color:#888;font-size:11px;margin-bottom:8px;text-transform:uppercase;">RSI Diario (14) - Optimizado para Swing Trading</div>
-        <div class="rsu-bar-line">
-            <div class="rsu-bar-fill" style="width:{rsi_val}%;background:linear-gradient(90deg,#00ffad,#ff9800,#f23645);"></div>
-        </div>
-        <div class="rsu-flex">
-            <span>0</span>
-            <span style="color:#00ffad;font-weight:bold;">30</span>
-            <span style="color:#ff9800;font-weight:bold;">70</span>
-            <span>100</span>
-        </div>
-        <div style="text-align:center;margin-top:8px;color:{color};font-weight:bold;font-size:13px;">
-            {rsi_val:.1f} → {estado}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Explicación de la integración
-    st.markdown("""
-    <div style="margin-top: 30px; padding: 20px; background: #0c0e12; border-radius: 10px; border: 1px solid #1a1e26;">
-        <h4 style="color: white; margin-top: 0;">🔬 Por qué RSI Diario + FTD</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; color: #888; font-size: 13px; line-height: 1.6;">
-            <div>
-                <strong style="color: #00ffad;">✓ Sincronización Temporal</strong><br>
-                FTD opera en días 4-7. RSI semanal es demasiado lento para capturar esta ventana. RSI diario (14) ofrece señales en el mismo timeframe que el FTD.
-            </div>
-            <div>
-                <strong style="color: #00ffad;">✓ Filtrado de Entradas</strong><br>
-                Un FTD con RSI > 70 es riesgoso (sobrecompra). La integración evita "comprar alto" incluso cuando el FTD técnico se confirma.
-            </div>
-            <div>
-                <strong style="color: #00ffad;">✓ Backtesting Favorable</strong><br>
-                Estudios muestran que RSI 14 en daily produce menor drawdown y mejor timing que weekly para swings de 5-15 días.
-            </div>
-            <div>
-                <strong style="color: #00ffad;">✓ Reglas de Integración</strong><br>
-                • FTD Confirmado + RSI < 70 = Entrada óptima<br>
-                • FTD Confirmado + RSI > 70 = Precaución/Parcial<br>
-                • Sin FTD = Usar RSI clásico (30/70)
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Zonas RSI
-    st.markdown("<h3 style='color:white;margin-top:30px;'>📊 Zonas RSI Diario</h3>", unsafe_allow_html=True)
-    z1, z2, z3 = st.columns(3)
-    
-    zonas_data = [
-        ("#f23645", "SOBRECOMPRA", "> 70", "🔴", "Considerar toma de beneficios"),
-        ("#ff9800", "NEUTRAL", "30-70", "🟡", "Esperar setup FTD"),
-        ("#00ffad", "SOBREVENTA", "< 30", "🟢", "Preparar entrada en FTD")
-    ]
-    
-    for col, (col_hex, title, range_txt, emoji, sub) in zip([z1, z2, z3], zonas_data):
-        with col:
-            st.markdown(f"""
-            <div class="rsu-box" style="border-color:{col_hex}44;">
-                <div style="text-align:center;padding:20px;">
-                    <div style="width:50px;height:50px;background:{col_hex}22;border:2px solid {col_hex};border-radius:50%;margin:0 auto 15px;display:flex;align-items:center;justify-content:center;font-size:20px;color:{col_hex};">{emoji}</div>
-                    <h4 style="color:{col_hex};margin:0 0 10px 0;">{title}</h4>
-                    <div style="color:white;font-size:1.5rem;font-weight:bold;">{range_txt}</div>
-                    <p style="color:#888;font-size:12px;margin:10px 0 0 0;">{sub}</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    if st.button("🔄 Recalcular", use_container_width=True):
-        st.rerun()
+        **ADVERTENCIA**: Esta herramienta es un asistente de análisis, no un oráculo. El market timing es estadísticamente desafiante.
+        
+        #### 1. Follow-Through Day (30%)
+        Basado en William O'Neil (CANSLIM). Un FTD válido ocurre entre el día 4-7 después de un mínimo, con +1.5% de subida y volumen creciente. 
+        *Limitación*: ~30% de los FTD fallan según estudios históricos [^5^].
+        
+        #### 2. RSI Diario (25%)
+        Índice de Fuerza Relativa de 14 períodos. < 30 indica sobreventa.
+        *Limitación*: El mercado puede permanecer sobrecomprado/sobrevento por semanas.
+        
+        #### 3. VIX / Volatilidad (20%)
+        El "índice de miedo". Lecturas > 30 indican pánico, típicamente asociadas con fondos.
+        *Limitación*: El VIX puede quedarse elevado por meses (ej. 2008-2009).
+        
+        #### 4. McClellan Oscillator (15%)
+        Breadth indicator. Mide la amplitud del mercado. Un thrust de -50 a +50 confirma fuerza.
+        *Limitación*: Requiere datos de advancing/declining issues; nuestro cálculo es un proxy.
+        
+        #### 5. Volumen de Capitulación (10%)
+        Picos de volumen > 1.5x la media sugieren capitulación (agotamiento vendedor).
+        
+        #### Reglas de Integración
+        - **Score > 70**: Múltiples factores alineados. Fondo probable, pero no garantizado.
+        - **Score 40-70**: Algunos factores presentes. Esperar confirmación.
+        - **Score < 40**: Sin condiciones de fondo. Preservar capital.
+        
+        #### Gestión de Riesgo Recomendada
+        1. Nunca arriesgar > 2% del capital en una señal
+        2. Stop-loss obligatorio: -7% debajo del punto de entrada
+        3. Entrada gradual: 25% inicial, escalonar si funciona
+        4. Time-stop: Si no sube en 10 días, reconsiderar
+        
+        #### Referencias
+        - O'Neil, W. (2009). How to Make Money in Stocks
+        - McClellan, S. & M. (1998). Patterns for Profit
+        - Investopedia (2025). Put-Call Ratio Analysis [^37^]
+        - StockCharts (2025). McClellan Oscillator [^39^]
+        """)
     
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 

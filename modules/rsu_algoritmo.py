@@ -51,16 +51,23 @@ def detectar_distribucion_days(df_spy):
 def detectar_fondo_comprehensivo(df_spy, df_vix=None):
     """
     Sistema de detección de fondos multi-factor.
-    SCORE MÁXIMO: 50 puntos (más intuitivo)
+    SCORE MÁXIMO: 50 puntos
     UMBRAL VERDE: 40 pts (80% del máximo)
     UMBRAL AMBAR: 25 pts (50% del máximo)
+    
+    PONDERACIÓN AJUSTADA:
+    - FTD: 15 pts (30% del máximo)
+    - RSI: 15 pts (30% del máximo)  
+    - VIX: 10 pts (20% del máximo)
+    - Breadth: 7 pts (14% del máximo)
+    - Volume: 3 pts (6% del máximo)
     """
     score = 0
     max_score = 50
     detalles = []
     metricas = {}
     
-    # 1. FTD Detection (15 pts) - REDUCIDO de 30 a 15
+    # 1. FTD Detection (15 pts) - CORREGIDO
     ftd_data = detectar_follow_through_day(df_spy)
     ftd_score = 0
     
@@ -82,35 +89,37 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
     score += ftd_score
     metricas['FTD'] = {'score': ftd_score, 'max': 15, 'color': '#3b82f6', 'order': 1}
     
-    # 2. RSI Diario (15 pts) - REDUCIDO de 25 a 15, pero más sensible
+    # 2. RSI Diario (15 pts) - CORREGIDO y más sensible
     rsi_series = calcular_rsi(df_spy['Close'], 14)
     rsi = rsi_series.iloc[-1]
     rsi_score = 0
     
-    if rsi < 20:
+    # Ajustado para dar más puntos en rangos intermedios
+    if rsi < 25:
         rsi_score = 15
-        detalles.append(f"✓ RSI {rsi:.1f} < 20 (+15)")
-    elif rsi < 30:
+        detalles.append(f"✓ RSI {rsi:.1f} < 25 (+15)")
+    elif rsi < 35:
         rsi_score = 12
-        detalles.append(f"✓ RSI {rsi:.1f} < 30 (+12)")
-    elif rsi < 40:
-        rsi_score = 8
-        detalles.append(f"~ RSI {rsi:.1f} < 40 (+8)")
+        detalles.append(f"✓ RSI {rsi:.1f} < 35 (+12)")
     elif rsi < 45:
-        rsi_score = 3
-        detalles.append(f"• RSI {rsi:.1f} < 45 (+3)")
+        rsi_score = 8
+        detalles.append(f"~ RSI {rsi:.1f} < 45 (+8)")
+    elif rsi < 50:
+        rsi_score = 4
+        detalles.append(f"• RSI {rsi:.1f} < 50 (+4)")
     else:
         detalles.append(f"• RSI {rsi:.1f} neutral (0)")
     
     score += rsi_score
     metricas['RSI'] = {'score': rsi_score, 'max': 15, 'color': '#10b981', 'raw_value': rsi, 'order': 2}
     
-    # 3. VIX / Volatilidad (10 pts) - REDUCIDO de 20 a 10
+    # 3. VIX / Volatilidad (10 pts) - CORREGIDO
     vix_score = 0
     vix_val = None
     
     if df_vix is not None and len(df_vix) > 20:
         vix_actual = df_vix['Close'].iloc[-1]
+        vix_sma20 = df_vix['Close'].rolling(20).mean().iloc[-1]
         vix_val = vix_actual
         
         if vix_actual > 30:
@@ -125,6 +134,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         else:
             detalles.append(f"• VIX {vix_actual:.1f} bajo (0)")
     else:
+        # Proxy ATR
         atr = calcular_atr(df_spy).iloc[-1]
         atr_medio = calcular_atr(df_spy).rolling(20).mean().iloc[-1]
         ratio_atr = atr / atr_medio if atr_medio > 0 else 1
@@ -132,14 +142,17 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         
         if ratio_atr > 2.0:
             vix_score = 8
-            detalles.append(f"~ Volatilidad alta (+8)")
+            detalles.append(f"~ Volatilidad alta {ratio_atr:.1f}x (+8)")
+        elif ratio_atr > 1.5:
+            vix_score = 4
+            detalles.append(f"~ Volatilidad elevada {ratio_atr:.1f}x (+4)")
         else:
             detalles.append(f"• Volatilidad normal (0)")
     
     score += vix_score
     metricas['VIX'] = {'score': vix_score, 'max': 10, 'color': '#f59e0b', 'raw_value': vix_val, 'is_proxy': df_vix is None, 'order': 3}
     
-    # 4. McClellan (7 pts) - REDUCIDO de 15 a 7
+    # 4. McClellan (7 pts) - CORREGIDO
     mcclellan = calcular_mcclellan_proxy(df_spy)
     breadth_score = 0
     
@@ -149,13 +162,16 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
     elif mcclellan < -50:
         breadth_score = 4
         detalles.append(f"~ McClellan {mcclellan:.0f} < -50 (+4)")
+    elif mcclellan < -20:
+        breadth_score = 2
+        detalles.append(f"• McClellan {mcclellan:.0f} < -20 (+2)")
     else:
         detalles.append(f"• McClellan {mcclellan:.0f} neutral (0)")
     
     score += breadth_score
     metricas['Breadth'] = {'score': breadth_score, 'max': 7, 'color': '#8b5cf6', 'raw_value': mcclellan, 'order': 4}
     
-    # 5. Volume Capitulación (3 pts) - REDUCIDO de 10 a 3
+    # 5. Volume Capitulación (3 pts) - CORREGIDO
     vol_actual = df_spy['Volume'].iloc[-1]
     vol_media = df_spy['Volume'].rolling(20).mean().iloc[-1]
     vol_ratio = vol_actual / vol_media if vol_media > 0 else 1
@@ -165,6 +181,9 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None):
         vol_score = 3
         detalles.append(f"✓ Volumen {vol_ratio:.1f}x (+3)")
     elif vol_ratio > 1.5:
+        vol_score = 2
+        detalles.append(f"~ Volumen {vol_ratio:.1f}x (+2)")
+    elif vol_ratio > 1.2:
         vol_score = 1
         detalles.append(f"• Volumen {vol_ratio:.1f}x (+1)")
     else:
@@ -206,6 +225,7 @@ def detectar_senal_venta(df_spy, df_vix=None):
     """
     Sistema de señales de VENTA.
     Detecta cuando el mercado está agotado y es momento de tomar beneficios.
+    Score máximo: 45 pts
     """
     score_venta = 0
     detalles_venta = []
@@ -223,16 +243,19 @@ def detectar_senal_venta(df_spy, df_vix=None):
     rsi = calcular_rsi(df_spy['Close'], 14).iloc[-1]
     if rsi > 75:
         score_venta += 15
-        detalles_venta.append(f"✓ RSI {rsi:.1f} > 75 (sobrecompra extrema) (+15)")
+        detalles_venta.append(f"✓ RSI {rsi:.1f} > 75 (+15)")
     elif rsi > 70:
         score_venta += 10
-        detalles_venta.append(f"~ RSI {rsi:.1f} > 70 (sobrecompra) (+10)")
+        detalles_venta.append(f"~ RSI {rsi:.1f} > 70 (+10)")
+    elif rsi > 65:
+        score_venta += 5
+        detalles_venta.append(f"• RSI {rsi:.1f} > 65 (+5)")
     
     # 3. VIX bajo + caída (máximo 10 pts)
     if df_vix is not None and len(df_vix) > 20:
         vix_actual = df_vix['Close'].iloc[-1]
         vix_sma20 = df_vix['Close'].rolling(20).mean().iloc[-1]
-        if vix_actual < vix_sma20 * 0.8:  # VIX bajo vs media
+        if vix_actual < vix_sma20 * 0.8:
             score_venta += 5
             detalles_venta.append("• VIX bajo (complacencia) (+5)")
     
@@ -241,7 +264,7 @@ def detectar_senal_venta(df_spy, df_vix=None):
     precio = df_spy['Close'].iloc[-1]
     dist_sma = (precio - sma50) / sma50
     
-    if dist_sma > 0.15:  # 15% por encima de SMA 50
+    if dist_sma > 0.15:
         score_venta += 10
         detalles_venta.append(f"✓ Precio {dist_sma*100:.1f}% sobre SMA50 (+10)")
     elif dist_sma > 0.10:
@@ -703,7 +726,6 @@ def render():
             """
             st.html(rec_html)
             
-            # Señal de venta
             sell_color = senal_venta['color']
             sell_html = f"""
             <div class="sell-signal-box" style="border-color: {sell_color}; background: {sell_color}08;">
@@ -819,6 +841,7 @@ def render():
                     
                     if error:
                         st.warning(error)
+                        st.info("💡 Prueba con umbral más bajo (25-30) para ver más señales")
                     elif resultados:
                         st.success(f"**{resultados['total_señales']} señales** · Score medio: {resultados['score_promedio']:.1f}/50")
                         
@@ -909,6 +932,5 @@ def render():
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
-
 
 

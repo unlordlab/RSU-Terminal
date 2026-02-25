@@ -1054,7 +1054,7 @@ def render():
             """
             
             # Usar components.html para renderizar el HTML correctamente
-            components.html(html_completo, height=800, scrolling=false)
+            components.html(html_completo, height=800, scrolling=False)
         
         # Gráfico de Zonas de Acumulación
         st.markdown("### 📊 Zonas de Acumulación (Score > 70)")
@@ -1285,5 +1285,6 @@ def render():
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 

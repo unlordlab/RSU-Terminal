@@ -1,5 +1,7 @@
+
 # modules/rsu_algoritmo_pro.py
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import yfinance as yf
 import numpy as np
@@ -963,7 +965,7 @@ def render():
                     st.markdown(f'<div class="warning-box {clase}">{adv}</div>', unsafe_allow_html=True)
         
         with col_right:
-            # Panel de Factores - CORREGIDO: Generar todo el HTML en un solo string
+            # Panel de Factores - CORREGIDO: Usar components.html para renderizar HTML crudo
             factores_orden = ['FTD', 'RSI', 'VIX', 'Breadth', 'Volume', 'Divergencia', 'SMA200']
             
             # Construir HTML de factores
@@ -1014,24 +1016,31 @@ def render():
                     if factor_key == 'SMA200' and m.get('advertencia'):
                         bar_color = '#ff9800'  # Naranja para advertencia
                     
-                    # Añadir factor al HTML
+                    # Añadir factor al HTML (en una sola línea para evitar problemas)
                     raw_text_html = f'<div style="color:#666; font-size:11px; margin-top:4px;">{raw_text}</div>' if raw_text else ''
                     
-                    factores_html += f"""
-                    <div class="factor-container">
-                        <div class="factor-header">
-                            <span class="factor-name">{nombre_display} (max {m['max']} pts)</span>
-                            <span class="factor-score" style="color:{bar_color};">{m['score']}/{m['max']}</span>
-                        </div>
-                        <div class="progress-bg">
-                            <div class="progress-fill" style="width:{pct}%; background:{bar_color};"></div>
-                        </div>
-                        {raw_text_html}
-                    </div>
-                    """
-            
-            # Renderizar todo el contenedor en un único st.markdown
-            st.markdown(f"""
+                    factores_html += f'<div class="factor-container"><div class="factor-header"><span class="factor-name">{nombre_display} (max {m["max"]} pts)</span><span class="factor-score" style="color:{bar_color};">{m["score"]}/{m["max"]}</span></div><div class="progress-bg"><div class="progress-fill" style="width:{pct}%; background:{bar_color};"></div></div>{raw_text_html}</div>'
+
+            # Construir HTML completo del contenedor con CSS incluido
+            html_completo = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <style>
+                body {{ margin: 0; padding: 0; background: #11141a; font-family: sans-serif; }}
+                .rsu-box {{ background: #11141a; border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; }}
+                .rsu-head {{ background: #0c0e12; padding: 15px 20px; border-bottom: 1px solid #1a1e26; }}
+                .rsu-title {{ color: white; font-size: 16px; font-weight: bold; margin: 0; }}
+                .rsu-body {{ padding: 20px; }}
+                .factor-container {{ background: #0c0e12; border-radius: 8px; padding: 15px; margin: 10px 0; }}
+                .factor-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }}
+                .factor-name {{ color: #888; font-size: 11px; text-transform: uppercase; font-weight: bold; }}
+                .factor-score {{ color: white; font-size: 14px; font-weight: bold; }}
+                .progress-bg {{ width: 100%; height: 8px; background: #1a1e26; border-radius: 4px; overflow: hidden; }}
+                .progress-fill {{ height: 100%; border-radius: 4px; transition: width 0.5s ease; }}
+            </style>
+            </head>
+            <body>
             <div class="rsu-box">
                 <div class="rsu-head">
                     <span class="rsu-title">Desglose de Factores v2.1</span>
@@ -1040,7 +1049,12 @@ def render():
                     {factores_html}
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            </body>
+            </html>
+            """
+            
+            # Usar components.html para renderizar el HTML correctamente
+            components.html(html_completo, height=600, scrolling=True)
         
         # Gráfico de Zonas de Acumulación
         st.markdown("### 📊 Zonas de Acumulación (Score > 70)")

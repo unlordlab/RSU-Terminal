@@ -550,9 +550,37 @@ def descargar_datos_sectores():
                 continue
     return sector_data
 
+
+def calcular_max_drawdown(precios, precio_entrada):
+    """
+    Calcula el máximo drawdown porcentual desde el punto de entrada.
+    
+    Args:
+        precios: Serie de precios (pandas Series) después de la entrada
+        precio_entrada: Precio de entrada en la señal
+    
+    Returns:
+        float: Máximo drawdown porcentual (negativo)
+    """
+    if len(precios) < 2:
+        return 0.0
+    
+    # Calcular el running maximum desde la entrada
+    running_max = precios.expanding().max()
+    
+    # Calcular drawdown en cada punto: (precio_actual - running_max) / running_max
+    drawdowns = (precios - running_max) / running_max * 100
+    
+    # El máximo drawdown es el valor más negativo
+    max_dd = drawdowns.min()
+    
+    return max_dd if max_dd < 0 else 0.0
+
+
 def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_sectores=False):
     """
     Backtesting robusto con umbral configurable.
+    INCLUYE: Drawdown máximo, win rate a 5, 20 y 60 días.
     """
     try:
         # Descargar datos históricos
@@ -583,7 +611,7 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
         señales = []
         
         # Ventana de lookback para análisis
-        for i in range(60, len(df_hist) - 20):
+        for i in range(60, len(df_hist) - 60):  # Cambiado a -60 para permitir cálculo de 60 días
             ventana_df = df_hist.iloc[:i]
             vix_window = vix_hist.iloc[:i] if vix_hist is not None else None
             
@@ -600,13 +628,22 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
             # Usar el umbral configurable
             if resultado['score'] >= umbral_señal:
                 precio_entrada = df_hist['Close'].iloc[i]
+                
+                # Calcular precios de salida para diferentes períodos
                 precio_salida_5d = df_hist['Close'].iloc[min(i + 5, len(df_hist) - 1)]
                 precio_salida_10d = df_hist['Close'].iloc[min(i + 10, len(df_hist) - 1)]
                 precio_salida_20d = df_hist['Close'].iloc[min(i + 20, len(df_hist) - 1)]
+                precio_salida_60d = df_hist['Close'].iloc[min(i + 60, len(df_hist) - 1)]  # NUEVO: 60 días
                 
+                # Calcular retornos
                 retorno_5d = ((precio_salida_5d - precio_entrada) / precio_entrada) * 100
                 retorno_10d = ((precio_salida_10d - precio_entrada) / precio_entrada) * 100
                 retorno_20d = ((precio_salida_20d - precio_entrada) / precio_entrada) * 100
+                retorno_60d = ((precio_salida_60d - precio_entrada) / precio_entrada) * 100  # NUEVO
+                
+                # NUEVO: Calcular máximo drawdown en los 60 días posteriores
+                precios_60d = df_hist['Close'].iloc[i:min(i + 61, len(df_hist))]
+                max_drawdown = calcular_max_drawdown(precios_60d, precio_entrada)
                 
                 señales.append({
                     'fecha': df_hist.index[i].strftime('%Y-%m-%d'),
@@ -617,9 +654,12 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
                     'retorno_5d': round(retorno_5d, 2),
                     'retorno_10d': round(retorno_10d, 2),
                     'retorno_20d': round(retorno_20d, 2),
+                    'retorno_60d': round(retorno_60d, 2),  # NUEVO
+                    'max_drawdown_60d': round(max_drawdown, 2),  # NUEVO: Drawdown máximo
                     'exito_5d': retorno_5d > 0,
                     'exito_10d': retorno_10d > 0,
                     'exito_20d': retorno_20d > 0,
+                    'exito_60d': retorno_60d > 0,  # NUEVO
                     'umbral_usado': umbral_señal
                 })
         
@@ -628,7 +668,7 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
         
         df_resultados = pd.DataFrame(señales)
         
-        # Métricas de performance
+        # Métricas de performance actualizadas
         metricas = {
             'total_señales': len(señales),
             'umbral_aplicado': umbral_señal,
@@ -636,10 +676,15 @@ def backtest_strategy(ticker_symbol="SPY", years=2, umbral_señal=50, usar_secto
             'win_rate_5d': (df_resultados['exito_5d'].mean() * 100),
             'win_rate_10d': (df_resultados['exito_10d'].mean() * 100),
             'win_rate_20d': (df_resultados['exito_20d'].mean() * 100),
+            'win_rate_60d': (df_resultados['exito_60d'].mean() * 100),  # NUEVO
             'retorno_medio_5d': df_resultados['retorno_5d'].mean(),
             'retorno_medio_10d': df_resultados['retorno_10d'].mean(),
             'retorno_medio_20d': df_resultados['retorno_20d'].mean(),
+            'retorno_medio_60d': df_resultados['retorno_60d'].mean(),  # NUEVO
             'retorno_total_20d': df_resultados['retorno_20d'].sum(),
+            'retorno_total_60d': df_resultados['retorno_60d'].sum(),  # NUEVO
+            'max_drawdown_promedio': df_resultados['max_drawdown_60d'].mean(),  # NUEVO
+            'peor_drawdown': df_resultados['max_drawdown_60d'].min(),  # NUEVO
             'mejor_señal': df_resultados.loc[df_resultados['retorno_20d'].idxmax()].to_dict() if len(df_resultados) > 0 else None,
             'peor_señal': df_resultados.loc[df_resultados['retorno_20d'].idxmin()].to_dict() if len(df_resultados) > 0 else None,
             'detalle': df_resultados
@@ -1055,9 +1100,11 @@ def render():
                                 resultados_comparativa.append({
                                     'Umbral': umb,
                                     'Señales': res['total_señales'],
+                                    'Win Rate 5d': f"{res['win_rate_5d']:.1f}%",
                                     'Win Rate 20d': f"{res['win_rate_20d']:.1f}%",
-                                    'Retorno Medio 20d': f"{res['retorno_medio_20d']:.2f}%",
-                                    'Retorno Total': f"{res['retorno_total_20d']:.2f}%"
+                                    'Win Rate 60d': f"{res['win_rate_60d']:.1f}%",
+                                    'Max DD Prom': f"{res['max_drawdown_promedio']:.1f}%",
+                                    'Retorno Medio 60d': f"{res['retorno_medio_60d']:.2f}%"
                                 })
                         progress_bar.progress((idx + 1) / 3)
                     
@@ -1067,7 +1114,7 @@ def render():
                         st.dataframe(df_comp, use_container_width=True, hide_index=True)
                         
                         # Gráfico comparativo
-                        st.bar_chart(df_comp.set_index('Umbral')[['Win Rate 20d', 'Retorno Medio 20d']])
+                        st.bar_chart(df_comp.set_index('Umbral')[['Win Rate 5d', 'Win Rate 20d', 'Win Rate 60d']])
                 else:
                     # Backtest simple
                     with st.spinner(f'Analizando {años_bt} años con umbral {umbral_bt}...'):
@@ -1078,25 +1125,46 @@ def render():
                         elif resultados_bt:
                             st.success(f"Backtest completado: {resultados_bt['total_señales']} señales (Umbral: {resultados_bt['umbral_aplicado']})")
                             
+                            # Métricas principales con nuevos campos
                             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                            m_col1.metric("Total Señales", resultados_bt['total_señales'])
-                            m_col2.metric("Score Promedio", f"{resultados_bt['score_promedio']:.1f}")
-                            m_col3.metric("Win Rate (20d)", f"{resultados_bt['win_rate_20d']:.1f}%")
-                            m_col4.metric("Retorno Medio (20d)", f"{resultados_bt['retorno_medio_20d']:.2f}%")
+                            m_col1.metric("Win Rate 5d", f"{resultados_bt['win_rate_5d']:.1f}%")
+                            m_col2.metric("Win Rate 20d", f"{resultados_bt['win_rate_20d']:.1f}%")
+                            m_col3.metric("Win Rate 60d", f"{resultados_bt['win_rate_60d']:.1f}%")
+                            m_col4.metric("Max DD Promedio", f"{resultados_bt['max_drawdown_promedio']:.1f}%", 
+                                          delta=f"Peor: {resultados_bt['peor_drawdown']:.1f}%", delta_color="inverse")
                             
-                            # Distribución de retornos
+                            # Segunda fila de métricas
+                            m_col5, m_col6, m_col7, m_col8 = st.columns(4)
+                            m_col5.metric("Total Señales", resultados_bt['total_señales'])
+                            m_col6.metric("Score Promedio", f"{resultados_bt['score_promedio']:.1f}")
+                            m_col7.metric("Retorno Medio 60d", f"{resultados_bt['retorno_medio_60d']:.2f}%")
+                            m_col8.metric("Retorno Total 60d", f"{resultados_bt['retorno_total_60d']:.2f}%")
+                            
+                            # Distribución de retornos incluyendo 60d
                             st.markdown("#### Distribución de Retornos")
-                            chart_data = resultados_bt['detalle'][['retorno_5d', 'retorno_10d', 'retorno_20d']].rename(columns={
+                            chart_data = resultados_bt['detalle'][['retorno_5d', 'retorno_20d', 'retorno_60d']].rename(columns={
                                 'retorno_5d': '5 días',
-                                'retorno_10d': '10 días',
-                                'retorno_20d': '20 días'
+                                'retorno_20d': '20 días',
+                                'retorno_60d': '60 días'
                             })
                             st.bar_chart(chart_data.mean())
                             
+                            # Análisis de Drawdown
+                            st.markdown("#### Análisis de Drawdown (60 días)")
+                            dd_data = resultados_bt['detalle']['max_drawdown_60d']
+                            col_dd1, col_dd2, col_dd3 = st.columns(3)
+                            col_dd1.metric("Drawdown Promedio", f"{dd_data.mean():.2f}%")
+                            col_dd2.metric("Peor Drawdown", f"{dd_data.min():.2f}%")
+                            col_dd3.metric("Señales con DD > -10%", f"{(dd_data < -10).sum()}/{len(dd_data)}")
+                            
+                            # Histograma de drawdowns
+                            st.bar_chart(dd_data.value_counts(bins=10).sort_index())
+                            
                             # Tabla detallada
                             with st.expander("Ver tabla detallada"):
+                                display_df = resultados_bt['detalle'].sort_values('fecha', ascending=False)
                                 st.dataframe(
-                                    resultados_bt['detalle'].sort_values('fecha', ascending=False),
+                                    display_df,
                                     use_container_width=True,
                                     hide_index=True
                                 )
@@ -1146,6 +1214,13 @@ def render():
         | **Breadth** | 20 | Actual | McClellan < -50 |
         | **Volumen** | 10 | Ventana 10d | Máximo > 1.5x en ventana |
         | **Divergencia** | 15 | Binario | RSI vs Precio |
+        
+        #### Métricas de Backtest
+        
+        **Win Rates**: 5d, 10d, 20d, 60d días después de la señal
+        
+        **Drawdown Máximo**: Peor caída desde el punto de entrada durante los 60 días siguientes.
+        Calculado como: `min((precio_t - running_max) / running_max) * 100`
         
         #### Umbrales de Decisión
         

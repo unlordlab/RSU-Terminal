@@ -1,4 +1,3 @@
-
 # modules/rsu_algoritmo_pro.py
 import streamlit as st
 import pandas as pd
@@ -964,17 +963,11 @@ def render():
                     st.markdown(f'<div class="warning-box {clase}">{adv}</div>', unsafe_allow_html=True)
         
         with col_right:
-            # Panel de Factores - CORREGIDO: Todo dentro del mismo contenedor
-            st.markdown("""
-            <div class="rsu-box">
-                <div class="rsu-head">
-                    <span class="rsu-title">Desglose de Factores v2.1</span>
-                </div>
-                <div class="rsu-body">
-            """, unsafe_allow_html=True)
-            
-            # Renderizar cada factor DENTRO del rsu-body
+            # Panel de Factores - CORREGIDO: Generar todo el HTML en un solo string
             factores_orden = ['FTD', 'RSI', 'VIX', 'Breadth', 'Volume', 'Divergencia', 'SMA200']
+            
+            # Construir HTML de factores
+            factores_html = ""
             for factor_key in factores_orden:
                 if factor_key in resultado['metricas']:
                     m = resultado['metricas'][factor_key]
@@ -1021,7 +1014,10 @@ def render():
                     if factor_key == 'SMA200' and m.get('advertencia'):
                         bar_color = '#ff9800'  # Naranja para advertencia
                     
-                    st.markdown(f"""
+                    # Añadir factor al HTML
+                    raw_text_html = f'<div style="color:#666; font-size:11px; margin-top:4px;">{raw_text}</div>' if raw_text else ''
+                    
+                    factores_html += f"""
                     <div class="factor-container">
                         <div class="factor-header">
                             <span class="factor-name">{nombre_display} (max {m['max']} pts)</span>
@@ -1030,12 +1026,21 @@ def render():
                         <div class="progress-bg">
                             <div class="progress-fill" style="width:{pct}%; background:{bar_color};"></div>
                         </div>
-                        {f'<div style="color:#666; font-size:11px; margin-top:4px;">{raw_text}</div>' if raw_text else ''}
+                        {raw_text_html}
                     </div>
-                    """, unsafe_allow_html=True)
+                    """
             
-            # Cerrar el contenedor correctamente
-            st.markdown("</div></div>", unsafe_allow_html=True)
+            # Renderizar todo el contenedor en un único st.markdown
+            st.markdown(f"""
+            <div class="rsu-box">
+                <div class="rsu-head">
+                    <span class="rsu-title">Desglose de Factores v2.1</span>
+                </div>
+                <div class="rsu-body">
+                    {factores_html}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
         # Gráfico de Zonas de Acumulación
         st.markdown("### 📊 Zonas de Acumulación (Score > 70)")
@@ -1266,4 +1271,3 @@ def render():
         """)
     
     st.markdown('</div>', unsafe_allow_html=True)
-

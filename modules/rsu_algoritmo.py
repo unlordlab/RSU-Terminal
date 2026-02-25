@@ -1,3 +1,4 @@
+
 # modules/rsu_algoritmo_pro.py
 import streamlit as st
 import pandas as pd
@@ -136,9 +137,24 @@ def calcular_mcclellan_proxy_mejorado(df_spy, sector_data=None):
 
 def calcular_medias_moviles(df):
     """Calcula SMA 50, 200 y EMA 21."""
-    sma_50 = df['Close'].rolling(window=50).mean().iloc[-1]
-    sma_200 = df['Close'].rolling(window=200).mean().iloc[-1]
-    ema_21 = df['Close'].ewm(span=21, adjust=False).mean().iloc[-1]
+    # Verificar que hay suficientes datos para SMA200
+    min_periods = min(len(df), 200)
+    
+    if len(df) >= 50:
+        sma_50 = df['Close'].rolling(window=50, min_periods=50).mean().iloc[-1]
+    else:
+        sma_50 = df['Close'].mean()
+    
+    if len(df) >= 200:
+        sma_200 = df['Close'].rolling(window=200, min_periods=200).mean().iloc[-1]
+    else:
+        # Si no hay 200 días, usar media móvil de todos los datos disponibles
+        sma_200 = df['Close'].mean()
+    
+    if len(df) >= 21:
+        ema_21 = df['Close'].ewm(span=21, adjust=False, min_periods=21).mean().iloc[-1]
+    else:
+        ema_21 = df['Close'].mean()
     
     return {
         'sma_50': sma_50,
@@ -400,7 +416,7 @@ def detectar_fondo_comprehensivo(df_spy, df_vix=None, sector_data=None):
         'max': 0, 
         'color': '#ff9800' if price < mm['sma_200'] else '#00ffad', 
         'raw_value': price - mm['sma_200'],
-        'distancia_pct': (price - mm['sma_200']) / mm['sma_200'] * 100,
+        'distancia_pct': (price - mm['sma_200']) / mm['sma_200'] * 100 if mm['sma_200'] != 0 else 0,
         'advertencia': price < mm['sma_200']
     }
     
@@ -906,17 +922,19 @@ def render():
             mm = resultado['medias_moviles']
             col_mm1, col_mm2, col_mm3 = st.columns(3)
             with col_mm1:
+                distancia_ema21 = ((mm['price'] - mm['ema_21'])/mm['ema_21']*100) if mm['ema_21'] != 0 else 0
                 st.markdown(f"""
                 <div class="metric-card">
                     <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['ema_21'] else '#ff9800'};">{mm['ema_21']:.2f}</div>
-                    <div class="metric-label">EMA 21</div>
+                    <div class="metric-label">EMA 21 ({distancia_ema21:+.2f}%)</div>
                 </div>
                 """, unsafe_allow_html=True)
             with col_mm2:
+                distancia_sma50 = ((mm['price'] - mm['sma_50'])/mm['sma_50']*100) if mm['sma_50'] != 0 else 0
                 st.markdown(f"""
                 <div class="metric-card">
                     <div class="metric-value" style="color:{'#00ffad' if mm['price'] > mm['sma_50'] else '#ff9800'};">{mm['sma_50']:.2f}</div>
-                    <div class="metric-label">SMA 50</div>
+                    <div class="metric-label">SMA 50 ({distancia_sma50:+.2f}%)</div>
                 </div>
                 """, unsafe_allow_html=True)
             with col_mm3:
@@ -946,7 +964,7 @@ def render():
                     st.markdown(f'<div class="warning-box {clase}">{adv}</div>', unsafe_allow_html=True)
         
         with col_right:
-            # Panel de Factores
+            # Panel de Factores - CORREGIDO: Todo dentro del mismo contenedor
             st.markdown("""
             <div class="rsu-box">
                 <div class="rsu-head">
@@ -955,7 +973,7 @@ def render():
                 <div class="rsu-body">
             """, unsafe_allow_html=True)
             
-            # Renderizar cada factor
+            # Renderizar cada factor DENTRO del rsu-body
             factores_orden = ['FTD', 'RSI', 'VIX', 'Breadth', 'Volume', 'Divergencia', 'SMA200']
             for factor_key in factores_orden:
                 if factor_key in resultado['metricas']:
@@ -1016,6 +1034,7 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
             
+            # Cerrar el contenedor correctamente
             st.markdown("</div></div>", unsafe_allow_html=True)
         
         # Gráfico de Zonas de Acumulación
@@ -1065,9 +1084,13 @@ def render():
                         st.write(f"**Fecha FTD**: {ftd['date'].strftime('%Y-%m-%d')}")
                 
                 st.markdown("### Contexto de Medias Móviles:")
-                st.write(f"**Precio vs EMA21**: {((mm['price'] - mm['ema_21'])/mm['ema_21']*100):+.2f}%")
-                st.write(f"**Precio vs SMA50**: {((mm['price'] - mm['sma_50'])/mm['sma_50']*100):+.2f}%")
-                st.write(f"**Precio vs SMA200**: {((mm['price'] - mm['sma_200'])/mm['sma_200']*100):+.2f}%")
+                dist_ema21 = ((mm['price'] - mm['ema_21'])/mm['ema_21']*100) if mm['ema_21'] != 0 else 0
+                dist_sma50 = ((mm['price'] - mm['sma_50'])/mm['sma_50']*100) if mm['sma_50'] != 0 else 0
+                dist_sma200 = ((mm['price'] - mm['sma_200'])/mm['sma_200']*100) if mm['sma_200'] != 0 else 0
+                
+                st.write(f"**Precio vs EMA21**: {dist_ema21:+.2f}%")
+                st.write(f"**Precio vs SMA50**: {dist_sma50:+.2f}%")
+                st.write(f"**Precio vs SMA200**: {dist_sma200:+.2f}%")
     
     with tab2:
         st.markdown("### 📊 Backtesting Histórico v2.1")

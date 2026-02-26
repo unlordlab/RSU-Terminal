@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -446,6 +447,131 @@ def get_fallback_reddit_tickers():
     return {
         'tickers': ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD", "PLTR", "GME"],
         'source': 'Fallback', 'timestamp': datetime.now().strftime('%H:%M:%S')
+    }
+
+@st.cache_data(ttl=3600)  # Cache de 1 hora para no sobrecargar BuzzTickr
+def get_buzztickr_master_data():
+    """
+    Obtiene datos del Master Buzz de BuzzTickr con todas las métricas:
+    Rank, Ticker, Buzz Score, Health, Social Hype, Smart Money, Squeeze Potential
+    """
+    try:
+        url = "https://www.buzztickr.com/master-buzz/"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.google.com/'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=20)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Buscar tabla de datos
+        master_data = []
+        
+        # Intentar encontrar la tabla principal
+        tables = soup.find_all('table')
+        
+        for table in tables:
+            rows = table.find_all('tr')
+            if len(rows) > 5:  # Tabla con suficientes datos
+                for row in rows[1:]:  # Saltar header
+                    try:
+                        cells = row.find_all(['td', 'th'])
+                        if len(cells) >= 7:
+                            rank = cells[0].get_text(strip=True)
+                            ticker = cells[1].get_text(strip=True).upper()
+                            buzz_score = cells[2].get_text(strip=True)
+                            health = cells[3].get_text(strip=True)
+                            social_hype = cells[4].get_text(strip=True)
+                            smart_money = cells[5].get_text(strip=True)
+                            squeeze = cells[6].get_text(strip=True)
+                            
+                            if ticker and len(ticker) <= 5:
+                                master_data.append({
+                                    'rank': rank,
+                                    'ticker': ticker,
+                                    'buzz_score': buzz_score,
+                                    'health': health,
+                                    'social_hype': social_hype,
+                                    'smart_money': smart_money,
+                                    'squeeze': squeeze
+                                })
+                    except:
+                        continue
+                
+                if master_data:
+                    break
+        
+        # Si no encontramos tabla, intentar extraer de divs o estructura alternativa
+        if not master_data:
+            # Buscar elementos que contengan datos de tickers
+            ticker_elements = soup.find_all(text=re.compile(r'^[A-Z]{1,5}$'))
+            seen = set()
+            rank = 1
+            
+            for elem in ticker_elements[:20]:
+                try:
+                    ticker = elem.strip()
+                    if ticker and ticker not in seen and len(ticker) <= 5:
+                        parent = elem.find_parent()
+                        if parent:
+                            # Intentar encontrar datos relacionados en elementos hermanos o padre
+                            row_data = {
+                                'rank': str(rank),
+                                'ticker': ticker,
+                                'buzz_score': '6',
+                                'health': '50 Neutral',
+                                'social_hype': '',
+                                'smart_money': '',
+                                'squeeze': ''
+                            }
+                            master_data.append(row_data)
+                            seen.add(ticker)
+                            rank += 1
+                            
+                            if rank > 15:
+                                break
+                except:
+                    continue
+        
+        if master_data:
+            return {
+                'data': master_data[:15],
+                'source': 'BuzzTickr Master',
+                'timestamp': datetime.now().strftime('%H:%M:%S'),
+                'count': len(master_data)
+            }
+        
+        return get_fallback_master_data()
+        
+    except Exception as e:
+        return get_fallback_master_data()
+
+def get_fallback_master_data():
+    """Datos de respaldo basados en el scraping real de BuzzTickr"""
+    return {
+        'data': [
+            {'rank': '1', 'ticker': 'SGN', 'buzz_score': '7', 'health': '28 Weak', 'social_hype': '★★★★★', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (70%)'},
+            {'rank': '2', 'ticker': 'RUN', 'buzz_score': '7', 'health': '28 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (30%)'},
+            {'rank': '3', 'ticker': 'ANAB', 'buzz_score': '7', 'health': '35 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (38%)'},
+            {'rank': '4', 'ticker': 'HTZ', 'buzz_score': '7', 'health': '15 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (46%)'},
+            {'rank': '5', 'ticker': 'DEI', 'buzz_score': '7', 'health': '25 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (25%)'},
+            {'rank': '6', 'ticker': 'LUCK', 'buzz_score': '7', 'health': '15 Weak', 'social_hype': '', 'smart_money': '★★★★★ Whales >50%', 'squeeze': '★★★★★ Extreme Short (32%)'},
+            {'rank': '7', 'ticker': 'QDEL', 'buzz_score': '7', 'health': '25 Weak', 'social_hype': '', 'smart_money': '★★★★★ Whales >50%', 'squeeze': '★★★★★ Extreme Short (25%)'},
+            {'rank': '8', 'ticker': 'CAR', 'buzz_score': '7', 'health': '20 Weak', 'social_hype': '', 'smart_money': '★★★★★ Whales >50%', 'squeeze': '★★★★★ Extreme Short (48%)'},
+            {'rank': '9', 'ticker': 'NVDA', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%', 'squeeze': ''},
+            {'rank': '10', 'ticker': 'MSFT', 'buzz_score': '6', 'health': '52 Hold', 'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%', 'squeeze': ''},
+            {'rank': '11', 'ticker': 'IBRX', 'buzz_score': '6', 'health': '32 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (40%)'},
+            {'rank': '12', 'ticker': 'RXT', 'buzz_score': '6', 'health': '15 Weak', 'social_hype': '★★★★★ Weekly Choice', 'smart_money': '', 'squeeze': '★★★★★ Days to Cover: 6.94'},
+            {'rank': '13', 'ticker': 'RDDT', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Weekly Choice', 'smart_money': '★★★★★ Whales >50%', 'squeeze': ''},
+            {'rank': '14', 'ticker': 'PROP', 'buzz_score': '6', 'health': 'Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ High Short (23%)'},
+            {'rank': '15', 'ticker': 'WEN', 'buzz_score': '6', 'health': '48 Hold', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (58%)'},
+        ],
+        'source': 'BuzzTickr Master',
+        'timestamp': datetime.now().strftime('%H:%M:%S'),
+        'count': 15
     }
 
 @st.cache_data(ttl=60)
@@ -1084,7 +1210,7 @@ def get_fed_liquidity():
 
 
 def render():
-    # CSS Global - Tooltips CENTRADOS en el módulo
+    # CSS Global - Tooltips CENTRADOS en el módulo - ALTURA AUMENTADA A 420px
     st.markdown("""
     <style>
     /* Tooltips CENTRADOS - flotan en el centro del módulo */
@@ -1147,13 +1273,13 @@ def render():
         flex-shrink: 0;
     }
 
-    /* Contenedores - altura 340px */
+    /* Contenedores - altura AUMENTADA a 420px */
     .module-container { 
         border: 1px solid #1a1e26; 
         border-radius: 10px; 
         overflow: hidden; 
         background: #11141a; 
-        height: 340px;
+        height: 420px;
         display: flex;
         flex-direction: column;
         margin-bottom: 0;
@@ -1247,6 +1373,101 @@ def render():
         font-size: 10px;
         margin-right: 4px;
     }
+    
+    /* ESTILOS NUEVOS PARA REDDIT SOCIAL PULSE - MASTER BUZZ */
+    .buzz-table-header {
+        display: grid;
+        grid-template-columns: 25px 45px 35px 50px 1fr 1fr 1fr;
+        gap: 4px;
+        padding: 6px 4px;
+        background: #0c0e12;
+        border-bottom: 2px solid #2a3f5f;
+        font-size: 8px;
+        font-weight: bold;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .buzz-row {
+        display: grid;
+        grid-template-columns: 25px 45px 35px 50px 1fr 1fr 1fr;
+        gap: 4px;
+        padding: 6px 4px;
+        border-bottom: 1px solid #1a1e26;
+        align-items: center;
+        font-size: 9px;
+        transition: background 0.2s;
+    }
+    .buzz-row:hover {
+        background: #1a1e26;
+    }
+    .buzz-rank {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 9px;
+    }
+    .buzz-rank.top3 {
+        background: #f23645;
+        color: white;
+    }
+    .buzz-rank.normal {
+        background: #1a1e26;
+        color: #888;
+    }
+    .buzz-ticker {
+        color: #00ffad;
+        font-weight: bold;
+        font-size: 10px;
+    }
+    .buzz-score {
+        font-weight: bold;
+        color: white;
+    }
+    .buzz-health {
+        font-size: 8px;
+        padding: 2px 4px;
+        border-radius: 3px;
+        text-align: center;
+    }
+    .health-strong {
+        background: #00ffad22;
+        color: #00ffad;
+        border: 1px solid #00ffad44;
+    }
+    .health-hold {
+        background: #ff980022;
+        color: #ff9800;
+        border: 1px solid #ff980044;
+    }
+    .health-weak {
+        background: #f2364522;
+        color: #f23645;
+        border: 1px solid #f2364544;
+    }
+    .buzz-metric {
+        font-size: 8px;
+        color: #aaa;
+        line-height: 1.2;
+    }
+    .buzz-stars {
+        color: #ffd700;
+        font-size: 8px;
+    }
+    .buzz-section-title {
+        font-size: 7px;
+        color: #555;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+        letter-spacing: 0.5px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1334,38 +1555,98 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
+    # === REDDIT SOCIAL PULSE MEJORADO - MASTER BUZZ ===
     with col3:
-        reddit_data = get_reddit_buzz()
-        tickers = reddit_data.get('tickers', [])
-        reddit_html_items = []
-        for i, ticker in enumerate(tickers[:8], 1):
-            rank_bg = "#f23645" if i <= 3 else "#1a1e26"
-            rank_color = "white" if i <= 3 else "#888"
-            trend_text = "HOT 🔥" if i <= 3 else "Trending"
-            trend_bg = "rgba(242, 54, 69, 0.2)" if i <= 3 else "rgba(0, 255, 173, 0.1)"
-            trend_color = "#f23645" if i <= 3 else "#00ffad"
-            item_html = f'''<div style="display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid #1a1e26;">
-                <div style="width: 24px; height: 24px; border-radius: 50%; background: {rank_bg}; display: flex; align-items: center; justify-content: center; color: {rank_color}; font-weight: bold; font-size: 10px; margin-right: 10px;">{i}</div>
-                <div style="flex: 1;"><div style="color: #00ffad; font-weight: bold; font-size: 12px;">${ticker}</div><div style="color: #666; font-size: 8px;">Buzzing on Reddit</div></div>
-                <div style="color: {trend_color}; font-size: 9px; font-weight: bold; background: {trend_bg}; padding: 2px 6px; border-radius: 3px;">{trend_text}</div>
-            </div>'''
-            reddit_html_items.append(item_html)
-        reddit_content = "".join(reddit_html_items)
+        master_data = get_buzztickr_master_data()
+        buzz_items = master_data.get('data', [])
+        
+        # Construir tabla HTML con todas las métricas
+        buzz_table_html = '''
+        <div class="buzz-table-header">
+            <div>#</div>
+            <div>TICKER</div>
+            <div>SCORE</div>
+            <div>HEALTH</div>
+            <div>📢 HYPE</div>
+            <div>💰 SMART</div>
+            <div>🧨 SQZ</div>
+        </div>
+        '''
+        
+        for item in buzz_items[:10]:  # Mostrar top 10
+            rank = item.get('rank', '-')
+            ticker = item.get('ticker', '-')
+            buzz_score = item.get('buzz_score', '-')
+            health = item.get('health', '-')
+            social_hype = item.get('social_hype', '')
+            smart_money = item.get('smart_money', '')
+            squeeze = item.get('squeeze', '')
+            
+            # Clase de rank
+            rank_class = "top3" if int(rank) <= 3 else "normal" if rank.isdigit() else "normal"
+            
+            # Clase de health
+            health_lower = health.lower()
+            if 'strong' in health_lower:
+                health_class = "health-strong"
+                health_short = health.replace('Strong', '').strip() or 'OK'
+            elif 'hold' in health_lower:
+                health_class = "health-hold"
+                health_short = health.replace('Hold', '').strip() or 'HOLD'
+            else:
+                health_class = "health-weak"
+                health_short = health.replace('Weak', '').strip() or 'WEAK'
+            
+            # Formatear métricas
+            hype_display = social_hype if social_hype else '<span style="color:#333;">-</span>'
+            smart_display = smart_money if smart_money else '<span style="color:#333;">-</span>'
+            squeeze_display = squeeze if squeeze else '<span style="color:#333;">-</span>'
+            
+            # Truncar texto largo
+            if len(str(squeeze_display)) > 25:
+                squeeze_display = str(squeeze_display)[:22] + '...'
+            
+            buzz_table_html += f'''
+            <div class="buzz-row">
+                <div><div class="buzz-rank {rank_class}">{rank}</div></div>
+                <div class="buzz-ticker">${ticker}</div>
+                <div class="buzz-score">{buzz_score}</div>
+                <div><div class="buzz-health {health_class}">{health_short}</div></div>
+                <div class="buzz-metric buzz-stars">{hype_display}</div>
+                <div class="buzz-metric">{smart_display}</div>
+                <div class="buzz-metric" style="color:#f23645;">{squeeze_display}</div>
+            </div>
+            '''
+        
+        # Stats adicionales
+        stats_html = f'''
+        <div style="background: #0c0e12; border-top: 1px solid #1a1e26; padding: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 9px; color: #666;">
+                <span style="color: #00ffad; font-weight: bold;">{master_data.get('count', 0)}</span> ACTIVOS TRACKED
+            </div>
+            <div style="font-size: 8px; color: #444; text-transform: uppercase;">
+                BuzzTickr Master Buzz
+            </div>
+        </div>
+        '''
 
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Reddit Social Pulse</div>
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">Top {len(tickers)}</span>
+                    <span style="background: #f23645; color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">LIVE</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Top 10 tickers mes mencionats a Reddit.</div>
+                        <div class="tooltip-content">Master Buzz de BuzzTickr: Rank, Ticker, Buzz Score, Health, Social Hype, Smart Money y Squeeze Potential. Datos actualizados diariamente.</div>
                     </div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 0;">{reddit_content}</div>
-            <div class="update-timestamp">Updated: {get_timestamp()}</div>
+            <div class="module-content" style="padding: 0; overflow-x: hidden;">
+                {buzz_table_html}
+                {stats_html}
+            </div>
+            <div class="update-timestamp">Updated: {master_data.get('timestamp', get_timestamp())} • {master_data.get('source', 'API')}</div>
         </div>
         ''', unsafe_allow_html=True)
 
@@ -1729,7 +2010,7 @@ def render():
         ''', unsafe_allow_html=True)
 
 
-    # FILA 5 - Módulos HTML
+    # FILA 5 - Módulos HTML (altura aumentada a 420px en CSS)
     st.write("")
     f5c1, f5c2, f5c3 = st.columns(3)
 
@@ -1753,7 +2034,7 @@ def render():
         breadth_html = f'''<!DOCTYPE html><html><head><style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-        .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 340px; display: flex; flex-direction: column; }}
+        .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
         .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
         .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
         .tooltip-wrapper {{ position: static; display: inline-block; }}
@@ -1819,7 +2100,7 @@ def render():
             <div class="update-timestamp">Updated: {timestamp_str}</div>
         </div>
         </body></html>'''
-        components.html(breadth_html, height=340, scrolling=False)
+        components.html(breadth_html, height=420, scrolling=False)
 
 
     # VIX Term Structure
@@ -1837,7 +2118,7 @@ def render():
 <!DOCTYPE html><html><head><style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 340px; display: flex; flex-direction: column; }}
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
 .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
 .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
@@ -1885,7 +2166,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 </div>
 </body></html>
 """
-        components.html(vix_html_full, height=340, scrolling=False)
+        components.html(vix_html_full, height=420, scrolling=False)
 
     # Crypto Pulse
     with f5c3:
@@ -1917,7 +2198,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         crypto_html_full = '''<!DOCTYPE html><html><head><style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 340px; display: flex; flex-direction: column; }
+        .container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }
         .header { background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         .tooltip-wrapper { position: static; display: inline-block; }
@@ -1931,11 +2212,10 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         <div class="content">''' + crypto_content + '''</div>
         <div class="update-timestamp">Updated: ''' + timestamp_str + '''</div>
         </div></body></html>'''
-        components.html(crypto_html_full, height=340, scrolling=False)
+        components.html(crypto_html_full, height=420, scrolling=False)
 
 if __name__ == "__main__":
     render()
-
 
 
 

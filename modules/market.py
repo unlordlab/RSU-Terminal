@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -1882,14 +1881,15 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - CON SELECT INTEGRADO EN EL MÓDULO
+    # SECTOR ROTATION - CON SELECT INTEGRADO EN EL MÓDULO USANDO HTML
     with c2:
+        # Obtener temporalidad actual de session_state o usar default
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1 Day"
 
         tf_options = ["1 Day", "3 Days", "1 Week", "1 Month"]
         tf_map = {"1 Day": "1D", "3 Days": "3D", "1 Week": "1W", "1 Month": "1M"}
-
+        
         current_tf = st.session_state.sector_tf
         tf_code = tf_map.get(current_tf, "1D")
         sectors = get_sector_performance(tf_code)
@@ -1914,26 +1914,70 @@ def render():
 
             sectors_html += f'<div class="sector-item" style="background:{bg_color};"><div class="sector-code">{code}</div><div class="sector-name">{name}</div><div class="sector-change" style="color:{text_color};">{change:+.2f}%</div></div>'
 
-        # HTML del módulo con select integrado en el header
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header" style="justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="module-title">Sector Rotation</div>
+        # Crear opciones del select como HTML
+        select_options_html = ""
+        for opt in tf_options:
+            selected_attr = "selected" if opt == current_tf else ""
+            select_options_html += f'<option value="{opt}" {selected_attr}>{opt}</option>'
+
+        # HTML del módulo completo con select integrado
+        sector_html_full = f'''<!DOCTYPE html><html><head><style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+        .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 480px; display: flex; flex-direction: column; }}
+        .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
+        .header-left {{ display: flex; align-items: center; gap: 10px; }}
+        .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .tooltip-wrapper {{ position: relative; display: inline-block; }}
+        .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
+        .tooltip-content {{ display: none; position: absolute; right: 0; top: 30px; width: 220px; background-color: #1e222d; color: #eee; text-align: left; padding: 12px; border-radius: 8px; z-index: 1000; font-size: 11px; border: 1px solid #3b82f6; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }}
+        .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
+        .tf-select {{ background: #1a1e26; color: white; border: 1px solid #2a3f5f; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none; }}
+        .tf-select:hover {{ border-color: #3b82f6; }}
+        .tf-select option {{ background: #1a1e26; color: white; }}
+        .content {{ flex: 1; overflow-y: auto; padding: 8px; }}
+        .sector-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; height: 100%; }}
+        .sector-item {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px 4px; text-align: center; display: flex; flex-direction: column; justify-content: center; }}
+        .sector-code {{ color: #666; font-size: 9px; font-weight: bold; margin-bottom: 2px; }}
+        .sector-name {{ color: white; font-size: 10px; font-weight: 600; margin-bottom: 4px; line-height: 1.2; }}
+        .sector-change {{ font-size: 11px; font-weight: bold; }}
+        .update-timestamp {{ text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }}
+        </style></head><body>
+        <div class="container">
+            <div class="header">
+                <div class="header-left">
+                    <div class="title">Sector Rotation</div>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
                         <div class="tooltip-content">Rendimiento de los sectores ({current_tf}) vía ETFs sectoriales.</div>
                     </div>
                 </div>
+                <select class="tf-select" id="tf-select" onchange="handleTfChange(this.value)">
+                    {select_options_html}
+                </select>
             </div>
-            <div class="module-content" style="padding: 8px;">
+            <div class="content">
                 <div class="sector-grid">{sectors_html}</div>
             </div>
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
-        ''', unsafe_allow_html=True)
-
-        # Selectbox funcional de Streamlit - oculto visualmente pero funcional
+        <script>
+            function handleTfChange(value) {{
+                // Enviar mensaje a Streamlit
+                window.parent.postMessage({{
+                    type: 'streamlit:setComponentValue',
+                    value: value
+                }}, '*');
+            }}
+        </script>
+        </body></html>'''
+        
+        # Renderizar el módulo Sector Rotation como componente HTML
+        components.html(sector_html_full, height=480, scrolling=False)
+        
+        # Select oculto de Streamlit para capturar el cambio (fallback)
+        # Usamos un enfoque diferente: detectar cambios mediante query params o session state
+        # Por ahora, usamos un select nativo de Streamlit debajo pero oculto visualmente
         selected_tf = st.selectbox(
             "Timeframe", 
             tf_options, 
@@ -1941,7 +1985,7 @@ def render():
             key="sector_tf_select",
             label_visibility="collapsed"
         )
-
+        
         if selected_tf != current_tf:
             st.session_state.sector_tf = selected_tf
             st.rerun()
@@ -2099,7 +2143,7 @@ def render():
                 '<span style="padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; background-color:' + item['color'] + '22;color:' + item['color'] + ';">' + item['impact'] + '</span>'
                 '</div>'
                 '<div style="color:white;font-size:0.8rem;line-height:1.2;margin-bottom:4px;">' + safe_title + '</div>'
-                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75px;">→ Leer más</a>'
+                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Leer más</a>'
                 '</div>'
             )
             news_items_html.append(news_item)

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -485,7 +484,7 @@ def get_fallback_crypto_fear_greed():
         'source': 'alternative.me'
     }
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=600)
 def get_earnings_calendar():
     """
     Obtiene earnings de Alpha Vantage (3 meses) y filtra por mega-caps (>50B).
@@ -550,7 +549,6 @@ def get_earnings_calendar():
                     return earnings_list[:6]
                     
         except Exception as e:
-            st.error(f"Error Alpha Vantage: {e}")
             pass
     
     # Intento 2: yfinance para mega-caps individuales (más lento pero sin API key)
@@ -1179,7 +1177,8 @@ def render():
     st.write("")
     f3c1, f3c2, f3c3 = st.columns(3)
 
-        with f3c1:
+    # EARNINGS CALENDAR MEJORADO
+    with f3c1:
         earnings = get_earnings_calendar()
         
         earn_html = ""
@@ -1591,8 +1590,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
 
 
 

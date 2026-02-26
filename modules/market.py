@@ -1555,13 +1555,13 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # === REDDIT SOCIAL PULSE MEJORADO - MASTER BUZZ ===
+       # === REDDIT SOCIAL PULSE MEJORADO - MASTER BUZZ ===
     with col3:
         master_data = get_buzztickr_master_data()
         buzz_items = master_data.get('data', [])
         
         # Construir tabla HTML con todas las métricas
-        buzz_table_html = '''
+        buzz_table_html = """
         <div class="buzz-table-header">
             <div>#</div>
             <div>TICKER</div>
@@ -1571,19 +1571,23 @@ def render():
             <div>💰 SMART</div>
             <div>🧨 SQZ</div>
         </div>
-        '''
+        """
         
         for item in buzz_items[:10]:  # Mostrar top 10
-            rank = item.get('rank', '-')
-            ticker = item.get('ticker', '-')
-            buzz_score = item.get('buzz_score', '-')
-            health = item.get('health', '-')
-            social_hype = item.get('social_hype', '')
-            smart_money = item.get('smart_money', '')
-            squeeze = item.get('squeeze', '')
+            rank = str(item.get('rank', '-'))
+            ticker = str(item.get('ticker', '-'))
+            buzz_score = str(item.get('buzz_score', '-'))
+            health = str(item.get('health', '-'))
+            social_hype = str(item.get('social_hype', ''))
+            smart_money = str(item.get('smart_money', ''))
+            squeeze = str(item.get('squeeze', ''))
             
             # Clase de rank
-            rank_class = "top3" if int(rank) <= 3 else "normal" if rank.isdigit() else "normal"
+            try:
+                rank_num = int(rank)
+                rank_class = "top3" if rank_num <= 3 else "normal"
+            except:
+                rank_class = "normal"
             
             # Clase de health
             health_lower = health.lower()
@@ -1606,7 +1610,7 @@ def render():
             if len(str(squeeze_display)) > 25:
                 squeeze_display = str(squeeze_display)[:22] + '...'
             
-            buzz_table_html += f'''
+            buzz_table_html += f"""
             <div class="buzz-row">
                 <div><div class="buzz-rank {rank_class}">{rank}</div></div>
                 <div class="buzz-ticker">${ticker}</div>
@@ -1616,21 +1620,197 @@ def render():
                 <div class="buzz-metric">{smart_display}</div>
                 <div class="buzz-metric" style="color:#f23645;">{squeeze_display}</div>
             </div>
-            '''
+            """
         
         # Stats adicionales
-        stats_html = f'''
+        count = master_data.get('count', 0)
+        source = master_data.get('source', 'API')
+        timestamp = master_data.get('timestamp', get_timestamp())
+        
+        stats_html = f"""
         <div style="background: #0c0e12; border-top: 1px solid #1a1e26; padding: 8px; display: flex; justify-content: space-between; align-items: center;">
             <div style="font-size: 9px; color: #666;">
-                <span style="color: #00ffad; font-weight: bold;">{master_data.get('count', 0)}</span> ACTIVOS TRACKED
+                <span style="color: #00ffad; font-weight: bold;">{count}</span> ACTIVOS TRACKED
             </div>
             <div style="font-size: 8px; color: #444; text-transform: uppercase;">
                 BuzzTickr Master Buzz
             </div>
         </div>
-        '''
+        """
 
-        st.markdown(f'''
+        # Usar st.components.v1.html para renderizar correctamente
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #11141a; }}
+        
+        .module-container {{ 
+            border: 1px solid #1a1e26; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            background: #11141a; 
+            height: 420px;
+            display: flex;
+            flex-direction: column;
+        }}
+        .module-header {{ 
+            background: #0c0e12; 
+            padding: 10px 12px; 
+            border-bottom: 1px solid #1a1e26; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }}
+        .module-title {{ 
+            margin: 0; 
+            color: white; 
+            font-size: 13px; 
+            font-weight: bold; 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        .module-content {{ 
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }}
+        .update-timestamp {{
+            text-align: center;
+            color: #555;
+            font-size: 10px;
+            padding: 6px 0;
+            font-family: 'Courier New', monospace;
+            border-top: 1px solid #1a1e26;
+            background: #0c0e12;
+        }}
+        
+        /* Buzz Table Styles */
+        .buzz-table-header {{
+            display: grid;
+            grid-template-columns: 25px 45px 35px 50px 1fr 1fr 1fr;
+            gap: 4px;
+            padding: 6px 4px;
+            background: #0c0e12;
+            border-bottom: 2px solid #2a3f5f;
+            font-size: 8px;
+            font-weight: bold;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        .buzz-row {{
+            display: grid;
+            grid-template-columns: 25px 45px 35px 50px 1fr 1fr 1fr;
+            gap: 4px;
+            padding: 6px 4px;
+            border-bottom: 1px solid #1a1e26;
+            align-items: center;
+            font-size: 9px;
+        }}
+        .buzz-row:hover {{
+            background: #1a1e26;
+        }}
+        .buzz-rank {{
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 9px;
+        }}
+        .buzz-rank.top3 {{
+            background: #f23645;
+            color: white;
+        }}
+        .buzz-rank.normal {{
+            background: #1a1e26;
+            color: #888;
+        }}
+        .buzz-ticker {{
+            color: #00ffad;
+            font-weight: bold;
+            font-size: 10px;
+        }}
+        .buzz-score {{
+            font-weight: bold;
+            color: white;
+        }}
+        .buzz-health {{
+            font-size: 8px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            text-align: center;
+        }}
+        .health-strong {{
+            background: #00ffad22;
+            color: #00ffad;
+            border: 1px solid #00ffad44;
+        }}
+        .health-hold {{
+            background: #ff980022;
+            color: #ff9800;
+            border: 1px solid #ff980044;
+        }}
+        .health-weak {{
+            background: #f2364522;
+            color: #f23645;
+            border: 1px solid #f2364544;
+        }}
+        .buzz-metric {{
+            font-size: 8px;
+            color: #aaa;
+            line-height: 1.2;
+        }}
+        .buzz-stars {{
+            color: #ffd700;
+        }}
+        
+        /* Tooltip */
+        .tooltip-wrapper {{
+            position: relative;
+            display: inline-block;
+        }}
+        .tooltip-btn {{
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #1a1e26;
+            border: 2px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #aaa;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: help;
+        }}
+        .tooltip-content {{
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 30px;
+            width: 250px;
+            background-color: #1e222d;
+            color: #eee;
+            text-align: left;
+            padding: 12px;
+            border-radius: 8px;
+            z-index: 1000;
+            font-size: 11px;
+            border: 1px solid #3b82f6;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }}
+        .tooltip-wrapper:hover .tooltip-content {{
+            display: block;
+        }}
+        </style>
+        </head>
+        <body>
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Reddit Social Pulse</div>
@@ -1642,14 +1822,17 @@ def render():
                     </div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 0; overflow-x: hidden;">
+            <div class="module-content">
                 {buzz_table_html}
                 {stats_html}
             </div>
-            <div class="update-timestamp">Updated: {master_data.get('timestamp', get_timestamp())} • {master_data.get('source', 'API')}</div>
+            <div class="update-timestamp">Updated: {timestamp} • {source}</div>
         </div>
-        ''', unsafe_allow_html=True)
-
+        </body>
+        </html>
+        """
+        
+        components.html(full_html, height=420, scrolling=False)
 
     # FILA 2
     st.write("")
@@ -2216,6 +2399,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
 
 
 

@@ -888,8 +888,8 @@ def get_crypto_fear_greed():
                 item = data['data'][0]
                 value = int(item['value'])
                 classification = item['value_classification']
-                timestamp = int(item['timestamp'])
-                update_time = datetime.fromtimestamp(timestamp).strftime('%H:%M')
+                # FIX: Usar timestamp actual en lugar del de la API
+                update_time = datetime.now().strftime('%H:%M')
 
                 return {
                     'value': value,
@@ -1151,15 +1151,39 @@ def get_fallback_market_breadth():
 
 def get_fallback_news():
     return [
-        {"time": "19:45", "title": "Tesla supera expectatives de benefici", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "18:30", "title": "El PIB dels EUA creix un 2,3% en l'últim trimestre", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "16:15", "title": "Apple presenta resultats rècord gràcies a l'iPhone", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "14:00", "title": "La inflació subjacent es modera al 3,2%", "impact": "Moderado", "color": "#ff9800", "link": "#"},
-        {"time": "12:30", "title": "Microsoft Cloud supera els 30.000M en ingressos", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "11:15", "title": "La Fed manté els tipus d'interès sense canvis", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "10:00", "title": "Amazon anuncia nova divisió d'intel·ligència artificial", "impact": "Moderado", "color": "#ff9800", "link": "#"},
-        {"time": "09:30", "title": "NVIDIA presenta nous xips per a centres de dades", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "19:45", "title": "Tesla supera expectativas de beneficios", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "18:30", "title": "El PIB de EEUU crece un 2,3% en el último trimestre", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "16:15", "title": "Apple presenta resultados récord gracias al iPhone", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "14:00", "title": "La inflación subyacente se modera al 3,2%", "impact": "Moderado", "color": "#ff9800", "link": "#"},
+        {"time": "12:30", "title": "Microsoft Cloud supera los 30.000M en ingresos", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "11:15", "title": "La Fed mantiene los tipos de interés sin cambios", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "10:00", "title": "Amazon anuncia nueva división de inteligencia artificial", "impact": "Moderado", "color": "#ff9800", "link": "#"},
+        {"time": "09:30", "title": "NVIDIA presenta nuevos chips para centros de datos", "impact": "Alto", "color": "#f23645", "link": "#"},
     ]
+
+def translate_text(text, source='en', target='es'):
+    """
+    Traduce texto usando MyMemory API (gratuita, 5000 chars/día anónimo)
+    """
+    try:
+        # Limitar texto a 500 bytes para evitar errores
+        if len(text.encode('utf-8')) > 450:
+            text = text[:200] + "..."
+        
+        url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text)}&langpair={source}|{target}"
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('responseStatus') == 200:
+                translated = data.get('responseData', {}).get('translatedText', text)
+                # Si la traducción es igual al original o contiene "MYMEMORY", devolver original
+                if translated == text or "MYMEMORY" in translated:
+                    return text
+                return translated
+        return text
+    except:
+        return text
 
 @st.cache_data(ttl=300)
 def fetch_finnhub_news():
@@ -1172,13 +1196,15 @@ def fetch_finnhub_news():
         data = r.json()
         news_list = []
         for item in data[:8]:
-            title = item.get("headline", "Sense titol")
+            title_en = item.get("headline", "Sin título")
+            # Traducir título al español
+            title_es = translate_text(title_en, 'en', 'es')
             link = item.get("url", "#")
             timestamp = item.get("datetime", 0)
             time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M") if timestamp else "N/A"
-            lower = title.lower()
+            lower = title_en.lower()
             impact, color = ("Alto", "#f23645") if any(k in lower for k in ["earnings", "profit", "revenue", "gdp", "fed", "fomc", "inflation", "rate", "outlook"]) else ("Moderado", "#ff9800")
-            news_list.append({"time": time_str, "title": title, "impact": impact, "color": color, "link": link})
+            news_list.append({"time": time_str, "title": title_es, "impact": impact, "color": color, "link": link})
         return news_list if news_list else get_fallback_news()
     except:
         return get_fallback_news()
@@ -1206,11 +1232,11 @@ def get_fed_liquidity():
                     return "STABLE", "#ff9800", "Balance sheet stable", f"{latest_val/1000:.1f}T", date_latest
         return "ERROR", "#888", "API no disponible", "N/A", "N/A"
     except:
-        return "N/A", "#888", "Sense connexio", "N/A", "N/A"
+        return "N/A", "#888", "Sin conexión", "N/A", "N/A"
 
 
 def render():
-    # CSS Global - Tooltips CENTRADOS en el módulo - ALTURA AUMENTADA A 420px
+    # CSS Global - Tooltips CENTRADOS en el módulo - ALTURA AUMENTADA A 480px
     st.markdown("""
     <style>
     /* Tooltips CENTRADOS - flotan en el centro del módulo */
@@ -1273,13 +1299,13 @@ def render():
         flex-shrink: 0;
     }
 
-    /* Contenedores - altura AUMENTADA a 420px */
+    /* Contenedores - altura AUMENTADA a 480px */
     .module-container { 
         border: 1px solid #1a1e26; 
         border-radius: 10px; 
         overflow: hidden; 
         background: #11141a; 
-        height: 420px;
+        height: 480px;
         display: flex;
         flex-direction: column;
         margin-bottom: 0;
@@ -1495,7 +1521,7 @@ def render():
                 <div class="module-title">Market Indices</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendiment en temps real dels principals indexs borsaris dels EUA.</div>
+                    <div class="tooltip-content">Rendimiento en tiempo real de los principales índices bursátiles de EEUU.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 12px;">{indices_html}</div>
@@ -1541,12 +1567,12 @@ def render():
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
-                <div class="module-title">Calendari Econòmic</div>
+                <div class="module-title">Calendario Económico</div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">CET</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Calendari econòmic en temps real. Dades d'avui endavant ordenades per data. Hora espanyola (CET/CEST). Events traduïts.</div>
+                        <div class="tooltip-content">Calendario económico en tiempo real. Datos de hoy en adelante ordenados por fecha. Hora española (CET/CEST). Eventos traducidos.</div>
                     </div>
                 </div>
             </div>
@@ -1619,7 +1645,6 @@ def render():
             # Extraer porcentaje de short interest si existe
             squeeze_pct = ""
             if has_squeeze:
-                import re
                 pct_match = re.search(r'(\d+\.?\d*)%', squeeze)
                 if pct_match:
                     squeeze_pct = f"{pct_match.group(1)}%"
@@ -1694,7 +1719,7 @@ def render():
             border-radius: 10px; 
             overflow: hidden; 
             background: #11141a; 
-            height: 420px;
+            height: 480px;
             display: flex;
             flex-direction: column;
         }}
@@ -1811,7 +1836,7 @@ def render():
         </html>
         """
         
-        components.html(full_html, height=420, scrolling=False)
+        components.html(full_html, height=480, scrolling=False)
 
     # FILA 2
     st.write("")
@@ -1836,7 +1861,7 @@ def render():
                 <div class="module-title">Fear & Greed Index</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Index CNN Fear & Greed – mesura el sentiment del mercat.</div>
+                    <div class="tooltip-content">Índice CNN Fear & Greed – mide el sentimiento del mercado.</div>
                 </div>
             </div>
             <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
@@ -1857,7 +1882,7 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - CON SELECT FUNCIONAL
+    # SECTOR ROTATION - CON SELECT INTEGRADO EN EL MÓDULO
     with c2:
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1 Day"
@@ -1889,7 +1914,7 @@ def render():
 
             sectors_html += f'<div class="sector-item" style="background:{bg_color};"><div class="sector-code">{code}</div><div class="sector-name">{name}</div><div class="sector-change" style="color:{text_color};">{change:+.2f}%</div></div>'
 
-        # HTML del módulo
+        # HTML del módulo con select integrado en el header
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header" style="justify-content: space-between;">
@@ -1897,7 +1922,7 @@ def render():
                     <div class="module-title">Sector Rotation</div>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Rendiment dels sectors ({current_tf}) via ETFs sectorials.</div>
+                        <div class="tooltip-content">Rendimiento de los sectores ({current_tf}) vía ETFs sectoriales.</div>
                     </div>
                 </div>
             </div>
@@ -1939,7 +1964,7 @@ def render():
                 <div class="module-title">Crypto Fear & Greed</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Crypto Fear & Greed Index – mesura el sentiment del mercat de criptomonedes.</div>
+                    <div class="tooltip-content">Crypto Fear & Greed Index – mide el sentimiento del mercado de criptomonedes.</div>
                 </div>
             </div>
             <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
@@ -2074,7 +2099,7 @@ def render():
                 '<span style="padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; background-color:' + item['color'] + '22;color:' + item['color'] + ';">' + item['impact'] + '</span>'
                 '</div>'
                 '<div style="color:white;font-size:0.8rem;line-height:1.2;margin-bottom:4px;">' + safe_title + '</div>'
-                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Llegir més</a>'
+                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75px;">→ Leer más</a>'
                 '</div>'
             )
             news_items_html.append(news_item)
@@ -2083,10 +2108,10 @@ def render():
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
-                <div class="module-title">Noticies d'Alt Impacte</div>
+                <div class="module-title">Noticias de Alto Impacto</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Noticies d'alt impacte via Finnhub API.</div>
+                    <div class="tooltip-content">Noticias de alto impacto traducidas al español vía Finnhub API.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 0; overflow-y: auto;">{news_content}</div>
@@ -2114,7 +2139,7 @@ def render():
                 <div class="module-title">VIX Index</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Index de volatilitat CBOE (VIX).</div>
+                    <div class="tooltip-content">Índice de volatilidad CBOE (VIX).</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 15px;">{vix_html}</div>
@@ -2139,7 +2164,7 @@ def render():
                 <div class="module-title">FED Liquidity Policy</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Politica de liquiditat de la FED via FRED.</div>
+                    <div class="tooltip-content">Política de liquidez de la FED vía FRED.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 15px;">{fed_html}</div>
@@ -2163,7 +2188,7 @@ def render():
                 <div class="module-title">10Y Treasury Yield</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendiment del bo del Tresor dels EUA a 10 anys.</div>
+                    <div class="tooltip-content">Rendimiento del bono del Tesoro de EEUU a 10 años.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 15px;">{tnx_html}</div>
@@ -2172,7 +2197,7 @@ def render():
         ''', unsafe_allow_html=True)
 
 
-    # FILA 5 - Módulos HTML (altura aumentada a 420px en CSS)
+    # FILA 5 - Módulos HTML (altura aumentada a 480px)
     st.write("")
     f5c1, f5c2, f5c3 = st.columns(3)
 
@@ -2196,7 +2221,7 @@ def render():
         breadth_html = f'''<!DOCTYPE html><html><head><style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-        .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
+        .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 480px; display: flex; flex-direction: column; }}
         .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
         .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
         .tooltip-wrapper {{ position: static; display: inline-block; }}
@@ -2262,7 +2287,7 @@ def render():
             <div class="update-timestamp">Updated: {timestamp_str}</div>
         </div>
         </body></html>'''
-        components.html(breadth_html, height=420, scrolling=False)
+        components.html(breadth_html, height=480, scrolling=False)
 
 
     # VIX Term Structure
@@ -2280,7 +2305,7 @@ def render():
 <!DOCTYPE html><html><head><style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 480px; display: flex; flex-direction: column; }}
 .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
 .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
@@ -2328,7 +2353,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 </div>
 </body></html>
 """
-        components.html(vix_html_full, height=420, scrolling=False)
+        components.html(vix_html_full, height=480, scrolling=False)
 
     # Crypto Pulse
     with f5c3:
@@ -2360,7 +2385,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         crypto_html_full = '''<!DOCTYPE html><html><head><style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }
+        .container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 480px; display: flex; flex-direction: column; }
         .header { background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         .tooltip-wrapper { position: static; display: inline-block; }
@@ -2370,15 +2395,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         .content { background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }
         .update-timestamp { text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }
         </style></head><body><div class="container">
-        <div class="header"><div class="title">Crypto Pulse</div><div class="tooltip-wrapper"><div class="tooltip-btn">?</div><div class="tooltip-content">Preus reals de criptomonedes via Yahoo Finance.</div></div></div>
+        <div class="header"><div class="title">Crypto Pulse</div><div class="tooltip-wrapper"><div class="tooltip-btn">?</div><div class="tooltip-content">Precios reales de criptomonedas vía Yahoo Finance.</div></div></div>
         <div class="content">''' + crypto_content + '''</div>
         <div class="update-timestamp">Updated: ''' + timestamp_str + '''</div>
         </div></body></html>'''
-        components.html(crypto_html_full, height=420, scrolling=False)
+        components.html(crypto_html_full, height=480, scrolling=False)
 
 if __name__ == "__main__":
     render()
-
 
 
 

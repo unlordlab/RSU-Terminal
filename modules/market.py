@@ -224,17 +224,134 @@ def translate_event(event_name: str) -> str:
 # CALENDARIO ECONÓMICO
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300)
+@st.cache_data(ttl=900)
 def get_economic_calendar():
     """
-    Devuelve eventos económicos desde HOY en adelante.
-    Compara solo la FECHA (sin hora) para evitar que eventos de hoy
-    aparezcan como pasados por diferencia de zona horaria.
+    Fuentes en orden de prioridad:
+    1. investing.com calendar scraping (sin investpy)
+    2. Fallback con datos dinámicos de hoy en adelante
+    Filtra estrictamente: solo fecha >= hoy.
     """
-    events = []
     today_date    = datetime.now().date()
     tomorrow_date = today_date + timedelta(days=1)
+    events        = []
 
-    if INVESTPY_AVAILABLE:
+    # ── Fuente 1: investing.com JSON endpoint ────────────────────────────────
+    try:
+        from_dt = datetime.now().strftime('%Y-%m-%d')
+        to_dt   = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+        url = "https://www.investing.com/economic-calendar/Service/getCalendarFilteredData"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': 'https://www.investing.com/economic-calendar/',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+        payload = {
+            'country[]':    ['5', '72'],   # 5=US, 72=EU
+            'importance[]': ['1', '2', '3'],
+            'dateFrom':     from_dt,
+            'dateTo':       to_dt,
+            'timeZone':     '55',          # CET
+            'timeFilter':   'timeOnly',
+            'currentTab':   'custom',
+            'submitFilters': '1',
+        }
+        r = requests.post(url, headers=headers, data=payload, timeout=12)
+        if r.status_code == 200:
+            data = r.json()
+            soup = BeautifulSoup(data.get('data', ''), 'html.parser')
+            rows = soup.find_all('tr', class_=re.compile(r'js-event-item'))
+            current_date = None
+
+            importance_map_inv = {'1': 'Low', '2': 'Medium', '3': 'High'}
+
+            for row in rows:
+                try:
+                    # Detectar fila de fecha
+                    date_td = row.find('td', class_='theDay')
+                    if date_td:
+                        date_text = date_td.get_text(strip=True)
+                        try:
+                            current_date = datetime.strptime(date_text, '%A, %B %d, %Y').date()
+                        except Exception:
+                            pass
+                        continue
+
+                    if current_date is None or current_date < today_date:
+                        # Intentar leer fecha del atributo data-event-datetime
+                        dt_attr = row.get('data-event-datetime', '')
+                        if dt_attr:
+                            try:
+                                current_date = datetime.strptime(dt_attr[:10], '%Y/%m/%d').date()
+                            except Exception:
+                                pass
+
+                    if current_date is None or current_date < today_date:
+                        continue
+
+                    # Hora
+                    time_td = row.find('td', class_='time')
+                    time_str = time_td.get_text(strip=True) if time_td else 'TBD'
+                    if not time_str or time_str.lower() in ('all day', 'tentative', ''):
+                        time_str = 'TBD'
+
+                    # Evento
+                    event_td = row.find('td', class_='event')
+                    if not event_td:
+                        continue
+                    event_name = event_td.get_text(strip=True)
+                    event_name_es = translate_event(event_name)
+
+                    # Importancia (bull icons)
+                    bulls = row.find_all('i', class_=re.compile(r'grayFullBullishIcon|fullBullishIcon'))
+                    imp_val = str(len(bulls)) if bulls else '1'
+                    imp = importance_map_inv.get(imp_val, 'Low')
+
+                    # País
+                    flag_td = row.find('td', class_='flagCur')
+                    country = 'US'
+                    if flag_td:
+                        flag_span = flag_td.find('span')
+                        if flag_span:
+                            title = flag_span.get('title', 'United States')
+                            country = 'EU' if 'euro' in title.lower() else 'US'
+
+                    # Valores
+                    actual   = row.find('td', class_='act')
+                    forecast = row.find('td', class_='fore')
+                    prev     = row.find('td', class_='prev')
+                    val_str  = actual.get_text(strip=True)   if actual   else '-'
+                    fore_str = forecast.get_text(strip=True) if forecast else '-'
+                    prev_str = prev.get_text(strip=True)     if prev     else '-'
+                    if not val_str:  val_str  = '-'
+                    if not fore_str: fore_str = '-'
+                    if not prev_str: prev_str = '-'
+
+                    if current_date == today_date:
+                        date_display, date_color = "HOY", "#00ffad"
+                    elif current_date == tomorrow_date:
+                        date_display, date_color = "MAÑANA", "#3b82f6"
+                    else:
+                        date_display = current_date.strftime('%d %b').upper()
+                        date_color   = "#888"
+
+                    events.append({
+                        "date": datetime.combine(current_date, datetime.min.time()),
+                        "date_display": date_display, "date_color": date_color,
+                        "time": time_str, "event": event_name_es, "imp": imp,
+                        "val": val_str, "prev": prev_str, "forecast": fore_str,
+                        "country": country
+                    })
+                except Exception as e:
+                    logger.debug("Investing.com row error: %s", e)
+                    continue
+
+    except Exception as e:
+        logger.warning("Investing.com calendar error: %s", e)
+
+    # ── Fuente 2: investpy si está disponible ────────────────────────────────
+    if not events and INVESTPY_AVAILABLE:
         try:
             from_date = datetime.now().strftime('%d/%m/%Y')
             to_date   = (datetime.now() + timedelta(days=7)).strftime('%d/%m/%Y')
@@ -249,12 +366,7 @@ def get_economic_calendar():
             for _, row in calendar.iterrows():
                 try:
                     date_str = row.get('date', '')
-                    if pd.notna(date_str) and date_str != '':
-                        event_date = pd.to_datetime(date_str, dayfirst=True)
-                    else:
-                        event_date = pd.Timestamp.now()
-
-                    # ⬇ Comparar solo la fecha, no el timestamp completo
+                    event_date = pd.to_datetime(date_str, dayfirst=True) if pd.notna(date_str) and date_str != '' else pd.Timestamp.now()
                     event_date_only = event_date.date()
                     if event_date_only < today_date:
                         continue
@@ -271,30 +383,26 @@ def get_economic_calendar():
 
                     imp = importance_map.get(str(row.get('importance', 'medium')).lower(), 'Medium')
                     event_name_es = translate_event(str(row.get('event', 'Unknown')))
+                    _safe = lambda v: str(v) if pd.notna(v) else '-'
 
                     if event_date_only == today_date:
                         date_display, date_color = "HOY", "#00ffad"
                     elif event_date_only == tomorrow_date:
                         date_display, date_color = "MAÑANA", "#3b82f6"
                     else:
-                        date_display = event_date.strftime('%d %b').upper()
-                        date_color   = "#888"
-
-                    def _safe_str(val):
-                        return str(val) if pd.notna(val) else '-'
+                        date_display, date_color = event_date.strftime('%d %b').upper(), "#888"
 
                     events.append({
                         "date": event_date, "date_display": date_display,
                         "date_color": date_color, "time": time_es,
                         "event": event_name_es, "imp": imp,
-                        "val": _safe_str(row.get('actual', '-')),
-                        "prev": _safe_str(row.get('previous', '-')),
-                        "forecast": _safe_str(row.get('forecast', '-')),
+                        "val": _safe(row.get('actual', '-')),
+                        "prev": _safe(row.get('previous', '-')),
+                        "forecast": _safe(row.get('forecast', '-')),
                         "country": str(row.get('zone', 'US')).upper()
                     })
                 except Exception as e:
-                    logger.debug("Economic calendar row error: %s", e)
-                    continue
+                    logger.debug("investpy row error: %s", e)
         except Exception as e:
             logger.warning("investpy error: %s", e)
 
@@ -306,20 +414,38 @@ def get_economic_calendar():
 
 
 def get_fallback_economic_calendar():
+    """
+    Fallback dinámico: genera eventos a partir de HOY.
+    Las fechas y el label HOY/MAÑANA se calculan en tiempo real.
+    """
     today = datetime.now()
+    today_date = today.date()
+
+    def _make(offset, hour, minute, event, imp, prev, forecast, country="US"):
+        d = today + timedelta(days=offset)
+        d_date = d.date()
+        if d_date == today_date:
+            dd, dc = "HOY", "#00ffad"
+        elif d_date == today_date + timedelta(days=1):
+            dd, dc = "MAÑANA", "#3b82f6"
+        else:
+            dd, dc = d.strftime('%d %b').upper(), "#888"
+        return {
+            "date": d, "date_display": dd, "date_color": dc,
+            "time": f"{hour:02d}:{minute:02d}", "event": event,
+            "imp": imp, "val": "-", "prev": prev, "forecast": forecast,
+            "country": country
+        }
+
     return [
-        {"date": today, "date_display": "HOY", "date_color": "#00ffad", "time": "14:30",
-         "event": "Solicitudes de Desempleo", "imp": "High", "val": "-", "prev": "215K", "forecast": "218K", "country": "US"},
-        {"date": today, "date_display": "HOY", "date_color": "#00ffad", "time": "16:00",
-         "event": "Pedidos de Bienes Duraderos", "imp": "Medium", "val": "-", "prev": "-4.6%", "forecast": "+2.0%", "country": "US"},
-        {"date": today + timedelta(days=1), "date_display": "MAÑANA", "date_color": "#3b82f6", "time": "14:30",
-         "event": "PIB (Revisado)", "imp": "High", "val": "-", "prev": "2.8%", "forecast": "2.9%", "country": "US"},
-        {"date": today + timedelta(days=1), "date_display": "MAÑANA", "date_color": "#3b82f6", "time": "16:00",
-         "event": "Ventas de Viviendas Pendientes", "imp": "Medium", "val": "-", "prev": "+4.6%", "forecast": "+1.0%", "country": "US"},
-        {"date": today + timedelta(days=2), "date_display": (today + timedelta(days=2)).strftime('%d %b').upper(),
-         "date_color": "#888", "time": "14:30", "event": "IPC Subyacente", "imp": "High", "val": "-", "prev": "0.3%", "forecast": "0.2%", "country": "US"},
-        {"date": today + timedelta(days=2), "date_display": (today + timedelta(days=2)).strftime('%d %b').upper(),
-         "date_color": "#888", "time": "14:30", "event": "Nóminas No Agrícolas", "imp": "High", "val": "-", "prev": "143K", "forecast": "175K", "country": "US"},
+        _make(0, 14, 30, "Solicitudes de Desempleo",      "High",   "215K",   "218K"),
+        _make(0, 15, 45, "PCE Subyacente (MoM)",           "High",   "0.3%",   "0.2%"),
+        _make(1, 14, 30, "PIB (Revisado)",                 "High",   "2.8%",   "2.9%"),
+        _make(1, 16, 0,  "Ventas de Viviendas Pendientes", "Medium", "+4.6%",  "+1.0%"),
+        _make(2, 14, 30, "IPC Subyacente",                 "High",   "0.3%",   "0.2%"),
+        _make(2, 14, 30, "Nóminas No Agrícolas",           "High",   "143K",   "175K"),
+        _make(3, 15, 0,  "Tasa de Desempleo",              "High",   "4.1%",   "4.1%"),
+        _make(4, 14, 30, "PMI Manufacturero ISM",          "Medium", "49.3",   "49.8"),
     ]
 
 
@@ -907,21 +1033,38 @@ def get_earnings_calendar():
 
 
 def get_fallback_earnings_realistic():
-    today = datetime.now()
+    """Fallback dinámico: fechas calculadas desde HOY en adelante."""
+    today      = datetime.now()
+    today_date = today.date()
+
+    def _meta(offset):
+        d = today + timedelta(days=offset)
+        delta = (d.date() - today_date).days
+        if delta == 0:   lbl, col, bg = "HOY",    "#f23645", "#f2364522"
+        elif delta == 1: lbl, col, bg = "MAÑANA", "#ff9800", "#ff980022"
+        elif delta <= 3: lbl, col, bg = f"{delta}d","#00ffad","#00ffad22"
+        else:            lbl, col, bg = f"{delta}d","#888",    "#1a1e26"
+        return d, lbl, col, bg
+
     items = [
-        ("NVDA",  2, "After Market", "$3.2T"),
-        ("AAPL",  5, "After Market", "$3.4T"),
-        ("MSFT",  7, "After Market", "$3.1T"),
-        ("AMZN",  8, "After Market", "$2.1T"),
-        ("GOOGL", 10,"After Market", "$2.3T"),
-        ("META",  12,"After Market", "$1.8T"),
+        ("NVDA",  0, "After Market", "$3.2T"),
+        ("BRK-B", 1, "Before Bell",  "Large Cap"),
+        ("COST",  3, "Before Bell",  "Large Cap"),
+        ("ADBE",  6, "After Market", "$250B"),
+        ("ACN",   13,"Before Bell",  "Large Cap"),
+        ("NKE",   20,"After Market", "Large Cap"),
     ]
-    return [
-        {'ticker': t, 'date': (today+timedelta(days=d)).strftime('%b %d'),
-         'full_date': today+timedelta(days=d), 'time': ti,
-         'impact': 'High', 'market_cap': mc, 'days': d, 'source': 'Fallback'}
-        for t, d, ti, mc in items
-    ]
+    result = []
+    for t, offset, time_str, cap in items:
+        d, lbl, col, bg = _meta(offset)
+        result.append({
+            'ticker': t, 'date': d.strftime('%b %d'),
+            'full_date': d, 'time': time_str,
+            'impact': 'High', 'market_cap': cap,
+            'days': offset, 'source': 'Fallback',
+            '_days_label': lbl, '_days_color': col, '_days_bg': bg
+        })
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1146,23 +1289,38 @@ def render():
     # ── CSS global de Streamlit ──────────────────────────────────────────────
     st.markdown("""
     <style>
-    /* ── Sidebar: recuperar estilo de botones/páginas ── */
-    [data-testid="stSidebarNav"] ul { padding: 0; list-style: none; }
-    [data-testid="stSidebarNav"] li { margin: 4px 0; }
-    [data-testid="stSidebarNav"] a {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 14px; border-radius: 8px;
-        background: #11141a; border: 1px solid #1a1e26;
-        color: #ccc !important; font-size: 13px; font-weight: 600;
-        text-decoration: none !important; transition: all 0.15s;
-        text-transform: uppercase; letter-spacing: 0.5px;
+    /* ── Sidebar: estilo botones de navegación (Streamlit ≥ 1.30) ── */
+    section[data-testid="stSidebar"] nav ul,
+    section[data-testid="stSidebar"] [data-testid="stSidebarNavItems"] ul {
+        padding: 4px 0 !important; list-style: none !important;
     }
-    [data-testid="stSidebarNav"] a:hover {
-        background: #1a2035; border-color: #2a3f5f; color: white !important;
+    section[data-testid="stSidebar"] nav li,
+    section[data-testid="stSidebar"] [data-testid="stSidebarNavItems"] li {
+        margin: 3px 8px !important;
     }
-    [data-testid="stSidebarNav"] a[aria-current="page"] {
-        background: #0d2137; border-color: #00ffad;
+    section[data-testid="stSidebar"] nav a,
+    section[data-testid="stSidebar"] [data-testid="stSidebarNavItems"] a {
+        display: flex !important; align-items: center !important; gap: 8px !important;
+        padding: 9px 12px !important; border-radius: 8px !important;
+        background: #11141a !important; border: 1px solid #1e2433 !important;
+        color: #aab !important; font-size: 12px !important; font-weight: 600 !important;
+        text-decoration: none !important; transition: all 0.15s !important;
+        text-transform: uppercase !important; letter-spacing: 0.4px !important;
+    }
+    section[data-testid="stSidebar"] nav a:hover,
+    section[data-testid="stSidebar"] [data-testid="stSidebarNavItems"] a:hover {
+        background: #1a2035 !important; border-color: #2a3f5f !important;
+        color: white !important;
+    }
+    section[data-testid="stSidebar"] nav a[aria-current="page"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarNavItems"] a[aria-current="page"] {
+        background: #0a1f2e !important; border-color: #00ffad !important;
         color: #00ffad !important;
+    }
+    /* Ocultar la decoración por defecto de Streamlit en nav items */
+    section[data-testid="stSidebar"] nav a span[data-testid="stSidebarNavLinkText"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarNavItems"] span {
+        font-size: 12px !important;
     }
     /* ── Resto de CSS del dashboard ── */
     .tooltip-wrapper { position: static; display: inline-block; }
@@ -1448,6 +1606,50 @@ def render():
             st.session_state.sector_tf = "1 Day"
         tf_options = ["1 Day", "3 Days", "1 Week", "1 Month"]
         tf_map     = {"1 Day": "1D", "3 Days": "3D", "1 Week": "1W", "1 Month": "1M"}
+
+        # Selectbox en el header del módulo — Streamlit lo coloca arriba del contenido
+        st.markdown("""
+        <style>
+        div[data-testid="stSelectbox"] {
+            margin: 0 !important; padding: 0 !important;
+        }
+        div[data-testid="stSelectbox"] > div > div {
+            background: #0c0e12 !important;
+            border: 1px solid #2a3f5f !important;
+            border-radius: 6px !important;
+            color: #00ffad !important;
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            min-height: 28px !important;
+            padding: 2px 8px !important;
+        }
+        div[data-testid="stSelectbox"] label { display: none !important; }
+        </style>""", unsafe_allow_html=True)
+
+        # Header del módulo con título, selectbox y tooltip
+        header_left, header_mid, header_right = st.columns([3, 2, 1])
+        with header_left:
+            st.markdown('''<p class="module-title" style="padding:8px 0 0 0;">SECTOR ROTATION</p>''',
+                        unsafe_allow_html=True)
+        with header_mid:
+            selected_tf = st.selectbox(
+                "", tf_options,
+                index=tf_options.index(st.session_state.sector_tf),
+                key="sector_tf_select",
+                label_visibility="collapsed"
+            )
+            if selected_tf != st.session_state.sector_tf:
+                st.session_state.sector_tf = selected_tf
+                st.rerun()
+        with header_right:
+            st.markdown('''
+            <div style="display:flex;justify-content:flex-end;padding-top:4px;">
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Rendimiento de los 11 sectores S&P 500 vía ETFs sectoriales (XLK, XLF, XLV…). Filtra por temporalidad para ver rotación de capital.</div>
+                </div>
+            </div>''', unsafe_allow_html=True)
+
         current_tf = st.session_state.sector_tf
         sectors    = get_sector_performance(tf_map.get(current_tf, "1D"))
 
@@ -1468,25 +1670,9 @@ def render():
                 f'</div>'
             )
 
-        hcol1, _, hcol3 = st.columns([2, 1, 1])
-        with hcol1:
-            st.markdown('''
-            <div style="display:flex;align-items:center;gap:10px;">
-                <div class="module-title" style="color:white;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;">Sector Rotation</div>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendimiento de los sectores vía ETFs sectoriales.</div>
-                </div>
-            </div>''', unsafe_allow_html=True)
-        with hcol3:
-            selected_tf = st.radio("", tf_options, index=tf_options.index(current_tf),
-                                   key="sector_tf_radio", horizontal=True, label_visibility="collapsed")
-            if selected_tf != current_tf:
-                st.session_state.sector_tf = selected_tf
-                st.rerun()
-
         st.markdown(f'''
-        <div style="border:1px solid #1a1e26;border-radius:10px;overflow:hidden;background:#11141a;height:430px;display:flex;flex-direction:column;margin-top:-10px;">
+        <div style="border:1px solid #1a1e26;border-radius:0 0 10px 10px;overflow:hidden;
+                    background:#11141a;height:415px;display:flex;flex-direction:column;margin-top:2px;">
             <div style="flex:1;overflow-y:auto;padding:8px;">
                 <div class="sector-grid">{sectors_html}</div>
             </div>
@@ -1525,18 +1711,32 @@ def render():
 
     # ── Earnings Calendar ─────────────────────────────────────────────────────
     with f3c1:
-        earnings = get_earnings_calendar()
-        earn_html = ""
-        for item in earnings:
-            days       = item.get('days', 0)
-            imp_color  = "#f23645" if item['impact'] == "High" else "#888"
-            if   days == 0: d_text, d_color, d_bg = "HOY",    "#f23645", "#f2364522"
-            elif days == 1: d_text, d_color, d_bg = "MAÑANA", "#ff9800", "#ff980022"
-            elif days <= 3: d_text, d_color, d_bg = f"{days}d","#00ffad", "#00ffad22"
-            else:           d_text, d_color, d_bg = f"{days}d","#888",    "#1a1e26"
+        earnings   = get_earnings_calendar()
+        today_date = datetime.now().date()
+        earn_html  = ""
 
-            # Market cap en tiempo de render (sin llamada yfinance extra — ya lo tenemos)
+        for item in earnings:
+            imp_color  = "#f23645" if item['impact'] == "High" else "#888"
             market_cap = item.get('market_cap', 'Large Cap')
+
+            # Calcular siempre desde la fecha real del item (no del campo 'days' que puede estar desfasado)
+            if '_days_label' in item:
+                # Viene del fallback ya procesado
+                d_text  = item['_days_label']
+                d_color = item['_days_color']
+                d_bg    = item['_days_bg']
+            else:
+                # Datos reales: recalcular dinámicamente desde full_date
+                try:
+                    item_date = pd.Timestamp(item['full_date']).date()
+                    delta = (item_date - today_date).days
+                except Exception:
+                    delta = item.get('days', 99)
+
+                if   delta == 0: d_text, d_color, d_bg = "HOY",    "#f23645", "#f2364522"
+                elif delta == 1: d_text, d_color, d_bg = "MAÑANA", "#ff9800", "#ff980022"
+                elif delta <= 3: d_text, d_color, d_bg = f"{delta}d","#00ffad","#00ffad22"
+                else:            d_text, d_color, d_bg = f"{delta}d","#888",    "#1a1e26"
 
             earn_html += (
                 f'<div style="background:#0c0e12;padding:10px;border-radius:6px;margin-bottom:8px;'
@@ -1900,6 +2100,8 @@ def render():
 
 if __name__ == "__main__":
     render()
+
+
 
 
 

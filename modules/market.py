@@ -1554,147 +1554,243 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # === CALENDARIO ECONÓMICO MEJORADO ===
+    # === CALENDARIO ECONÓMICO ===
     with col2:
         events = get_economic_calendar()
-        impact_colors = {'High': '#f23645', 'Medium': '#ff9800', 'Low': '#4caf50'}
-        country_flags = {'US': '🇺🇸', 'EU': '🇪🇺', 'EZ': '🇪🇺', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹'}
-        
-        def _event_row(ev):
-            imp_color = impact_colors.get(ev['imp'], '#888')
-            date_color = ev.get('date_color', '#888')
-            date_display = ev.get('date_display', '---')
-            flag = country_flags.get(ev.get('country', 'US'), '🇺🇸')
-            display_val = ev['val']
-            if display_val in ('-', 'nan'):
-                fc = ev.get('forecast', '-')
-                display_val = f"Est: {fc}" if fc not in ('-', 'nan') else '-'
-            return (
-                f'<div style="padding:8px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">'
-                f'<div class="eco-date-badge" style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44;">{date_display}</div>'
-                f'<div class="eco-time">{ev["time"]}</div>'
-                f'<div style="flex-grow:1; margin-left:8px; min-width:0;">'
-                f'<div style="color:white; font-size:10px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
-                f'<span class="eco-flag">{flag}</span>{ev["event"]}</div>'
-                f'<div style="color:{imp_color}; font-size:7px; font-weight:bold; text-transform:uppercase; margin-top:2px;">● {ev["imp"]}</div>'
-                f'</div>'
-                f'<div style="text-align:right; min-width:50px; margin-left:6px;">'
-                f'<div style="color:white; font-size:10px; font-weight:bold;">{display_val}</div>'
-                f'</div></div>'
-            )
-        events_html = "".join(_event_row(ev) for ev in events[:6])
 
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Calendari Econòmic</div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">CET</span>
-                    <div class="tooltip-wrapper">
-                        <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Calendari econòmic en temps real. Dades d'avui endavant ordenades per data. Hora espanyola (CET/CEST). Events traduïts.</div>
-                    </div>
+        high   = [e for e in events if e['imp'] == 'High']
+        medium = [e for e in events if e['imp'] == 'Medium']
+        low    = [e for e in events if e['imp'] == 'Low']
+
+        COUNTRY_FLAGS = {'US': '🇺🇸', 'EU': '🇪🇺', 'EZ': '🇪🇺',
+                         'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹'}
+        IMP_COLOR = {'High': '#f23645', 'Medium': '#ff9800', 'Low': '#4caf50'}
+        IMP_ES    = {'High': 'Alto',    'Medium': 'Medio',   'Low': 'Bajo'}
+
+        def _cal_row(ev):
+            date_color = ev.get('date_color', '#888')
+            date_disp  = ev.get('date_display', '---')
+            flag = COUNTRY_FLAGS.get(ev.get('country', 'US'), '🇺🇸')
+            imp_color = IMP_COLOR.get(ev['imp'], '#888')
+            imp_es    = IMP_ES.get(ev['imp'], ev['imp'])
+            icon      = '🔴' if ev['imp'] == 'High' else '🟡' if ev['imp'] == 'Medium' else '🟢'
+
+            actual   = str(ev.get('val', '-'))
+            forecast = str(ev.get('forecast', '-'))
+            prev     = str(ev.get('prev', '-'))
+            for bad in ('nan', 'None', ''):
+                if actual   == bad: actual   = '-'
+                if forecast == bad: forecast = '-'
+                if prev     == bad: prev     = '-'
+
+            actual_color = 'white'
+            if actual != '-' and prev != '-':
+                try:
+                    a = float(actual.replace('%','').replace('K','').replace('M','').replace(',',''))
+                    p = float(prev.replace('%','').replace('K','').replace('M','').replace(',',''))
+                    actual_color = '#00ffad' if a >= p else '#f23645'
+                except Exception:
+                    pass
+            actual_border = '#00ffad44' if actual_color == '#00ffad' else '#f2364544' if actual_color == '#f23645' else '#1a1e26'
+
+            return f"""
+            <div style="padding:8px 10px; border-bottom:1px solid #1a1e26;">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                <div style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44;
+                            border-radius:4px; padding:2px 5px; font-size:8px; font-weight:bold;
+                            min-width:42px; text-align:center; flex-shrink:0;">{date_disp}</div>
+                <div style="color:#666; font-family:'Courier New',monospace; font-size:9px; flex-shrink:0;">{ev['time']}</div>
+                <div style="font-size:11px; flex-shrink:0;">{flag}</div>
+                <div style="color:white; font-size:10px; font-weight:600; line-height:1.2;
+                            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">{ev['event']}</div>
+                <div style="background:{imp_color}22; color:{imp_color}; border:1px solid {imp_color}44;
+                            border-radius:3px; padding:1px 5px; font-size:8px; font-weight:bold;
+                            flex-shrink:0;">{icon} {imp_es}</div>
+              </div>
+              <div style="display:flex; gap:5px; margin-left:48px;">
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:4px;
+                            padding:3px 6px; flex:1; text-align:center;">
+                  <div style="color:#555; font-size:7px; text-transform:uppercase; margin-bottom:1px; letter-spacing:0.5px;">Previo</div>
+                  <div style="color:#aaa; font-size:10px; font-weight:600;">{prev}</div>
                 </div>
+                <div style="background:#0c0e12; border:1px solid #2a3f5f; border-radius:4px;
+                            padding:3px 6px; flex:1; text-align:center;">
+                  <div style="color:#3b82f6; font-size:7px; text-transform:uppercase; margin-bottom:1px; letter-spacing:0.5px;">Estimación</div>
+                  <div style="color:#3b82f6; font-size:10px; font-weight:600;">{forecast}</div>
+                </div>
+                <div style="background:#0c0e12; border:1px solid {actual_border}; border-radius:4px;
+                            padding:3px 6px; flex:1; text-align:center;">
+                  <div style="color:#555; font-size:7px; text-transform:uppercase; margin-bottom:1px; letter-spacing:0.5px;">Actual</div>
+                  <div style="color:{actual_color}; font-size:10px; font-weight:bold;">{actual if actual != '-' else '—'}</div>
+                </div>
+              </div>
+            </div>"""
+
+        def _section(color, ev_list):
+            if not ev_list: return ""
+            imp_es_label = 'Alto' if color == '#f23645' else 'Medio' if color == '#ff9800' else 'Bajo'
+            rows = "".join(_cal_row(e) for e in ev_list)
+            return f"""
+            <div style="background:{color}0d; border-left:3px solid {color}; margin:6px 6px 0 6px; border-radius:0 5px 5px 0;">
+              <div style="padding:4px 10px; display:flex; align-items:center; gap:6px; border-bottom:1px solid {color}22;">
+                <div style="width:6px; height:6px; border-radius:50%; background:{color};"></div>
+                <span style="color:{color}; font-size:8px; font-weight:bold; text-transform:uppercase; letter-spacing:0.8px;">Impacto {imp_es_label}</span>
+                <span style="background:{color}33; color:{color}; border-radius:8px; padding:0px 5px;
+                             font-size:8px; font-weight:bold; margin-left:auto;">{len(ev_list)}</span>
+              </div>
+              {rows}
+            </div>"""
+
+        cal_content = (
+            _section('#f23645', high) +
+            _section('#ff9800', medium) +
+            _section('#4caf50', low)
+        )
+        if not cal_content:
+            cal_content = '<div style="color:#555; text-align:center; padding:40px; font-size:12px;">Sin eventos disponibles</div>'
+
+        cal_html = f"""<!DOCTYPE html><html><head><style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
+        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a;
+                      width:100%; height:420px; display:flex; flex-direction:column; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26;
+                   display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .tooltip-wrapper {{ position:static; display:inline-block; }}
+        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444;
+                        display:flex; align-items:center; justify-content:center; color:#888; font-size:12px;
+                        font-weight:bold; cursor:help; }}
+        .tooltip-content {{ display:none; position:fixed; width:300px; background:#1e222d; color:#eee;
+                            padding:15px; border-radius:10px; z-index:99999; font-size:12px;
+                            border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9);
+                            line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        .content {{ flex:1; overflow-y:auto; padding-bottom:6px; }}
+        .timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0;
+                      font-family:'Courier New',monospace; border-top:1px solid #1a1e26;
+                      background:#0c0e12; flex-shrink:0; }}
+        </style></head><body>
+        <div class="container">
+          <div class="header">
+            <div class="title">Calendario Económico</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="background:#2a3f5f; color:#00ffad; padding:2px 6px; border-radius:3px; font-size:9px; font-weight:bold;">CET</span>
+              <div class="tooltip-wrapper">
+                <div class="tooltip-btn">?</div>
+                <div class="tooltip-content">Datos macroeconómicos desde hoy en adelante, clasificados por impacto: Alto 🔴, Medio 🟡, Bajo 🟢. Hora española (CET/CEST). Muestra dato previo, estimación y actual en tiempo real.</div>
+              </div>
             </div>
-            <div class="module-content" style="padding: 0;">{events_html}</div>
-            <div class="update-timestamp">Updated: {get_timestamp()}</div>
+          </div>
+          <div class="content">{cal_content}</div>
+          <div class="timestamp">Updated: {get_timestamp()} · desde hoy</div>
         </div>
-        ''', unsafe_allow_html=True)
+        </body></html>"""
+        components.html(cal_html, height=420, scrolling=False)
 
     # === REDDIT SOCIAL PULSE MEJORADO - MASTER BUZZ ===
     with col3:
         master_data = get_buzztickr_master_data()
         buzz_items = master_data.get('data', [])
-        
-        # Construir tabla HTML con todas las métricas
-        buzz_table_html = '''
-        <div class="buzz-table-header">
-            <div>#</div>
-            <div>TICKER</div>
-            <div>SCORE</div>
-            <div>HEALTH</div>
-            <div>📢 HYPE</div>
-            <div>💰 SMART</div>
-            <div>🧨 SQZ</div>
-        </div>
-        '''
-        
-        for item in buzz_items[:10]:  # Mostrar top 10
-            rank = item.get('rank', '-')
+        ts_buzz = master_data.get('timestamp', get_timestamp())
+        src_buzz = master_data.get('source', 'API')
+        count_buzz = master_data.get('count', 0)
+
+        rows_html = ""
+        for item in buzz_items[:10]:
+            rank = str(item.get('rank', '-'))
             ticker = item.get('ticker', '-')
             buzz_score = item.get('buzz_score', '-')
             health = item.get('health', '-')
             social_hype = item.get('social_hype', '')
             smart_money = item.get('smart_money', '')
             squeeze = item.get('squeeze', '')
-            
-            # Clase de rank
-            rank_class = "top3" if int(rank) <= 3 else "normal" if rank.isdigit() else "normal"
-            
-            # Clase de health
+
+            rank_bg = "#f23645" if rank.isdigit() and int(rank) <= 3 else "#1a1e26"
+            rank_color = "white" if rank.isdigit() and int(rank) <= 3 else "#888"
+
             health_lower = health.lower()
             if 'strong' in health_lower:
-                health_class = "health-strong"
-                health_short = health.replace('Strong', '').strip() or 'OK'
+                h_bg, h_color, h_text = "#00ffad22", "#00ffad", health.replace('Strong','').strip() or 'STRONG'
             elif 'hold' in health_lower:
-                health_class = "health-hold"
-                health_short = health.replace('Hold', '').strip() or 'HOLD'
+                h_bg, h_color, h_text = "#ff980022", "#ff9800", health.replace('Hold','').strip() or 'HOLD'
             else:
-                health_class = "health-weak"
-                health_short = health.replace('Weak', '').strip() or 'WEAK'
-            
-            # Formatear métricas
-            hype_display = social_hype if social_hype else '<span style="color:#333;">-</span>'
-            smart_display = smart_money if smart_money else '<span style="color:#333;">-</span>'
-            squeeze_display = squeeze if squeeze else '<span style="color:#333;">-</span>'
-            
-            # Truncar texto largo
-            if len(str(squeeze_display)) > 25:
-                squeeze_display = str(squeeze_display)[:22] + '...'
-            
-            buzz_table_html += f'''
-            <div class="buzz-row">
-                <div><div class="buzz-rank {rank_class}">{rank}</div></div>
-                <div class="buzz-ticker">${ticker}</div>
-                <div class="buzz-score">{buzz_score}</div>
-                <div><div class="buzz-health {health_class}">{health_short}</div></div>
-                <div class="buzz-metric buzz-stars">{hype_display}</div>
-                <div class="buzz-metric">{smart_display}</div>
-                <div class="buzz-metric" style="color:#f23645;">{squeeze_display}</div>
-            </div>
-            '''
-        
-        # Stats adicionales
-        stats_html = f'''
-        <div style="background: #0c0e12; border-top: 1px solid #1a1e26; padding: 8px; display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 9px; color: #666;">
-                <span style="color: #00ffad; font-weight: bold;">{master_data.get('count', 0)}</span> ACTIVOS TRACKED
-            </div>
-            <div style="font-size: 8px; color: #444; text-transform: uppercase;">
-                BuzzTickr Master Buzz
-            </div>
-        </div>
-        '''
+                h_bg, h_color, h_text = "#f2364522", "#f23645", health.replace('Weak','').strip() or 'WEAK'
 
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Reddit Social Pulse</div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="background: #f23645; color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">LIVE</span>
-                    <div class="tooltip-wrapper">
-                        <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz de BuzzTickr: Rank, Ticker, Buzz Score, Health, Social Hype, Smart Money y Squeeze Potential. Datos actualizados diariamente.</div>
-                    </div>
-                </div>
+            hype_d  = social_hype[:18] if social_hype else '<span style="color:#2a2a2a">—</span>'
+            smart_d = smart_money[:18] if smart_money else '<span style="color:#2a2a2a">—</span>'
+            sqz_d   = squeeze[:22] if squeeze else '<span style="color:#2a2a2a">—</span>'
+            if len(squeeze) > 22:
+                sqz_d = squeeze[:19] + '...'
+
+            rows_html += f"""
+            <div style="display:grid; grid-template-columns:22px 44px 30px 46px 1fr 1fr 1fr; gap:4px;
+                        padding:6px 4px; border-bottom:1px solid #1a1e26; align-items:center; font-size:9px;">
+              <div style="width:18px;height:18px;border-radius:50%;background:{rank_bg};color:{rank_color};
+                          display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:8px;">{rank}</div>
+              <div style="color:#00ffad;font-weight:bold;font-size:10px;">${ticker}</div>
+              <div style="color:white;font-weight:bold;">{buzz_score}</div>
+              <div style="background:{h_bg};color:{h_color};border:1px solid {h_color}44;border-radius:3px;
+                          padding:2px 3px;font-size:8px;text-align:center;">{h_text}</div>
+              <div style="color:#ffd700;font-size:8px;line-height:1.2;">{hype_d}</div>
+              <div style="color:#aaa;font-size:8px;line-height:1.2;">{smart_d}</div>
+              <div style="color:#f23645;font-size:8px;line-height:1.2;">{sqz_d}</div>
+            </div>"""
+
+        buzz_html = f"""<!DOCTYPE html><html><head><style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
+        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a;
+                      width:100%; height:420px; display:flex; flex-direction:column; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26;
+                   display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .badge {{ background:#f23645; color:white; padding:2px 6px; border-radius:3px; font-size:9px; font-weight:bold; }}
+        .tooltip-wrapper {{ position:static; display:inline-block; }}
+        .tooltip-btn {{ width:22px;height:22px;border-radius:50%;background:#1a1e26;border:1px solid #444;
+                        display:flex;align-items:center;justify-content:center;color:#888;font-size:12px;
+                        font-weight:bold;cursor:help; }}
+        .tooltip-content {{ display:none; position:fixed; width:300px; background:#1e222d; color:#eee;
+                            padding:15px; border-radius:10px; z-index:99999; font-size:12px;
+                            border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9);
+                            line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%);
+                            white-space:normal; word-wrap:break-word; }}
+        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        .col-header {{ display:grid; grid-template-columns:22px 44px 30px 46px 1fr 1fr 1fr; gap:4px;
+                       padding:6px 4px; background:#0c0e12; border-bottom:2px solid #2a3f5f;
+                       font-size:8px; font-weight:bold; color:#888; text-transform:uppercase;
+                       letter-spacing:0.5px; position:sticky; top:0; z-index:10; }}
+        .content {{ flex:1; overflow-y:auto; }}
+        .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:6px 10px;
+                   display:flex; justify-content:space-between; flex-shrink:0; }}
+        .timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0;
+                      font-family:'Courier New',monospace; border-top:1px solid #1a1e26;
+                      background:#0c0e12; flex-shrink:0; }}
+        </style></head><body>
+        <div class="container">
+          <div class="header">
+            <div class="title">Reddit Social Pulse</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge">LIVE</span>
+              <div class="tooltip-wrapper">
+                <div class="tooltip-btn">?</div>
+                <div class="tooltip-content">Master Buzz de BuzzTickr: Rank, Ticker, Buzz Score, Health, Social Hype, Smart Money y Squeeze Potential. Actualizado diariamente.</div>
+              </div>
             </div>
-            <div class="module-content" style="padding: 0; overflow-x: hidden;">
-                {buzz_table_html}
-                {stats_html}
-            </div>
-            <div class="update-timestamp">Updated: {master_data.get('timestamp', get_timestamp())} • {master_data.get('source', 'API')}</div>
+          </div>
+          <div class="col-header">
+            <div>#</div><div>TICKER</div><div>SCR</div><div>HEALTH</div>
+            <div>📢 HYPE</div><div>💰 SMART</div><div>🧨 SQZ</div>
+          </div>
+          <div class="content">{rows_html}</div>
+          <div class="footer">
+            <div style="font-size:9px;color:#666;"><span style="color:#00ffad;font-weight:bold;">{count_buzz}</span> activos</div>
+            <div style="font-size:8px;color:#444;">BuzzTickr Master Buzz</div>
+          </div>
+          <div class="timestamp">Updated: {ts_buzz} · {src_buzz}</div>
         </div>
-        ''', unsafe_allow_html=True)
+        </body></html>"""
+        components.html(buzz_html, height=420, scrolling=False)
 
 
     # FILA 2
@@ -2229,6 +2325,8 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
+
 
 
 

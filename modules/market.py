@@ -225,21 +225,26 @@ def translate_event(event_name: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def get_economic_calendar():
+    """
+    Devuelve eventos económicos desde HOY en adelante.
+    Compara solo la FECHA (sin hora) para evitar que eventos de hoy
+    aparezcan como pasados por diferencia de zona horaria.
+    """
     events = []
+    today_date    = datetime.now().date()
+    tomorrow_date = today_date + timedelta(days=1)
 
     if INVESTPY_AVAILABLE:
         try:
             from_date = datetime.now().strftime('%d/%m/%Y')
-            to_date = (datetime.now() + timedelta(days=7)).strftime('%d/%m/%Y')
-            calendar = investpy.economic_calendar(
+            to_date   = (datetime.now() + timedelta(days=7)).strftime('%d/%m/%Y')
+            calendar  = investpy.economic_calendar(
                 time_zone='GMT', time_filter='time_only',
                 from_date=from_date, to_date=to_date,
                 countries=['united states', 'euro zone'],
                 importances=['high', 'medium', 'low']
             )
             importance_map = {'high': 'High', 'medium': 'Medium', 'low': 'Low'}
-            today = datetime.now().date()
-            tomorrow = today + timedelta(days=1)
 
             for _, row in calendar.iterrows():
                 try:
@@ -247,9 +252,11 @@ def get_economic_calendar():
                     if pd.notna(date_str) and date_str != '':
                         event_date = pd.to_datetime(date_str, dayfirst=True)
                     else:
-                        event_date = datetime.now()
+                        event_date = pd.Timestamp.now()
 
-                    if event_date.date() < today:
+                    # ⬇ Comparar solo la fecha, no el timestamp completo
+                    event_date_only = event_date.date()
+                    if event_date_only < today_date:
                         continue
 
                     time_str = row.get('time', '')
@@ -265,12 +272,13 @@ def get_economic_calendar():
                     imp = importance_map.get(str(row.get('importance', 'medium')).lower(), 'Medium')
                     event_name_es = translate_event(str(row.get('event', 'Unknown')))
 
-                    if event_date.date() == today:
+                    if event_date_only == today_date:
                         date_display, date_color = "HOY", "#00ffad"
-                    elif event_date.date() == tomorrow:
+                    elif event_date_only == tomorrow_date:
                         date_display, date_color = "MAÑANA", "#3b82f6"
                     else:
-                        date_display, date_color = event_date.strftime('%d %b').upper(), "#888"
+                        date_display = event_date.strftime('%d %b').upper()
+                        date_color   = "#888"
 
                     def _safe_str(val):
                         return str(val) if pd.notna(val) else '-'
@@ -812,8 +820,14 @@ AFTER_MARKET_TICKERS = {'NVDA','AAPL','AMZN','META','NFLX','AMD'}
 
 @st.cache_data(ttl=600)
 def get_earnings_calendar():
+    """
+    Devuelve earnings desde HOY en adelante.
+    La comparación se hace por fecha de calendario (date), no por diferencia
+    de horas/minutos, para evitar que eventos de hoy aparezcan como "ayer".
+    """
     api_key = st.secrets.get("ALPHA_VANTAGE_API_KEY", None)
     earnings_list = []
+    today_date = datetime.now().date()  # solo la fecha, sin hora
 
     if api_key:
         try:
@@ -825,20 +839,22 @@ def get_earnings_calendar():
                 df_filtered = df[df['symbol'].isin(MEGA_CAPS)].copy()
                 for _, row in df_filtered.iterrows():
                     try:
-                        report_date = pd.to_datetime(row['reportDate'])
-                        days_until = (report_date - pd.Timestamp.now()).days
-                        if days_until >= -2:
-                            symbol = row['symbol']
-                            earnings_list.append({
-                                'ticker':    symbol,
-                                'date':      report_date.strftime('%b %d'),
-                                'full_date': report_date,
-                                'time':      "After Market" if symbol in AFTER_MARKET_TICKERS else "Before Bell",
-                                'impact':    'High',
-                                'estimate':  row.get('estimate', '-'),
-                                'days':      days_until,
-                                'source':    'AlphaVantage'
-                            })
+                        report_date = pd.to_datetime(row['reportDate']).date()
+                        # Estricto: solo hoy o futuro
+                        if report_date < today_date:
+                            continue
+                        days_until = (report_date - today_date).days
+                        symbol = row['symbol']
+                        earnings_list.append({
+                            'ticker':    symbol,
+                            'date':      report_date.strftime('%b %d'),
+                            'full_date': pd.Timestamp(report_date),
+                            'time':      "After Market" if symbol in AFTER_MARKET_TICKERS else "Before Bell",
+                            'impact':    'High',
+                            'estimate':  row.get('estimate', '-'),
+                            'days':      days_until,
+                            'source':    'AlphaVantage'
+                        })
                     except Exception as e:
                         logger.debug("Earnings row error: %s", e)
                 earnings_list.sort(key=lambda x: x['full_date'])
@@ -854,22 +870,27 @@ def get_earnings_calendar():
             cal = stock.calendar
             if cal is not None and not cal.empty:
                 next_e = cal.index[0]
-                days_until = (next_e - pd.Timestamp.now()).days
-                if 0 <= days_until <= 30:
-                    info = stock.info
-                    cap = info.get('marketCap', 0) / 1e9
-                    if cap >= 50:
-                        hour = next_e.hour if hasattr(next_e, 'hour') else 16
-                        return {
-                            'ticker':     ticker,
-                            'date':       next_e.strftime('%b %d'),
-                            'full_date':  next_e,
-                            'time':       "Before Bell" if hour < 12 else "After Market",
-                            'impact':     'High',
-                            'market_cap': f"${cap:.0f}B",
-                            'days':       days_until,
-                            'source':     'yfinance'
-                        }
+                # Normalizar a solo fecha para comparar correctamente
+                next_date = pd.Timestamp(next_e).date()
+                if next_date < today_date:
+                    return None
+                days_until = (next_date - today_date).days
+                if days_until > 60:
+                    return None
+                info = stock.info
+                cap = info.get('marketCap', 0) / 1e9
+                if cap >= 50:
+                    hour = pd.Timestamp(next_e).hour if pd.Timestamp(next_e).hour != 0 else 16
+                    return {
+                        'ticker':     ticker,
+                        'date':       next_date.strftime('%b %d'),
+                        'full_date':  pd.Timestamp(next_date),
+                        'time':       "Before Bell" if hour < 12 else "After Market",
+                        'impact':     'High',
+                        'market_cap': f"${cap:.0f}B",
+                        'days':       days_until,
+                        'source':     'yfinance'
+                    }
         except Exception as e:
             logger.debug("yfinance earnings error %s: %s", ticker, e)
         return None
@@ -1125,6 +1146,25 @@ def render():
     # ── CSS global de Streamlit ──────────────────────────────────────────────
     st.markdown("""
     <style>
+    /* ── Sidebar: recuperar estilo de botones/páginas ── */
+    [data-testid="stSidebarNav"] ul { padding: 0; list-style: none; }
+    [data-testid="stSidebarNav"] li { margin: 4px 0; }
+    [data-testid="stSidebarNav"] a {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; border-radius: 8px;
+        background: #11141a; border: 1px solid #1a1e26;
+        color: #ccc !important; font-size: 13px; font-weight: 600;
+        text-decoration: none !important; transition: all 0.15s;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    [data-testid="stSidebarNav"] a:hover {
+        background: #1a2035; border-color: #2a3f5f; color: white !important;
+    }
+    [data-testid="stSidebarNav"] a[aria-current="page"] {
+        background: #0d2137; border-color: #00ffad;
+        color: #00ffad !important;
+    }
+    /* ── Resto de CSS del dashboard ── */
     .tooltip-wrapper { position: static; display: inline-block; }
     .tooltip-btn {
         width: 24px; height: 24px; border-radius: 50%;
@@ -1201,7 +1241,11 @@ def render():
     # ── Índices ──────────────────────────────────────────────────────────────
     with col1:
         indices_html = ""
-        for t, n in [("^GSPC","S&P 500"),("^IXIC","NASDAQ 100"),("^DJI","DOW JONES"),("^RUT","RUSSELL 2000")]:
+        for t, n in [
+            ("^GSPC","S&P 500"), ("^IXIC","NASDAQ 100"),
+            ("^DJI","DOW JONES"), ("^RUT","RUSSELL 2000"),
+            ("VUG","VUG – Growth"), ("MEME","MEME ETF"), ("RSP","RSP – Equal Weight"),
+        ]:
             val, chg = get_market_index(t)
             c = "#00ffad" if chg >= 0 else "#f23645"
             indices_html += (
@@ -1808,9 +1852,57 @@ def render():
             tooltip="Precios reales de criptomonedas vía Yahoo Finance."
         ), height=480, scrolling=False)
 
+    # ════════════════════════════════════════════════════════════════════════
+    # FILA 6  –  Módulos vacíos (reservados para futura funcionalidad)
+    # ════════════════════════════════════════════════════════════════════════
+    st.write("")
+    f6c1, f6c2, f6c3 = st.columns(3)
+
+    _empty_placeholder = """
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                height:100%;text-align:center;gap:12px;">
+        <div style="font-size:2rem;opacity:0.15;">⬜</div>
+        <div style="color:#333;font-size:11px;letter-spacing:1px;text-transform:uppercase;">
+            Próximamente
+        </div>
+    </div>"""
+
+    with f6c1:
+        st.markdown(f'''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Módulo 1</div>
+            </div>
+            <div class="module-content">{_empty_placeholder}</div>
+            <div class="update-timestamp">—</div>
+        </div>''', unsafe_allow_html=True)
+
+    with f6c2:
+        st.markdown(f'''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Módulo 2</div>
+            </div>
+            <div class="module-content">{_empty_placeholder}</div>
+            <div class="update-timestamp">—</div>
+        </div>''', unsafe_allow_html=True)
+
+    with f6c3:
+        st.markdown(f'''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Módulo 3</div>
+            </div>
+            <div class="module-content">{_empty_placeholder}</div>
+            <div class="update-timestamp">—</div>
+        </div>''', unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     render()
+
+
+
 
 
 

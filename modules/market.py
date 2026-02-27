@@ -10,6 +10,14 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 from collections import Counter
+import logging
+try:
+    from zoneinfo import ZoneInfo
+    _ZONEINFO_AVAILABLE = True
+except ImportError:
+    _ZONEINFO_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 try:
     import investpy
@@ -142,18 +150,22 @@ EVENT_TRANSLATIONS = {
     "Spain CPI": "IPC España",
 }
 
+# Precomputed lowercase keys for O(1) partial match lookups
+_EVENT_TRANSLATIONS_LOWER = {k.lower(): v for k, v in EVENT_TRANSLATIONS.items()}
+
 def translate_event(event_name):
-    """Traduce el nombre del evento al español si existe en el diccionario"""
-    # Buscar coincidencia exacta primero
+    """Traduce el nombre del evento al español si existe en el diccionario."""
+    # Búsqueda exacta primero (O(1))
     if event_name in EVENT_TRANSLATIONS:
         return EVENT_TRANSLATIONS[event_name]
-    
-    # Buscar coincidencias parciales
-    for eng, esp in EVENT_TRANSLATIONS.items():
-        if eng.lower() in event_name.lower():
+
+    # Búsqueda parcial con claves precomputadas en minúsculas
+    event_lower = event_name.lower()
+    for key_lower, esp in _EVENT_TRANSLATIONS_LOWER.items():
+        if key_lower in event_lower:
             return esp
-    
-    # Si no hay traducción, devolver el nombre original truncado si es muy largo
+
+    # Si no hay traducción, truncar si es muy largo
     if len(event_name) > 35:
         return event_name[:32] + "..."
     return event_name
@@ -194,16 +206,23 @@ def get_economic_calendar():
                     if event_date.date() < datetime.now().date():
                         continue
                     
-                    # Procesar hora (GMT -> España GMT+1/+2)
+                    # Procesar hora (GMT -> España CET/CEST)
                     time_str = row.get('time', '')
                     if time_str and time_str != '' and pd.notna(time_str):
                         try:
                             hour, minute = map(int, time_str.split(':'))
-                            # Convertir GMT a hora española (+1 en invierno, +2 en verano)
-                            # Usamos +1 como base, el sistema manejará el cambio de hora
-                            hour_es = (hour + 1) % 24
-                            time_es = f"{hour_es:02d}:{minute:02d}"
-                        except:
+                            if _ZONEINFO_AVAILABLE:
+                                from datetime import timezone as _tz
+                                utc_dt = event_date.replace(hour=hour, minute=minute,
+                                                            tzinfo=_tz.utc)
+                                spain_dt = utc_dt.astimezone(ZoneInfo("Europe/Madrid"))
+                                time_es = spain_dt.strftime("%H:%M")
+                            else:
+                                # Fallback simple: +1 (sin DST)
+                                hour_es = (hour + 1) % 24
+                                time_es = f"{hour_es:02d}:{minute:02d}"
+                        except Exception as e:
+                            logger.warning(f"Error convirtiendo hora: {e}")
                             time_es = "TBD"
                     else:
                         time_es = "TBD"
@@ -245,10 +264,11 @@ def get_economic_calendar():
                         "country": str(row.get('zone', 'US')).upper()
                     })
                 except Exception as e:
+                    logger.debug(f"Error procesando evento investpy: {e}")
                     continue
                     
         except Exception as e:
-            st.error(f"Error investpy: {e}")
+            logger.warning(f"Error investpy: {e}")
             pass
     
     # Intento 2: API de ForexFactory o alternativa si investpy falla
@@ -268,18 +288,8 @@ def get_economic_calendar():
     return get_fallback_economic_calendar()
 
 def get_forexfactory_calendar():
-    """Scraping alternativo de ForexFactory como respaldo"""
-    events = []
-    try:
-        url = "https://www.forexfactory.com/calendar"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        # Procesamiento básico (simplificado)
-        return events
-    except:
-        return events
+    """Scraping alternativo de ForexFactory como respaldo. TODO: implementar parsing."""
+    return []
 
 def get_fallback_economic_calendar():
     """Datos de ejemplo realistas basados en la fecha actual"""
@@ -364,31 +374,37 @@ def get_fallback_economic_calendar():
 
 @st.cache_data(ttl=300)
 def get_crypto_prices():
+    crypto_symbols = {
+        'BTC-USD': ('BTC', 'Bitcoin'), 'ETH-USD': ('ETH', 'Ethereum'),
+        'BNB-USD': ('BNB', 'BNB'), 'SOL-USD': ('SOL', 'Solana'),
+        'XRP-USD': ('XRP', 'XRP'), 'ADA-USD': ('ADA', 'Cardano'),
+    }
     try:
-        crypto_symbols = {
-            'BTC-USD': 'Bitcoin', 'ETH-USD': 'Ethereum', 'BNB-USD': 'BNB',
-            'SOL-USD': 'Solana', 'XRP-USD': 'XRP', 'ADA-USD': 'Cardano'
-        }
+        symbols = list(crypto_symbols.keys())
+        data = yf.download(symbols, period="2d", progress=False, group_by="ticker", auto_adjust=True)
         cryptos = []
-        for symbol, name in crypto_symbols.items():
+        for symbol, (short, name) in crypto_symbols.items():
             try:
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period="2d")
-                if len(hist) >= 2:
-                    current_price = hist['Close'].iloc[-1]
-                    prev_price = hist['Close'].iloc[-2]
+                if len(symbols) > 1:
+                    closes = data[symbol]["Close"].dropna()
+                else:
+                    closes = data["Close"].dropna()
+                if len(closes) >= 2:
+                    current_price = closes.iloc[-1]
+                    prev_price = closes.iloc[-2]
                     change_pct = ((current_price - prev_price) / prev_price) * 100
                     price_str = f"{current_price:,.2f}" if current_price >= 1 else f"{current_price:.4f}"
                     cryptos.append({
-                        'symbol': symbol.replace('-USD', ''), 'name': name,
+                        'symbol': short, 'name': name,
                         'price': price_str, 'change': f"{change_pct:+.2f}%",
-                        'is_positive': change_pct >= 0
+                        'is_positive': change_pct >= 0,
                     })
-                    time.sleep(0.1)
-            except:
+            except Exception as e:
+                logger.debug(f"Error procesando crypto {symbol}: {e}")
                 continue
         return cryptos if cryptos else get_fallback_crypto_prices()
-    except:
+    except Exception as e:
+        logger.warning(f"Error batch crypto download: {e}")
         return get_fallback_crypto_prices()
 
 def get_fallback_crypto_prices():
@@ -497,7 +513,8 @@ def get_buzztickr_master_data():
                                     'smart_money': smart_money,
                                     'squeeze': squeeze
                                 })
-                    except:
+                    except Exception as e:
+                        logger.debug(f"Error procesando fila buzztickr: {e}")
                         continue
                 
                 if master_data:
@@ -516,7 +533,6 @@ def get_buzztickr_master_data():
                     if ticker and ticker not in seen and len(ticker) <= 5:
                         parent = elem.find_parent()
                         if parent:
-                            # Intentar encontrar datos relacionados en elementos hermanos o padre
                             row_data = {
                                 'rank': str(rank),
                                 'ticker': ticker,
@@ -532,7 +548,8 @@ def get_buzztickr_master_data():
                             
                             if rank > 15:
                                 break
-                except:
+                except Exception as e:
+                    logger.debug(f"Error procesando elemento ticker: {e}")
                     continue
         
         if master_data:
@@ -546,6 +563,7 @@ def get_buzztickr_master_data():
         return get_fallback_master_data()
         
     except Exception as e:
+        logger.warning(f"Error fetching BuzzTickr master data: {e}")
         return get_fallback_master_data()
 
 def get_fallback_master_data():
@@ -575,32 +593,40 @@ def get_fallback_master_data():
 
 @st.cache_data(ttl=60)
 def get_financial_ticker_data():
-    ticker_data = []
     all_symbols = {
         'ES=F': 'S&P 500 FUT', 'NQ=F': 'NASDAQ FUT', 'YM=F': 'DOW FUT', 'RTY=F': 'RUSSELL FUT',
         '^N225': 'NIKKEI', '^GDAXI': 'DAX', '^FTSE': 'FTSE 100',
         'GC=F': 'GOLD', 'SI=F': 'SILVER', 'CL=F': 'CRUDE OIL', 'NG=F': 'NAT GAS',
         'AAPL': 'AAPL', 'MSFT': 'MSFT', 'GOOGL': 'GOOGL', 'AMZN': 'AMZN',
         'NVDA': 'NVDA', 'META': 'META', 'TSLA': 'TSLA',
-        'BTC-USD': 'BTC', 'ETH-USD': 'ETH'
+        'BTC-USD': 'BTC', 'ETH-USD': 'ETH',
     }
-    for symbol, name in all_symbols.items():
-        try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="2d")
-            if len(hist) >= 2:
-                current = hist['Close'].iloc[-1]
-                prev = hist['Close'].iloc[-2]
-                change_pct = ((current - prev) / prev) * 100
-                price_str = f"{current:,.2f}" if current >= 100 else f"{current:.3f}"
-                ticker_data.append({
-                    'name': name, 'price': price_str,
-                    'change': change_pct, 'is_positive': change_pct >= 0
-                })
-            time.sleep(0.05)
-        except:
-            continue
-    return ticker_data
+    symbols = list(all_symbols.keys())
+    try:
+        data = yf.download(symbols, period="2d", progress=False, group_by="ticker", auto_adjust=True)
+        ticker_data = []
+        for symbol, name in all_symbols.items():
+            try:
+                if len(symbols) > 1:
+                    closes = data[symbol]["Close"].dropna()
+                else:
+                    closes = data["Close"].dropna()
+                if len(closes) >= 2:
+                    current = closes.iloc[-1]
+                    prev = closes.iloc[-2]
+                    change_pct = ((current - prev) / prev) * 100
+                    price_str = f"{current:,.2f}" if current >= 100 else f"{current:.3f}"
+                    ticker_data.append({
+                        'name': name, 'price': price_str,
+                        'change': change_pct, 'is_positive': change_pct >= 0,
+                    })
+            except Exception as e:
+                logger.debug(f"Error procesando ticker {symbol}: {e}")
+                continue
+        return ticker_data
+    except Exception as e:
+        logger.warning(f"Error batch ticker download: {e}")
+        return []
 
 def generate_ticker_html():
     data = get_financial_ticker_data()
@@ -639,54 +665,51 @@ def generate_ticker_html():
 
 @st.cache_data(ttl=300)
 def get_sector_performance(timeframe="1D"):
+    sector_etfs = {
+        'XLK': ('Technology', 'Tecnología'),
+        'XLF': ('Financials', 'Financieros'),
+        'XLV': ('Healthcare', 'Salud'),
+        'XLE': ('Energy', 'Energía'),
+        'XLY': ('Consumer Disc.', 'Consumo Discrecional'),
+        'XLU': ('Utilities', 'Utilidades'),
+        'XLI': ('Industrials', 'Industriales'),
+        'XLB': ('Materials', 'Materiales'),
+        'XLP': ('Consumer Staples', 'Consumo Básico'),
+        'XLRE': ('Real Estate', 'Bienes Raíces'),
+        'XLC': ('Communication', 'Comunicaciones'),
+    }
+    period_map = {"1D": "2d", "3D": "5d", "1W": "10d", "1M": "1mo"}
+    period = period_map.get(timeframe, "2d")
+    symbols = list(sector_etfs.keys())
     try:
-        sector_etfs = {
-            'XLK': ('Technology', 'Tecnología'), 
-            'XLF': ('Financials', 'Financieros'),
-            'XLV': ('Healthcare', 'Salud'), 
-            'XLE': ('Energy', 'Energía'),
-            'XLY': ('Consumer Disc.', 'Consumo Discrecional'), 
-            'XLU': ('Utilities', 'Utilidades'),
-            'XLI': ('Industrials', 'Industriales'), 
-            'XLB': ('Materials', 'Materiales'),
-            'XLP': ('Consumer Staples', 'Consumo Básico'), 
-            'XLRE': ('Real Estate', 'Bienes Raíces'),
-            'XLC': ('Communication', 'Comunicaciones')
-        }
-
-        period_map = {"1D": "2d", "3D": "5d", "1W": "10d", "1M": "1mo"}
-        period = period_map.get(timeframe, "2d")
+        data = yf.download(symbols, period=period, progress=False, group_by="ticker", auto_adjust=True)
         sectors_data = []
-
         for symbol, (name_en, name_es) in sector_etfs.items():
             try:
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period=period)
-                if len(hist) >= 2:
+                if len(symbols) > 1:
+                    closes = data[symbol]["Close"].dropna()
+                else:
+                    closes = data["Close"].dropna()
+                if len(closes) >= 2:
+                    current = closes.iloc[-1]
                     if timeframe == "1D":
-                        current, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
+                        prev = closes.iloc[-2]
                     elif timeframe == "3D":
-                        current = hist['Close'].iloc[-1]
-                        prev = hist['Close'].iloc[-4] if len(hist) >= 4 else hist['Close'].iloc[0]
+                        prev = closes.iloc[-4] if len(closes) >= 4 else closes.iloc[0]
                     elif timeframe == "1W":
-                        current = hist['Close'].iloc[-1]
-                        prev = hist['Close'].iloc[-6] if len(hist) >= 6 else hist['Close'].iloc[0]
+                        prev = closes.iloc[-6] if len(closes) >= 6 else closes.iloc[0]
                     else:
-                        current, prev = hist['Close'].iloc[-1], hist['Close'].iloc[0]
-
+                        prev = closes.iloc[0]
                     change = ((current - prev) / prev) * 100
                     sectors_data.append({
-                        'code': symbol, 
-                        'name': name_en, 
-                        'name_es': name_es,
-                        'change': change
+                        'code': symbol, 'name': name_en, 'name_es': name_es, 'change': change,
                     })
-                time.sleep(0.05)
-            except:
+            except Exception as e:
+                logger.debug(f"Error procesando sector {symbol}: {e}")
                 continue
-
         return sectors_data if sectors_data else get_fallback_sectors(timeframe)
-    except:
+    except Exception as e:
+        logger.warning(f"Error batch sector download: {e}")
         return get_fallback_sectors(timeframe)
 
 def get_fallback_sectors(timeframe="1D"):
@@ -778,6 +801,7 @@ def get_vix_term_structure():
             'is_contango': is_contango
         }
     except Exception as e:
+        logger.warning(f"Error obteniendo VIX term structure: {e}")
         return get_fallback_vix_structure()
 
 def get_fallback_vix_structure():
@@ -898,7 +922,8 @@ def get_crypto_fear_greed():
                 }
 
         return get_fallback_crypto_fear_greed()
-    except:
+    except Exception as e:
+        logger.warning(f"Error fetching crypto fear greed: {e}")
         return get_fallback_crypto_fear_greed()
 
 def get_fallback_crypto_fear_greed():
@@ -1010,7 +1035,8 @@ def get_earnings_calendar():
                             })
                 
                 time.sleep(0.15)  # Rate limiting
-            except:
+            except Exception as e:
+                logger.debug(f"Error obteniendo earnings para {ticker}: {e}")
                 continue
         
         earnings_list.sort(key=lambda x: x['full_date'])
@@ -1095,6 +1121,7 @@ def get_insider_trading():
                                 'date': trade.get('transactionDate', 'Recent')
                             })
             except Exception as e:
+                logger.debug(f"Error obteniendo insider trading para {symbol}: {e}")
                 continue
 
         if all_trades:
@@ -1138,7 +1165,8 @@ def get_market_breadth():
                 'strength': 'FUERTE' if (current > sma50 and current > sma200) else 'DÉBIL'
             }
         return get_fallback_market_breadth()
-    except:
+    except Exception as e:
+        logger.warning(f"Error calculando market breadth: {e}")
         return get_fallback_market_breadth()
 
 def get_fallback_market_breadth():
@@ -1179,7 +1207,8 @@ def fetch_finnhub_news():
             impact, color = ("Alto", "#f23645") if any(k in lower for k in ["earnings", "profit", "revenue", "gdp", "fed", "fomc", "inflation", "rate", "outlook"]) else ("Moderado", "#ff9800")
             news_list.append({"time": time_str, "title": title, "impact": impact, "color": color, "link": link})
         return news_list if news_list else get_fallback_news()
-    except:
+    except Exception as e:
+        logger.warning(f"Error fetching Finnhub news: {e}")
         return get_fallback_news()
 
 def get_fed_liquidity():
@@ -1204,8 +1233,30 @@ def get_fed_liquidity():
                 else:
                     return "STABLE", "#ff9800", "Balance sheet stable", f"{latest_val/1000:.1f}T", date_latest
         return "ERROR", "#888", "API no disponible", "N/A", "N/A"
-    except:
+    except Exception as e:
+        logger.warning(f"Error obteniendo Fed liquidity: {e}")
         return "N/A", "#888", "Sense connexio", "N/A", "N/A"
+
+
+def _build_widget(title: str, content_html: str, tooltip_text: str,
+                  timestamp: str, extra_badge: str = "") -> str:
+    """Genera el HTML base reutilizable para todos los módulos del dashboard."""
+    badge_html = f'<span style="background:#2a3f5f; color:#00ffad; padding:2px 6px; border-radius:3px; font-size:9px; font-weight:bold;">{extra_badge}</span>' if extra_badge else ""
+    return f'''
+    <div class="module-container">
+        <div class="module-header">
+            <div class="module-title">{title}</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                {badge_html}
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">{tooltip_text}</div>
+                </div>
+            </div>
+        </div>
+        <div class="module-content" style="padding:10px;">{content_html}</div>
+        <div class="update-timestamp">Updated: {timestamp}</div>
+    </div>'''
 
 
 def render():
@@ -1479,14 +1530,15 @@ def render():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        indices_html = ""
-        for t, n in [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]:
-            idx_val, idx_change = get_market_index(t)
-            color = "#00ffad" if idx_change >= 0 else "#f23645"
-            indices_html += f'''<div style="background:#0c0e12; padding:10px 12px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-                <div><div style="font-weight:bold; color:white; font-size:12px;">{n}</div><div style="color:#555; font-size:9px;">INDEX</div></div>
-                <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:12px;">{idx_val:,.2f}</div><div style="color:{color}; font-size:10px; font-weight:bold;">{idx_change:+.2f}%</div></div>
-            </div>'''
+        indices_html = "".join(
+            f'<div style="background:#0c0e12; padding:10px 12px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">'
+            f'<div><div style="font-weight:bold; color:white; font-size:12px;">{n}</div><div style="color:#555; font-size:9px;">INDEX</div></div>'
+            f'<div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:12px;">{idx_val:,.2f}</div>'
+            f'<div style="color:{"#00ffad" if idx_change >= 0 else "#f23645"}; font-size:10px; font-weight:bold;">{idx_change:+.2f}%</div></div>'
+            f'</div>'
+            for t, n in [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]
+            for idx_val, idx_change in [get_market_index(t)]
+        )
 
         st.markdown(f'''
         <div class="module-container">
@@ -1508,34 +1560,29 @@ def render():
         impact_colors = {'High': '#f23645', 'Medium': '#ff9800', 'Low': '#4caf50'}
         country_flags = {'US': '🇺🇸', 'EU': '🇪🇺', 'EZ': '🇪🇺', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹'}
         
-        events_html = ""
-        for ev in events[:6]:
+        def _event_row(ev):
             imp_color = impact_colors.get(ev['imp'], '#888')
             date_color = ev.get('date_color', '#888')
             date_display = ev.get('date_display', '---')
-            country = ev.get('country', 'US')
-            flag = country_flags.get(country, '🇺🇸')
-            
-            # Mostrar previsión si existe y no hay valor actual
+            flag = country_flags.get(ev.get('country', 'US'), '🇺🇸')
             display_val = ev['val']
-            if display_val == '-' or display_val == 'nan':
-                display_val = ev.get('forecast', '-')
-                if display_val != '-' and display_val != 'nan':
-                    display_val = f"Est: {display_val}"
-            
-            events_html += f'''<div style="padding:8px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
-                <div class="eco-date-badge" style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44;">{date_display}</div>
-                <div class="eco-time">{ev["time"]}</div>
-                <div style="flex-grow:1; margin-left:8px; min-width:0;">
-                    <div style="color:white; font-size:10px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        <span class="eco-flag">{flag}</span>{ev["event"]}
-                    </div>
-                    <div style="color:{imp_color}; font-size:7px; font-weight:bold; text-transform:uppercase; margin-top:2px;">● {ev["imp"]}</div>
-                </div>
-                <div style="text-align:right; min-width:50px; margin-left:6px;">
-                    <div style="color:white; font-size:10px; font-weight:bold;">{display_val}</div>
-                </div>
-            </div>'''
+            if display_val in ('-', 'nan'):
+                fc = ev.get('forecast', '-')
+                display_val = f"Est: {fc}" if fc not in ('-', 'nan') else '-'
+            return (
+                f'<div style="padding:8px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">'
+                f'<div class="eco-date-badge" style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44;">{date_display}</div>'
+                f'<div class="eco-time">{ev["time"]}</div>'
+                f'<div style="flex-grow:1; margin-left:8px; min-width:0;">'
+                f'<div style="color:white; font-size:10px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">'
+                f'<span class="eco-flag">{flag}</span>{ev["event"]}</div>'
+                f'<div style="color:{imp_color}; font-size:7px; font-weight:bold; text-transform:uppercase; margin-top:2px;">● {ev["imp"]}</div>'
+                f'</div>'
+                f'<div style="text-align:right; min-width:50px; margin-left:6px;">'
+                f'<div style="color:white; font-size:10px; font-weight:bold;">{display_val}</div>'
+                f'</div></div>'
+            )
+        events_html = "".join(_event_row(ev) for ev in events[:6])
 
         st.markdown(f'''
         <div class="module-container">
@@ -1706,25 +1753,21 @@ def render():
         tf_code = tf_map.get(current_tf, "1D")
         sectors = get_sector_performance(tf_code)
 
-        # Generar HTML de sectores
-        sectors_html = ""
-        for sector in sectors:
-            code, name, change = sector['code'], sector['name'], sector['change']
+        def _sector_colors(change):
+            if change >= 2:    return "#00ffad22", "#00ffad"
+            elif change >= 0.5: return "#00ffad18", "#00ffad"
+            elif change >= 0:   return "#00ffad10", "#00ffad"
+            elif change >= -0.5: return "#f2364510", "#f23645"
+            elif change >= -2:  return "#f2364518", "#f23645"
+            else:               return "#f2364522", "#f23645"
 
-            if change >= 2: 
-                bg_color, text_color = "#00ffad22", "#00ffad"
-            elif change >= 0.5: 
-                bg_color, text_color = "#00ffad18", "#00ffad"
-            elif change >= 0: 
-                bg_color, text_color = "#00ffad10", "#00ffad"
-            elif change >= -0.5: 
-                bg_color, text_color = "#f2364510", "#f23645"
-            elif change >= -2: 
-                bg_color, text_color = "#f2364518", "#f23645"
-            else: 
-                bg_color, text_color = "#f2364522", "#f23645"
-
-            sectors_html += f'<div class="sector-item" style="background:{bg_color};"><div class="sector-code">{code}</div><div class="sector-name">{name}</div><div class="sector-change" style="color:{text_color};">{change:+.2f}%</div></div>'
+        sectors_html = "".join(
+            f'<div class="sector-item" style="background:{_sector_colors(s["change"])[0]};">'
+            f'<div class="sector-code">{s["code"]}</div>'
+            f'<div class="sector-name">{s["name"]}</div>'
+            f'<div class="sector-change" style="color:{_sector_colors(s["change"])[1]};">{s["change"]:+.2f}%</div></div>'
+            for s in sectors
+        )
 
         # HTML del módulo
         st.markdown(f'''
@@ -1806,57 +1849,37 @@ def render():
     with f3c1:
         earnings = get_earnings_calendar()
         
-        earn_html = ""
-        for item in earnings:
+        def _earn_row(item):
             impact_color = "#f23645" if item['impact'] == "High" else "#888"
             days = item.get('days', 0)
-            
-            # Color según proximidad
-            if days == 0:
-                days_text = "HOY"
-                days_color = "#f23645"
-                days_bg = "#f2364522"
-            elif days == 1:
-                days_text = "MAÑANA"
-                days_color = "#ff9800"
-                days_bg = "#ff980022"
-            elif days <= 3:
-                days_text = f"{days}d"
-                days_color = "#00ffad"
-                days_bg = "#00ffad22"
-            else:
-                days_text = f"{days}d"
-                days_color = "#888"
-                days_bg = "#1a1e26"
-            
+            if days == 0:       days_text, days_color, days_bg = "HOY", "#f23645", "#f2364522"
+            elif days == 1:     days_text, days_color, days_bg = "MAÑANA", "#ff9800", "#ff980022"
+            elif days <= 3:     days_text, days_color, days_bg = f"{days}d", "#00ffad", "#00ffad22"
+            else:               days_text, days_color, days_bg = f"{days}d", "#888", "#1a1e26"
             market_cap = item.get('market_cap', '-')
             if market_cap == '-':
-                # Intentar obtener market cap si no está
                 try:
                     stock = yf.Ticker(item['ticker'])
                     cap = stock.info.get('marketCap', 0) / 1e12
                     market_cap = f"${cap:.1f}T" if cap >= 1 else f"${cap*1000:.0f}B"
-                except:
+                except Exception:
                     market_cap = "Large Cap"
-            
-            earn_html += f'''
-            <div style="background:#0c0e12; padding:10px; border-radius:6px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; position: relative; overflow: hidden;">
-                <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: {impact_color};"></div>
-                <div style="margin-left: 8px;">
-                    <div style="color:#00ffad; font-weight:bold; font-size:12px; letter-spacing: 0.5px;">{item['ticker']}</div>
-                    <div style="color:#555; font-size:8px; margin-top: 2px;">{market_cap}</div>
-                </div>
-                <div style="text-align:center; flex:1; margin:0 10px;">
-                    <div style="color:white; font-weight:bold; font-size:11px;">{item['date']}</div>
-                    <div style="color:#666; font-size:8px; text-transform: uppercase; letter-spacing: 0.3px;">{item['time']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="background: {days_bg}; color: {days_color}; padding: 3px 8px; border-radius: 4px; font-size: 9px; font-weight: bold; border: 1px solid {days_color}33;">
-                        {days_text}
-                    </div>
-                    <div style="color:{impact_color}; font-size:8px; font-weight:bold; margin-top:4px; text-transform: uppercase;">● {item['impact']}</div>
-                </div>
-            </div>'''
+            return (
+                f'<div style="background:#0c0e12; padding:10px; border-radius:6px; margin-bottom:8px; border:1px solid #1a1e26;'
+                f' display:flex; justify-content:space-between; align-items:center; position:relative; overflow:hidden;">'
+                f'<div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:{impact_color};"></div>'
+                f'<div style="margin-left:8px;">'
+                f'<div style="color:#00ffad; font-weight:bold; font-size:12px;">{item["ticker"]}</div>'
+                f'<div style="color:#555; font-size:8px; margin-top:2px;">{market_cap}</div></div>'
+                f'<div style="text-align:center; flex:1; margin:0 10px;">'
+                f'<div style="color:white; font-weight:bold; font-size:11px;">{item["date"]}</div>'
+                f'<div style="color:#666; font-size:8px; text-transform:uppercase;">{item["time"]}</div></div>'
+                f'<div style="text-align:right;">'
+                f'<div style="background:{days_bg}; color:{days_color}; padding:3px 8px; border-radius:4px; font-size:9px; font-weight:bold; border:1px solid {days_color}33;">{days_text}</div>'
+                f'<div style="color:{impact_color}; font-size:8px; font-weight:bold; margin-top:4px;">● {item["impact"]}</div>'
+                f'</div></div>'
+            )
+        earn_html = "".join(_earn_row(item) for item in earnings)
 
         st.markdown(f'''
         <div class="module-container">
@@ -1877,13 +1900,15 @@ def render():
 
     with f3c2:
         insiders = get_insider_trading()
-        insider_html = ""
-        for item in insiders:
-            type_color = "#00ffad" if item['type'] == "BUY" else "#f23645"
-            insider_html += f'''<div style="background:#0c0e12; padding:8px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">
-            <div><div style="color:white; font-weight:bold; font-size:10px;">{item['ticker']}</div><div style="color:#555; font-size:8px;">{item['position']}</div></div>
-            <div style="text-align:right;"><div style="color:{type_color}; font-weight:bold; font-size:9px;">{item['type']}</div><div style="color:#888; font-size:8px;">{item['amount']}</div></div>
-            </div>'''
+        insider_html = "".join(
+            f'<div style="background:#0c0e12; padding:8px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">'
+            f'<div><div style="color:white; font-weight:bold; font-size:10px;">{item["ticker"]}</div>'
+            f'<div style="color:#555; font-size:8px;">{item["position"]}</div></div>'
+            f'<div style="text-align:right;">'
+            f'<div style="color:{"#00ffad" if item["type"] == "BUY" else "#f23645"}; font-weight:bold; font-size:9px;">{item["type"]}</div>'
+            f'<div style="color:#888; font-size:8px;">{item["amount"]}</div></div></div>'
+            for item in insiders
+        )
 
         st.markdown(f'''
         <div class="module-container">
@@ -1901,21 +1926,17 @@ def render():
 
     with f3c3:
         news = fetch_finnhub_news()
-        news_items_html = []
-        for item in news[:8]:
-            safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
-            news_item = (
-                '<div style="padding: 8px 12px; border-bottom: 1px solid #1a1e26;">'
-                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;">'
-                '<span style="color:#888;font-size:0.7rem;font-family:monospace;">' + item['time'] + '</span>'
-                '<span style="padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; background-color:' + item['color'] + '22;color:' + item['color'] + ';">' + item['impact'] + '</span>'
-                '</div>'
-                '<div style="color:white;font-size:0.8rem;line-height:1.2;margin-bottom:4px;">' + safe_title + '</div>'
-                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Llegir més</a>'
-                '</div>'
-            )
-            news_items_html.append(news_item)
-        news_content = "".join(news_items_html)
+        news_content = "".join(
+            f'<div style="padding:8px 12px; border-bottom:1px solid #1a1e26;">'
+            f'<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:3px;">'
+            f'<span style="color:#888; font-size:0.7rem; font-family:monospace;">{item["time"]}</span>'
+            f'<span style="padding:1px 6px; border-radius:8px; font-size:0.65rem; font-weight:bold; background-color:{item["color"]}22; color:{item["color"]};">{item["impact"]}</span>'
+            f'</div>'
+            f'<div style="color:white; font-size:0.8rem; line-height:1.2; margin-bottom:4px;">{item["title"].replace(chr(34), "&quot;").replace(chr(39), "&#39;")}</div>'
+            f'<a href="{item["link"]}" target="_blank" style="color:#00ffad; text-decoration:none; font-size:0.75rem;">→ Llegir més</a>'
+            f'</div>'
+            for item in news[:8]
+        )
 
         st.markdown(f'''
         <div class="module-container">
@@ -2174,24 +2195,17 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         except:
             cryptos = get_fallback_crypto_prices()
 
-        crypto_items_html = []
-        for crypto in cryptos[:6]:
-            symbol = str(crypto.get('symbol', 'N/A'))
-            name = str(crypto.get('name', 'Unknown'))
-            price = str(crypto.get('price', '0.00'))
-            change = str(crypto.get('change', '0%'))
-            color = "#00ffad" if crypto.get('is_positive', True) else "#f23645"
-            item_html = (
-                '<div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">'
-                '<div style="display: flex; align-items: center; gap: 8px;">'
-                '<div style="color: #00ffad; font-weight: bold; font-size: 12px;">' + symbol + '</div>'
-                '<div style="color: #555; font-size: 9px;">' + name + '</div></div>'
-                '<div style="text-align: right;">'
-                '<div style="color: white; font-size: 12px; font-weight: bold;">$' + price + '</div>'
-                '<div style="color: ' + color + '; font-size: 10px; font-weight: bold;">' + change + '</div></div></div>'
-            )
-            crypto_items_html.append(item_html)
-        crypto_content = "".join(crypto_items_html)
+        crypto_content = "".join(
+            f'<div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center;">'
+            f'<div style="display:flex; align-items:center; gap:8px;">'
+            f'<div style="color:#00ffad; font-weight:bold; font-size:12px;">{crypto.get("symbol","N/A")}</div>'
+            f'<div style="color:#555; font-size:9px;">{crypto.get("name","Unknown")}</div></div>'
+            f'<div style="text-align:right;">'
+            f'<div style="color:white; font-size:12px; font-weight:bold;">${crypto.get("price","0.00")}</div>'
+            f'<div style="color:{"#00ffad" if crypto.get("is_positive", True) else "#f23645"}; font-size:10px; font-weight:bold;">{crypto.get("change","0%")}</div>'
+            f'</div></div>'
+            for crypto in cryptos[:6]
+        )
         timestamp_str = get_timestamp()
 
         crypto_html_full = '''<!DOCTYPE html><html><head><style>

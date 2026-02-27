@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -2298,10 +2297,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
-
-
 
 
 

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta
@@ -11,6 +10,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 from collections import Counter
+import pytz
 
 try:
     import investpy
@@ -21,9 +21,19 @@ except ImportError:
 def get_timestamp():
     return datetime.now().strftime('%H:%M:%S')
 
+def get_effective_date():
+    """Obtiene la fecha efectiva para filtrar datos (hoy si son más de las 9am, ayer si no)"""
+    spain_tz = pytz.timezone('Europe/Madrid')
+    now = datetime.now(spain_tz)
+
+    if now.hour >= 9:
+        return now.date()
+    else:
+        # Antes de las 9am, mostrar desde ayer
+        return (now - timedelta(days=1)).date()
+
 # Diccionario de traducción de eventos económicos
 EVENT_TRANSLATIONS = {
-    # Empleo
     "Nonfarm Payrolls": "Nóminas No Agrícolas",
     "Unemployment Rate": "Tasa de Desempleo",
     "ADP Nonfarm Employment": "Empleo ADP",
@@ -32,16 +42,12 @@ EVENT_TRANSLATIONS = {
     "JOLTS Job Openings": "Vacantes JOLTS",
     "Average Hourly Earnings": "Salario por Hora Promedio",
     "Labor Force Participation Rate": "Tasa de Participación Laboral",
-    
-    # Inflación
     "CPI": "IPC (Inflación)",
     "Core CPI": "IPC Subyacente",
     "PPI": "IPP (Precios Productor)",
     "Core PPI": "IPP Subyacente",
     "PCE Price Index": "Índice de Precios PCE",
     "Core PCE": "PCE Subyacente",
-    
-    # Actividad Económica
     "GDP": "PIB",
     "GDP Growth Rate": "Crecimiento del PIB",
     "Retail Sales": "Ventas al Por Menor",
@@ -52,8 +58,6 @@ EVENT_TRANSLATIONS = {
     "Core Durable Goods Orders": "Pedidos Bienes Duraderos Subyacentes",
     "Factory Orders": "Órdenes de Fábrica",
     "Business Inventories": "Inventarios Empresariales",
-    
-    # Confianza y PMIs
     "ISM Manufacturing PMI": "PMI Manufacturero ISM",
     "ISM Services PMI": "PMI Servicios ISM",
     "S&P Global Manufacturing PMI": "PMI Manufacturero S&P Global",
@@ -70,8 +74,6 @@ EVENT_TRANSLATIONS = {
     "Michigan Consumer Expectations": "Expectativas del Consumidor Michigan",
     "Michigan Current Conditions": "Condiciones Actuales Michigan",
     "Conference Board Leading Index": "Índice Adelantado Conference Board",
-    
-    # Construcción y Vivienda
     "Building Permits": "Permisos de Construcción",
     "Housing Starts": "Inicio de Viviendas",
     "New Home Sales": "Ventas de Viviendas Nuevas",
@@ -80,18 +82,12 @@ EVENT_TRANSLATIONS = {
     "S&P/Case-Shiller Home Price Index": "Índice de Precios S&P/Case-Shiller",
     "FHFA House Price Index": "Índice de Precios FHFA",
     "Mortgage Applications": "Solicitudes de Hipotecas",
-    
-    # Comercio Exterior
     "Trade Balance": "Balanza Comercial",
     "Exports": "Exportaciones",
     "Imports": "Importaciones",
-    
-    # Deuda y Déficit
     "Treasury Budget": "Presupuesto del Tesoro",
     "Budget Balance": "Balance Presupuestario",
     "Public Debt": "Deuda Pública",
-    
-    # Fed y Tipos de Interés
     "Fed Interest Rate Decision": "Decisión de Tipos de la Fed",
     "FOMC Statement": "Declaración FOMC",
     "FOMC Minutes": "Actas FOMC",
@@ -100,8 +96,6 @@ EVENT_TRANSLATIONS = {
     "Fed Chair Speech": "Discurso del Presidente Fed",
     "Fed Governor Speech": "Discurso de Gobernador Fed",
     "Fed Member Speech": "Discurso de Miembro Fed",
-    
-    # Commodities
     "Crude Oil Inventories": "Inventarios de Petróleo Crudo",
     "EIA Crude Oil Inventories": "Inventarios EIA Petróleo Crudo",
     "API Crude Oil Inventories": "Inventarios API Petróleo Crudo",
@@ -110,14 +104,10 @@ EVENT_TRANSLATIONS = {
     "Natural Gas Storage": "Almacenamiento de Gas Natural",
     "Heating Oil Inventories": "Inventarios de Gasóleo Calefacción",
     "Refinery Utilization": "Utilización de Refinerías",
-    
-    # Otros
     "Current Account": "Cuenta Corriente",
     "Capital Flows": "Flujos de Capital",
     "Foreign Bond Investment": "Inversión en Bonos Extranjeros",
     "Net Long-term TIC Flows": "Flujos TIC Largo Plazo Netos",
-    
-    # Zona Euro
     "ECB Interest Rate Decision": "Decisión de Tipos del BCE",
     "ECB Deposit Facility Rate": "Tasa de Depósito BCE",
     "ECB Marginal Lending Facility": "Facilidad de Préstamo Marginal BCE",
@@ -144,27 +134,26 @@ EVENT_TRANSLATIONS = {
 }
 
 def translate_event(event_name):
-    """Traduce el nombre del evento al español si existe en el diccionario"""
     if event_name in EVENT_TRANSLATIONS:
         return EVENT_TRANSLATIONS[event_name]
-    
     for eng, esp in EVENT_TRANSLATIONS.items():
         if eng.lower() in event_name.lower():
             return esp
-    
     if len(event_name) > 35:
         return event_name[:32] + "..."
     return event_name
 
+
 @st.cache_data(ttl=300)
 def get_economic_calendar():
     events = []
-    
+    effective_date = get_effective_date()
+
     if INVESTPY_AVAILABLE:
         try:
-            from_date = datetime.now().strftime('%d/%m/%Y')
-            to_date = (datetime.now() + timedelta(days=7)).strftime('%d/%m/%Y')
-            
+            from_date = effective_date.strftime('%d/%m/%Y')
+            to_date = (effective_date + timedelta(days=7)).strftime('%d/%m/%Y')
+
             calendar = investpy.economic_calendar(
                 time_zone='GMT', 
                 time_filter='time_only',
@@ -173,7 +162,7 @@ def get_economic_calendar():
                 countries=['united states', 'euro zone'],
                 importances=['high', 'medium', 'low']
             )
-            
+
             for _, row in calendar.iterrows():
                 try:
                     date_str = row.get('date', '')
@@ -181,10 +170,10 @@ def get_economic_calendar():
                         event_date = pd.to_datetime(date_str, dayfirst=True)
                     else:
                         event_date = datetime.now()
-                    
-                    if event_date.date() < datetime.now().date():
+
+                    if event_date.date() < effective_date:
                         continue
-                    
+
                     time_str = row.get('time', '')
                     if time_str and time_str != '' and pd.notna(time_str):
                         try:
@@ -195,24 +184,24 @@ def get_economic_calendar():
                             time_es = "TBD"
                     else:
                         time_es = "TBD"
-                    
+
                     importance_map = {'high': 'High', 'medium': 'Medium', 'low': 'Low'}
                     imp = row.get('importance', 'medium')
                     impact = importance_map.get(str(imp).lower(), 'Medium')
-                    
+
                     event_name = str(row.get('event', 'Unknown'))
                     event_name_es = translate_event(event_name)
-                    
-                    if event_date.date() == datetime.now().date():
+
+                    if event_date.date() == effective_date:
                         date_display = "HOY"
                         date_color = "#00ffad"
-                    elif event_date.date() == (datetime.now() + timedelta(days=1)).date():
+                    elif event_date.date() == (effective_date + timedelta(days=1)):
                         date_display = "MAÑANA"
                         date_color = "#3b82f6"
                     else:
                         date_display = event_date.strftime('%d %b').upper()
                         date_color = "#888"
-                    
+
                     events.append({
                         "date": event_date,
                         "date_display": date_display,
@@ -227,20 +216,20 @@ def get_economic_calendar():
                     })
                 except Exception as e:
                     continue
-                    
+
         except Exception as e:
             pass
-    
+
     if not events:
         try:
             events = get_forexfactory_calendar()
         except:
             pass
-    
+
     if events:
         events.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
         return events[:8]
-    
+
     return get_fallback_economic_calendar()
 
 def get_forexfactory_calendar():
@@ -254,8 +243,9 @@ def get_forexfactory_calendar():
         return events
 
 def get_fallback_economic_calendar():
-    today = datetime.now()
-    
+    effective_date = get_effective_date()
+    today = datetime.combine(effective_date, datetime.min.time())
+
     fallback_events = [
         {"date": today, "date_display": "HOY", "date_color": "#00ffad", "time": "14:30", "event": "Solicitudes de Desempleo", "imp": "High", "val": "-", "prev": "215K", "forecast": "218K", "country": "US"},
         {"date": today, "date_display": "HOY", "date_color": "#00ffad", "time": "16:00", "event": "Pedidos de Bienes Duraderos", "imp": "Medium", "val": "-", "prev": "-4.6%", "forecast": "+2.0%", "country": "US"},
@@ -264,7 +254,7 @@ def get_fallback_economic_calendar():
         {"date": today + timedelta(days=2), "date_display": (today + timedelta(days=2)).strftime('%d %b').upper(), "date_color": "#888", "time": "14:30", "event": "IPC Subyacente", "imp": "High", "val": "-", "prev": "0.3%", "forecast": "0.2%", "country": "US"},
         {"date": today + timedelta(days=2), "date_display": (today + timedelta(days=2)).strftime('%d %b').upper(), "date_color": "#888", "time": "14:30", "event": "Nóminas No Agrícolas", "imp": "High", "val": "-", "prev": "143K", "forecast": "175K", "country": "US"},
     ]
-    
+
     return fallback_events
 
 @st.cache_data(ttl=300)
@@ -353,6 +343,7 @@ def get_fallback_reddit_tickers():
         'source': 'Fallback', 'timestamp': datetime.now().strftime('%H:%M:%S')
     }
 
+
 @st.cache_data(ttl=3600)
 def get_buzztickr_master_data():
     try:
@@ -363,13 +354,13 @@ def get_buzztickr_master_data():
             'Accept-Language': 'en-US,en;q=0.9',
             'Referer': 'https://www.google.com/'
         }
-        
+
         response = requests.get(url, headers=headers, timeout=20)
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         master_data = []
         tables = soup.find_all('table')
-        
+
         for table in tables:
             rows = table.find_all('tr')
             if len(rows) > 5:
@@ -384,7 +375,7 @@ def get_buzztickr_master_data():
                             social_hype = cells[4].get_text(strip=True)
                             smart_money = cells[5].get_text(strip=True)
                             squeeze = cells[6].get_text(strip=True)
-                            
+
                             if ticker and len(ticker) <= 5:
                                 master_data.append({
                                     'rank': rank, 'ticker': ticker, 'buzz_score': buzz_score,
@@ -393,15 +384,15 @@ def get_buzztickr_master_data():
                                 })
                     except:
                         continue
-                
+
                 if master_data:
                     break
-        
+
         if not master_data:
             ticker_elements = soup.find_all(text=re.compile(r'^[A-Z]{1,5}$'))
             seen = set()
             rank = 1
-            
+
             for elem in ticker_elements[:20]:
                 try:
                     ticker = elem.strip()
@@ -419,7 +410,7 @@ def get_buzztickr_master_data():
                                 break
                 except:
                     continue
-        
+
         if master_data:
             return {
                 'data': master_data[:15],
@@ -427,9 +418,9 @@ def get_buzztickr_master_data():
                 'timestamp': datetime.now().strftime('%H:%M:%S'),
                 'count': len(master_data)
             }
-        
+
         return get_fallback_master_data()
-        
+
     except Exception as e:
         return get_fallback_master_data()
 
@@ -579,6 +570,7 @@ def get_fallback_sectors(timeframe="1D"):
     ]
     mult = {"1D": 1, "3D": 2.5, "1W": 4, "1M": 8}.get(timeframe, 1)
     return [{'code': c, 'name': n, 'name_es': n, 'change': v * mult} for c, n, v in base]
+
 
 @st.cache_data(ttl=300)
 def get_vix_term_structure():
@@ -787,10 +779,14 @@ def get_fallback_crypto_fear_greed():
         'source': 'alternative.me'
     }
 
+
 @st.cache_data(ttl=600)
 def get_earnings_calendar():
     api_key = st.secrets.get("ALPHA_VANTAGE_API_KEY", None)
-    
+
+    # Obtener fecha efectiva (hoy si son más de las 9am hora española)
+    effective_date = get_effective_date()
+
     mega_caps = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 
         'BRK-B', 'AVGO', 'WMT', 'JPM', 'V', 'MA', 'UNH', 'HD',
@@ -798,29 +794,33 @@ def get_earnings_calendar():
         'COST', 'TMO', 'ADBE', 'NFLX', 'AMD', 'CRM', 'ACN', 'LIN',
         'DIS', 'VZ', 'WFC', 'DHR', 'NKE', 'TXN', 'PM', 'RTX', 'HON'
     ]
-    
+
     earnings_list = []
-    
+
     if api_key:
         try:
             url = f"https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&horizon=3month&apikey={api_key}"
             response = requests.get(url, timeout=15)
-            
+
             if response.status_code == 200:
                 from io import StringIO
                 df = pd.read_csv(StringIO(response.text))
-                
+
                 df_filtered = df[df['symbol'].isin(mega_caps)].copy()
-                
+
                 for _, row in df_filtered.iterrows():
                     try:
                         report_date = pd.to_datetime(row['reportDate'])
                         days_until = (report_date - pd.Timestamp.now()).days
-                        
+
+                        # Solo incluir earnings desde la fecha efectiva en adelante
+                        if report_date.date() < effective_date:
+                            continue
+
                         if days_until >= -2:
                             symbol = row['symbol']
                             hour_guess = "After Market" if symbol in ['NVDA', 'AAPL', 'AMZN', 'META', 'NFLX', 'AMD'] else "Before Bell"
-                            
+
                             earnings_list.append({
                                 'ticker': symbol,
                                 'date': report_date.strftime('%b %d'),
@@ -828,38 +828,42 @@ def get_earnings_calendar():
                                 'time': hour_guess,
                                 'impact': 'High',
                                 'estimate': row.get('estimate', '-'),
-                                'days': days_until,
+                                'days': max(0, days_until),
                                 'source': 'AlphaVantage'
                             })
                     except:
                         continue
-                
+
                 earnings_list.sort(key=lambda x: x['full_date'])
-                
+
                 if len(earnings_list) >= 4:
                     return earnings_list[:6]
-                    
+
         except Exception as e:
             pass
-    
+
     try:
-        today = datetime.now()
         for ticker in mega_caps[:15]:
             try:
                 stock = yf.Ticker(ticker)
                 calendar = stock.calendar
-                
+
                 if calendar is not None and not calendar.empty:
                     next_earnings = calendar.index[0]
+
+                    # Solo incluir earnings desde la fecha efectiva en adelante
+                    if next_earnings.date() < effective_date:
+                        continue
+
                     days_until = (next_earnings - pd.Timestamp.now()).days
-                    
+
                     if 0 <= days_until <= 30:
                         info = stock.info
                         hour = next_earnings.hour if hasattr(next_earnings, 'hour') else 16
                         time_str = "Before Bell" if hour < 12 else "After Market"
-                        
+
                         market_cap = info.get('marketCap', 0) / 1e9
-                        
+
                         if market_cap >= 50:
                             earnings_list.append({
                                 'ticker': ticker,
@@ -871,33 +875,34 @@ def get_earnings_calendar():
                                 'days': days_until,
                                 'source': 'yfinance'
                             })
-                
+
                 time.sleep(0.15)
             except:
                 continue
-        
+
         earnings_list.sort(key=lambda x: x['full_date'])
-        
+
         if earnings_list:
             return earnings_list[:6]
-            
+
     except Exception as e:
         pass
-    
+
     return get_fallback_earnings_realistic()
 
 def get_fallback_earnings_realistic():
-    today = datetime.now()
-    
+    effective_date = get_effective_date()
+    today = datetime.combine(effective_date, datetime.min.time())
+
     fallback_data = [
-        {"ticker": "NVDA", "date_offset": 2, "time": "After Market", "impact": "High", "market_cap": "$3.2T"},
-        {"ticker": "AAPL", "date_offset": 5, "time": "After Market", "impact": "High", "market_cap": "$3.4T"},
-        {"ticker": "MSFT", "date_offset": 7, "time": "After Market", "impact": "High", "market_cap": "$3.1T"},
-        {"ticker": "AMZN", "date_offset": 8, "time": "After Market", "impact": "High", "market_cap": "$2.1T"},
-        {"ticker": "GOOGL", "date_offset": 10, "time": "After Market", "impact": "High", "market_cap": "$2.3T"},
-        {"ticker": "META", "date_offset": 12, "time": "After Market", "impact": "High", "market_cap": "$1.8T"},
+        {"ticker": "NVDA", "date_offset": 0, "time": "After Market", "impact": "High", "market_cap": "$3.2T"},
+        {"ticker": "AAPL", "date_offset": 1, "time": "After Market", "impact": "High", "market_cap": "$3.4T"},
+        {"ticker": "MSFT", "date_offset": 2, "time": "After Market", "impact": "High", "market_cap": "$3.1T"},
+        {"ticker": "AMZN", "date_offset": 3, "time": "After Market", "impact": "High", "market_cap": "$2.1T"},
+        {"ticker": "GOOGL", "date_offset": 5, "time": "After Market", "impact": "High", "market_cap": "$2.3T"},
+        {"ticker": "META", "date_offset": 7, "time": "After Market", "impact": "High", "market_cap": "$1.8T"},
     ]
-    
+
     result = []
     for item in fallback_data:
         target_date = today + timedelta(days=item['date_offset'])
@@ -911,7 +916,7 @@ def get_fallback_earnings_realistic():
             'days': item['date_offset'],
             'source': 'Fallback'
         })
-    
+
     return result
 
 @st.cache_data(ttl=600)
@@ -1020,14 +1025,15 @@ def get_fallback_news():
         {"time": "09:30", "title": "NVIDIA presenta nuevos chips para centros de datos", "impact": "Alto", "color": "#f23645", "link": "#"},
     ]
 
+
 def translate_text(text, source='en', target='es'):
     try:
         if len(text.encode('utf-8')) > 450:
             text = text[:200] + "..."
-        
+
         url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text)}&langpair={source}|{target}"
         response = requests.get(url, timeout=5)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get('responseStatus') == 200:
@@ -1086,6 +1092,39 @@ def get_fed_liquidity():
         return "ERROR", "#888", "API no disponible", "N/A", "N/A"
     except:
         return "N/A", "#888", "Sin conexión", "N/A", "N/A"
+
+
+# NUEVA FUNCIÓN: Obtener datos de índices adicionales (VUG, MEME, RSP)
+def get_additional_indices():
+    """Obtiene datos para VUG, MEME y RSP"""
+    additional_indices = []
+
+    symbols = {
+        'VUG': 'Vanguard Growth ETF',
+        'MEME': 'Roundhill Meme ETF', 
+        'RSP': 'Invesco S&P 500 Equal Weight'
+    }
+
+    for symbol, name in symbols.items():
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="2d")
+            if len(hist) >= 2:
+                current = hist['Close'].iloc[-1]
+                prev = hist['Close'].iloc[-2]
+                change_pct = ((current - prev) / prev) * 100
+                additional_indices.append({
+                    'symbol': symbol,
+                    'name': name,
+                    'price': current,
+                    'change': change_pct
+                })
+            time.sleep(0.05)
+        except:
+            continue
+
+    return additional_indices
+
 
 
 def render():
@@ -1202,12 +1241,12 @@ def render():
     .sector-name { color: white; font-size: 10px; font-weight: 600; margin-bottom: 4px; line-height: 1.2; }
     .sector-change { font-size: 11px; font-weight: bold; }
 
-    /* Botones de timeframe estilo segment control */
+    /* Botones de timeframe estilo segment control - MEJORADOS */
     .tf-button-container {
         display: flex;
         gap: 4px;
         background: #0c0e12;
-        padding: 2px;
+        padding: 3px;
         border-radius: 6px;
         border: 1px solid #1a1e26;
     }
@@ -1215,15 +1254,17 @@ def render():
         background: transparent;
         color: #888;
         border: none;
-        padding: 4px 10px;
+        padding: 5px 12px;
         font-size: 10px;
         font-weight: 600;
         cursor: pointer;
         border-radius: 4px;
         transition: all 0.2s;
+        white-space: nowrap;
     }
     .tf-button:hover {
         color: white;
+        background: #1a1e26;
     }
     .tf-button.active {
         background: #2a3f5f;
@@ -1239,7 +1280,7 @@ def render():
     .stColumns { gap: 0.5rem !important; }
     .stColumn { padding: 0 0.25rem !important; }
     .element-container { margin-bottom: 0.5rem !important; }
-    
+
     /* Estilos específicos para Calendario Económico */
     .eco-date-badge {
         display: inline-flex;
@@ -1263,7 +1304,7 @@ def render():
         font-size: 10px;
         margin-right: 4px;
     }
-    
+
     /* ESTILOS PARA REDDIT SOCIAL PULSE */
     .buzz-table-header {
         display: grid;
@@ -1363,19 +1404,21 @@ def render():
     div[data-testid="stWidgetLabel"] {
         display: none !important;
     }
-    /* Estilo para radio buttons como botones */
+
+    /* Estilo mejorado para radio buttons como botones */
     div[role="radiogroup"] {
-        display: flex;
-        gap: 4px;
-        background: #0c0e12;
-        padding: 2px;
-        border-radius: 6px;
-        border: 1px solid #1a1e26;
+        display: flex !important;
+        gap: 4px !important;
+        background: #0c0e12 !important;
+        padding: 3px !important;
+        border-radius: 6px !important;
+        border: 1px solid #1a1e26 !important;
         margin: 0 !important;
     }
     div[role="radiogroup"] > label {
         margin: 0 !important;
         padding: 0 !important;
+        flex: 1;
     }
     div[role="radiogroup"] > label > div {
         display: none !important;
@@ -1385,15 +1428,18 @@ def render():
     }
     div[role="radiogroup"] > label > div[data-testid="stMarkdownContainer"] p {
         margin: 0;
-        padding: 4px 10px;
+        padding: 5px 10px;
         font-size: 10px;
         font-weight: 600;
         color: #888;
         border-radius: 4px;
         cursor: pointer;
+        text-align: center;
+        white-space: nowrap;
     }
     div[role="radiogroup"] > label:hover > div[data-testid="stMarkdownContainer"] p {
         color: white;
+        background: #1a1e26;
     }
     div[role="radiogroup"] > label[data-checked="true"] > div[data-testid="stMarkdownContainer"] p {
         background: #2a3f5f;
@@ -1401,6 +1447,7 @@ def render():
     }
     </style>
     """, unsafe_allow_html=True)
+
 
     # Ticker
     ticker_html = generate_ticker_html()
@@ -1411,7 +1458,10 @@ def render():
     col1, col2, col3 = st.columns(3)
 
     with col1:
+        # Market Indices con índices adicionales VUG, MEME, RSP
         indices_html = ""
+
+        # Índices principales
         for t, n in [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]:
             idx_val, idx_change = get_market_index(t)
             color = "#00ffad" if idx_change >= 0 else "#f23645"
@@ -1420,13 +1470,22 @@ def render():
                 <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:12px;">{idx_val:,.2f}</div><div style="color:{color}; font-size:10px; font-weight:bold;">{idx_change:+.2f}%</div></div>
             </div>'''
 
+        # Índices adicionales: VUG, MEME, RSP
+        additional = get_additional_indices()
+        for idx in additional:
+            color = "#00ffad" if idx['change'] >= 0 else "#f23645"
+            indices_html += f'''<div style="background:#0c0e12; padding:10px 12px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <div><div style="font-weight:bold; color:white; font-size:12px;">{idx["symbol"]}</div><div style="color:#555; font-size:9px;">{idx["name"][:15]}</div></div>
+                <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:12px;">{idx["price"]:.2f}</div><div style="color:{color}; font-size:10px; font-weight:bold;">{idx["change"]:+.2f}%</div></div>
+            </div>'''
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
                 <div class="module-title">Market Indices</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendimiento en tiempo real de los principales índices bursátiles de EEUU.</div>
+                    <div class="tooltip-content">Rendimiento en tiempo real de los principales índices bursátiles de EEUU incluyendo VUG (Growth), MEME (Meme stocks) y RSP (Equal Weight S&P 500).</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 12px;">{indices_html}</div>
@@ -1439,7 +1498,7 @@ def render():
         events = get_economic_calendar()
         impact_colors = {'High': '#f23645', 'Medium': '#ff9800', 'Low': '#4caf50'}
         country_flags = {'US': '🇺🇸', 'EU': '🇪🇺', 'EZ': '🇪🇺', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹'}
-        
+
         events_html = ""
         for ev in events[:6]:
             imp_color = impact_colors.get(ev['imp'], '#888')
@@ -1447,13 +1506,13 @@ def render():
             date_display = ev.get('date_display', '---')
             country = ev.get('country', 'US')
             flag = country_flags.get(country, '🇺🇸')
-            
+
             display_val = ev['val']
             if display_val == '-' or display_val == 'nan':
                 display_val = ev.get('forecast', '-')
                 if display_val != '-' and display_val != 'nan':
                     display_val = f"Est: {display_val}"
-            
+
             events_html += f'''<div style="padding:8px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
                 <div class="eco-date-badge" style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44;">{date_display}</div>
                 <div class="eco-time">{ev["time"]}</div>
@@ -1476,7 +1535,7 @@ def render():
                     <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">CET</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Calendario económico en tiempo real. Datos de hoy en adelante ordenados por fecha. Hora española (CET/CEST). Eventos traducidos.</div>
+                        <div class="tooltip-content">Calendario económico en tiempo real. Datos actualizados a las 9:00 AM hora española. Solo se muestran eventos desde hoy en adelante.</div>
                     </div>
                 </div>
             </div>
@@ -1485,13 +1544,14 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
+
     # === REDDIT SOCIAL PULSE ===
     with col3:
         master_data = get_buzztickr_master_data()
         buzz_items = master_data.get('data', [])
-        
+
         cards_html = ""
-        
+
         for item in buzz_items[:10]:
             rank = str(item.get('rank', '-'))
             ticker = str(item.get('ticker', '-'))
@@ -1499,7 +1559,7 @@ def render():
             health = str(item.get('health', '-'))
             smart_money = str(item.get('smart_money', ''))
             squeeze = str(item.get('squeeze', ''))
-            
+
             try:
                 rank_num = int(rank)
                 if rank_num <= 3:
@@ -1514,46 +1574,46 @@ def render():
                 rank_bg = "#1a1e26"
                 rank_color = "#888"
                 glow = ""
-            
+
             health_num = "50"
             health_text = "NEUTRAL"
             health_color = "#ff9800"
             health_bg = "#ff980022"
-            
+
             health_parts = health.split()
             if len(health_parts) >= 1:
                 health_num = health_parts[0]
             if len(health_parts) >= 2:
                 health_text = health_parts[1].upper()
-            
+
             if 'strong' in health.lower():
                 health_color = "#00ffad"
                 health_bg = "#00ffad15"
             elif 'weak' in health.lower():
                 health_color = "#f23645"
                 health_bg = "#f2364515"
-            
+
             has_smart = bool(smart_money and 'whales' in smart_money.lower())
             smart_icon = "🐋" if has_smart else "○"
             smart_color = "#00ffad" if has_smart else "#333"
             smart_text = "SMART $" if has_smart else "—"
-            
+
             has_squeeze = bool(squeeze and ('short' in squeeze.lower() or 'squeeze' in squeeze.lower()))
             squeeze_icon = "🧨" if has_squeeze else "○"
             squeeze_color = "#f23645" if has_squeeze else "#333"
-            
+
             squeeze_pct = ""
             if has_squeeze:
                 pct_match = re.search(r'(\d+\.?\d*)%', squeeze)
                 if pct_match:
                     squeeze_pct = f"{pct_match.group(1)}%"
-            
+
             try:
                 score_val = int(buzz_score)
                 score_width = (score_val / 10) * 100
             except:
                 score_width = 50
-            
+
             cards_html += f"""
             <div style="background: #0c0e12; border: 1px solid #1a1e26; border-radius: 8px; padding: 10px; margin-bottom: 8px; {glow}">
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -1570,20 +1630,20 @@ def render():
                         </div>
                     </div>
                 </div>
-                
+
                 <div style="display: flex; gap: 8px;">
                     <div style="flex: 1; background: {health_bg}; border: 1px solid {health_color}30; border-radius: 6px; padding: 6px; text-align: center;">
                         <div style="font-size: 8px; color: #666; text-transform: uppercase; margin-bottom: 2px;">Health</div>
                         <div style="color: {health_color}; font-weight: bold; font-size: 11px;">{health_num}</div>
                         <div style="color: {health_color}; font-size: 8px; opacity: 0.8;">{health_text}</div>
                     </div>
-                    
+
                     <div style="flex: 1; background: #0f1218; border: 1px solid {smart_color}30; border-radius: 6px; padding: 6px; text-align: center;">
                         <div style="font-size: 8px; color: #666; text-transform: uppercase; margin-bottom: 2px;">Smart $</div>
                         <div style="color: {smart_color}; font-size: 14px;">{smart_icon}</div>
                         <div style="color: {smart_color}; font-size: 8px; margin-top: 1px;">{smart_text}</div>
                     </div>
-                    
+
                     <div style="flex: 1; background: #0f1218; border: 1px solid {squeeze_color}30; border-radius: 6px; padding: 6px; text-align: center;">
                         <div style="font-size: 8px; color: #666; text-transform: uppercase; margin-bottom: 2px;">Squeeze</div>
                         <div style="color: {squeeze_color}; font-size: 14px;">{squeeze_icon}</div>
@@ -1592,11 +1652,11 @@ def render():
                 </div>
             </div>
             """
-        
+
         count = master_data.get('count', 0)
         source = master_data.get('source', 'API')
         timestamp = master_data.get('timestamp', get_timestamp())
-        
+
         full_html = f"""
         <!DOCTYPE html>
         <html>
@@ -1605,7 +1665,7 @@ def render():
         <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #11141a; }}
-        
+
         .module-container {{ 
             border: 1px solid #1a1e26; 
             border-radius: 10px; 
@@ -1645,7 +1705,7 @@ def render():
             border-top: 1px solid #1a1e26;
             background: #0c0e12;
         }}
-        
+
         .module-content::-webkit-scrollbar {{
             width: 6px;
         }}
@@ -1656,7 +1716,7 @@ def render():
             background: #2a3f5f;
             border-radius: 3px;
         }}
-        
+
         .tooltip-wrapper {{
             position: relative;
             display: inline-block;
@@ -1694,7 +1754,7 @@ def render():
         .tooltip-wrapper:hover .tooltip-content {{
             display: block;
         }}
-        
+
         @keyframes pulse {{
             0%, 100% {{ opacity: 1; }}
             50% {{ opacity: 0.7; }}
@@ -1724,8 +1784,9 @@ def render():
         </body>
         </html>
         """
-        
+
         components.html(full_html, height=480, scrolling=False)
+
 
     # FILA 2
     st.write("")
@@ -1771,7 +1832,7 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION CON BOTONES NATIVOS DE STREAMLIT
+    # SECTOR ROTATION CON BOTONES NATIVOS DE STREAMLIT - REESTRUCTURADO
     with c2:
         # Inicializar session state
         if 'sector_tf' not in st.session_state:
@@ -1779,7 +1840,7 @@ def render():
 
         tf_options = ["1 Day", "3 Days", "1 Week", "1 Month"]
         tf_map = {"1 Day": "1D", "3 Days": "3D", "1 Week": "1W", "1 Month": "1M"}
-        
+
         current_tf = st.session_state.sector_tf
         tf_code = tf_map.get(current_tf, "1D")
         sectors = get_sector_performance(tf_code)
@@ -1804,38 +1865,38 @@ def render():
 
             sectors_html += f'<div class="sector-item" style="background:{bg_color};"><div class="sector-code">{code}</div><div class="sector-name">{name}</div><div class="sector-change" style="color:{text_color};">{change:+.2f}%</div></div>'
 
-        # Header del módulo con título, tooltip y radio buttons
-        header_col1, header_col2, header_col3 = st.columns([2, 1, 1])
-        
-        with header_col1:
-            st.markdown('''
+        # Header del módulo con título, botones y tooltip (estructura requerida)
+        header_html = '''
+        <div style="background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <div class="module-title" style="color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Sector Rotation</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendimiento de los sectores vía ETFs sectoriales.</div>
+                    <div class="tooltip-content">Rendimiento de los sectores vía ETFs sectoriales. Selecciona la temporalidad para ver el rendimiento en diferentes periodos.</div>
                 </div>
             </div>
-            ''', unsafe_allow_html=True)
-        
-        with header_col3:
-            # Radio buttons estilizados como botones de segmento
-            selected_tf = st.radio(
-                "",
-                tf_options,
-                index=tf_options.index(current_tf),
-                key="sector_tf_radio",
-                horizontal=True,
-                label_visibility="collapsed"
-            )
-            
-            if selected_tf != current_tf:
-                st.session_state.sector_tf = selected_tf
-                st.rerun()
+        </div>
+        '''
+
+        st.markdown(header_html, unsafe_allow_html=True)
+
+        # Radio buttons para selección de timeframe
+        selected_tf = st.radio(
+            "",
+            tf_options,
+            index=tf_options.index(current_tf),
+            key="sector_tf_radio",
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+        if selected_tf != current_tf:
+            st.session_state.sector_tf = selected_tf
+            st.rerun()
 
         # Contenido del módulo
         st.markdown(f'''
-        <div style="border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; height: 430px; display: flex; flex-direction: column; margin-top: -10px;">
+        <div style="border: 1px solid #1a1e26; border-radius: 0 0 10px 10px; overflow: hidden; background: #11141a; height: 395px; display: flex; flex-direction: column; margin-top: -1px;">
             <div style="flex: 1; overflow-y: auto; padding: 8px;">
                 <div class="sector-grid">{sectors_html}</div>
             </div>
@@ -1890,12 +1951,12 @@ def render():
     # EARNINGS CALENDAR
     with f3c1:
         earnings = get_earnings_calendar()
-        
+
         earn_html = ""
         for item in earnings:
             impact_color = "#f23645" if item['impact'] == "High" else "#888"
             days = item.get('days', 0)
-            
+
             if days == 0:
                 days_text = "HOY"
                 days_color = "#f23645"
@@ -1912,7 +1973,7 @@ def render():
                 days_text = f"{days}d"
                 days_color = "#888"
                 days_bg = "#1a1e26"
-            
+
             market_cap = item.get('market_cap', '-')
             if market_cap == '-':
                 try:
@@ -1921,7 +1982,7 @@ def render():
                     market_cap = f"${cap:.1f}T" if cap >= 1 else f"${cap*1000:.0f}B"
                 except:
                     market_cap = "Large Cap"
-            
+
             earn_html += f'''
             <div style="background:#0c0e12; padding:10px; border-radius:6px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; position: relative; overflow: hidden;">
                 <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: {impact_color};"></div>
@@ -1949,7 +2010,7 @@ def render():
                     <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">MEGA-CAP</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Próximos earnings de mega-cap companies (>$50B). Datos vía Alpha Vantage/yfinance.</div>
+                        <div class="tooltip-content">Próximos earnings de mega-cap companies (>$50B). Datos actualizados a las 9:00 AM hora española. Solo se muestran earnings desde hoy en adelante.</div>
                     </div>
                 </div>
             </div>
@@ -2013,6 +2074,7 @@ def render():
             <div class="update-timestamp">Updated: {get_timestamp()}</div>
         </div>
         ''', unsafe_allow_html=True)
+
 
     # FILA 4
     st.write("")
@@ -2092,7 +2154,7 @@ def render():
         ''', unsafe_allow_html=True)
 
 
-    # FILA 5 - Módulos HTML
+    # FILA 5
     st.write("")
     f5c1, f5c2, f5c3 = st.columns(3)
 
@@ -2183,7 +2245,6 @@ def render():
         </div>
         </body></html>'''
         components.html(breadth_html, height=480, scrolling=False)
-
 
     # VIX Term Structure
     with f5c2:
@@ -2296,8 +2357,77 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         </div></body></html>'''
         components.html(crypto_html_full, height=480, scrolling=False)
 
+
+    # FILA 6 - NUEVA FILA CON 3 MÓDULOS VACÍOS
+    st.write("")
+    f6c1, f6c2, f6c3 = st.columns(3)
+
+    with f6c1:
+        st.markdown('''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Módulo Vacío 1</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Espacio reservado para futura implementación.</div>
+                </div>
+            </div>
+            <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
+                <div style="color:#555; font-size:14px; text-align:center;">
+                    <div style="font-size:48px; margin-bottom:10px;">📊</div>
+                    <div>Espacio disponible</div>
+                    <div style="font-size:11px; margin-top:5px;">Para futuros indicadores</div>
+                </div>
+            </div>
+            <div class="update-timestamp">Updated: {get_timestamp()}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with f6c2:
+        st.markdown('''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Módulo Vacío 2</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Espacio reservado para futura implementación.</div>
+                </div>
+            </div>
+            <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
+                <div style="color:#555; font-size:14px; text-align:center;">
+                    <div style="font-size:48px; margin-bottom:10px;">📈</div>
+                    <div>Espacio disponible</div>
+                    <div style="font-size:11px; margin-top:5px;">Para futuros indicadores</div>
+                </div>
+            </div>
+            <div class="update-timestamp">Updated: {get_timestamp()}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with f6c3:
+        st.markdown('''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Módulo Vacío 3</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Espacio reservado para futura implementación.</div>
+                </div>
+            </div>
+            <div class="module-content" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;">
+                <div style="color:#555; font-size:14px; text-align:center;">
+                    <div style="font-size:48px; margin-bottom:10px;">📉</div>
+                    <div>Espacio disponible</div>
+                    <div style="font-size:11px; margin-top:5px;">Para futuros indicadores</div>
+                </div>
+            </div>
+            <div class="update-timestamp">Updated: {get_timestamp()}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
 if __name__ == "__main__":
     render()
+
 
 
 

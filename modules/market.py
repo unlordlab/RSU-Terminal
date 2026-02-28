@@ -170,7 +170,7 @@ def get_economic_calendar():
     if INVESTPY_AVAILABLE:
         try:
             from_date = datetime.now().strftime('%d/%m/%Y')
-            to_date = (datetime.now() + timedelta(days=7)).strftime('%d/%m/%Y')
+            to_date = (datetime.now() + timedelta(days=15)).strftime('%d/%m/%Y')
             
             calendar = investpy.economic_calendar(
                 time_zone='GMT', 
@@ -262,7 +262,7 @@ def get_economic_calendar():
     # Si tenemos eventos, ordenarlos por fecha y hora
     if events:
         events.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
-        return events[:8]  # Limitar a 8 eventos más próximos
+        return events[:12]  # Hasta 12 eventos a 15 días vista
     
     # Fallback
     return get_fallback_economic_calendar()
@@ -282,85 +282,21 @@ def get_forexfactory_calendar():
         return events
 
 def get_fallback_economic_calendar():
-    """Datos de ejemplo realistas basados en la fecha actual"""
-    today = datetime.now()
-    
-    fallback_events = [
+    """Fallback cuando no hay datos reales disponibles"""
+    return [
         {
-            "date": today,
+            "date": datetime.now(),
             "date_display": "HOY",
-            "date_color": "#00ffad",
-            "time": "14:30",
-            "event": "Solicitudes de Desempleo",
-            "imp": "High",
-            "val": "-",
-            "prev": "215K",
-            "forecast": "218K",
-            "country": "US"
-        },
-        {
-            "date": today,
-            "date_display": "HOY",
-            "date_color": "#00ffad",
-            "time": "16:00",
-            "event": "Pedidos de Bienes Duraderos",
-            "imp": "Medium",
-            "val": "-",
-            "prev": "-4.6%",
-            "forecast": "+2.0%",
-            "country": "US"
-        },
-        {
-            "date": today + timedelta(days=1),
-            "date_display": "MAÑANA",
-            "date_color": "#3b82f6",
-            "time": "14:30",
-            "event": "PIB (Revisado)",
-            "imp": "High",
-            "val": "-",
-            "prev": "2.8%",
-            "forecast": "2.9%",
-            "country": "US"
-        },
-        {
-            "date": today + timedelta(days=1),
-            "date_display": "MAÑANA",
-            "date_color": "#3b82f6",
-            "time": "16:00",
-            "event": "Ventas de Viviendas Pendientes",
-            "imp": "Medium",
-            "val": "-",
-            "prev": "+4.6%",
-            "forecast": "+1.0%",
-            "country": "US"
-        },
-        {
-            "date": today + timedelta(days=2),
-            "date_display": (today + timedelta(days=2)).strftime('%d %b').upper(),
             "date_color": "#888",
-            "time": "14:30",
-            "event": "IPC Subyacente",
-            "imp": "High",
+            "time": "--:--",
+            "event": "Datos no disponibles",
+            "imp": "Low",
             "val": "-",
-            "prev": "0.3%",
-            "forecast": "0.2%",
+            "prev": "-",
+            "forecast": "-",
             "country": "US"
-        },
-        {
-            "date": today + timedelta(days=2),
-            "date_display": (today + timedelta(days=2)).strftime('%d %b').upper(),
-            "date_color": "#888",
-            "time": "14:30",
-            "event": "Nóminas No Agrícolas",
-            "imp": "High",
-            "val": "-",
-            "prev": "143K",
-            "forecast": "175K",
-            "country": "US"
-        },
+        }
     ]
-    
-    return fallback_events
 
 @st.cache_data(ttl=300)
 def get_crypto_prices():
@@ -704,70 +640,97 @@ def get_fallback_sectors(timeframe="1D"):
 @st.cache_data(ttl=300)
 def get_vix_term_structure():
     try:
+        # VIX Spot real
         try:
             vix = yf.Ticker("^VIX")
             vix_hist = vix.history(period="5d")
             if len(vix_hist) >= 3:
-                current_spot = vix_hist['Close'].iloc[-1]
-                prev_spot = vix_hist['Close'].iloc[-2]
-                spot_2days = vix_hist['Close'].iloc[-3]
+                current_spot = float(vix_hist['Close'].iloc[-1])
+                prev_spot = float(vix_hist['Close'].iloc[-2])
+                spot_2days = float(vix_hist['Close'].iloc[-3])
             else:
-                current_spot = 17.45
-                prev_spot = 17.36
-                spot_2days = 20.37
+                current_spot, prev_spot, spot_2days = 17.45, 17.36, 20.37
         except:
-            current_spot = 17.45
-            prev_spot = 17.36
-            spot_2days = 20.37
+            current_spot, prev_spot, spot_2days = 17.45, 17.36, 20.37
 
-        months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct']
-        base_year = datetime.now().year
+        # Intentar obtener futuros VIX reales (VX1-VX8 en CBOE via yfinance)
+        # Los futuros VIX tienen símbolos como VXH25, VXJ25, etc. en yfinance
+        now = datetime.now()
+        month_codes = ['F','G','H','J','K','M','N','Q','U','V','X','Z']
+        month_names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+        
+        vix_futures = []
+        vix_futures.append({'month': f"{month_names[now.month-1]} {now.year}", 
+                            'current': round(current_spot, 2), 
+                            'previous': round(prev_spot, 2), 
+                            'two_days': round(spot_2days, 2)})
+        
+        # Intentar obtener futuros reales
+        futures_obtained = False
+        future_vals = []
+        for i in range(1, 8):
+            m = (now.month - 1 + i) % 12
+            y = now.year + ((now.month - 1 + i) // 12)
+            code = month_codes[m]
+            yr2 = str(y)[-2:]
+            sym = f"VX{code}{yr2}.CF"
+            try:
+                t = yf.Ticker(sym)
+                h = t.history(period="2d")
+                if len(h) >= 1:
+                    val = float(h['Close'].iloc[-1])
+                    prev_val = float(h['Close'].iloc[-2]) if len(h) >= 2 else val
+                    vix_futures.append({
+                        'month': f"{month_names[m]} {y}",
+                        'current': round(val, 2),
+                        'previous': round(prev_val, 2),
+                        'two_days': round(prev_val * 0.99, 2)
+                    })
+                    future_vals.append(val)
+                    futures_obtained = True
+            except:
+                pass
 
-        current_curve = [current_spot]
-        prev_curve = [prev_spot]
-        two_days_curve = [spot_2days]
+        # Si no obtuvimos futuros reales, simular curva realista
+        if not futures_obtained or len(vix_futures) < 4:
+            vix_futures = []
+            is_contango = current_spot < 20
+            for i in range(8):
+                m = (now.month - 1 + i) % 12
+                y = now.year + ((now.month - 1 + i) // 12)
+                if is_contango:
+                    cur = current_spot + (i * 0.9) + (i * i * 0.08)
+                    prv = prev_spot + (i * 0.85) + (i * i * 0.07)
+                    td = spot_2days + (i * 0.5) + (i * i * 0.05)
+                else:
+                    cur = max(current_spot - (i * 0.3), 12)
+                    prv = max(prev_spot - (i * 0.25), 12)
+                    td = max(spot_2days - (i * 0.2), 12)
+                vix_futures.append({
+                    'month': f"{month_names[m]} {y}",
+                    'current': round(cur, 2),
+                    'previous': round(prv, 2),
+                    'two_days': round(td, 2)
+                })
 
-        is_contango = current_spot < 20
-
-        for i in range(1, 9):
-            if is_contango:
-                current_curve.append(current_spot + (i * 0.9) + (i * i * 0.08))
-                prev_curve.append(prev_spot + (i * 0.85) + (i * i * 0.07))
-                two_days_curve.append(spot_2days + (i * 0.5) + (i * i * 0.05))
-            else:
-                current_curve.append(current_spot - (i * 0.3))
-                prev_curve.append(prev_spot - (i * 0.25))
-                two_days_curve.append(spot_2days - (i * 0.2))
-
-        vix_data = []
-        for i, month in enumerate(months):
-            year = base_year if i < 10 else base_year + 1
-            vix_data.append({
-                'month': f"{month} {year}",
-                'current': round(current_curve[i], 2),
-                'previous': round(prev_curve[i], 2),
-                'two_days': round(two_days_curve[i], 2)
-            })
-
-        if current_curve[-1] > current_curve[0]:
+        # Determinar estado
+        if len(vix_futures) >= 2 and vix_futures[-1]['current'] > vix_futures[0]['current']:
             state = "Contango"
-            state_desc = "Typical in calm markets - Conducive to dip buying"
+            state_desc = "Mercados calmados - Favorable para comprar caídas"
             state_color = "#00ffad"
-            explanation = ("<b>Contango:</b> Futures price > Spot price. "
-                         "The market expects volatility to decrease over time. "
-                         "This is the normal state in calm markets. "
-                         "Investors pay a premium for future protection, expecting volatility to mean revert lower.")
+            explanation = ("<b>Contango:</b> Precio Futuros > Spot. "
+                         "El mercado espera que la volatilidad baje con el tiempo. "
+                         "Estado normal en mercados tranquilos.")
         else:
             state = "Backwardation"
-            state_desc = "Market stress detected - Caution advised"
+            state_desc = "Estrés de mercado detectado - Precaución"
             state_color = "#f23645"
-            explanation = ("<b>Backwardation:</b> Futures price < Spot price. "
-                         "The market expects volatility to increase. "
-                         "Immediate hedging demand drives up short-term volatility. "
-                         "This signals fear of upcoming market moves.")
+            explanation = ("<b>Backwardation:</b> Precio Futuros < Spot. "
+                         "El mercado espera más volatilidad. "
+                         "Señal de miedo inmediato.")
 
         return {
-            'data': vix_data,
+            'data': vix_futures,
             'current_spot': current_spot,
             'prev_spot': prev_spot,
             'spot_2days': spot_2days,
@@ -775,7 +738,7 @@ def get_vix_term_structure():
             'state_desc': state_desc,
             'state_color': state_color,
             'explanation': explanation,
-            'is_contango': is_contango
+            'is_contango': state == "Contango"
         }
     except Exception as e:
         return get_fallback_vix_structure()
@@ -847,17 +810,20 @@ def generate_vix_chart_html(vix_data):
         x = padding + (i / (len(months) - 1)) * (chart_width - 2 * padding)
         x_labels += f'<text x="{x}" y="{chart_height-8}" text-anchor="middle" fill="#666" font-size="8">{month}</text>'
 
+    today_str = datetime.now().strftime('%d/%m')
+    yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%d/%m')
+    two_days_str = (datetime.now() - timedelta(days=2)).strftime('%d/%m')
     legend_y = 15
     legend = f"""
     <rect x="{chart_width-175}" y="5" width="170" height="50" fill="#0c0e12" stroke="#1a1e26" rx="4"/>
     <line x1="{chart_width-170}" y1="{legend_y+5}" x2="{chart_width-155}" y2="{legend_y+5}" stroke="#3b82f6" stroke-width="2"/>
-    <text x="{chart_width-150}" y="{legend_y+8}" fill="#888" font-size="8">Current (2/10): {vix_data['current_spot']:.2f}</text>
+    <text x="{chart_width-150}" y="{legend_y+8}" fill="#888" font-size="8">Hoy ({today_str}): {vix_data['current_spot']:.2f}</text>
 
     <line x1="{chart_width-170}" y1="{legend_y+20}" x2="{chart_width-155}" y2="{legend_y+20}" stroke="#f97316" stroke-width="2" stroke-dasharray="4,3"/>
-    <text x="{chart_width-150}" y="{legend_y+23}" fill="#888" font-size="8">Previous (2/9): {vix_data['prev_spot']:.2f}</text>
+    <text x="{chart_width-150}" y="{legend_y+23}" fill="#888" font-size="8">Ayer ({yesterday_str}): {vix_data['prev_spot']:.2f}</text>
 
     <line x1="{chart_width-170}" y1="{legend_y+35}" x2="{chart_width-155}" y2="{legend_y+35}" stroke="#6b7280" stroke-width="2" stroke-dasharray="4,3"/>
-    <text x="{chart_width-150}" y="{legend_y+38}" fill="#888" font-size="8">2 Days Ago (2/8): {vix_data['spot_2days']:.2f}</text>
+    <text x="{chart_width-150}" y="{legend_y+38}" fill="#888" font-size="8">-2d ({two_days_str}): {vix_data['spot_2days']:.2f}</text>
     """
 
     return f"""
@@ -906,7 +872,7 @@ def get_fallback_crypto_fear_greed():
         'value': 50,
         'classification': 'Neutral',
         'timestamp': get_timestamp(),
-        'source': 'alternative.me'
+        'source': 'Datos no disponibles'
     }
 
 @st.cache_data(ttl=600)
@@ -1025,34 +991,20 @@ def get_earnings_calendar():
     return get_fallback_earnings_realistic()
 
 def get_fallback_earnings_realistic():
-    """Fallback con datos realistas de próximos earnings basados en fechas actuales"""
+    """Fallback cuando no hay datos reales disponibles"""
     today = datetime.now()
-    
-    # Generar fechas relativas a hoy para que siempre parezcan actuales
-    fallback_data = [
-        {"ticker": "NVDA", "date_offset": 2, "time": "After Market", "impact": "High", "market_cap": "$3.2T"},
-        {"ticker": "AAPL", "date_offset": 5, "time": "After Market", "impact": "High", "market_cap": "$3.4T"},
-        {"ticker": "MSFT", "date_offset": 7, "time": "After Market", "impact": "High", "market_cap": "$3.1T"},
-        {"ticker": "AMZN", "date_offset": 8, "time": "After Market", "impact": "High", "market_cap": "$2.1T"},
-        {"ticker": "GOOGL", "date_offset": 10, "time": "After Market", "impact": "High", "market_cap": "$2.3T"},
-        {"ticker": "META", "date_offset": 12, "time": "After Market", "impact": "High", "market_cap": "$1.8T"},
-    ]
-    
-    result = []
-    for item in fallback_data:
-        target_date = today + timedelta(days=item['date_offset'])
-        result.append({
-            'ticker': item['ticker'],
-            'date': target_date.strftime('%b %d'),
-            'full_date': target_date,
-            'time': item['time'],
-            'impact': item['impact'],
-            'market_cap': item['market_cap'],
-            'days': item['date_offset'],
+    return [
+        {
+            'ticker': 'N/D',
+            'date': 'Sin datos',
+            'full_date': today,
+            'time': '-',
+            'impact': 'N/D',
+            'market_cap': 'Datos no disponibles',
+            'days': 0,
             'source': 'Fallback'
-        })
-    
-    return result
+        }
+    ]
 
 @st.cache_data(ttl=600)
 def get_insider_trading():
@@ -1108,12 +1060,7 @@ def get_insider_trading():
 
 def get_fallback_insider():
     return [
-        {"ticker": "NVDA", "insider": "Jensen Huang", "position": "CEO", "type": "SELL", "amount": "$12.5M"},
-        {"ticker": "TSLA", "insider": "Elon Musk", "position": "CEO", "type": "SELL", "amount": "$45.1M"},
-        {"ticker": "META", "insider": "Mark Zuckerberg", "position": "CEO", "type": "SELL", "amount": "$28.3M"},
-        {"ticker": "MSFT", "insider": "Satya Nadella", "position": "CEO", "type": "SELL", "amount": "$8.2M"},
-        {"ticker": "AAPL", "insider": "Tim Cook", "position": "CEO", "type": "SELL", "amount": "$5.4M"},
-        {"ticker": "AMZN", "insider": "Andy Jassy", "position": "CEO", "type": "SELL", "amount": "$3.1M"},
+        {"ticker": "N/D", "insider": "Datos no disponibles", "position": "-", "type": "N/D", "amount": "-"},
     ]
 
 @st.cache_data(ttl=600)
@@ -1143,22 +1090,29 @@ def get_market_breadth():
 
 def get_fallback_market_breadth():
     return {
-        'price': 695.50, 'sma50': 686.61, 'sma200': float('nan'),
-        'above_sma50': True, 'above_sma200': False, 'golden_cross': False,
-        'rsi': 59.2, 'trend': 'BAJISTA', 'strength': 'DÉBIL'
+        'price': 0.0, 'sma50': 0.0, 'sma200': 0.0,
+        'above_sma50': False, 'above_sma200': False, 'golden_cross': False,
+        'rsi': 50.0, 'trend': 'Datos no disponibles', 'strength': 'N/D'
     }
 
 def get_fallback_news():
     return [
-        {"time": "19:45", "title": "Tesla supera expectatives de benefici", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "18:30", "title": "El PIB dels EUA creix un 2,3% en l'últim trimestre", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "16:15", "title": "Apple presenta resultats rècord gràcies a l'iPhone", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "14:00", "title": "La inflació subjacent es modera al 3,2%", "impact": "Moderado", "color": "#ff9800", "link": "#"},
-        {"time": "12:30", "title": "Microsoft Cloud supera els 30.000M en ingressos", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "11:15", "title": "La Fed manté els tipus d'interès sense canvis", "impact": "Alto", "color": "#f23645", "link": "#"},
-        {"time": "10:00", "title": "Amazon anuncia nova divisió d'intel·ligència artificial", "impact": "Moderado", "color": "#ff9800", "link": "#"},
-        {"time": "09:30", "title": "NVIDIA presenta nous xips per a centres de dades", "impact": "Alto", "color": "#f23645", "link": "#"},
+        {"time": "--:--", "title": "Datos no disponibles. Configure FINNHUB_API_KEY.", "impact": "N/D", "color": "#888", "link": "#"},
     ]
+
+def translate_to_spanish(text):
+    """Intenta traducir texto al castellano usando MyMemory API (gratuita)"""
+    try:
+        url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(text[:500])}&langpair=en|es"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            translated = data.get('responseData', {}).get('translatedText', '')
+            if translated and translated != text:
+                return translated
+    except:
+        pass
+    return text
 
 @st.cache_data(ttl=300)
 def fetch_finnhub_news():
@@ -1171,11 +1125,13 @@ def fetch_finnhub_news():
         data = r.json()
         news_list = []
         for item in data[:8]:
-            title = item.get("headline", "Sense titol")
+            title_en = item.get("headline", "Sin título")
+            # Traducir al castellano
+            title = translate_to_spanish(title_en)
             link = item.get("url", "#")
             timestamp = item.get("datetime", 0)
             time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M") if timestamp else "N/A"
-            lower = title.lower()
+            lower = title_en.lower()
             impact, color = ("Alto", "#f23645") if any(k in lower for k in ["earnings", "profit", "revenue", "gdp", "fed", "fomc", "inflation", "rate", "outlook"]) else ("Moderado", "#ff9800")
             news_list.append({"time": time_str, "title": title, "impact": impact, "color": color, "link": link})
         return news_list if news_list else get_fallback_news()
@@ -1480,11 +1436,12 @@ def render():
 
     with col1:
         indices_html = ""
-        for t, n in [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000")]:
+        for t, n in [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ 100"), ("^DJI", "DOW JONES"), ("^RUT", "RUSSELL 2000"),
+                     ("RSP", "S&P 500 EW"), ("MEME", "MEME Stocks"), ("VUG", "Growth ETF")]:
             idx_val, idx_change = get_market_index(t)
             color = "#00ffad" if idx_change >= 0 else "#f23645"
-            indices_html += f'''<div style="background:#0c0e12; padding:10px 12px; border-radius:8px; margin-bottom:8px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
-                <div><div style="font-weight:bold; color:white; font-size:12px;">{n}</div><div style="color:#555; font-size:9px;">INDEX</div></div>
+            indices_html += f'''<div style="background:#0c0e12; padding:10px 12px; border-radius:8px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center;">
+                <div><div style="font-weight:bold; color:white; font-size:12px;">{n}</div><div style="color:#555; font-size:9px;">{t}</div></div>
                 <div style="text-align:right;"><div style="color:white; font-weight:bold; font-size:12px;">{idx_val:,.2f}</div><div style="color:{color}; font-size:10px; font-weight:bold;">{idx_change:+.2f}%</div></div>
             </div>'''
 
@@ -1554,100 +1511,113 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # === REDDIT SOCIAL PULSE MEJORADO - MASTER BUZZ ===
+    # === REDDIT SOCIAL PULSE - MASTER BUZZ ===
     with col3:
         master_data = get_buzztickr_master_data()
         buzz_items = master_data.get('data', [])
+        timestamp_str = master_data.get('timestamp', get_timestamp())
+        source_str = master_data.get('source', 'API')
+        count_str = master_data.get('count', 0)
         
-        # Construir tabla HTML con todas las métricas
-        buzz_table_html = '''
-        <div class="buzz-table-header">
-            <div>#</div>
-            <div>TICKER</div>
-            <div>SCORE</div>
-            <div>HEALTH</div>
-            <div>📢 HYPE</div>
-            <div>💰 SMART</div>
-            <div>🧨 SQZ</div>
-        </div>
-        '''
-        
-        for item in buzz_items[:10]:  # Mostrar top 10
-            rank = item.get('rank', '-')
-            ticker = item.get('ticker', '-')
-            buzz_score = item.get('buzz_score', '-')
-            health = item.get('health', '-')
-            social_hype = item.get('social_hype', '')
-            smart_money = item.get('smart_money', '')
-            squeeze = item.get('squeeze', '')
-            
-            # Clase de rank
-            rank_class = "top3" if int(rank) <= 3 else "normal" if rank.isdigit() else "normal"
-            
-            # Clase de health
+        # Construir filas HTML
+        rows_html = ""
+        for item in buzz_items[:10]:
+            rank = str(item.get('rank', '-'))
+            ticker = str(item.get('ticker', '-'))
+            buzz_score = str(item.get('buzz_score', '-'))
+            health = str(item.get('health', '-'))
+            social_hype = str(item.get('social_hype', ''))
+            smart_money = str(item.get('smart_money', ''))
+            squeeze = str(item.get('squeeze', ''))
+
+            try:
+                rank_int = int(rank)
+                rank_bg = "#f23645" if rank_int <= 3 else "#1a1e26"
+                rank_color = "white"
+            except:
+                rank_bg = "#1a1e26"
+                rank_color = "#888"
+
             health_lower = health.lower()
             if 'strong' in health_lower:
-                health_class = "health-strong"
-                health_short = health.replace('Strong', '').strip() or 'OK'
+                h_bg, h_color = "#00ffad22", "#00ffad"
+                h_text = health.replace('Strong','').strip() or 'STR'
             elif 'hold' in health_lower:
-                health_class = "health-hold"
-                health_short = health.replace('Hold', '').strip() or 'HOLD'
+                h_bg, h_color = "#ff980022", "#ff9800"
+                h_text = health.replace('Hold','').strip() or 'HLD'
             else:
-                health_class = "health-weak"
-                health_short = health.replace('Weak', '').strip() or 'WEAK'
-            
-            # Formatear métricas
-            hype_display = social_hype if social_hype else '<span style="color:#333;">-</span>'
-            smart_display = smart_money if smart_money else '<span style="color:#333;">-</span>'
-            squeeze_display = squeeze if squeeze else '<span style="color:#333;">-</span>'
-            
-            # Truncar texto largo
-            if len(str(squeeze_display)) > 25:
-                squeeze_display = str(squeeze_display)[:22] + '...'
-            
-            buzz_table_html += f'''
-            <div class="buzz-row">
-                <div><div class="buzz-rank {rank_class}">{rank}</div></div>
-                <div class="buzz-ticker">${ticker}</div>
-                <div class="buzz-score">{buzz_score}</div>
-                <div><div class="buzz-health {health_class}">{health_short}</div></div>
-                <div class="buzz-metric buzz-stars">{hype_display}</div>
-                <div class="buzz-metric">{smart_display}</div>
-                <div class="buzz-metric" style="color:#f23645;">{squeeze_display}</div>
-            </div>
-            '''
-        
-        # Stats adicionales
-        stats_html = f'''
-        <div style="background: #0c0e12; border-top: 1px solid #1a1e26; padding: 8px; display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 9px; color: #666;">
-                <span style="color: #00ffad; font-weight: bold;">{master_data.get('count', 0)}</span> ACTIVOS TRACKED
-            </div>
-            <div style="font-size: 8px; color: #444; text-transform: uppercase;">
-                BuzzTickr Master Buzz
-            </div>
-        </div>
-        '''
+                h_bg, h_color = "#f2364522", "#f23645"
+                h_text = health.replace('Weak','').strip() or 'WK'
 
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Reddit Social Pulse</div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="background: #f23645; color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">LIVE</span>
+            # Simplificar hype: mostrar solo si hay estrellas
+            hype_short = "★★★★★" if social_hype else "—"
+            hype_color = "#ffd700" if social_hype else "#333"
+            smart_short = "★★★★★" if smart_money else "—"
+            smart_color = "#00ffad" if smart_money else "#333"
+            # Squeeze: extraer % si existe
+            sqz_match = re.search(r'\((\d+)%\)', squeeze)
+            if sqz_match:
+                sqz_text = f"{sqz_match.group(1)}%"
+                sqz_color = "#f23645"
+            elif squeeze:
+                sqz_text = "●"
+                sqz_color = "#f23645"
+            else:
+                sqz_text = "—"
+                sqz_color = "#333"
+
+            rows_html += f'''
+            <div style="display:grid; grid-template-columns:22px 42px 28px 38px 30px 30px 30px; gap:4px; padding:5px 4px; border-bottom:1px solid #1a1e26; align-items:center; font-size:9px;">
+                <div style="width:18px; height:18px; border-radius:50%; background:{rank_bg}; color:{rank_color}; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:8px;">{rank}</div>
+                <div style="color:#00ffad; font-weight:bold; font-size:10px;">${ticker}</div>
+                <div style="color:white; font-weight:bold; text-align:center;">{buzz_score}</div>
+                <div style="background:{h_bg}; color:{h_color}; padding:2px 3px; border-radius:3px; text-align:center; font-size:8px;">{h_text}</div>
+                <div style="color:{hype_color}; text-align:center;">{hype_short}</div>
+                <div style="color:{smart_color}; text-align:center;">{smart_short}</div>
+                <div style="color:{sqz_color}; font-weight:bold; text-align:center;">{sqz_text}</div>
+            </div>'''
+
+        buzz_html_full = f'''<!DOCTYPE html><html><head><style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
+        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .table-head {{ display:grid; grid-template-columns:22px 42px 28px 38px 30px 30px 30px; gap:4px; padding:5px 4px; background:#0c0e12; border-bottom:2px solid #2a3f5f; font-size:7px; font-weight:bold; color:#888; text-transform:uppercase; letter-spacing:0.5px; }}
+        .content {{ flex:1; overflow-y:auto; }}
+        .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:5px 8px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
+        .tooltip-wrapper {{ position:static; display:inline-block; }}
+        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        </style></head><body>
+        <div class="container">
+            <div class="header">
+                <div class="title">Reddit Social Pulse</div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="background:#f23645; color:white; padding:2px 6px; border-radius:3px; font-size:9px; font-weight:bold;">LIVE</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz de BuzzTickr: Rank, Ticker, Buzz Score, Health, Social Hype, Smart Money y Squeeze Potential. Datos actualizados diariamente.</div>
+                        <div class="tooltip-content">Master Buzz BuzzTickr: Rank, Ticker, Score, Health, Hype Social, Smart Money y Squeeze. Actualizado diariamente.</div>
                     </div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 0; overflow-x: hidden;">
-                {buzz_table_html}
-                {stats_html}
+            <div class="table-head">
+                <div>#</div><div>TICKER</div><div>SCR</div><div>HLTH</div><div>HYPE</div><div>SMRT</div><div>SQZ</div>
             </div>
-            <div class="update-timestamp">Updated: {master_data.get('timestamp', get_timestamp())} • {master_data.get('source', 'API')}</div>
+            <div class="content">
+                {rows_html}
+            </div>
+            <div class="footer">
+                <span style="font-size:9px; color:#666;"><span style="color:#00ffad; font-weight:bold;">{count_str}</span> tracked</span>
+                <span style="font-size:8px; color:#444;">BuzzTickr</span>
+            </div>
+            <div class="update-timestamp">Updated: {timestamp_str} • {source_str}</div>
         </div>
-        ''', unsafe_allow_html=True)
+        </body></html>'''
+        
+        components.html(buzz_html_full, height=420, scrolling=False)
 
 
     # FILA 2
@@ -1726,16 +1696,27 @@ def render():
 
             sectors_html += f'<div class="sector-item" style="background:{bg_color};"><div class="sector-code">{code}</div><div class="sector-name">{name}</div><div class="sector-change" style="color:{text_color};">{change:+.2f}%</div></div>'
 
-        # HTML del módulo
+        # Opciones de timeframe en el header como botones HTML (el selectbox real está abajo, oculto)
+        tf_buttons_html = ""
+        for opt, lbl in [("1D","1D"), ("3D","3D"), ("1W","1W"), ("1M","1M")]:
+            is_active = opt == tf_code
+            bg = "#3b82f6" if is_active else "#1a1e26"
+            border = "#3b82f6" if is_active else "#2a3f5f"
+            tf_buttons_html += f'<span style="background:{bg}; border:1px solid {border}; color:white; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:bold; cursor:pointer; margin-left:2px;">{lbl}</span>'
+
+        # HTML del módulo con selector integrado en header
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header" style="justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="module-title">Sector Rotation</div>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
                         <div class="tooltip-content">Rendiment dels sectors ({current_tf}) via ETFs sectorials.</div>
                     </div>
+                    <div class="module-title">Sector Rotation</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:2px;">
+                    {tf_buttons_html}
                 </div>
             </div>
             <div class="module-content" style="padding: 8px;">
@@ -1745,7 +1726,7 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-        # Selectbox funcional de Streamlit - oculto visualmente pero funcional
+        # Selectbox funcional de Streamlit - visible con label colapsado
         selected_tf = st.selectbox(
             "Timeframe", 
             tf_options, 
@@ -1761,6 +1742,8 @@ def render():
     with c3:
         crypto_fg = get_crypto_fear_greed()
         val = crypto_fg['value']
+        fg_timestamp = crypto_fg.get('timestamp', get_timestamp())
+        fg_source = crypto_fg.get('source', 'alternative.me')
 
         if val <= 24: label, col = "EXTREME FEAR", "#d32f2f"
         elif val <= 44: label, col = "FEAR", "#f57c00"
@@ -1793,7 +1776,7 @@ def render():
                     <div class="fng-legend-item"><div class="fng-color-box" style="background:#00ffad;"></div><div>Extreme<br>Greed</div></div>
                 </div>
             </div>
-            <div class="update-timestamp">Updated: {crypto_fg['timestamp']} • {crypto_fg['source']}</div>
+            <div class="update-timestamp">Updated: {fg_timestamp} • {fg_source}</div>
         </div>
         ''', unsafe_allow_html=True)
 
@@ -2212,6 +2195,25 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         <div class="update-timestamp">Updated: ''' + timestamp_str + '''</div>
         </div></body></html>'''
         components.html(crypto_html_full, height=420, scrolling=False)
+
+    # FILA 6 - Módulos vacíos (reservados para futuras funcionalidades)
+    st.write("")
+    f6c1, f6c2, f6c3 = st.columns(3)
+
+    empty_module_html = '''
+    <div class="module-container" style="display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; border-style:dashed;">
+        <div style="color:#2a3f5f; font-size:2rem;">＋</div>
+        <div style="color:#2a3f5f; font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Próximamente</div>
+        <div style="color:#1a1e26; font-size:9px;">Módulo en desarrollo</div>
+    </div>
+    '''
+
+    with f6c1:
+        st.markdown(empty_module_html, unsafe_allow_html=True)
+    with f6c2:
+        st.markdown(empty_module_html, unsafe_allow_html=True)
+    with f6c3:
+        st.markdown(empty_module_html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     render()

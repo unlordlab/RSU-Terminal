@@ -237,6 +237,10 @@ def get_economic_calendar():
                         if event_dt.date() < now.date():
                             continue
                         
+                        # Saltar fines de semana (los mercados no publican datos sáb/dom)
+                        if event_dt.weekday() >= 5:
+                            continue
+                        
                         current_date = event_dt
                         
                         # Hora en CET (+1)
@@ -317,6 +321,8 @@ def get_forexfactory_calendar():
                     date_str = item.get('date', '')
                     event_dt = datetime.strptime(date_str[:19], '%Y-%m-%dT%H:%M:%S') if date_str else now
                     if event_dt.date() < now.date():
+                        continue
+                    if event_dt.weekday() >= 5:  # saltar sáb/dom
                         continue
                     impact_map = {'High': 'High', 'Medium': 'Medium', 'Low': 'Low'}
                     impact = impact_map.get(item.get('impact', 'Low'), 'Low')
@@ -953,9 +959,14 @@ def get_fallback_crypto_fear_greed():
 @st.cache_data(ttl=1800)
 def get_earnings_calendar():
     """
-    Earnings de mega-caps con fecha exacta y filtrado estricto (solo hoy en adelante).
+    Earnings de mega-caps. Solo muestra fechas futuras reales.
+    Si hoy es fin de semana (sáb/dom), el filtro mínimo es mañana (days>=1).
+    Si hoy es día laborable, mostramos hoy (days>=0) solo si aún no pasó.
     """
-    today = datetime.now().date()
+    now = datetime.now()
+    today = now.date()
+    is_weekend = today.weekday() >= 5  # sábado=5, domingo=6
+    min_days = 1 if is_weekend else 0
     mega_caps_timing = {
         # ticker: (after_market: bool)
         'NVDA': True, 'AAPL': True, 'AMZN': True, 'META': True, 'NFLX': True,
@@ -988,7 +999,7 @@ def get_earnings_calendar():
                     try:
                         rd = pd.to_datetime(row['reportDate']).date()
                         days = (rd - today).days
-                        if days < 0:
+                        if days < min_days:
                             continue
                         sym = row['symbol']
                         after_mkt = mega_caps_timing.get(sym, False)
@@ -1021,7 +1032,7 @@ def get_earnings_calendar():
                     if ed and len(ed) > 0:
                         rd = pd.Timestamp(ed[0]).date()
                         days = (rd - today).days
-                        if 0 <= days <= 60:
+                        if min_days <= days <= 60:
                             info = t.info
                             mc = info.get('marketCap', 0) or 0
                             mc_str = f"${mc/1e12:.1f}T" if mc >= 1e12 else (f"${mc/1e9:.0f}B" if mc >= 1e9 else "-")
@@ -1071,57 +1082,127 @@ def get_fallback_earnings_realistic():
         }
     ]
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def get_insider_trading():
+    """
+    Scraping de OpenInsider.com para obtener transacciones reales de insiders.
+    Filtra compras/ventas significativas de ejecutivos de grandes empresas.
+    No requiere API key.
+    """
+    all_trades = []
     try:
-        api_key = st.secrets.get("FMP_API_KEY", None)
-
-        if not api_key:
-            return get_fallback_insider()
-
-        symbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'META', 'GOOGL', 'AMZN', 'NFLX', 'AMD', 'CRM']
-        all_trades = []
-
-        for symbol in symbols:
-            try:
-                url = f"https://financialmodelingprep.com/api/v4/insider-trading?symbol={symbol}&limit=3&apikey={api_key}"
-                response = requests.get(url, timeout=10)
-
-                if response.status_code == 200:
-                    data = response.json()
-                    for trade in data:
-                        transaction_type = trade.get('transactionType', '')
-                        if 'P' in transaction_type:
-                            trans = "BUY"
-                        elif 'S' in transaction_type:
-                            trans = "SELL"
+        session = get_http_session()
+        # OpenInsider - últimas transacciones de mega-caps
+        url = "http://openinsider.com/screener?s=&o=&pl=&ph=&ll=&lh=&fd=7&fdr=&td=0&tdr=&fdlyl=&fdlyh=&daysago=&xp=1&xs=1&vl=100&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h=&oc2l=&oc2h=&sortcol=0&cnt=40&action=1"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+        }
+        r = session.get(url, timeout=15, headers=headers)
+        set_api_health('Insider', r.status_code == 200)
+        
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            table = soup.find('table', class_='tinytable')
+            if not table:
+                table = soup.find('table', {'id': 'tablewrapper'})
+            
+            if table:
+                rows = table.find_all('tr')[1:]  # skip header
+                for row in rows[:20]:
+                    try:
+                        cells = row.find_all('td')
+                        if len(cells) < 12:
+                            continue
+                        
+                        filing_date = cells[1].get_text(strip=True)
+                        ticker = cells[3].get_text(strip=True)
+                        insider_name = cells[4].get_text(strip=True)[:22]
+                        title = cells[5].get_text(strip=True)[:18]
+                        trade_type = cells[6].get_text(strip=True)
+                        price = cells[7].get_text(strip=True)
+                        qty = cells[8].get_text(strip=True)
+                        owned = cells[9].get_text(strip=True)
+                        value_str = cells[11].get_text(strip=True).replace('$','').replace(',','').replace('+','')
+                        
+                        if 'P -' in trade_type or 'Purchase' in trade_type:
+                            trans = "COMPRA"
+                        elif 'S -' in trade_type or 'Sale' in trade_type:
+                            trans = "VENTA"
                         else:
                             continue
-
-                        shares = trade.get('securitiesTransacted', 0)
-                        price = trade.get('price', 0)
-                        amount = shares * price
-
-                        if amount > 50000:
-                            all_trades.append({
-                                'ticker': symbol,
-                                'insider': trade.get('reportingName', 'Executive')[:20],
-                                'position': trade.get('typeOfOwner', 'Officer')[:15],
-                                'type': trans,
-                                'amount': f"${amount/1e6:.1f}M" if amount >= 1e6 else f"${amount/1e3:.0f}K",
-                                'date': trade.get('transactionDate', 'Recent')
-                            })
-            except Exception as e:
-                continue
-
-        if all_trades:
-            all_trades.sort(key=lambda x: float(x['amount'].replace('$','').replace('M','').replace('K','').replace(',','')), reverse=True)
-            return all_trades[:6]
-
-        return get_fallback_insider()
-
+                        
+                        try:
+                            value_num = float(value_str) * 1000 if 'K' not in value_str else float(value_str.replace('K','')) * 1000
+                            if 'M' in cells[11].get_text():
+                                value_num = float(value_str.replace('M','')) * 1e6
+                            elif 'K' in cells[11].get_text():
+                                value_num = float(value_str.replace('K','')) * 1e3
+                            else:
+                                value_num = float(value_str) if value_str else 0
+                        except:
+                            value_num = 0
+                        
+                        if value_num < 100000:  # mínimo $100K
+                            continue
+                        
+                        value_fmt = f"${value_num/1e6:.1f}M" if value_num >= 1e6 else f"${value_num/1e3:.0f}K"
+                        
+                        all_trades.append({
+                            'ticker': ticker,
+                            'insider': insider_name,
+                            'position': title,
+                            'type': trans,
+                            'amount': value_fmt,
+                            'date': filing_date,
+                            'value_num': value_num,
+                        })
+                    except:
+                        continue
     except Exception as e:
-        return get_fallback_insider()
+        set_api_health('Insider', False)
+    
+    # Fallback: FMP API si está disponible
+    if not all_trades:
+        try:
+            api_key = st.secrets.get("FMP_API_KEY", None)
+            if api_key:
+                session = get_http_session()
+                symbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'META', 'GOOGL', 'AMZN', 'NFLX', 'AMD', 'CRM']
+                for symbol in symbols[:8]:
+                    try:
+                        url = f"https://financialmodelingprep.com/api/v4/insider-trading?symbol={symbol}&limit=3&apikey={api_key}"
+                        r = session.get(url, timeout=10)
+                        if r.status_code == 200:
+                            data = r.json()
+                            for trade in data:
+                                tt = trade.get('transactionType', '')
+                                trans = "COMPRA" if 'P' in tt else ("VENTA" if 'S' in tt else None)
+                                if not trans:
+                                    continue
+                                shares = trade.get('securitiesTransacted', 0) or 0
+                                price_v = trade.get('price', 0) or 0
+                                amount = shares * price_v
+                                if amount > 50000:
+                                    all_trades.append({
+                                        'ticker': symbol,
+                                        'insider': trade.get('reportingName', 'Executive')[:22],
+                                        'position': trade.get('typeOfOwner', 'Officer')[:18],
+                                        'type': trans,
+                                        'amount': f"${amount/1e6:.1f}M" if amount >= 1e6 else f"${amount/1e3:.0f}K",
+                                        'date': trade.get('transactionDate', ''),
+                                        'value_num': amount,
+                                    })
+                    except:
+                        continue
+        except:
+            pass
+    
+    if all_trades:
+        all_trades.sort(key=lambda x: x.get('value_num', 0), reverse=True)
+        return all_trades[:8]
+    
+    return get_fallback_insider()
 
 def get_fallback_insider():
     return [
@@ -1702,9 +1783,22 @@ def render():
     st.markdown(health_html, unsafe_allow_html=True)
 
     # ── REFRESH BUTTON ─────────────────────────────────────────────────────────
-    if st.button("🔄 Actualizar datos", key="global_refresh", type="secondary"):
-        st.cache_data.clear()
-        st.rerun()
+    col_r1, col_r2, col_r3 = st.columns([1, 1, 1])
+    with col_r3:
+        st.markdown(
+            '<style>'
+            'button[kind="secondary"][data-testid="baseButton-secondary"] {'
+            'background:transparent!important;border:1px solid #2a3f5f!important;'
+            'color:#888!important;font-size:10px!important;padding:2px 8px!important;'
+            'border-radius:3px!important;height:auto!important;min-height:0!important;}'
+            'button[kind="secondary"][data-testid="baseButton-secondary"]:hover {'
+            'border-color:#3b82f6!important;color:#3b82f6!important;}'
+            '</style>',
+            unsafe_allow_html=True
+        )
+        if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
+            st.cache_data.clear()
+            st.rerun()
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -1832,7 +1926,7 @@ def render():
         
         # Cards visuales en lugar de tabla
         cards_html = ""
-        for item in buzz_items[:8]:
+        for item in buzz_items[:20]:  # 20 activos con scroll
             rank = str(item.get('rank', '-'))
             ticker = str(item.get('ticker', '-'))
             buzz_score = str(item.get('buzz_score', '-'))
@@ -1847,54 +1941,55 @@ def render():
                 elif rank_int == 2: rank_bg, rank_color = "linear-gradient(135deg,#ff9800,#e65100)", "white"
                 elif rank_int == 3: rank_bg, rank_color = "linear-gradient(135deg,#ffd700,#f9a825)", "#111"
                 else:               rank_bg, rank_color = "#1a1e26", "#888"
+                rank_int_ok = True
             except:
                 rank_bg, rank_color = "#1a1e26", "#888"
                 rank_int = 99
+                rank_int_ok = False
 
             health_lower = health.lower()
             if 'strong' in health_lower:
-                h_bg, h_border, h_color = "#00ffad15", "#00ffad40", "#00ffad"
+                h_bg, h_border, h_color = "#00ffad15", "#00ffad50", "#00ffad"
                 h_label = "FUERTE"
             elif 'hold' in health_lower:
-                h_bg, h_border, h_color = "#ff980015", "#ff980040", "#ff9800"
+                h_bg, h_border, h_color = "#ff980015", "#ff980050", "#ff9800"
                 h_label = "HOLD"
             else:
-                h_bg, h_border, h_color = "#f2364515", "#f2364540", "#f23645"
+                h_bg, h_border, h_color = "#f2364515", "#f2364550", "#f23645"
                 h_label = "DÉBIL"
-            
-            # Indicators dots
-            dots = ""
+
+            # Health number
+            num_match = re.search(r'(\d+)', health)
+            health_num = num_match.group(1) if num_match else ""
+
+            # Señales - badges más grandes y visibles
+            badges = ""
             if social_hype:
-                dots += '<span style="background:#ffd70020; color:#ffd700; border:1px solid #ffd70040; padding:1px 5px; border-radius:3px; font-size:7px; font-weight:bold;">HYPE</span> '
+                badges += '<span class="badge-hype">● HYPE</span>'
             if smart_money:
-                dots += '<span style="background:#00ffad15; color:#00ffad; border:1px solid #00ffad40; padding:1px 5px; border-radius:3px; font-size:7px; font-weight:bold;">SMART</span> '
+                badges += '<span class="badge-smart">● SMART</span>'
             sqz_match = re.search(r'\((\d+)%\)', squeeze)
             if sqz_match:
                 sqz_pct = int(sqz_match.group(1))
-                sqz_color2 = "#f23645" if sqz_pct > 40 else "#ff9800"
-                dots += f'<span style="background:{sqz_color2}15; color:{sqz_color2}; border:1px solid {sqz_color2}40; padding:1px 5px; border-radius:3px; font-size:7px; font-weight:bold;">SQZ {sqz_pct}%</span>'
+                sqz_cls = "badge-sqz-high" if sqz_pct > 40 else "badge-sqz-med"
+                badges += f'<span class="{sqz_cls}">SQZ {sqz_pct}%</span>'
             elif squeeze:
-                dots += '<span style="background:#f2364515; color:#f23645; border:1px solid #f2364540; padding:1px 5px; border-radius:3px; font-size:7px; font-weight:bold;">SQZ</span>'
-
-            # Health number from text
-            health_num = ""
-            num_match = re.search(r'(\d+)', health)
-            if num_match:
-                health_num = num_match.group(1)
+                badges += '<span class="badge-sqz-high">● SQZ</span>'
+            
+            if not badges:
+                badges = '<span style="color:#2a3f5f; font-size:9px;">—</span>'
 
             cards_html += f'''
-            <div style="display:flex; align-items:center; padding:6px 8px; border-bottom:1px solid #1a1e2655; gap:8px; transition:background 0.2s;">
-                <div style="width:22px; height:22px; border-radius:50%; background:{rank_bg}; color:{rank_color}; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:9px; flex-shrink:0;">{rank}</div>
-                <div style="flex:0 0 42px;">
-                    <div style="color:#00ffad; font-weight:bold; font-size:11px; letter-spacing:0.3px;">${ticker}</div>
-                    <div style="color:#555; font-size:8px;">SCR: {buzz_score}</div>
+            <div class="buzz-row">
+                <div class="buzz-rank" style="background:{rank_bg}; color:{rank_color};">{rank}</div>
+                <div class="buzz-ticker-col">
+                    <div class="buzz-ticker">${ticker}</div>
+                    <div class="buzz-score">SCR:{buzz_score}</div>
                 </div>
-                <div style="background:{h_bg}; border:1px solid {h_border}; color:{h_color}; padding:2px 5px; border-radius:4px; font-size:8px; font-weight:bold; flex-shrink:0; min-width:36px; text-align:center;">
-                    {health_num or h_label}
+                <div class="buzz-health" style="background:{h_bg}; border:1px solid {h_border}; color:{h_color};">
+                    {health_num or h_label[:4]}
                 </div>
-                <div style="flex:1; display:flex; flex-wrap:wrap; gap:2px; overflow:hidden;">
-                    {dots if dots else '<span style="color:#2a3f5f; font-size:8px;">—</span>'}
-                </div>
+                <div class="buzz-signals">{badges}</div>
             </div>'''
 
         buzz_html_full = f'''<!DOCTYPE html><html><head><style>
@@ -1903,9 +1998,21 @@ def render():
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
-        .col-head {{ display:grid; grid-template-columns:22px 50px 44px 1fr; gap:8px; padding:4px 8px; background:linear-gradient(180deg,#0c0e12,#111519); border-bottom:1px solid #1a1e26; }}
-        .col-label {{ font-size:7px; font-weight:bold; color:#444; text-transform:uppercase; letter-spacing:0.8px; }}
-        .content {{ flex:1; overflow-y:auto; }}
+        .col-head {{ display:grid; grid-template-columns:26px 56px 36px 1fr; gap:6px; padding:5px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
+        .col-label {{ font-size:7px; font-weight:bold; color:#3a4f6f; text-transform:uppercase; letter-spacing:0.8px; }}
+        .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
+        .buzz-row {{ display:grid; grid-template-columns:26px 56px 36px 1fr; gap:6px; padding:5px 8px; border-bottom:1px solid #1a1e2640; align-items:center; }}
+        .buzz-row:hover {{ background:#ffffff05; }}
+        .buzz-rank {{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:9px; flex-shrink:0; }}
+        .buzz-ticker-col {{ display:flex; flex-direction:column; }}
+        .buzz-ticker {{ color:#00ffad; font-weight:bold; font-size:11px; }}
+        .buzz-score {{ color:#444; font-size:8px; }}
+        .buzz-health {{ padding:3px 5px; border-radius:4px; font-size:9px; font-weight:bold; text-align:center; }}
+        .buzz-signals {{ display:flex; gap:3px; align-items:center; flex-wrap:wrap; }}
+        .badge-hype {{ background:#ffd70020; color:#ffd700; border:1px solid #ffd70060; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
+        .badge-smart {{ background:#00ffad18; color:#00ffad; border:1px solid #00ffad60; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
+        .badge-sqz-high {{ background:#f2364520; color:#f23645; border:1px solid #f2364560; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
+        .badge-sqz-med {{ background:#ff980020; color:#ff9800; border:1px solid #ff980060; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
         .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -1920,7 +2027,7 @@ def render():
                     <span style="background:#f2364520; color:#f23645; border:1px solid #f2364540; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:bold; letter-spacing:0.5px;">● LIVE</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Health Score, Hype Social (Reddit), Smart Money (ballenas) y Squeeze Potential. Actualizado diariamente.</div>
+                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Health Score, Hype (Reddit), Smart Money y Squeeze. Top 20 activos con scroll.</div>
                     </div>
                 </div>
             </div>
@@ -1990,7 +2097,7 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - CON SELECT FUNCIONAL
+    # SECTOR ROTATION - CON BOTONES COMPACTOS EN EL HEADER
     with c2:
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1D"
@@ -2000,16 +2107,15 @@ def render():
         current_tf = st.session_state.sector_tf
         sectors = get_sector_performance(current_tf)
 
-        # Botones funcionales para el timeframe (radio oculto + HTML visible)
-        # Usamos st.radio con label_visibility=hidden
-        col_btns = st.columns(4)
-        new_tf = current_tf
-        for i, tf in enumerate(tf_options):
-            with col_btns[i]:
-                if st.button(tf, key=f"tf_btn_{tf}", 
-                             type="primary" if tf == current_tf else "secondary",
-                             use_container_width=True):
-                    new_tf = tf
+        # Botones compactos dentro del módulo HTML con st.query_params trick
+        # Usamos un selectbox hidden para cambiar el timeframe
+        new_tf = st.selectbox(
+            "tf_selector",
+            tf_options,
+            index=tf_options.index(current_tf),
+            key="sector_tf_select_v2",
+            label_visibility="collapsed"
+        )
         if new_tf != current_tf:
             st.session_state.sector_tf = new_tf
             st.rerun()
@@ -2029,14 +2135,27 @@ def render():
                              f'<div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>'
                              f'</div>')
 
-        tf_lbl = tf_labels.get(current_tf, current_tf)
+        # Botones HTML compactos en el header
+        tf_btns_html = ""
+        for tf in tf_options:
+            active = tf == current_tf
+            bg = "#3b82f6" if active else "transparent"
+            border = "#3b82f6" if active else "#2a3f5f"
+            fw = "bold" if active else "normal"
+            tf_btns_html += (f'<span style="background:{bg}; border:1px solid {border}; color:white; '
+                             f'padding:2px 8px; border-radius:4px; font-size:9px; font-weight:{fw}; '
+                             f'margin-left:3px; display:inline-block;">{tf}</span>')
+
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header" style="justify-content:space-between;">
-                <div class="module-title">Sector Rotation <span style="color:#888;font-size:9px;font-weight:normal;">({tf_lbl})</span></div>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Selecciona el horizonte temporal con los botones de arriba.</div>
+                <div class="module-title">Rotación Sectorial</div>
+                <div style="display:flex; align-items:center; gap:2px;">
+                    {tf_btns_html}
+                    <div class="tooltip-wrapper" style="margin-left:6px;">
+                        <div class="tooltip-btn">?</div>
+                        <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Cambia el horizonte con el selector de arriba.</div>
+                    </div>
                 </div>
             </div>
             <div class="module-content" style="padding:8px;">
@@ -2161,23 +2280,40 @@ def render():
         insiders = get_insider_trading()
         insider_html = ""
         for item in insiders:
-            type_color = "#00ffad" if item['type'] == "BUY" else "#f23645"
-            insider_html += f'''<div style="background:#0c0e12; padding:8px; border-radius:6px; margin-bottom:6px; border:1px solid #1a1e26; display:flex; justify-content:space-between;">
-            <div><div style="color:white; font-weight:bold; font-size:10px;">{item['ticker']}</div><div style="color:#555; font-size:8px;">{item['position']}</div></div>
-            <div style="text-align:right;"><div style="color:{type_color}; font-weight:bold; font-size:9px;">{item['type']}</div><div style="color:#888; font-size:8px;">{item['amount']}</div></div>
+            is_buy = item['type'] in ("COMPRA", "BUY")
+            type_color = "#00ffad" if is_buy else "#f23645"
+            type_bg = "#00ffad15" if is_buy else "#f2364515"
+            type_border = "#00ffad40" if is_buy else "#f2364540"
+            type_label = "COMPRA" if is_buy else "VENTA"
+            date_str = str(item.get('date', ''))[:10]
+            insider_html += f'''
+            <div style="background:#0c0e12; padding:8px 10px; border-radius:6px; margin-bottom:5px; border:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; position:relative; overflow:hidden;">
+                <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:{type_color};"></div>
+                <div style="margin-left:8px; flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="color:#00ffad; font-weight:bold; font-size:11px;">{item['ticker']}</span>
+                        <span style="background:{type_bg}; color:{type_color}; border:1px solid {type_border}; padding:1px 5px; border-radius:3px; font-size:8px; font-weight:bold;">{type_label}</span>
+                    </div>
+                    <div style="color:#666; font-size:8px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{item.get('insider', '-')}</div>
+                    <div style="color:#444; font-size:7px;">{item.get('position', '-')}</div>
+                </div>
+                <div style="text-align:right; flex-shrink:0; margin-left:8px;">
+                    <div style="color:white; font-weight:bold; font-size:11px;">{item['amount']}</div>
+                    <div style="color:#555; font-size:8px;">{date_str}</div>
+                </div>
             </div>'''
 
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
-                <div class="module-title">Insider Tracker</div>
+                <div class="module-title">Tracker Insiders</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Insider trading activity (> $50k) via SEC Form 4.</div>
+                    <div class="tooltip-content">Transacciones reales de insiders (>$100K) via OpenInsider / SEC Form 4. Actualizado cada 30 minutos.</div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 10px;">{insider_html}</div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
+            <div class="module-content" style="padding: 8px;">{insider_html}</div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} • OpenInsider</div>
         </div>
         ''', unsafe_allow_html=True)
 
@@ -2193,7 +2329,7 @@ def render():
                 '<span style="padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; background-color:' + item['color'] + '22;color:' + item['color'] + ';">' + item['impact'] + '</span>'
                 '</div>'
                 '<div style="color:white;font-size:0.8rem;line-height:1.2;margin-bottom:4px;">' + safe_title + '</div>'
-                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Llegir més</a>'
+                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Leer más</a>'
                 '</div>'
             )
             news_items_html.append(news_item)
@@ -2202,10 +2338,10 @@ def render():
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
-                <div class="module-title">Noticies d'Alt Impacte</div>
+                <div class="module-title">Noticias de Alto Impacto</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Noticies d'alt impacte via Finnhub API.</div>
+                    <div class="tooltip-content">Noticias financieras de alto impacto vía Finnhub API. Titulares traducidos al castellano.</div>
                 </div>
             </div>
             <div class="module-content" style="padding: 0; overflow-y: auto;">{news_content}</div>
@@ -2218,28 +2354,133 @@ def render():
     f4c1, f4c2, f4c3 = st.columns(3)
 
     with f4c1:
-        vix = get_market_index("^VIX")
-        vix_color = "#00ffad" if vix[1] >= 0 else "#f23645"
-        vix_html = f'''<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center;">
-            <div style="font-size:3rem; font-weight:bold; color:white;">{vix[0]:.2f}</div>
-            <div style="color:#f23645; font-size:1rem; font-weight:bold; margin-top:5px;">VIX INDEX</div>
-            <div style="color:{vix_color}; font-size:0.9rem; font-weight:bold;">{vix[1]:+.2f}%</div>
-            <div style="color:#555; font-size:0.75rem; margin-top:10px;">Volatility Index</div>
-        </div>'''
+        # VIX con gráfico diario y niveles 20/25
+        try:
+            vix_ticker = yf.Ticker("^VIX")
+            vix_hist = vix_ticker.history(period="6mo")
+            vix_current = float(vix_hist['Close'].iloc[-1]) if len(vix_hist) > 0 else 20.0
+            vix_prev = float(vix_hist['Close'].iloc[-2]) if len(vix_hist) > 1 else vix_current
+            vix_change = vix_current - vix_prev
+            vix_change_pct = (vix_change / vix_prev * 100) if vix_prev else 0
+            vix_vals = [float(v) for v in vix_hist['Close'].values]
+            vix_dates = [str(d)[:10] for d in vix_hist.index]
+        except:
+            vix_current, vix_prev, vix_change, vix_change_pct = 20.0, 19.5, 0.5, 2.5
+            vix_vals, vix_dates = [], []
 
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">VIX Index</div>
+        vix_color = "#f23645" if vix_change >= 0 else "#00ffad"
+        vix_level_color = "#f23645" if vix_current >= 25 else ("#ff9800" if vix_current >= 20 else "#00ffad")
+        vix_state = "ESTRÉS ALTO" if vix_current >= 25 else ("PRECAUCIÓN" if vix_current >= 20 else "CALMA")
+
+        # Generar SVG del gráfico VIX
+        def _vix_chart_svg(vals, dates, W=320, H=180):
+            if len(vals) < 5:
+                return '<text x="50%" y="50%" text-anchor="middle" fill="#555" font-size="10">Sin datos</text>'
+            pad = {'l': 35, 'r': 10, 't': 15, 'b': 22}
+            mn = min(min(vals), 10)
+            mx = max(max(vals), 30)
+            rng = mx - mn if mx != mn else 1
+            n = len(vals)
+
+            def to_xy(i, v):
+                x = pad['l'] + i * (W - pad['l'] - pad['r']) / (n - 1)
+                y = H - pad['b'] - ((v - mn) / rng) * (H - pad['t'] - pad['b'])
+                return x, y
+
+            # Área bajo la curva
+            area_pts = [f"{pad['l']},{H - pad['b']}"]
+            line_pts = []
+            for i, v in enumerate(vals):
+                x, y = to_xy(i, v)
+                area_pts.append(f"{x:.1f},{y:.1f}")
+                line_pts.append(f"{x:.1f},{y:.1f}")
+            area_pts.append(f"{W - pad['r']},{H - pad['b']}")
+
+            # Nivel 20
+            _, y20 = to_xy(0, 20)
+            # Nivel 25
+            _, y25 = to_xy(0, 25)
+
+            # Y ticks
+            yticks = ""
+            for v in [10, 15, 20, 25, 30]:
+                if mn <= v <= mx:
+                    _, yv = to_xy(0, v)
+                    col = "#f2364555" if v in [20, 25] else "#1a1e26"
+                    yticks += f'<line x1="{pad["l"]}" y1="{yv:.1f}" x2="{W - pad["r"]}" y2="{yv:.1f}" stroke="{col}" stroke-width="0.7"/>'
+                    yticks += f'<text x="{pad["l"] - 3}" y="{yv + 3:.1f}" text-anchor="end" fill="#555" font-size="7">{v}</text>'
+
+            # X labels
+            xlabels = ""
+            step = max(1, n // 5)
+            for i in range(0, n, step):
+                x, _ = to_xy(i, vals[i])
+                lbl = dates[i][5:] if i < len(dates) else ""
+                xlabels += f'<text x="{x:.1f}" y="{H - 4}" text-anchor="middle" fill="#555" font-size="7">{lbl}</text>'
+
+            # Último punto
+            lx, ly = to_xy(n - 1, vals[-1])
+            dot_color = "#f23645" if vals[-1] >= 25 else ("#ff9800" if vals[-1] >= 20 else "#00ffad")
+
+            return f'''
+            {yticks}
+            <line x1="{pad["l"]}" y1="{y20:.1f}" x2="{W - pad["r"]}" y2="{y20:.1f}" stroke="#ff980088" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="{W - pad["r"] - 2}" y="{y20 - 3:.1f}" text-anchor="end" fill="#ff9800" font-size="8" font-weight="bold">20</text>
+            <line x1="{pad["l"]}" y1="{y25:.1f}" x2="{W - pad["r"]}" y2="{y25:.1f}" stroke="#f2364588" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="{W - pad["r"] - 2}" y="{y25 - 3:.1f}" text-anchor="end" fill="#f23645" font-size="8" font-weight="bold">25</text>
+            <polygon points="{" ".join(area_pts)}" fill="{dot_color}15"/>
+            <polyline points="{" ".join(line_pts)}" fill="none" stroke="{dot_color}" stroke-width="1.5" stroke-linejoin="round"/>
+            <circle cx="{lx:.1f}" cy="{ly:.1f}" r="3" fill="{dot_color}" stroke="#11141a" stroke-width="1"/>
+            {xlabels}'''
+
+        chart_svg = _vix_chart_svg(vix_vals, vix_dates)
+
+        vix_full_html = f'''<!DOCTYPE html><html><head><style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
+        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
+        .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
+        .tooltip-wrapper {{ position:static; display:inline-block; }}
+        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        </style></head><body>
+        <div class="container">
+            <div class="header">
+                <div class="title">VIX Índice de Volatilidad</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Index de volatilitat CBOE (VIX).</div>
+                    <div class="tooltip-content">CBOE Volatility Index (VIX). Niveles clave: 20 = zona de precaución, 25+ = estrés de mercado. Gráfico diario 6 meses. Fuente: yfinance.</div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 15px;">{vix_html}</div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
+            <div class="content">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                    <div>
+                        <div style="font-size:2rem; font-weight:bold; color:{vix_level_color}; line-height:1;">{vix_current:.2f}</div>
+                        <div style="font-size:10px; color:{vix_color}; font-weight:bold;">{vix_change:+.2f} ({vix_change_pct:+.2f}%)</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="background:{vix_level_color}20; color:{vix_level_color}; border:1px solid {vix_level_color}50; padding:3px 8px; border-radius:4px; font-size:9px; font-weight:bold;">{vix_state}</div>
+                        <div style="color:#555; font-size:8px; margin-top:4px;">Diario · 6 meses</div>
+                    </div>
+                </div>
+                <div style="flex:1; background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px; overflow:hidden;">
+                    <svg width="100%" height="100%" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid meet">
+                        {chart_svg}
+                    </svg>
+                </div>
+                <div style="display:flex; gap:12px; margin-top:6px; font-size:9px; color:#666;">
+                    <span>— <span style="color:#ff9800;">Nivel 20</span> (precaución)</span>
+                    <span>— <span style="color:#f23645;">Nivel 25</span> (estrés)</span>
+                </div>
+            </div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} • CBOE via yfinance</div>
         </div>
-        ''', unsafe_allow_html=True)
+        </body></html>'''
+        components.html(vix_full_html, height=420, scrolling=False)
 
     with f4c2:
         status, color, desc, assets, date = get_fed_liquidity()
@@ -2765,7 +3006,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

@@ -55,8 +55,8 @@ set_style()
 # CSS Sidebar con estética de market.py
 st.markdown("""
 <style>
-    /* Importar fuente pixelada de Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    /* Importar fuente pixelada VT323 de Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
     
     /* FONDO DEL SIDEBAR - Estética market.py */
     [data-testid="stSidebar"] {
@@ -187,7 +187,7 @@ st.markdown("""
         border: 1px solid rgba(242, 54, 69, 0.3);
     }
     
-    /* MENÚ ESTÉTICO - Botones MÁS PEQUEÑOS con tipografía pixelada */
+    /* MENÚ ESTÉTICO - Botones con tipografía pixelada VT323 */
     .stRadio > div {
         display: flex;
         flex-direction: column;
@@ -219,13 +219,13 @@ st.markdown("""
     
     .stRadio > div > label > div {
         color: #888;
-        font-size: 0.65rem !important;
+        font-size: 1.1rem !important;
         font-weight: 400 !important;
-        font-family: 'Press Start 2P', monospace !important;
+        font-family: 'VT323', monospace !important;
         display: flex;
         align-items: center;
         gap: 8px;
-        line-height: 1.4 !important;
+        line-height: 1.2 !important;
         text-transform: uppercase;
         letter-spacing: 1px;
     }
@@ -240,7 +240,7 @@ st.markdown("""
     .stRadio > div > label[aria-checked="true"] > div {
         color: #00ffad;
         font-weight: 400 !important;
-        font-family: 'Press Start 2P', monospace !important;
+        font-family: 'VT323', monospace !important;
     }
     
     .stRadio > div > label[aria-checked="true"]::before {
@@ -449,4 +449,5 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
+
 

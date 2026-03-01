@@ -626,18 +626,36 @@ def render():
     # TAB 1: VALORACIÓN
     # ══════════════════════
     with tabs[0]:
+        def valuation_color(metric_name, val):
+            """Devuelve color verde/rojo/naranja según si el múltiplo indica cara o barata."""
+            v = _safe(val)
+            if v is None: return "#888"
+            if v < 0:     return "#f23645"   # negativo siempre rojo
+            thresholds = {
+                # (barato ≤ verde, caro ≥ rojo)
+                "P/E":         (15, 30),
+                "P/S":         (2,  8),
+                "EV/EBITDA":   (10, 20),
+                "Forward P/E": (12, 25),
+                "PEG Ratio":   (1,  2),
+            }
+            lo, hi = thresholds.get(metric_name, (0, 9999))
+            if v <= lo: return "#00ffad"
+            if v >= hi: return "#f23645"
+            return "#ff9800"
+
         valuation_data = [
-            ("P/E",         metrics['trailing_pe'],    "Trailing",          "Precio / Beneficio"),
-            ("P/S",         metrics['price_to_sales'], "TTM",               "Precio / Ventas"),
-            ("EV/EBITDA",   metrics['ev_ebitda'],      "TTM",               "Valor Empresa / EBITDA"),
-            ("Forward P/E", metrics['forward_pe'],     "Próx. 12M",         "Precio / BPA Futuro"),
-            ("PEG Ratio",   metrics['peg_ratio'],      "P/E ÷ Crec.",       "Valoración ajustada al crecimiento"),
+            ("P/E",         metrics['trailing_pe'],    "Trailing",    "Precio / Beneficio"),
+            ("P/S",         metrics['price_to_sales'], "TTM",         "Precio / Ventas"),
+            ("EV/EBITDA",   metrics['ev_ebitda'],      "TTM",         "Valor Empresa / EBITDA"),
+            ("Forward P/E", metrics['forward_pe'],     "Próx. 12M",   "Precio / BPA Futuro"),
+            ("PEG Ratio",   metrics['peg_ratio'],      "P/E ÷ Crec.", "Valoración ajustada al crecimiento"),
         ]
         row1 = "".join(
             f'<div style="flex:1;min-width:0;">'
             f'<div class="metric-box"><span class="metric-tag">{tag}</span>'
             f'<div class="metric-label">{label}</div>'
-            f'<div class="metric-value">{fmt_x(val)}</div>'
+            f'<div class="metric-value" style="color:{valuation_color(label, val)};">{fmt_x(val)}</div>'
             f'<div class="metric-desc">{desc}</div>'
             f'</div></div>'
             for label, val, tag, desc in valuation_data[:3]
@@ -646,7 +664,7 @@ def render():
             f'<div style="flex:1;min-width:0;max-width:34%;">'
             f'<div class="metric-box"><span class="metric-tag">{tag}</span>'
             f'<div class="metric-label">{label}</div>'
-            f'<div class="metric-value">{fmt_x(val)}</div>'
+            f'<div class="metric-value" style="color:{valuation_color(label, val)};">{fmt_x(val)}</div>'
             f'<div class="metric-desc">{desc}</div>'
             f'</div></div>'
             for label, val, tag, desc in valuation_data[3:]
@@ -948,21 +966,45 @@ def render():
                 'Interest Expense': 'Gastos Intereses',
             }
             financials.index = [index_mapping.get(str(i), str(i)) for i in financials.index]
+            # Header del módulo como bloque HTML cerrado
             st.markdown("""
-            <div class="mod-box">
+            <div class="mod-box" style="margin-bottom:0;">
                 <div class="mod-header"><span class="mod-title">📑 Estado de Resultados</span></div>
-                <div class="mod-body">
+            </div>
             """, unsafe_allow_html=True)
-            st.dataframe(financials, use_container_width=True)
-            st.markdown("</div></div>", unsafe_allow_html=True)
+            # Dataframe en contenedor nativo pegado al módulo, con borde lateral
+            with st.container():
+                st.markdown('<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;padding:14px;background:#0a0c10;margin-bottom:18px;">', unsafe_allow_html=True)
+                st.dataframe(financials, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("Estados financieros no disponibles.")
 
     # ════════════════════════════════════════════════
-    # SECCIÓN RSU AI
+    # SUGERENCIAS DE INVERSIÓN  (antes del prompt RSU)
     # ════════════════════════════════════════════════
     st.markdown("<hr>", unsafe_allow_html=True)
 
+    suggestions = get_suggestions(info, recommendations, target_data, profitability)
+    sug_html    = "".join(
+        f'<div class="suggestion-item"><strong style="color:#00ffad;">{i}.</strong> {s}</div>'
+        for i, s in enumerate(suggestions, 1)
+    )
+    st.markdown(f"""
+    <div class="mod-box">
+        <div class="mod-header">
+            <span class="mod-title">💡 Sugerencias de Inversión</span>
+            <div class="tip-box"><div class="tip-icon">?</div>
+                <div class="tip-text">Análisis automatizado basado en métricas fundamentales. No constituye asesoramiento financiero.</div>
+            </div>
+        </div>
+        <div class="mod-body">{sug_html}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════
+    # SECCIÓN RSU AI  (al final)
+    # ════════════════════════════════════════════════
     st.markdown("""
     <div class="rsu-box">
         <div class="rsu-title">🤖 RSU Artificial Intelligence</div>
@@ -1029,26 +1071,6 @@ Proporciona recomendaciones claras con niveles de entrada, stop-loss y objetivos
             mime="text/plain",
             key="download_report"
         )
-
-    # ════════════════════════════════════════════════
-    # SUGERENCIAS DE INVERSIÓN
-    # ════════════════════════════════════════════════
-    suggestions = get_suggestions(info, recommendations, target_data, profitability)
-    sug_html    = "".join(
-        f'<div class="suggestion-item"><strong style="color:#00ffad;">{i}.</strong> {s}</div>'
-        for i, s in enumerate(suggestions, 1)
-    )
-    st.markdown(f"""
-    <div class="mod-box">
-        <div class="mod-header">
-            <span class="mod-title">💡 Sugerencias de Inversión</span>
-            <div class="tip-box"><div class="tip-icon">?</div>
-                <div class="tip-text">Análisis automatizado basado en métricas fundamentales. No constituye asesoramiento financiero.</div>
-            </div>
-        </div>
-        <div class="mod-body">{sug_html}</div>
-    </div>
-    """, unsafe_allow_html=True)
 
     # ── FOOTER ──
     st.markdown("""

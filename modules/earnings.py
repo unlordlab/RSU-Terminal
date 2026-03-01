@@ -1,5 +1,6 @@
-
+# -*- coding: utf-8 -*-
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
@@ -7,1786 +8,1701 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from config import get_ia_model
 import time
-import random
-from functools import wraps
-import hashlib
 import requests
-import os
-import json
-import sys
-import traceback
+import math
 import html
+import traceback
 
 # ────────────────────────────────────────────────
-# CONFIGURACIÓN Y DEBUGGING
-# ────────────────────────────────────────────────
-
-def debug_log(msg, data=None):
-    """Log detallado para debugging."""
-    timestamp = datetime.now().strftime('%H:%M:%S')
-    full_msg = f"[{timestamp}] {msg}"
-    if data is not None:
-        full_msg += f": {data}"
-    print(full_msg)
-    return full_msg
-
-# ────────────────────────────────────────────────
-# API KEYS DESDE SECRETS
+# API KEYS
 # ────────────────────────────────────────────────
 
 def get_api_keys():
-    """Obtiene las API keys desde secrets."""
     return {
         'alpha_vantage': st.secrets.get("ALPHA_VANTAGE_API_KEY", ""),
-        'finnhub': st.secrets.get("FINNHUB_API_KEY", ""),
+        'finnhub':       st.secrets.get("FINNHUB_API_KEY", ""),
     }
 
 # ────────────────────────────────────────────────
-# CACHE DE DATOS PARA OPTIMIZAR LLAMADAS API
+# HELPERS NUMÉRICOS
 # ────────────────────────────────────────────────
 
-@st.cache_data(ttl=3600)  # Cache por 1 hora
-def get_alpha_vantage_data_cached(ticker, api_key):
-    """Versión cacheada de get_alpha_vantage_data - SIN elementos de UI."""
-    return _fetch_alpha_vantage_data(ticker, api_key)
-
-@st.cache_data(ttl=1800)  # Cache por 30 minutos para precios
-def get_yfinance_data_cached(ticker_symbol):
-    """Versión cacheada de get_yfinance_data - SIN elementos de UI."""
-    return _fetch_yfinance_data(ticker_symbol)
-
-@st.cache_data(ttl=900)  # Cache por 15 minutos para noticias (más frecuente)
-def get_finnhub_data_cached(ticker, api_key):
-    """Versión cacheada de get_finnhub_data - SIN elementos de UI."""
-    return _fetch_finnhub_data(ticker, api_key)
-
-# ────────────────────────────────────────────────
-# FINNHUB API - DATOS DE SEGMENTOS Y NOTICIAS
-# ────────────────────────────────────────────────
-
-def _fetch_finnhub_data(ticker, api_key):
-    """Función interna que obtiene datos de Finnhub (sin UI)."""
-    if not api_key:
-        debug_log("ERROR: FINNHUB_API_KEY no proporcionada")
-        return None
-    
-    base_url = "https://finnhub.io/api/v1"
-    headers = {"X-Finnhub-Token": api_key}
-    result = {}
-    
-    try:
-        # 1. Revenue Breakdown by Segment
-        debug_log("Solicitando revenue breakdown de Finnhub")
-        rev_response = requests.get(
-            f"{base_url}/stock/revenue-breakdown",
-            params={"symbol": ticker},
-            headers=headers,
-            timeout=10
-        )
-        
-        if rev_response.status_code == 200:
-            rev_data = rev_response.json()
-            debug_log("Revenue breakdown OK", list(rev_data.keys())[:5])
-            result['revenue_breakdown'] = rev_data
-        else:
-            debug_log(f"Revenue breakdown error: {rev_response.status_code}")
-            result['revenue_breakdown'] = {}
-        
-        time.sleep(0.5)  # Rate limiting
-        
-        # 2. Revenue Breakdown by Geographic
-        debug_log("Solicitando geographic revenue de Finnhub")
-        geo_response = requests.get(
-            f"{base_url}/stock/revenue-breakdown",
-            params={"symbol": ticker, "breakdown": "geographic"},
-            headers=headers,
-            timeout=10
-        )
-        
-        if geo_response.status_code == 200:
-            geo_data = geo_response.json()
-            debug_log("Geographic revenue OK")
-            result['geographic_revenue'] = geo_data
-        else:
-            debug_log(f"Geographic revenue error: {geo_response.status_code}")
-            result['geographic_revenue'] = {}
-        
-        time.sleep(0.5)
-        
-        # 3. Company News con Sentiment
-        debug_log("Solicitando noticias de Finnhub")
-        to_date = datetime.now().strftime('%Y-%m-%d')
-        from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-        
-        news_response = requests.get(
-            f"{base_url}/company-news",
-            params={
-                "symbol": ticker,
-                "from": from_date,
-                "to": to_date
-            },
-            headers=headers,
-            timeout=10
-        )
-        
-        if news_response.status_code == 200:
-            news_data = news_response.json()
-            debug_log(f"Noticias OK: {len(news_data)} artículos")
-            result['news'] = news_response.json()
-        else:
-            debug_log(f"Noticias error: {news_response.status_code}")
-            result['news'] = []
-        
-        time.sleep(0.5)
-        
-        # 4. Social Sentiment
-        debug_log("Solicitando social sentiment de Finnhub")
-        sentiment_response = requests.get(
-            f"{base_url}/stock/social-sentiment",
-            params={"symbol": ticker},
-            headers=headers,
-            timeout=10
-        )
-        
-        if sentiment_response.status_code == 200:
-            sentiment_data = sentiment_response.json()
-            debug_log("Social sentiment OK")
-            result['social_sentiment'] = sentiment_data
-        else:
-            debug_log(f"Social sentiment error: {sentiment_response.status_code}")
-            result['social_sentiment'] = {}
-        
-        result['source'] = 'finnhub'
-        result['last_updated'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        return result
-        
-    except Exception as e:
-        debug_log("ERROR en Finnhub", str(e))
-        return None
-
-def get_finnhub_data(ticker, api_key):
-    """Versión pública con spinner (no cacheada)."""
-    if not api_key:
-        return None
-    with st.spinner("📰 Cargando datos de Finnhub..."):
-        return _fetch_finnhub_data(ticker, api_key)
-
-def process_finnhub_segments(finnhub_data):
-    """Procesa los datos de segmentos de Finnhub."""
-    if not finnhub_data:
-        return None
-    
-    segments = {}
-    
-    # Procesar revenue breakdown por segmento de negocio
-    rev_breakdown = finnhub_data.get('revenue_breakdown', {})
-    if rev_breakdown and 'data' in rev_breakdown:
-        for item in rev_breakdown['data']:
-            segment_name = item.get('segment', 'Unknown')
-            revenue = item.get('revenue', 0)
-            if revenue > 0:
-                segments[segment_name] = revenue
-    
-    # Si no hay segmentos de negocio, usar geográficos
-    if not segments:
-        geo_breakdown = finnhub_data.get('geographic_revenue', {})
-        if geo_breakdown and 'data' in geo_breakdown:
-            for item in geo_breakdown['data']:
-                region = item.get('region', 'Unknown')
-                revenue = item.get('revenue', 0)
-                if revenue > 0:
-                    segments[region] = revenue
-    
-    return segments if segments else None
-
-def calculate_news_sentiment(finnhub_data):
-    """Calcula sentimiento basado en noticias de Finnhub."""
-    if not finnhub_data or 'news' not in finnhub_data:
-        return None
-    
-    news = finnhub_data['news']
-    if not news:
-        return None
-    
-    # Análisis basado en palabras clave en títulos
-    bullish_words = [
-        'beat', 'strong', 'growth', 'profit', 'gain', 'rise', 'surge', 'bull', 
-        'upgrade', 'buy', 'outperform', 'exceeds', 'beats', 'record', 'soar',
-        'rally', 'boom', 'breakthrough', 'partnership', 'deal', 'expansion',
-        'innovation', 'launch', 'success', 'positive', 'optimistic', 'surge',
-        'moon', 'rocket', ' ATH', 'all time high', 'dividend increase'
-    ]
-    bearish_words = [
-        'miss', 'weak', 'loss', 'decline', 'fall', 'drop', 'bear', 'downgrade', 
-        'sell', 'cut', 'underperform', 'misses', 'plunge', 'crash', 'concern',
-        'risk', 'investigation', 'lawsuit', 'layoff', 'recession', 'inflation',
-        'bankruptcy', 'debt crisis', 'fraud', 'scandal', 'delay', 'postpone',
-        'warning', 'cut forecast', 'bearish', 'dump', 'correction', 'dip'
-    ]
-    
-    bullish_count = 0
-    bearish_count = 0
-    total_analyzed = 0
-    
-    for article in news[:30]:  # Últimas 30 noticias para más precisión
-        title = article.get('headline', '').lower()
-        if not title:
-            continue
-            
-        total_analyzed += 1
-        
-        # Buscar palabras alcistas
-        for word in bullish_words:
-            if word in title:
-                bullish_count += 1
-                break
-        
-        # Buscar palabras bajistas
-        for word in bearish_words:
-            if word in title:
-                bearish_count += 1
-                break
-    
-    total_sentiment = bullish_count + bearish_count
-    if total_sentiment == 0:
-        return {
-            'overall_sentiment': 'neutral',
-            'sentiment_score': 0,
-            'news_count': len(news),
-            'bullish_pct': 0,
-            'bearish_pct': 0,
-            'analyzed_count': total_analyzed,
-            'source': 'finnhub'
-        }
-    
-    bullish_pct = (bullish_count / total_sentiment) * 100
-    bearish_pct = (bearish_count / total_sentiment) * 100
-    
-    # Calcular score entre -1 y 1
-    if bullish_pct > 60:
-        sentiment = 'bullish'
-        score = 0.5 + (bullish_pct - 60) / 80  # 0.5 a 1.0
-    elif bearish_pct > 60:
-        sentiment = 'bearish'
-        score = -0.5 - (bearish_pct - 60) / 80  # -0.5 a -1.0
-    else:
-        sentiment = 'neutral'
-        score = (bullish_pct - bearish_pct) / 100  # -0.5 a 0.5
-    
-    return {
-        'overall_sentiment': sentiment,
-        'sentiment_score': max(-1, min(1, score)),
-        'news_count': len(news),
-        'bullish_pct': round(bullish_pct, 1),
-        'bearish_pct': round(bearish_pct, 1),
-        'analyzed_count': total_analyzed,
-        'source': 'finnhub'
-    }
-
-# ────────────────────────────────────────────────
-# ALPHA VANTAGE API - DATOS FUNDAMENTALES
-# ────────────────────────────────────────────────
-
-def _fetch_alpha_vantage_data(ticker, api_key):
-    """Función interna que obtiene datos de Alpha Vantage (sin UI)."""
-    if not api_key:
-        debug_log("ERROR: ALPHA_VANTAGE_API_KEY no proporcionada")
-        return None
-    
-    base_url = "https://www.alphavantage.co/query"
-    result = {}
-    
-    endpoints = {
-        'overview': {'function': 'OVERVIEW', 'symbol': ticker},
-        'income': {'function': 'INCOME_STATEMENT', 'symbol': ticker},
-        'balance': {'function': 'BALANCE_SHEET', 'symbol': ticker},
-        'cashflow': {'function': 'CASH_FLOW', 'symbol': ticker},
-        'earnings': {'function': 'EARNINGS', 'symbol': ticker},
-    }
-    
-    debug_log(f"Iniciando solicitudes Alpha Vantage para {ticker}")
-    
-    for name, params in endpoints.items():
-        try:
-            params['apikey'] = api_key
-            debug_log(f"Solicitando {name}")
-            
-            response = requests.get(base_url, params=params, timeout=20)
-            debug_log(f"{name} status", response.status_code)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if 'Note' in data:
-                    debug_log(f"{name} LÍMITE ALCANZADO", data['Note'])
-                    result[name] = {}
-                elif 'Information' in data:
-                    debug_log(f"{name} INFO", data['Information'])
-                    result[name] = {}
-                else:
-                    result[name] = data
-                    debug_log(f"{name} OK", f"Keys: {list(data.keys())[:5]}")
-            else:
-                debug_log(f"{name} ERROR", f"Status {response.status_code}")
-                result[name] = {}
-                
-            if name != 'earnings':
-                time.sleep(12)
-                
-        except Exception as e:
-            debug_log(f"{name} EXCEPTION", str(e))
-            result[name] = {}
-    
-    if not result.get('overview') or len(result.get('overview', {})) == 0:
-        debug_log("ERROR CRÍTICO: No se obtuvo overview")
-        return None
-    
-    return {
-        'overview': result.get('overview', {}),
-        'income_statement': result.get('income', {}),
-        'balance_sheet': result.get('balance', {}),
-        'cash_flow': result.get('cashflow', {}),
-        'earnings': result.get('earnings', {}),
-        'source': 'alpha_vantage',
-        'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }
-
-def get_alpha_vantage_data(ticker, api_key):
-    """Versión pública con spinner (no cacheada)."""
-    if not api_key:
-        return None
-    with st.spinner("📊 Cargando datos fundamentales de Alpha Vantage..."):
-        return _fetch_alpha_vantage_data(ticker, api_key)
-
-# ────────────────────────────────────────────────
-# EXTRACCIÓN DE DATOS ALPHA VANTAGE
-# ────────────────────────────────────────────────
+def _safe(val):
+    if val is None: return None
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)): return None
+    return val
 
 def safe_float(value):
-    """Convierte a float de manera segura."""
-    if value is None or value == '' or value == 'None' or value == 'N/A':
-        return 0.0
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return 0.0
+    if value is None or value == '' or value == 'None' or value == 'N/A': return 0.0
+    try: return float(value)
+    except: return 0.0
 
 def safe_int(value):
-    """Convierte a int de manera segura."""
-    if value is None or value == '' or value == 'None' or value == 'N/A':
-        return 0
-    try:
-        return int(float(value))
-    except (ValueError, TypeError):
-        return 0
-
-def extract_fundamentals_from_av(av_data):
-    """Extrae métricas de Alpha Vantage."""
-    if not av_data:
-        debug_log("extract_fundamentals: av_data es None")
-        return {}
-    
-    debug_log("Iniciando extracción de fundamentos Alpha Vantage")
-    f = {}
-    
-    try:
-        overview = av_data.get('overview', {})
-        debug_log("Overview keys", list(overview.keys())[:10])
-        
-        f['name'] = overview.get('Name', 'Unknown')
-        f['sector'] = overview.get('Sector', 'N/A')
-        f['industry'] = overview.get('Industry', 'N/A')
-        f['country'] = overview.get('Country', 'N/A')
-        f['employees'] = safe_int(overview.get('FullTimeEmployees'))
-        f['website'] = overview.get('OfficialSite', '#')
-        f['summary'] = overview.get('Description', f"Empresa {f.get('name', '')}")
-        f['exchange'] = overview.get('Exchange', 'N/A')
-        
-        # Institutional data
-        f['institutional_ownership'] = safe_float(overview.get('PercentInstitutions'))
-        f['insider_ownership'] = safe_float(overview.get('PercentInsiders'))
-        
-        f['sma_50'] = safe_float(overview.get('50DayMovingAverage'))
-        f['sma_200'] = safe_float(overview.get('200DayMovingAverage'))
-        
-        # Ratios de valoración
-        f['pe_trailing'] = safe_float(overview.get('TrailingPE'))
-        f['pe_forward'] = safe_float(overview.get('ForwardPE'))
-        f['peg_ratio'] = safe_float(overview.get('PEGRatio'))
-        f['price_to_book'] = safe_float(overview.get('PriceToBookRatio'))
-        f['price_to_sales'] = safe_float(overview.get('PriceToSalesRatioTTM'))
-        
-        # Márgenes - Normalización
-        gross_margin_raw = safe_float(overview.get('GrossProfitTTM'))
-        revenue_ttm_raw = safe_float(overview.get('RevenueTTM'))
-        
-        if revenue_ttm_raw > 0 and gross_margin_raw > 0:
-            if gross_margin_raw > 1:
-                f['gross_margin'] = gross_margin_raw / 100
-            else:
-                f['gross_margin'] = gross_margin_raw / revenue_ttm_raw
-        
-        f['operating_margin'] = safe_float(overview.get('OperatingMarginTTM'))
-        f['profit_margin'] = safe_float(overview.get('ProfitMargin'))
-        f['ebitda_margin'] = safe_float(overview.get('EBITDA')) / safe_float(overview.get('RevenueTTM')) if overview.get('RevenueTTM') else 0
-        
-        # Normalizar márgenes
-        for margin_key in ['operating_margin', 'profit_margin', 'ebitda_margin']:
-            if f.get(margin_key, 0) > 1:
-                f[margin_key] = f[margin_key] / 100
-        
-        # Rentabilidad
-        f['roe'] = safe_float(overview.get('ReturnOnEquityTTM'))
-        f['roa'] = safe_float(overview.get('ReturnOnAssetsTTM'))
-        f['roi'] = safe_float(overview.get('ReturnOnInvestmentTTM'))
-        
-        # Normalizar ratios
-        for ratio_key in ['roe', 'roa', 'roi']:
-            if f.get(ratio_key, 0) > 1:
-                f[ratio_key] = f[ratio_key] / 100
-        
-        # Crecimiento
-        f['rev_growth'] = safe_float(overview.get('QuarterlyRevenueGrowthYOY'))
-        f['eps_growth'] = safe_float(overview.get('QuarterlyEarningsGrowthYOY'))
-        
-        # Normalizar crecimiento
-        for growth_key in ['rev_growth', 'eps_growth']:
-            if abs(f.get(growth_key, 0)) > 1:
-                f[growth_key] = f[growth_key] / 100
-        
-        # Dividendos
-        f['dividend_yield'] = safe_float(overview.get('DividendYield'))
-        f['payout_ratio'] = safe_float(overview.get('PayoutRatio'))
-        
-        if f.get('dividend_yield', 0) > 0.5:
-            f['dividend_yield'] = f['dividend_yield'] / 100
-        
-        f['beta'] = safe_float(overview.get('Beta'))
-        f['eps'] = safe_float(overview.get('EPS'))
-        f['eps_forward'] = safe_float(overview.get('ForwardEPS'))
-        f['book_value_ps'] = safe_float(overview.get('BookValue'))
-        f['revenue_ttm'] = safe_float(overview.get('RevenueTTM'))
-        
-        debug_log("Overview procesado", f"Name: {f['name']}, P/E: {f['pe_trailing']}, ROE: {f['roe']}, Profit Margin: {f['profit_margin']}")
-        
-        # Balance Sheet
-        balance = av_data.get('balance_sheet', {})
-        balance_reports = balance.get('quarterlyReports', [])
-        
-        if balance_reports and len(balance_reports) > 0:
-            b = balance_reports[0]
-            debug_log("Balance sheet", f"Fecha: {b.get('fiscalDateEnding')}")
-            f['cash'] = safe_float(b.get('cashAndCashEquivalentsAtCarryingValue'))
-            f['debt'] = safe_float(b.get('shortLongTermDebtTotal') or b.get('longTermDebt'))
-            f['total_equity'] = safe_float(b.get('totalShareholderEquity'))
-            f['total_assets'] = safe_float(b.get('totalAssets'))
-            f['total_liabilities'] = safe_float(b.get('totalLiabilities'))
-            f['inventory'] = safe_float(b.get('inventory'))
-            f['goodwill'] = safe_float(b.get('goodwill'))
-            
-            if f['total_equity'] > 0:
-                f['debt_to_equity'] = (f['debt'] / f['total_equity']) * 100
-            
-            current_assets = safe_float(b.get('totalCurrentAssets'))
-            current_liabilities = safe_float(b.get('totalCurrentLiabilities'))
-            if current_liabilities > 0:
-                f['current_ratio'] = current_assets / current_liabilities
-                f['quick_ratio'] = (current_assets - f['inventory']) / current_liabilities if f['inventory'] > 0 else f['current_ratio']
-        
-        # Cash Flow
-        cashflow = av_data.get('cash_flow', {})
-        cf_reports = cashflow.get('quarterlyReports', [])
-        
-        if cf_reports and len(cf_reports) > 0:
-            c = cf_reports[0]
-            debug_log("Cash flow", f"Fecha: {c.get('fiscalDateEnding')}")
-            f['operating_cashflow'] = safe_float(c.get('operatingCashflow'))
-            capex = safe_float(c.get('capitalExpenditures'))
-            if f['operating_cashflow'] and capex:
-                f['free_cashflow'] = f['operating_cashflow'] - capex
-        
-        # Income Statement
-        income = av_data.get('income_statement', {})
-        income_reports = income.get('quarterlyReports', [])
-        
-        if income_reports and len(income_reports) > 0:
-            latest = income_reports[0]
-            f['latest_revenue'] = safe_float(latest.get('totalRevenue'))
-            f['latest_net_income'] = safe_float(latest.get('netIncome'))
-            f['latest_ebitda'] = safe_float(latest.get('ebitda'))
-            f['latest_operating_income'] = safe_float(latest.get('operatingIncome'))
-            f['research_dev'] = safe_float(latest.get('researchAndDevelopment'))
-            f['interest_expense'] = safe_float(latest.get('interestExpense'))
-            f['income_tax'] = safe_float(latest.get('incomeTaxExpense'))
-            
-            debug_log("Income Statement Latest", f"Revenue: {f['latest_revenue']}, Net Income: {f['latest_net_income']}, EBITDA: {f['latest_ebitda']}")
-            
-            # Calcular crecimiento YoY
-            if len(income_reports) >= 5:
-                current_rev = safe_float(income_reports[0].get('totalRevenue'))
-                yoy_rev = safe_float(income_reports[4].get('totalRevenue'))
-                if yoy_rev > 0:
-                    f['rev_growth_calculated'] = (current_rev - yoy_rev) / yoy_rev
-        
-        # Earnings
-        earnings = av_data.get('earnings', {})
-        earnings_reports = earnings.get('quarterlyEarnings', [])
-        
-        if earnings_reports and len(earnings_reports) > 0:
-            f['eps_history'] = earnings_reports
-            
-            surprises = []
-            for report in earnings_reports[:8]:
-                surprise_data = {
-                    'date': report.get('fiscalDateEnding', ''),
-                    'eps_actual': safe_float(report.get('reportedEPS')),
-                    'eps_estimate': safe_float(report.get('estimatedEPS')),
-                    'surprise': safe_float(report.get('surprise')),
-                    'surprise_pct': safe_float(report.get('surprisePercentage'))
-                }
-                if surprise_data['eps_actual'] != 0 or surprise_data['eps_estimate'] != 0:
-                    surprises.append(surprise_data)
-            
-            f['earnings_surprises'] = surprises
-            beats = sum(1 for s in surprises if s['surprise'] > 0)
-            f['earnings_beat_rate'] = (beats / len(surprises) * 100) if surprises else 0
-            f['avg_surprise_pct'] = sum(s['surprise_pct'] for s in surprises) / len(surprises) if surprises else 0
-        
-        # Analyst targets
-        f['target_mean'] = safe_float(overview.get('AnalystTargetPrice'))
-        f['target_high'] = safe_float(overview.get('AnalystTargetHigh'))
-        f['target_low'] = safe_float(overview.get('AnalystTargetLow'))
-        f['num_analysts'] = safe_int(overview.get('AnalystRatingStrongBuy')) + safe_int(overview.get('AnalystRatingBuy')) + safe_int(overview.get('AnalystRatingHold')) + safe_int(overview.get('AnalystRatingSell')) + safe_int(overview.get('AnalystRatingStrongSell'))
-        
-        f['rating_strong_buy'] = safe_int(overview.get('AnalystRatingStrongBuy'))
-        f['rating_buy'] = safe_int(overview.get('AnalystRatingBuy'))
-        f['rating_hold'] = safe_int(overview.get('AnalystRatingHold'))
-        f['rating_sell'] = safe_int(overview.get('AnalystRatingSell'))
-        f['rating_strong_sell'] = safe_int(overview.get('AnalystRatingStrongSell'))
-        
-        debug_log("Extracción AV completada", f"Campos: {len(f)}")
-        
-    except Exception as e:
-        debug_log("ERROR en extracción AV", str(e))
-        debug_log("Traceback", traceback.format_exc())
-    
-    return f
-
-# ────────────────────────────────────────────────
-# YFINANCE CON RETRY
-# ────────────────────────────────────────────────
-
-def _fetch_yfinance_data(ticker_symbol, max_retries=3):
-    """Función interna que obtiene datos de yfinance (sin UI)."""
-    for attempt in range(max_retries):
-        try:
-            debug_log(f"YFinance intento {attempt + 1}/{max_retries}")
-            
-            if attempt > 0:
-                time.sleep(2 ** attempt)
-            
-            ticker = yf.Ticker(ticker_symbol)
-            info = ticker.info or {}
-            
-            if not info or len(info) < 5:
-                debug_log(f"YFinance: info vacío en intento {attempt + 1}")
-                continue
-            
-            hist = ticker.history(period="1y", auto_adjust=True)
-            hist_dict = None
-            if not hist.empty:
-                hist_dict = {
-                    'dates': hist.index.strftime('%Y-%m-%d').tolist(),
-                    'open': hist['Open'].tolist(),
-                    'high': hist['High'].tolist(),
-                    'low': hist['Low'].tolist(),
-                    'close': hist['Close'].tolist(),
-                    'volume': hist['Volume'].tolist()
-                }
-            
-            price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
-            
-            if not price:
-                debug_log(f"YFinance: precio no disponible en intento {attempt + 1}")
-                continue
-            
-            yf_data = {
-                'price': price,
-                'prev_close': info.get('previousClose'),
-                'market_cap': info.get('marketCap'),
-                'volume': info.get('volume'),
-                'avg_volume': info.get('averageVolume'),
-                'change_pct': info.get('regularMarketChangePercent'),
-                'fifty_two_high': info.get('fiftyTwoWeekHigh'),
-                'fifty_two_low': info.get('fiftyTwoWeekLow'),
-                'beta': info.get('beta'),
-            }
-            
-            debug_log("YFinance éxito", f"Precio: {price}")
-            
-            return {
-                'info': info,
-                'yf_specific': yf_data,
-                'history': hist_dict,
-                'source': 'yfinance'
-            }
-            
-        except Exception as e:
-            debug_log(f"YFinance error intento {attempt + 1}", str(e))
-            if attempt == max_retries - 1:
-                return None
-    
-    return None
-
-def get_yfinance_data(ticker_symbol):
-    """Versión pública con spinner (no cacheada)."""
-    with st.spinner("📈 Cargando precios de Yahoo Finance..."):
-        return _fetch_yfinance_data(ticker_symbol)
-
-# ────────────────────────────────────────────────
-# PROCESAMIENTO DE DATOS COMBINADO
-# ────────────────────────────────────────────────
-
-def process_combined_data(ticker, av_data, yf_data, finnhub_data=None):
-    """Combina datos de Alpha Vantage, Yahoo Finance y Finnhub."""
-    debug_log("Iniciando process_combined_data")
-    
-    data = {
-        'ticker': ticker,
-        'name': ticker,
-        'sector': 'N/A',
-        'industry': 'N/A',
-        'country': 'N/A',
-        'employees': 0,
-        'website': '#',
-        'summary': f"Empresa {ticker}",
-        'price': 0,
-        'prev_close': 0,
-        'market_cap': 0,
-        'change_pct': 0,
-        'volume': 0,
-        'avg_volume': 0,
-        'beta': 0,
-        'eps': 0,
-        'pe_trailing': 0,
-        'pe_forward': 0,
-        'peg_ratio': 0,
-        'price_to_book': 0,
-        'price_to_sales': 0,
-        'roe': 0,
-        'roa': 0,
-        'roi': 0,
-        'gross_margin': 0,
-        'operating_margin': 0,
-        'profit_margin': 0,
-        'ebitda_margin': 0,
-        'rev_growth': 0,
-        'eps_growth': 0,
-        'cash': 0,
-        'debt': 0,
-        'free_cashflow': 0,
-        'operating_cashflow': 0,
-        'debt_to_equity': 0,
-        'current_ratio': 0,
-        'quick_ratio': 0,
-        'dividend_yield': 0,
-        'payout_ratio': 0,
-        'eps_forward': 0,
-        'target_mean': 0,
-        'target_high': 0,
-        'target_low': 0,
-        'num_analysts': 0,
-        'hist': pd.DataFrame(),
-        'earnings_calendar': [],
-        'data_source': 'none',
-        'is_real_data': False,
-        'sma_50': 0,
-        'sma_200': 0,
-        'book_value_ps': 0,
-        'revenue_ttm': 0,
-        'rating_strong_buy': 0,
-        'rating_buy': 0,
-        'rating_hold': 0,
-        'rating_sell': 0,
-        'rating_strong_sell': 0,
-        'earnings_surprises': [],
-        'earnings_beat_rate': 0,
-        'avg_surprise_pct': 0,
-        'institutional_ownership': 0,
-        'insider_ownership': 0,
-        'news_sentiment': None,
-        'segments': None,
-        'latest_revenue': 0,
-        'latest_net_income': 0,
-        'latest_ebitda': 0,
-    }
-    
-    has_valid_price = False
-    
-    # Procesar Alpha Vantage
-    if av_data:
-        debug_log("Procesando datos Alpha Vantage")
-        av_fund = extract_fundamentals_from_av(av_data)
-        
-        if av_fund and av_fund.get('name') != 'Unknown':
-            debug_log("Alpha Vantage tiene datos válidos")
-            
-            for key, value in av_fund.items():
-                if value is not None and value != 0 and value != '':
-                    if key in data:
-                        data[key] = value
-            
-            data['data_source'] = 'alpha_vantage'
-            data['is_real_data'] = True
-    
-    # Procesar Yahoo Finance
-    if yf_data:
-        debug_log("Procesando datos Yahoo Finance")
-        yf_specific = yf_data.get('yf_specific', {})
-        
-        if yf_specific.get('price'):
-            data['price'] = float(yf_specific['price'])
-            data['prev_close'] = float(yf_specific.get('prev_close') or yf_specific['price'])
-            data['market_cap'] = float(yf_specific.get('market_cap') or 0)
-            data['volume'] = int(yf_specific.get('volume') or 0)
-            data['avg_volume'] = int(yf_specific.get('avg_volume') or 0)
-            data['change_pct'] = float(yf_specific.get('change_pct') or 0)
-            data['fifty_two_high'] = float(yf_specific.get('fifty_two_high') or 0)
-            data['fifty_two_low'] = float(yf_specific.get('fifty_two_low') or 0)
-            data['beta'] = float(yf_specific.get('beta') or 0)
-            has_valid_price = True
-            
-            if data['data_source'] == 'alpha_vantage':
-                data['data_source'] = 'combined'
-            else:
-                data['data_source'] = 'yfinance'
-            
-            debug_log("Precios YF aplicados", f"Price: {data['price']}")
-        
-        if yf_data.get('history'):
-            try:
-                hist = yf_data['history']
-                data['hist'] = pd.DataFrame({
-                    'Open': hist['open'],
-                    'High': hist['high'],
-                    'Low': hist['low'],
-                    'Close': hist['close'],
-                    'Volume': hist['volume']
-                }, index=pd.to_datetime(hist['dates']))
-                debug_log("Histórico cargado", len(data['hist']))
-            except Exception as e:
-                debug_log("Error cargando histórico", str(e))
-    
-    # Procesar Finnhub
-    if finnhub_data:
-        debug_log("Procesando datos Finnhub")
-        
-        # Segmentos
-        segments = process_finnhub_segments(finnhub_data)
-        if segments:
-            data['segments'] = segments
-            debug_log("Segmentos procesados", list(segments.keys()))
-        
-        # Sentimiento
-        sentiment = calculate_news_sentiment(finnhub_data)
-        if sentiment:
-            data['news_sentiment'] = sentiment
-            debug_log("Sentimiento calculado", f"{sentiment['overall_sentiment']} ({sentiment['sentiment_score']:.2f})")
-    
-    # Fallback de precio
-    if not has_valid_price and data['eps'] > 0 and data['pe_trailing'] > 0:
-        estimated_price = data['eps'] * data['pe_trailing']
-        if estimated_price > 0:
-            data['price'] = estimated_price
-            data['prev_close'] = estimated_price
-            data['change_pct'] = 0
-            has_valid_price = True
-            data['data_source'] = 'alpha_vantage_estimated'
-    
-    # Calcular campos derivados
-    if data['price'] > 0 and data['prev_close'] > 0:
-        data['change_pct'] = ((data['price'] - data['prev_close']) / data['prev_close']) * 100
-    
-    if data['price'] > 0 and data.get('fifty_two_high', 0) > 0:
-        data['pct_from_high'] = ((data['price'] - data['fifty_two_high']) / data['fifty_two_high']) * 100
-    
-    if data['price'] > 0 and data.get('fifty_two_low', 0) > 0:
-        data['pct_from_low'] = ((data['price'] - data['fifty_two_low']) / data['fifty_two_low']) * 100
-    
-    if data['market_cap'] > 0 and data['debt'] > 0 and data['cash'] > 0:
-        data['enterprise_value'] = data['market_cap'] + data['debt'] - data['cash']
-    
-    if data['price'] == 0 and not has_valid_price:
-        debug_log("ERROR: Precio sigue siendo 0")
-        return None
-    
-    debug_log("Datos procesados exitosamente", f"Fuente: {data['data_source']}, Precio: {data['price']}")
-    return data
-
-# ────────────────────────────────────────────────
-# MOCK DATA
-# ────────────────────────────────────────────────
-
-def get_mock_data(ticker):
-    """Datos de demostración."""
-    debug_log(f"Usando MOCK DATA para {ticker}")
-    
-    seed = int(hashlib.md5(ticker.encode()).hexdigest(), 16) % 1000
-    base_price = 50 + (seed % 950)
-    
-    mock_surprises = []
-    for i in range(8):
-        mock_surprises.append({
-            'date': f"2024-Q{(i % 4) + 1}",
-            'eps_actual': 2.5 + (i * 0.1),
-            'eps_estimate': 2.4 + (i * 0.1),
-            'surprise': 0.1,
-            'surprise_pct': 4.2
-        })
-    
-    return {
-        'ticker': ticker,
-        'name': f"{ticker} Corporation",
-        'sector': "Technology",
-        'industry': "Software",
-        'country': "United States",
-        'employees': 50000,
-        'website': "#",
-        'summary': f"{ticker} es una empresa líder en su sector.",
-        'price': float(base_price),
-        'prev_close': float(base_price) * 0.98,
-        'market_cap': float(base_price) * 1e9 * random.uniform(0.5, 5),
-        'volume': 10000000,
-        'avg_volume': 12000000,
-        'beta': random.uniform(0.8, 2.0),
-        'change_pct': 2.0,
-        'fifty_two_high': float(base_price) * 1.3,
-        'fifty_two_low': float(base_price) * 0.7,
-        'pct_from_high': -5.0,
-        'pct_from_low': 15.0,
-        'eps': float(base_price) / random.uniform(15, 40),
-        'pe_trailing': random.uniform(15, 40),
-        'pe_forward': random.uniform(15, 35),
-        'peg_ratio': random.uniform(0.5, 2.0),
-        'price_to_book': random.uniform(2, 10),
-        'price_to_sales': random.uniform(3, 15),
-        'roe': random.uniform(0.1, 0.4),
-        'roa': random.uniform(0.05, 0.2),
-        'roi': random.uniform(0.08, 0.35),
-        'gross_margin': random.uniform(0.4, 0.8),
-        'operating_margin': random.uniform(0.15, 0.35),
-        'profit_margin': random.uniform(0.1, 0.25),
-        'ebitda_margin': random.uniform(0.2, 0.4),
-        'rev_growth': random.uniform(-0.05, 0.3),
-        'eps_growth': random.uniform(-0.05, 0.3),
-        'cash': float(base_price) * 1e9 * 0.1,
-        'debt': float(base_price) * 1e9 * 0.05,
-        'free_cashflow': float(base_price) * 1e9 * 0.05,
-        'operating_cashflow': float(base_price) * 1e9 * 0.08,
-        'debt_to_equity': random.uniform(20, 80),
-        'current_ratio': random.uniform(1.0, 3.0),
-        'quick_ratio': random.uniform(0.8, 2.5),
-        'dividend_yield': random.choice([0.0, 0.005, 0.01, 0.02]),
-        'payout_ratio': random.uniform(0.1, 0.5),
-        'eps_forward': float(base_price) / random.uniform(12, 30),
-        'target_mean': float(base_price) * 1.15,
-        'target_high': float(base_price) * 1.4,
-        'target_low': float(base_price) * 0.9,
-        'num_analysts': random.randint(10, 50),
-        'rating_strong_buy': random.randint(5, 20),
-        'rating_buy': random.randint(10, 30),
-        'rating_hold': random.randint(5, 15),
-        'rating_sell': random.randint(0, 5),
-        'rating_strong_sell': random.randint(0, 2),
-        'recommendation': 'buy',
-        'hist': pd.DataFrame(),
-        'earnings_calendar': [],
-        'data_source': 'mock',
-        'is_real_data': False,
-        'sma_50': float(base_price) * 0.95,
-        'sma_200': float(base_price) * 0.90,
-        'book_value_ps': float(base_price) * 0.3,
-        'revenue_ttm': float(base_price) * 1e9 * 2,
-        'earnings_surprises': mock_surprises,
-        'earnings_beat_rate': 75.0,
-        'avg_surprise_pct': 5.2,
-        'institutional_ownership': 65.0,
-        'insider_ownership': 2.5,
-        'latest_revenue': float(base_price) * 1e9 * 2,
-        'latest_net_income': float(base_price) * 1e9 * 0.1,
-        'latest_ebitda': float(base_price) * 1e9 * 0.3,
-        'segments': {
-            'Producto A': 65,
-            'Producto B': 25,
-            'Servicios': 10
-        },
-        'news_sentiment': {
-            'overall_sentiment': 'neutral',
-            'sentiment_score': 0.1,
-            'news_count': 15,
-            'bullish_pct': 55,
-            'bearish_pct': 45,
-            'analyzed_count': 12,
-            'source': 'mock'
-        }
-    }
-
-# ────────────────────────────────────────────────
-# FORMATO Y UTILIDADES
-# ────────────────────────────────────────────────
+    if value is None or value == '' or value == 'None' or value == 'N/A': return 0
+    try: return int(float(value))
+    except: return 0
 
 def format_value(value, prefix="", suffix="", decimals=2):
     if value is None or value == 0 or (isinstance(value, float) and pd.isna(value)):
         return "N/D"
     try:
         val = float(value)
-        if abs(val) >= 1e12:
-            return f"{prefix}{val/1e12:.{decimals}f}T{suffix}"
-        elif abs(val) >= 1e9:
-            return f"{prefix}{val/1e9:.{decimals}f}B{suffix}"
-        elif abs(val) >= 1e6:
-            return f"{prefix}{val/1e6:.{decimals}f}M{suffix}"
-        elif abs(val) >= 1e3:
-            return f"{prefix}{val/1e3:.{decimals}f}K{suffix}"
+        if abs(val) >= 1e12: return f"{prefix}{val/1e12:.{decimals}f}T{suffix}"
+        elif abs(val) >= 1e9: return f"{prefix}{val/1e9:.{decimals}f}B{suffix}"
+        elif abs(val) >= 1e6: return f"{prefix}{val/1e6:.{decimals}f}M{suffix}"
+        elif abs(val) >= 1e3: return f"{prefix}{val/1e3:.{decimals}f}K{suffix}"
         return f"{prefix}{val:.{decimals}f}{suffix}"
-    except:
-        return str(value)
+    except: return str(value)
+
+def fmt_x(val):
+    v = _safe(val)
+    return f"{v:.2f}×" if v is not None else "N/D"
+
+def fmt_pct(val, mult=1):
+    v = _safe(val)
+    return f"{v * mult:.2f}%" if v is not None else "N/D"
+
+def ts_to_date(ts):
+    try: return datetime.fromtimestamp(int(ts)).strftime('%d %b %Y')
+    except: return str(ts)
 
 def format_pct(value, decimals=2):
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return "N/D", "#888"
+    if value is None or (isinstance(value, float) and pd.isna(value)): return "N/D", "#888"
     try:
         val = float(value) * 100 if abs(float(value)) < 1 else float(value)
         color = "#00ffad" if val >= 0 else "#f23645"
         return f"{val:.{decimals}f}%", color
-    except:
-        return "N/D", "#888"
-
-def get_color_for_value(value, good_threshold=0, bad_threshold=0, inverse=False):
-    """Retorna color basado en valor."""
-    if value is None or value == 0:
-        return "#888"
-    
-    if inverse:
-        value = -value
-    
-    if value > good_threshold:
-        return "#00ffad"
-    elif value < bad_threshold:
-        return "#f23645"
-    return "#f5a623"
+    except: return "N/D", "#888"
 
 # ────────────────────────────────────────────────
-# COMPONENTES UI
+# SPARKLINE SVG
 # ────────────────────────────────────────────────
 
-def render_metric_card(label, value, is_pct=False, decimals=2, good_threshold=0, bad_threshold=0, inverse=False):
-    """Renderiza una tarjeta de métrica individual."""
-    
-    if is_pct and value is not None and value != 0:
-        formatted_val, color = format_pct(value, decimals)
-    elif value is not None and value != 0:
-        if label in ["P/E Trailing", "P/E Forward", "PEG Ratio", "P/B", "Beta", "Current Ratio", "Quick Ratio"]:
-            formatted_val = format_value(value, '', '', decimals)
-        else:
-            formatted_val = format_value(value, '', '', decimals)
-        color = get_color_for_value(value, good_threshold, bad_threshold, inverse) if isinstance(value, (int, float)) else "#00ffad"
-    else:
-        formatted_val = "N/D"
-        color = "#666"
-    
-    is_real = value is not None and value != 0
-    
-    st.markdown(
-        f"""
-        <div style="background: {'#0c0e12' if is_real else '#1a1e26'}; 
-                    border: 1px solid {'#00ffad33' if is_real else '#f2364533'}; 
-                    border-radius: 10px; padding: 16px; text-align: center;
-                    {'opacity: 0.6;' if not is_real else ''}">
-            <div style="color: #888; font-size: 10px; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">{html.escape(label)}</div>
-            <div style="color: {color}; font-size: 1.3rem; font-weight: bold;">{html.escape(formatted_val)}</div>
-        </div>
-        """, 
-        unsafe_allow_html=True
+def build_sparkline_svg(prices, width=240, height=48):
+    if not prices or len(prices) < 2: return ""
+    mn, mx = min(prices), max(prices)
+    rng = mx - mn if mx != mn else 1
+    xs = [round(i / (len(prices) - 1) * width, 2) for i in range(len(prices))]
+    ys = [round(height - (p - mn) / rng * (height - 4) - 2, 2) for p in prices]
+    pts  = " ".join(f"{x},{y}" for x, y in zip(xs, ys))
+    color = "#00ffad" if prices[-1] >= prices[0] else "#f23645"
+    fill  = f"0,{height} " + pts + f" {width},{height}"
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
+        f'<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0%" stop-color="{color}" stop-opacity="0.25"/>'
+        f'<stop offset="100%" stop-color="{color}" stop-opacity="0"/>'
+        f'</linearGradient></defs>'
+        f'<polygon points="{fill}" fill="url(#sg)"/>'
+        f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'
+        f'</svg>'
     )
 
-def render_segment_chart(segments_data, title="Ingresos por Segmento"):
-    """Renderiza gráfico de donut para segmentos."""
-    if not segments_data:
-        st.info("Datos de segmentos no disponibles")
-        return
-    
-    labels = list(segments_data.keys())
-    values = list(segments_data.values())
-    colors = ['#5b8ff9', '#00ffad', '#f5a623', '#f23645', '#9b59b6', '#1abc9c']
-    
-    fig = go.Figure(data=[go.Pie(
-        labels=labels,
-        values=values,
-        hole=0.4,
-        marker_colors=colors[:len(labels)],
-        textinfo='label+percent',
-        textfont_size=12,
-        textfont_color='white'
-    )])
-    
-    fig.update_layout(
-        title=dict(text=title, font=dict(color='white', size=16)),
-        template="plotly_dark",
-        plot_bgcolor='#0c0e12',
-        paper_bgcolor='#11141a',
-        font=dict(color='white'),
-        height=350,
-        margin=dict(l=20, r=20, t=50, b=20),
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_forward_guidance(data, av_data):
-    """Renderiza sección de Forward Guidance basado en datos reales."""
-    
-    income = av_data.get('income_statement', {}) if av_data else {}
-    income_reports = income.get('quarterlyReports', [])
-    
-    # Calcular tendencias
-    if len(income_reports) >= 2:
-        latest = income_reports[0]
-        previous = income_reports[1]
-        
-        rev_growth = ((safe_float(latest.get('totalRevenue')) - safe_float(previous.get('totalRevenue'))) / 
-                     safe_float(previous.get('totalRevenue')) * 100) if safe_float(previous.get('totalRevenue')) > 0 else 0
-    else:
-        rev_growth = 0
-    
-    positive_outlook = []
-    challenges = []
-    
-    # Análisis de tendencias reales
-    if data.get('rev_growth', 0) > 0:
-        positive_outlook.append(f"Crecimiento de ingresos positivo ({data['rev_growth']*100:.1f}%) impulsado por demanda sostenida")
-    elif data.get('rev_growth', 0) < -0.1:
-        challenges.append(f"Contracción de ingresos ({data['rev_growth']*100:.1f}%) requiere atención en próximos trimestres")
-    
-    if data.get('profit_margin', 0) > 0.15:
-        positive_outlook.append(f"Márgenes de beneficio sólidos ({data['profit_margin']*100:.1f}%) respaldan rentabilidad")
-    elif data.get('profit_margin', 0) < 0:
-        challenges.append(f"Pérdidas operativas ({data['profit_margin']*100:.1f}%) requieren optimización de costes")
-    
-    if data.get('free_cashflow', 0) > 0:
-        positive_outlook.append(f"Generación positiva de FCF ({format_value(data['free_cashflow'], '$')}) permite flexibilidad financiera")
-    else:
-        challenges.append(f"Quema de caja ({format_value(data['free_cashflow'], '$')}) requiere monitoreo de liquidez")
-    
-    if data.get('debt_to_equity', 0) < 50:
-        positive_outlook.append(f"Balance sheet conservador con bajo apalancamiento ({data['debt_to_equity']:.1f}%)")
-    elif data.get('debt_to_equity', 0) > 100:
-        challenges.append(f"Alto nivel de apalancamiento ({data['debt_to_equity']:.1f}%) expone a riesgos de tipos de interés")
-    
-    if len(positive_outlook) < 2:
-        positive_outlook.append("Posición de mercado estable en segmentos core")
-    if len(challenges) < 2:
-        challenges.append("Entorno competitivo y presión regulatoria en sectores clave")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📈 Perspectivas Positivas")
-        for item in positive_outlook[:4]:
-            st.markdown(f"✅ {item}")
-    
-    with col2:
-        st.markdown("#### ⚠️ Desafíos por Delante")
-        for item in challenges[:4]:
-            st.markdown(f"❌ {item}")
-
-def render_earnings_surprise_chart(surprises):
-    """Renderiza gráfico de earnings surprises."""
-    if not surprises or len(surprises) == 0:
-        st.info("Datos de earnings surprises no disponibles")
-        return
-    
-    dates = [s['date'] for s in reversed(surprises)]
-    surprises_pct = [s['surprise_pct'] for s in reversed(surprises)]
-    
-    colors = ['#00ffad' if s > 0 else '#f23645' for s in surprises_pct]
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=dates,
-        y=surprises_pct,
-        marker_color=colors,
-        text=[f"{s:+.1f}%" for s in surprises_pct],
-        textposition='outside',
-        textfont=dict(color='white', size=10)
-    ))
-    
-    beat_rate = sum(1 for s in surprises if s['surprise'] > 0) / len(surprises) * 100
-    
-    fig.add_hline(y=0, line_dash="dash", line_color="#666", opacity=0.5)
-    
-    fig.update_layout(
-        title=dict(
-            text=f"Historial de Earnings Surprises (Beat Rate: {beat_rate:.0f}%)",
-            font=dict(color='white', size=14)
-        ),
-        template="plotly_dark",
-        plot_bgcolor='#0c0e12',
-        paper_bgcolor='#11141a',
-        font=dict(color='white'),
-        height=300,
-        margin=dict(l=50, r=50, t=80, b=50),
-        xaxis_tickangle=-45,
-        yaxis_title="Surprise %",
-        showlegend=False
-    )
-    
-    fig.update_xaxes(gridcolor='#1a1e26')
-    fig.update_yaxes(gridcolor='#1a1e26', zeroline=True, zerolinecolor='#666')
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_news_sentiment(sentiment_data):
-    """Renderiza indicador de sentimiento de noticias."""
-    if not sentiment_data:
-        st.info("📰 Análisis de sentimiento no disponibles - Configura FINNHUB_API_KEY")
-        return
-    
-    sentiment = sentiment_data.get('overall_sentiment', 'neutral')
-    score = sentiment_data.get('sentiment_score', 0)
-    source = sentiment_data.get('source', 'unknown')
-    
-    colors = {
-        'bullish': '#00ffad',
-        'bearish': '#f23645',
-        'neutral': '#f5a623'
-    }
-    
-    color = colors.get(sentiment, '#888')
-    
-    # Mostrar badge de fuente
-    if source == 'finnhub':
-        st.success("✅ Sentimiento basado en noticias reales de Finnhub")
-    else:
-        st.info("ℹ️ Datos de sentimiento de ejemplo")
-    
-    # Métricas en columnas
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Sentimiento", sentiment.upper())
-    
-    with col2:
-        bullish_pct = sentiment_data.get('bullish_pct', 0)
-        st.metric("Noticias Alcistas", f"{bullish_pct:.0f}%")
-    
-    with col3:
-        bearish_pct = sentiment_data.get('bearish_pct', 0)
-        st.metric("Noticias Bajistas", f"{bearish_pct:.0f}%")
-    
-    with col4:
-        score_pct = score * 100
-        delta_color = "normal" if score_pct >= 0 else "inverse"
-        st.metric("Score", f"{score_pct:+.0f}", delta_color=delta_color)
-    
-    # Gauge chart - CORREGIDO: sin transparencia en steps
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=score * 100,
-        delta={'reference': 0, 'increasing': {'color': "#00ffad"}, 'decreasing': {'color': "#f23645"}},
-        domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': "Sentimiento de Noticias", 'font': {'color': 'white', 'size': 14}},
-        gauge={
-            'axis': {'range': [-100, 100], 'tickcolor': 'white', 'tickwidth': 1},
-            'bar': {'color': color, 'thickness': 0.75},
-            'bgcolor': '#1a1e26',
-            'borderwidth': 2,
-            'bordercolor': '#2a3f5f',
-            'steps': [
-                {'range': [-100, -33], 'color': '#3d1f1f'},  # Rojo oscuro sin transparencia
-                {'range': [-33, 33], 'color': '#3d3520'},     # Amarillo oscuro sin transparencia
-                {'range': [33, 100], 'color': '#1f3d2e'}      # Verde oscuro sin transparencia
-            ],
-            'threshold': {
-                'line': {'color': 'white', 'width': 3},
-                'thickness': 0.8,
-                'value': score * 100
-            }
-        }
-    ))
-    
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor='#11141a',
-        font=dict(color='white'),
-        height=280,
-        margin=dict(l=30, r=30, t=50, b=30)
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Información adicional
-    news_count = sentiment_data.get('news_count', 0)
-    analyzed = sentiment_data.get('analyzed_count', 0)
-    
-    st.caption(f"📊 Análisis basado en {analyzed} noticias relevantes de las últimas {news_count} disponibles")
-
 # ────────────────────────────────────────────────
-# VISUALIZACIÓN DE EARNINGS
+# TRADUCCIÓN AUTOMÁTICA (castellano)
 # ────────────────────────────────────────────────
 
-def render_earnings_section(data, av_data):
-    """Renderiza sección de earnings con datos reales."""
-    
-    if not av_data:
-        st.info("📊 Datos fundamentales no disponibles.")
-        return
-    
-    income = av_data.get('income_statement', {})
-    income_reports = income.get('quarterlyReports', [])
-    
-    if not income_reports or len(income_reports) == 0:
-        st.warning("⚠️ No hay datos de income statement")
-        return
-    
-    latest = income_reports[0]
-    
-    # Calcular crecimiento YoY real
-    revenue_growth = None
-    if len(income_reports) >= 5:
-        try:
-            current = safe_float(income_reports[0].get('totalRevenue'))
-            yoy = safe_float(income_reports[4].get('totalRevenue'))
-            if yoy > 0:
-                revenue_growth = ((current - yoy) / yoy) * 100
-        except:
-            pass
-    
-    revenue = safe_float(latest.get('totalRevenue'))
-    net_income = safe_float(latest.get('netIncome'))
-    ebitda = safe_float(latest.get('ebitda'))
-    
-    st.markdown(f"**{latest.get('fiscalDateEnding', 'N/D')}** • Resultados {data['ticker']}")
-    st.markdown(f"## {data['name']}")
-    st.markdown(f"{data['sector']} • {data.get('industry', 'N/A')}")
-    st.markdown("")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            label="Ingresos Totales (TTM)",
-            value=f"${revenue/1e9:.2f}B" if revenue >= 1e9 else f"${revenue/1e6:.1f}M",
-            delta=f"{revenue_growth:.1f}% YoY" if revenue_growth else None
-        )
-    
-    with col2:
-        margin = (net_income/revenue*100) if revenue > 0 else 0
-        st.metric(
-            label="Beneficio Neto",
-            value=f"${net_income/1e6:.0f}M" if abs(net_income) >= 1e6 else f"${net_income/1e3:.0f}K",
-            delta=f"{margin:.1f}% Margen"
-        )
-    
-    with col3:
-        ebitda_margin = (ebitda/revenue*100) if revenue > 0 else 0
-        st.metric(
-            label="EBITDA",
-            value=f"${ebitda/1e6:.0f}M" if abs(ebitda) >= 1e6 else f"${ebitda/1e3:.0f}K",
-            delta=f"{ebitda_margin:.1f}% Margen"
-        )
-    
-    with col4:
-        eps = data.get('eps', 0)
-        st.metric(
-            label="EPS (TTM)",
-            value=f"${eps:.2f}"
-        )
-
-# ────────────────────────────────────────────────
-# ANÁLISIS RSU CON IA
-# ────────────────────────────────────────────────
-
-def get_embedded_prompt():
-    return """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║           ██╗░░░██╗███████╗██╗░░██╗         ██████╗ ███████╗██╗   ██╗        ║
-║           ██║░░░██║██╔════╝╚██╗██╔╝         ██╔══██╗██╔════╝██║   ██║        ║
-║           ╚██╗░██╔╝█████╗░░░╚███╔╝░         ██████╔╝█████╗░░██║   ██║        ║
-║           ░╚████╔╝░██╔══╝░░░██╔██╗░         ██╔══██╗██╔══╝░░╚██╗ ██╔╝        ║
-║           ░░╚██╔╝░░███████╗██╔╝╚██╗         ██║░░██║███████╗░╚████╔╝░        ║
-║           ░░░╚═╝░░░╚══════╝╚═╝░░╚═╝         ╚═╝░░╚═╝╚══════╝░░╚═══╝░░        ║
-║                                                                              ║
-║     ██████╗  █████╗ ███╗   ██╗ █████╗ ██╗     ██╗███████╗██╗███████╗         ║
-║     ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║     ██║██╔════╝██║██╔════╝         ║
-║     ██████╔╝███████║██╔██╗ ██║███████║██║     ██║█████╗  ██║███████╗         ║
-║     ██╔══██╗██╔══██║██║╚██╗██║██╔══██║██║     ██║██╔══╝  ██║╚════██║         ║
-║     ██║  ██║██║  ██║██║ ╚████║██║  ██║███████╗██║██║     ██║███████║         ║
-║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝     ╚═╝╚══════╝         ║
-║                                                                              ║
-║                    TERMINAL DE ANÁLISIS DE RENTA VARIABLE                    ║
-║                              v2.0 - RSU Edition                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-DATOS DE ENTRADA:
-{datos_ticker}
-
-INSTRUCCIONES:
-Genera análisis fundamental completo en español con:
-
-1. SNAPSHOT EJECUTIVO
-2. VALORACIÓN RELATIVA  
-3. CALIDAD DEL NEGOCIO (Moat)
-4. SALUD FINANCIERA
-5. PERSPECTIVAS POSITIVAS (3-4 bullets con catalizadores)
-6. DESAFÍOS POR DELANTE (3-4 bullets con riesgos específicos)
-7. ANÁLISIS TÉCNICO
-8. DECISIÓN DE INVERSIÓN (Score /10, recomendación, target price)
-
-Fecha: {current_date}"""
-
-def render_rsu_analysis(data):
-    """Renderiza el análisis con IA."""
-    
-    base_prompt = get_embedded_prompt()
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    
-    upside_potential = ((data.get('target_mean', 0) - data['price']) / data['price'] * 100) if data['price'] > 0 and data.get('target_mean', 0) > 0 else 0
-    
-    datos_ticker = f"""TICKER: {data['ticker']} | {data['name']}
-SECTOR: {data.get('sector', 'N/A')} | INDUSTRIA: {data.get('industry', 'N/A')}
-
-MERCADO: ${data['price']:.2f} ({data.get('change_pct', 0):+.2f}%) | Cap: {format_value(data['market_cap'], '$')}
-VALORACIÓN: P/E {data.get('pe_trailing', 0):.1f}x | PEG {data.get('peg_ratio', 0):.2f} | P/B {data.get('price_to_book', 0):.1f}x
-RENTABILIDAD: ROE {data.get('roe', 0)*100:.1f}% | Margen Neto {data.get('profit_margin', 0)*100:.1f}%
-CRECIMIENTO: Rev {data.get('rev_growth', 0)*100:.1f}% | EPS {data.get('eps_growth', 0)*100:.1f}%
-BALANCE: Cash {format_value(data.get('cash'), '$')} | Deuda {format_value(data.get('debt'), '$')} | FCF {format_value(data.get('free_cashflow'), '$')}
-ANALISTAS: Target ${data.get('target_mean', 0):.2f} ({upside_potential:+.1f}% upside) | {data.get('num_analysts', 0)} analistas
-EARNINGS BEAT RATE: {data.get('earnings_beat_rate', 0):.0f}% | Avg Surprise: {data.get('avg_surprise_pct', 0):.1f}%
-"""
-    
-    prompt_completo = base_prompt.replace("{datos_ticker}", datos_ticker).replace("{current_date}", current_date)
-    
-    model, name, err = get_ia_model()
-    
-    if not model:
-        st.info("🤖 IA no configurada.")
-        return
-    
+@st.cache_data(ttl=3600, show_spinner=False)
+def translate_text_cached(text, ticker):
+    if not text: return 'Descripción no disponible.'
     try:
-        with st.spinner("🧠 Generando análisis..."):
-            response = model.generate_content(
-                prompt_completo,
-                generation_config={"temperature": 0.2, "max_output_tokens": 8192}
-            )
-            
-            st.markdown("---")
-            st.markdown("### 🤖 Análisis RSU AI")
-            
-            st.markdown(
-                """
-                <style>
-                .terminal-box {
-                    background-color: #0c0e12;
-                    border: 1px solid #00ffad;
-                    border-radius: 8px;
-                    padding: 20px;
-                    font-family: 'Courier New', monospace;
-                    color: #e0e0e0;
-                    white-space: pre-wrap;
-                    overflow-x: auto;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            
-            st.markdown(f'<div class="terminal-box">{html.escape(response.text)}</div>', unsafe_allow_html=True)
-            
-    except Exception as e:
-        st.error(f"❌ Error en generación: {e}")
+        chunks = [text[i:i+500] for i in range(0, len(text), 500)]
+        translated = []
+        for chunk in chunks:
+            url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(chunk)}&langpair=en|es"
+            resp = requests.get(url, timeout=6)
+            if resp.status_code == 200:
+                d = resp.json()
+                if d.get('responseStatus') == 200:
+                    translated.append(d['responseData']['translatedText'])
+                    time.sleep(0.05)
+                    continue
+            translated.append(chunk)
+            time.sleep(0.05)
+        return ' '.join(translated)
+    except:
+        return text
 
 # ────────────────────────────────────────────────
-# MAIN
+# YFINANCE — DATOS PRINCIPALES (cacheado)
+# ────────────────────────────────────────────────
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_yfinance_full(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        info  = stock.info
+        if not info or not (_safe(info.get('currentPrice')) or _safe(info.get('regularMarketPrice'))):
+            return None
+
+        # Recomendaciones
+        recommendations = None
+        try:
+            recs = stock.recommendations
+            if recs is not None and not recs.empty:
+                latest = recs.iloc[0]
+                sb = int(_safe(latest.get('strongBuy'))  or 0)
+                b  = int(_safe(latest.get('buy'))        or 0)
+                h  = int(_safe(latest.get('hold'))       or 0)
+                s  = int(_safe(latest.get('sell'))       or 0)
+                ss = int(_safe(latest.get('strongSell')) or 0)
+                recommendations = {'strong_buy': sb, 'buy': b, 'hold': h,
+                                   'sell': s, 'strong_sell': ss, 'total': sb+b+h+s+ss}
+        except: pass
+
+        rec_summary = None
+        try:
+            rs = stock.recommendations_summary
+            if rs is not None and not rs.empty:
+                rec_summary = rs.head(6)
+        except: pass
+
+        # Precio objetivo
+        tm = _safe(info.get('targetMeanPrice'))
+        cp = _safe(info.get('currentPrice')) or _safe(info.get('regularMarketPrice'))
+        target_data = {
+            'mean': tm, 'high': _safe(info.get('targetHighPrice')),
+            'low': _safe(info.get('targetLowPrice')), 'median': _safe(info.get('targetMedianPrice')),
+            'current': cp, 'upside': ((tm - cp) / cp * 100) if (tm and cp) else None
+        }
+
+        # Métricas valoración
+        metrics = {
+            'trailing_pe':    _safe(info.get('trailingPE')),
+            'forward_pe':     _safe(info.get('forwardPE')),
+            'price_to_sales': _safe(info.get('priceToSalesTrailing12Months')),
+            'ev_ebitda':      _safe(info.get('enterpriseToEbitda')),
+            'peg_ratio':      _safe(info.get('pegRatio')),
+            'price_to_book':  _safe(info.get('priceToBook')),
+        }
+
+        # Rentabilidad
+        profitability = {
+            'roe':             _safe(info.get('returnOnEquity')),
+            'roa':             _safe(info.get('returnOnAssets')),
+            'net_margin':      _safe(info.get('profitMargins')),
+            'op_margin':       _safe(info.get('operatingMargins')),
+            'gross_margin':    _safe(info.get('grossMargins')),
+            'revenue_growth':  _safe(info.get('revenueGrowth')),
+            'earnings_growth': _safe(info.get('earningsGrowth')),
+            'debt_to_equity':  _safe(info.get('debtToEquity')),
+            'current_ratio':   _safe(info.get('currentRatio')),
+            'free_cashflow':   _safe(info.get('freeCashflow')),
+            'operating_cashflow': _safe(info.get('operatingCashflow')),
+            'revenue_ttm':     _safe(info.get('totalRevenue')),
+            'ebitda':          _safe(info.get('ebitda')),
+            'total_cash':      _safe(info.get('totalCash')),
+            'total_debt':      _safe(info.get('totalDebt')),
+        }
+
+        # Datos de mercado
+        market = {
+            'price':           cp,
+            'prev_close':      _safe(info.get('previousClose')),
+            'market_cap':      _safe(info.get('marketCap')),
+            'volume':          _safe(info.get('volume')),
+            'avg_volume':      _safe(info.get('averageVolume')),
+            'beta':            _safe(info.get('beta')),
+            '52w_high':        _safe(info.get('fiftyTwoWeekHigh')),
+            '52w_low':         _safe(info.get('fiftyTwoWeekLow')),
+            'eps':             _safe(info.get('trailingEps')),
+            'eps_forward':     _safe(info.get('forwardEps')),
+            'dividend_yield':  _safe(info.get('dividendYield')),
+            'dividend_rate':   _safe(info.get('dividendRate')),
+            'payout_ratio':    _safe(info.get('payoutRatio')),
+            'sma_50':          _safe(info.get('fiftyDayAverage')),
+            'sma_200':         _safe(info.get('twoHundredDayAverage')),
+            'short_ratio':     _safe(info.get('shortRatio')),
+            'insider_pct':     _safe(info.get('heldPercentInsiders')),
+            'inst_pct':        _safe(info.get('heldPercentInstitutions')),
+            'n_analysts':      _safe(info.get('numberOfAnalystOpinions')),
+            'book_value':      _safe(info.get('bookValue')),
+            'employees':       _safe(info.get('fullTimeEmployees')),
+        }
+
+        # Eventos calendario
+        events = {}
+        try:
+            cal = stock.calendar
+            if cal is not None:
+                raw = cal if isinstance(cal, dict) else cal.to_dict()
+                for k, v in raw.items():
+                    if k in {'Earnings Date', 'Ex-Dividend Date', 'Dividend Date'}:
+                        events[k] = v
+        except: pass
+
+        analyst_estimates = {}
+        try:
+            cal_raw = stock.calendar
+            if cal_raw is not None:
+                raw = cal_raw if isinstance(cal_raw, dict) else cal_raw.to_dict()
+                for k in ['Earnings High', 'Earnings Low', 'Earnings Average',
+                          'Revenue High', 'Revenue Low', 'Revenue Average']:
+                    if k in raw and raw[k] is not None:
+                        analyst_estimates[k] = raw[k]
+        except: pass
+
+        # Sparkline 3 meses
+        sparkline = None
+        try:
+            hist = yf.download(ticker, period="3mo", interval="1d", progress=False, auto_adjust=True)
+            if not hist.empty:
+                close_col = ('Close', ticker) if isinstance(hist.columns, pd.MultiIndex) else 'Close'
+                sparkline = [p for p in [_safe(x) for x in hist[close_col].dropna().tolist()] if p is not None]
+        except: pass
+
+        # Histórico 1 año para gráfico
+        hist_1y = None
+        try:
+            h = stock.history(period="1y", auto_adjust=True)
+            if not h.empty:
+                hist_1y = h
+        except: pass
+
+        # Earnings surprises
+        earnings_surprises = []
+        try:
+            eq = stock.earnings_history
+            if eq is not None and not eq.empty:
+                for _, row in eq.head(8).iterrows():
+                    eps_actual   = _safe(row.get('epsActual'))
+                    eps_estimate = _safe(row.get('epsEstimate'))
+                    if eps_actual is None and eps_estimate is None:
+                        continue
+                    surprise = (eps_actual - eps_estimate) if (eps_actual and eps_estimate) else None
+                    surprise_pct = (surprise / abs(eps_estimate) * 100) if (surprise and eps_estimate and eps_estimate != 0) else None
+                    date_val = row.name if hasattr(row, 'name') else ''
+                    earnings_surprises.append({
+                        'date': str(date_val)[:10] if date_val else 'N/D',
+                        'eps_actual':   eps_actual   or 0,
+                        'eps_estimate': eps_estimate or 0,
+                        'surprise':     surprise     or 0,
+                        'surprise_pct': surprise_pct or 0,
+                    })
+        except: pass
+
+        return {
+            'info': info, 'recommendations': recommendations, 'rec_summary': rec_summary,
+            'target_data': target_data, 'metrics': metrics, 'profitability': profitability,
+            'market': market, 'events': events, 'analyst_estimates': analyst_estimates,
+            'sparkline': sparkline, 'hist_1y': hist_1y,
+            'earnings_surprises': earnings_surprises,
+        }
+    except Exception as e:
+        return None
+
+# ────────────────────────────────────────────────
+# ALPHA VANTAGE — EARNINGS HISTORY (complementario)
+# ────────────────────────────────────────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_alpha_vantage_earnings(ticker, api_key):
+    if not api_key: return None
+    try:
+        resp = requests.get(
+            "https://www.alphavantage.co/query",
+            params={'function': 'EARNINGS', 'symbol': ticker, 'apikey': api_key},
+            timeout=20
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'Note' in data or 'Information' in data or not data.get('quarterlyEarnings'):
+                return None
+            surprises = []
+            for r in data['quarterlyEarnings'][:8]:
+                ea  = safe_float(r.get('reportedEPS'))
+                ee  = safe_float(r.get('estimatedEPS'))
+                sur = safe_float(r.get('surprise'))
+                pct = safe_float(r.get('surprisePercentage'))
+                if ea != 0 or ee != 0:
+                    surprises.append({
+                        'date': r.get('fiscalDateEnding', 'N/D'),
+                        'eps_actual': ea, 'eps_estimate': ee,
+                        'surprise': sur, 'surprise_pct': pct,
+                    })
+            return surprises if surprises else None
+    except:
+        return None
+
+# ────────────────────────────────────────────────
+# FINNHUB — SEGMENTOS Y SENTIMIENTO
+# ────────────────────────────────────────────────
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_finnhub_data(ticker, api_key):
+    if not api_key: return None
+    base_url = "https://finnhub.io/api/v1"
+    headers  = {"X-Finnhub-Token": api_key}
+    result   = {}
+    try:
+        for key, params in [
+            ('revenue_breakdown', {'symbol': ticker}),
+            ('geographic_revenue', {'symbol': ticker, 'breakdown': 'geographic'}),
+        ]:
+            r = requests.get(f"{base_url}/stock/revenue-breakdown",
+                             params=params, headers=headers, timeout=10)
+            result[key] = r.json() if r.status_code == 200 else {}
+            time.sleep(0.3)
+
+        to_date   = datetime.now().strftime('%Y-%m-%d')
+        from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        r = requests.get(f"{base_url}/company-news",
+                         params={'symbol': ticker, 'from': from_date, 'to': to_date},
+                         headers=headers, timeout=10)
+        result['news'] = r.json() if r.status_code == 200 else []
+
+        result['source'] = 'finnhub'
+        return result
+    except:
+        return None
+
+def process_finnhub_segments(finnhub_data):
+    if not finnhub_data: return None
+    segments = {}
+    for key in ['revenue_breakdown', 'geographic_revenue']:
+        bd = finnhub_data.get(key, {})
+        if bd and 'data' in bd:
+            for item in bd['data']:
+                name = item.get('segment') or item.get('region', 'Desconocido')
+                rev  = item.get('revenue', 0)
+                if rev > 0: segments[name] = rev
+            if segments: break
+    return segments if segments else None
+
+def calculate_news_sentiment(finnhub_data):
+    if not finnhub_data or 'news' not in finnhub_data: return None
+    news = finnhub_data['news']
+    if not news: return None
+
+    bullish_words = ['beat','strong','growth','profit','gain','rise','surge','upgrade',
+                     'buy','outperform','exceeds','beats','record','soar','rally','deal','expansion']
+    bearish_words = ['miss','weak','loss','decline','fall','drop','downgrade','sell',
+                     'cut','underperform','misses','plunge','crash','concern','risk',
+                     'investigation','lawsuit','layoff','recession','bankruptcy','fraud']
+
+    bullish_count = bearish_count = total = 0
+    for article in news[:30]:
+        title = article.get('headline', '').lower()
+        if not title: continue
+        total += 1
+        if any(w in title for w in bullish_words): bullish_count += 1
+        if any(w in title for w in bearish_words): bearish_count += 1
+
+    ts = bullish_count + bearish_count
+    if ts == 0:
+        return {'overall_sentiment': 'neutral', 'sentiment_score': 0,
+                'news_count': len(news), 'bullish_pct': 0, 'bearish_pct': 0,
+                'analyzed_count': total, 'source': 'finnhub'}
+
+    bullish_pct = bullish_count / ts * 100
+    bearish_pct = bearish_count / ts * 100
+
+    if bullish_pct > 60:
+        sentiment, score = 'alcista', 0.5 + (bullish_pct - 60) / 80
+    elif bearish_pct > 60:
+        sentiment, score = 'bajista', -0.5 - (bearish_pct - 60) / 80
+    else:
+        sentiment, score = 'neutral', (bullish_pct - bearish_pct) / 100
+
+    return {
+        'overall_sentiment': sentiment, 'sentiment_score': max(-1, min(1, score)),
+        'news_count': len(news), 'bullish_pct': round(bullish_pct, 1),
+        'bearish_pct': round(bearish_pct, 1), 'analyzed_count': total, 'source': 'finnhub'
+    }
+
+# ────────────────────────────────────────────────
+# TENEDORES INSTITUCIONALES (13F)
+# ────────────────────────────────────────────────
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_institutional_holders(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        return {
+            'institutional': stock.institutional_holders,
+            'major':         stock.major_holders,
+            'mutual_funds':  stock.mutualfund_holders,
+        }
+    except:
+        return None
+
+# ────────────────────────────────────────────────
+# SUGERENCIAS AUTOMÁTICAS
+# ────────────────────────────────────────────────
+
+def get_suggestions(info, recommendations, target_data, profitability):
+    suggestions = []
+
+    pe         = _safe(info.get('trailingPE'))
+    forward_pe = _safe(info.get('forwardPE'))
+    cp         = target_data.get('current', 0) or 0
+    n_analysts = _safe(info.get('numberOfAnalystOpinions')) or 0
+
+    if pe and forward_pe and pe > 0 and forward_pe > 0:
+        if forward_pe < pe * 0.85:
+            suggestions.append(f"📈 Forward P/E ({forward_pe:.2f}×) muy inferior al P/E actual ({pe:.2f}×) — fuerte crecimiento de beneficios esperado.")
+        elif forward_pe < pe:
+            suggestions.append(f"📈 Forward P/E ({forward_pe:.2f}×) inferior al P/E actual ({pe:.2f}×) — crecimiento de beneficios esperado.")
+        else:
+            suggestions.append(f"⚠️ Forward P/E ({forward_pe:.2f}×) superior al P/E actual ({pe:.2f}×) — posible contracción de márgenes.")
+
+    if recommendations and recommendations['total'] > 0:
+        tot     = recommendations['total']
+        buy_pct = ((recommendations['strong_buy'] + recommendations['buy']) / tot) * 100
+        n_buy   = recommendations['strong_buy'] + recommendations['buy']
+        if buy_pct >= 75:
+            suggestions.append(f"✅ Fuerte consenso alcista: {n_buy} de {tot} analistas recomiendan comprar ({buy_pct:.0f}%).")
+        elif buy_pct >= 50:
+            suggestions.append(f"⚖️ Consenso mayoritariamente alcista: {buy_pct:.0f}% de {tot} analistas recomiendan comprar.")
+        elif buy_pct <= 30:
+            suggestions.append(f"🔴 Consenso débil: solo {buy_pct:.0f}% de {tot} analistas recomiendan comprar.")
+        else:
+            suggestions.append(f"⚖️ Consenso neutral entre {tot} analistas ({buy_pct:.0f}% favorables).")
+
+    if target_data.get('mean') and cp:
+        upside = target_data['upside']
+        mean_p = target_data['mean']
+        na_str = f" (consenso de {int(n_analysts)} analistas)" if n_analysts else ""
+        if upside and upside > 25:
+            suggestions.append(f"🎯 Alto potencial alcista: +{upside:.1f}% hasta objetivo medio ${mean_p:.2f}{na_str}.")
+        elif upside and upside > 10:
+            suggestions.append(f"📊 Potencial alcista moderado: +{upside:.1f}% hasta precio objetivo ${mean_p:.2f}{na_str}.")
+        elif upside and upside < -10:
+            suggestions.append(f"⚠️ Cotización {abs(upside):.1f}% por encima del objetivo medio (${mean_p:.2f}). Posible sobrevaloración.")
+        elif upside is not None:
+            suggestions.append(f"📊 Precio alineado con consenso de analistas (±{abs(upside):.1f}% del objetivo ${mean_p:.2f}).")
+
+    rg = profitability.get('revenue_growth')
+    if rg is not None:
+        if rg > 0.25:   suggestions.append(f"🚀 Crecimiento de ingresos excepcional: +{rg*100:.1f}% interanual.")
+        elif rg > 0.10: suggestions.append(f"📈 Crecimiento de ingresos sólido: +{rg*100:.1f}% interanual.")
+        elif rg > 0:    suggestions.append(f"📊 Crecimiento de ingresos modesto: +{rg*100:.1f}% interanual.")
+        else:           suggestions.append(f"📉 Ingresos en contracción: {rg*100:.1f}% interanual.")
+
+    roe = profitability.get('roe')
+    if roe is not None:
+        if roe > 0.30:  suggestions.append(f"💎 ROE excepcional ({roe*100:.1f}%) — empresa muy eficiente en generar beneficios con el capital.")
+        elif roe > 0.15: suggestions.append(f"💚 ROE sólido ({roe*100:.1f}%) — buena rentabilidad sobre fondos propios.")
+        elif roe < 0:   suggestions.append(f"🔴 ROE negativo ({roe*100:.1f}%) — empresa destruyendo valor actualmente.")
+
+    nm = profitability.get('net_margin')
+    if nm is not None:
+        if nm > 0.25:   suggestions.append(f"💰 Margen neto excepcional ({nm*100:.1f}%) — negocio altamente rentable.")
+        elif nm > 0.10: suggestions.append(f"✅ Margen neto sólido ({nm*100:.1f}%).")
+        elif nm < 0:    suggestions.append(f"🔴 Margen neto negativo ({nm*100:.1f}%) — empresa en pérdidas.")
+
+    de = profitability.get('debt_to_equity')
+    if de is not None:
+        if de > 150:   suggestions.append(f"💳 Endeudamiento muy elevado (D/E: {de:.0f}%) — riesgo financiero alto.")
+        elif de > 80:  suggestions.append(f"⚠️ Endeudamiento moderado-alto (D/E: {de:.0f}%). Vigilar cobertura de intereses.")
+        elif de < 30:  suggestions.append(f"💪 Balance conservador (D/E: {de:.0f}%) — solidez financiera.")
+
+    fcf = profitability.get('free_cashflow')
+    if fcf is not None:
+        if fcf > 0: suggestions.append(f"💵 Free Cash Flow positivo ({format_value(fcf, '$')}) — empresa genera caja real.")
+        else:       suggestions.append(f"⚠️ Free Cash Flow negativo ({format_value(fcf, '$')}) — empresa consume caja.")
+
+    dy = _safe(info.get('dividendYield'))
+    dr = _safe(info.get('dividendRate'))
+    if dy and dy > 0 and dr:
+        suggestions.append(f"💰 Dividendo anual: ${dr:.2f}/acción (yield {dy*100:.2f}%) — fuente de rentabilidad adicional.")
+
+    peg = _safe(info.get('pegRatio'))
+    if peg and peg > 0:
+        if peg < 1:    suggestions.append(f"🟢 PEG Ratio {peg:.2f} — potencialmente infravalorada respecto a su crecimiento.")
+        elif peg > 3:  suggestions.append(f"🔴 PEG Ratio {peg:.2f} — valoración muy exigente respecto al crecimiento esperado.")
+
+    return suggestions if suggestions else ["ℹ️ Datos insuficientes para generar sugerencias específicas."]
+
+# ────────────────────────────────────────────────
+# PROMPT IA
+# ────────────────────────────────────────────────
+
+PROMPT_RSU_COMPLETO = """Analiza {t} en profundidad y responde en castellano con el siguiente formato markdown estructurado:
+
+## 1. ¿A qué se dedica la empresa?
+- Tres puntos breves con lenguaje sencillo y analogías.
+
+## 2. Resumen Profesional (máx. 10 frases)
+Sector, productos, competidores (tickers), ventaja competitiva (moat), unicidad en su industria.
+
+## 3. Narrativa y Catalizadores
+Tabla con: Tema actual | Catalizadores recientes/potenciales | Datos fundamentales significativos
+
+## 4. Noticias/Eventos Últimos 3 Meses
+Tabla: Fecha | Tipo | Resumen | Impacto en precio
+
+## 5. Fundamentales Último Trimestre
+Ingresos vs expectativas, EPS vs expectativas, márgenes, guidance, reacción del mercado.
+
+## 6. Análisis Técnico
+Tendencia (corto/medio/largo), soportes y resistencias clave, estructura de mercado, volumen relevante.
+
+## 7. Smart Money
+Opciones inusuales, movimientos institucionales, compras/ventas de insiders (CEO/fundador).
+
+## 8. Comparativa Sectorial (Último Mes)
+Comportamiento vs competidores, tendencia del sector, flujos hacia el sector.
+
+## 9. Próximos Catalizadores (30 días)
+Resultados, lanzamientos, eventos regulatorios, conferencias, macro relevante.
+
+## 10. Cambios en Precios Objetivo de Analistas
+Tabla: Banco | Precio anterior | Precio nuevo | Fecha | Razonamiento
+
+## 11. Perspectivas
+Sentimiento general (bullish/bearish/mixto), fase actual (acumulación/distribución/continuación), niveles técnicos clave, qué haría moverse la acción.
+
+---
+**DATOS CUANTITATIVOS ACTUALES (Yahoo Finance):**
+{datos_cuantitativos}
+
+Responde siempre en castellano. Estilo profesional, directo, orientado a decisiones de inversión."""
+
+PROMPT_RSU_RAPIDO = """Analiza {t} y proporciona en castellano:
+
+1. **SNAPSHOT**: Qué hace, precio actual, capitalización
+2. **VALORACIÓN**: P/E, PEG, P/S — ¿cara o barata?
+3. **CALIDAD**: Márgenes, ROE, FCF — ¿negocio de calidad?
+4. **CATALIZADORES**: 3 razones para subir, 3 riesgos
+5. **VEREDICTO**: Score /10, recomendación (comprar/mantener/vender), target price
+
+**DATOS:**
+{datos_cuantitativos}
+
+Responde en castellano. Breve y directo."""
+
+# ────────────────────────────────────────────────
+# CSS GLOBAL
+# ────────────────────────────────────────────────
+
+def inject_css():
+    st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        .stApp { background: #0c0e12; }
+        .main .block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 100%; }
+
+        /* VT323 headings */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'VT323', monospace !important;
+            color: #00ffad !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        h1 { font-size: 3.5rem !important; text-shadow: 0 0 20px #00ffad66; border-bottom: 2px solid #00ffad; padding-bottom: 15px; }
+        h2 { font-size: 2.2rem !important; color: #00d9ff !important; border-left: 4px solid #00ffad; padding-left: 15px; margin-top: 30px !important; }
+        h3 { font-size: 1.8rem !important; color: #ff9800 !important; }
+
+        /* Body */
+        p, li { font-family: 'Courier New', monospace; color: #ccc !important; line-height: 1.8; font-size: 0.92rem; }
+        strong { color: #00ffad; }
+
+        /* VT labels */
+        .vt-label { font-family: 'VT323', monospace; color: #666; font-size: 0.9rem; letter-spacing: 2px; }
+        .landing-title { font-family: 'VT323', monospace; font-size: 5rem; color: #00ffad; text-shadow: 0 0 30px #00ffad55; border-bottom: 2px solid #00ffad33; padding-bottom: 10px; letter-spacing: 4px; }
+        .landing-desc  { font-family: 'VT323', monospace; font-size: 1.2rem; color: #00d9ff; letter-spacing: 3px; }
+
+        /* INPUT */
+        .stTextInput > div > div > input {
+            background: #0c0e12 !important; border: 1px solid #00ffad33 !important;
+            border-radius: 6px !important; color: #00ffad !important;
+            font-family: 'VT323', monospace !important; font-size: 1.6rem !important;
+            text-align: center; letter-spacing: 4px; padding: 12px !important;
+        }
+        .stTextInput > div > div > input:focus { border-color: #00ffad !important; box-shadow: 0 0 10px #00ffad22 !important; }
+        .stTextInput label { font-family: 'VT323', monospace !important; color: #888 !important; font-size: 1rem !important; letter-spacing: 2px; }
+
+        /* BOTONES */
+        .stButton > button {
+            background: linear-gradient(90deg, #00ffad, #00cc8a) !important;
+            color: #000 !important; border: none !important; border-radius: 6px !important;
+            font-family: 'VT323', monospace !important; font-size: 1.4rem !important;
+            letter-spacing: 3px !important; padding: 12px 28px !important;
+            text-transform: uppercase !important; width: 100% !important;
+        }
+        .stButton > button:hover { box-shadow: 0 0 20px #00ffad44 !important; }
+        .stDownloadButton > button {
+            background: #0c0e12 !important; color: #00ffad !important;
+            border: 1px solid #00ffad33 !important; border-radius: 6px !important;
+            font-family: 'VT323', monospace !important; font-size: 1rem !important;
+            letter-spacing: 2px !important; padding: 8px 20px !important;
+            text-transform: uppercase !important; width: auto !important;
+        }
+
+        /* MÓDULOS */
+        .mod-box     { background: linear-gradient(135deg, #0c0e12 0%, #111520 100%); border: 1px solid #00ffad1a; border-radius: 8px; overflow: hidden; margin-bottom: 18px; box-shadow: 0 2px 20px #00000040; }
+        .mod-header  { background: #0a0c10; padding: 12px 18px; border-bottom: 1px solid #00ffad1a; display: flex; justify-content: space-between; align-items: center; }
+        .mod-title   { font-family: 'VT323', monospace; color: #00ffad; font-size: 1.2rem; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
+        .mod-body    { padding: 18px; }
+
+        /* TICKER HEADER */
+        .ticker-box    { background: linear-gradient(135deg, #0a0c10 0%, #111520 100%); border: 1px solid #00ffad22; border-radius: 8px; padding: 18px 24px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 30px #00ffad08; }
+        .ticker-name   { font-family: 'VT323', monospace; font-size: 2.4rem; color: #00ffad; letter-spacing: 3px; text-shadow: 0 0 10px #00ffad33; }
+        .ticker-meta   { font-family: 'Courier New', monospace; font-size: 11px; color: #555; margin-top: 4px; }
+        .ticker-price  { font-family: 'VT323', monospace; font-size: 2.6rem; color: #fff; text-align: right; }
+        .ticker-change { font-family: 'VT323', monospace; font-size: 1.2rem; text-align: right; }
+
+        /* MÉTRICAS */
+        .metric-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px; position: relative; height: 120px; box-sizing: border-box; }
+        .metric-tag   { position: absolute; top: 8px; right: 8px; background: #0f1e35; color: #00d9ff; padding: 1px 6px; border-radius: 4px; font-family: 'VT323', monospace; font-size: 0.8rem; letter-spacing: 1px; }
+        .metric-label { font-family: 'VT323', monospace; color: #777; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .metric-value { font-family: 'VT323', monospace; font-size: 1.8rem; letter-spacing: 1px; }
+        .metric-desc  { font-family: 'Courier New', monospace; color: #444; font-size: 10px; margin-top: 2px; }
+
+        /* PROFIT BOX */
+        .profit-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 14px 16px; }
+        .profit-label { font-family: 'VT323', monospace; color: #777; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .profit-value { font-family: 'VT323', monospace; font-size: 1.6rem; }
+
+        /* RATINGS */
+        .rating-item  { margin-bottom: 14px; }
+        .rating-top   { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .rating-name  { font-family: 'VT323', monospace; color: #ccc; font-size: 1.05rem; letter-spacing: 1px; }
+        .rating-count { font-family: 'VT323', monospace; font-size: 1.05rem; font-weight: bold; }
+        .rating-bar   { background: #0a0c10; height: 7px; border-radius: 4px; overflow: hidden; }
+        .rating-fill  { height: 100%; border-radius: 4px; }
+
+        /* PRECIO OBJETIVO */
+        .target-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 24px; text-align: center; height: 100%; }
+        .target-price { font-family: 'VT323', monospace; font-size: 3.2rem; color: #00ffad; text-shadow: 0 0 12px #00ffad33; }
+        .target-label { font-family: 'VT323', monospace; color: #777; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+
+        /* CONSENSUS */
+        .consensus-box { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 24px; text-align: center; height: 100%; }
+
+        /* EVENTOS */
+        .event-row        { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #111520; }
+        .event-row:last-child { border-bottom: none; }
+        .event-label      { font-family: 'VT323', monospace; color: #888; font-size: 1rem; letter-spacing: 1px; }
+        .event-value      { font-family: 'VT323', monospace; color: #00ffad; font-size: 1.05rem; }
+
+        /* FONDOS */
+        .fund-card        { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px 18px; margin-bottom: 10px; }
+        .fund-card:hover  { border-color: #00ffad44; }
+        .fund-name        { font-family: 'VT323', monospace; color: #fff; font-size: 1.1rem; letter-spacing: 1px; }
+
+        /* SUGERENCIAS */
+        .suggestion-item { background: #0a0c10; border-left: 2px solid #00ffad; padding: 12px 16px; margin-bottom: 8px; border-radius: 0 6px 6px 0; font-family: 'Courier New', monospace; color: #ccc; font-size: 13px; line-height: 1.5; }
+
+        /* RSU BOX */
+        .rsu-box  { background: linear-gradient(135deg, #0a0c10 0%, #111520 100%); border: 1px solid #00ffad33; border-radius: 8px; padding: 24px; margin: 18px 0; }
+        .rsu-title { font-family: 'VT323', monospace; color: #00ffad; font-size: 1.5rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 10px; }
+
+        /* ABOUT */
+        .about-text { font-family: 'Courier New', monospace; color: #aaa; line-height: 1.8; font-size: 0.88rem; }
+
+        /* HIGHLIGHT */
+        .highlight-quote { background: #00ffad0a; border: 1px solid #00ffad22; border-radius: 8px; padding: 16px 20px; font-family: 'VT323', monospace; font-size: 1.2rem; color: #00ffad99; text-align: center; letter-spacing: 1px; margin: 16px 0; }
+
+        /* TOOLTIP */
+        .tip-box  { position: relative; cursor: help; z-index: 10; }
+        .tip-icon { width: 20px; height: 20px; border-radius: 50%; background: #1a1e26; border: 1px solid #333; display: flex; align-items: center; justify-content: center; color: #666; font-size: 11px; font-weight: bold; }
+        .tip-text { visibility: hidden; width: 260px; background: #111520; color: #bbb; text-align: left; padding: 12px; border-radius: 6px; position: fixed; z-index: 9999; opacity: 0; transition: opacity 0.2s; font-size: 11px; border: 1px solid #00ffad22; font-family: 'Courier New', monospace; box-shadow: 0 4px 24px #00000080; pointer-events: none; }
+        .tip-box:hover .tip-text { visibility: visible; opacity: 1; }
+
+        /* TABS */
+        .stTabs [data-baseweb="tab-list"]  { gap: 4px; background: #0a0c10; padding: 8px; border-radius: 8px; border: 1px solid #00ffad1a; margin-bottom: 16px; }
+        .stTabs [data-baseweb="tab"]        { background: transparent; color: #555; border-radius: 6px; padding: 8px 14px; font-family: 'VT323', monospace; font-size: 0.9rem; letter-spacing: 1px; text-transform: uppercase; }
+        .stTabs [aria-selected="true"]      { background: #00ffad !important; color: #000 !important; }
+
+        /* MISC */
+        hr { border: none; height: 1px; background: linear-gradient(90deg, transparent, #00ffad33, transparent); margin: 24px 0; }
+        .hq { background: #00ffad0a; border: 1px solid #00ffad22; border-radius: 8px; padding: 16px 20px; font-family: 'VT323', monospace; font-size: 1.2rem; color: #00ffad99; text-align: center; letter-spacing: 1px; }
+
+        /* Streamlit cleanups */
+        [data-testid="stMetricValue"] { font-family: 'VT323', monospace; color: #00ffad; }
+        div[data-testid="stVerticalBlock"] > div { margin-bottom: 0 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
+# RENDER PRINCIPAL
 # ────────────────────────────────────────────────
 
 def render():
-    st.set_page_config(page_title="RSU Earnings", layout="wide")
-    
-    # CSS Global
-    st.markdown(
-        """
-        <style>
-        .stApp { background-color: #0c0e12; color: white; }
-        .stTextInput > div > div > input { 
-            background-color: #1a1e26; 
-            color: white; 
-            border: 1px solid #2a3f5f; 
-        }
-        .stButton > button { 
-            background: linear-gradient(135deg, #00ffad 0%, #00cc8a 100%); 
-            color: #0c0e12; 
-            font-weight: bold; 
-        }
-        [data-testid="stMetricValue"] {
-            font-size: 1.5rem;
-            color: #00ffad;
-        }
-        [data-testid="stMetricDelta"] {
-            color: #888;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.title("📅 Análisis de Earnings")
-    st.markdown(
-        '<div style="color: #888; margin-bottom: 20px;">Datos fundamentales por Alpha Vantage + Precios por Yahoo Finance + Segmentos por Finnhub</div>',
-        unsafe_allow_html=True
-    )
-    
-    # Obtener API keys
+    st.set_page_config(page_title="RSU Earnings", page_icon="📅", layout="wide",
+                       initial_sidebar_state="collapsed")
+    inject_css()
+
+    # Session state
+    for k, v in [('last_ticker', ''), ('last_report', ''), ('last_report_ticker', '')]:
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+    # HEADER
+    st.markdown("""
+    <div style="text-align:center; margin-bottom:28px;">
+        <div class="vt-label" style="margin-bottom:10px;">[CONEXIÓN SEGURA ESTABLECIDA // RSU ANALYTICS v4.0]</div>
+        <div class="landing-title">📅 RSU EARNINGS</div><br>
+        <div class="landing-desc">ANÁLISIS DE RESULTADOS · FUNDAMENTALES · SORPRESAS · IA</div>
+    </div>
+    """, unsafe_allow_html=True)
+
     api_keys = get_api_keys()
-    
-    # Verificar API keys
-    if not api_keys['alpha_vantage']:
-        st.warning("⚠️ **ALPHA_VANTAGE_API_KEY no configurada**")
-        st.info("💡 Obtén tu API key gratuita en: https://www.alphavantage.co/support/#api-key")
-    
-    if not api_keys['finnhub']:
-        st.info("ℹ️ **FINNHUB_API_KEY no configurada** - Los datos de segmentos y sentimiento usarán datos de ejemplo")
+
+    # INPUT
+    _, col_c, _ = st.columns([1.5, 2, 1.5])
+    with col_c:
+        t_in = st.text_input(
+            "Ticker",
+            value=st.session_state['last_ticker'],
+            placeholder="AAPL, NVDA, MSFT, IBE.MC…",
+            label_visibility="collapsed"
+        ).upper().strip()
+
+    if not t_in:
         st.markdown("""
-        💡 **Para obtener API key de Finnhub (GRATIS):**
-        1. Ve a https://finnhub.io/
-        2. Clic en "Get free api key"
-        3. Regístrate con email
-        4. Copia tu API key del dashboard
-        """)
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        ticker = st.text_input("Ticker", value="AAPL").upper().strip()
-    with col2:
-        st.write("")
-        st.write("")
-        analyze = st.button("🔍 Analizar", use_container_width=True)
-    
-    if analyze and ticker:
-        debug_expander = st.expander("🔧 Ver log de debugging", expanded=False)
-        log_container = debug_expander.empty()
-        logs = []
-        
-        class LogCapture:
-            def write(self, msg):
-                if msg.strip():
-                    logs.append(msg.strip())
-                    log_container.code('\n'.join(logs[-100:]), language='text')
-        
-        old_stdout = sys.stdout
-        sys.stdout = LogCapture()
-        
-        try:
-            with st.spinner("Cargando datos (esto puede tomar 1-2 minutos)..."):
-                # USAR FUNCIONES CACHEADAS (sin spinner interno)
-                av_data = get_alpha_vantage_data_cached(ticker, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
-                yf_data = get_yfinance_data_cached(ticker)
-                finnhub_data = get_finnhub_data_cached(ticker, api_keys['finnhub']) if api_keys['finnhub'] else None
-                
-                data = process_combined_data(ticker, av_data, yf_data, finnhub_data)
-                
-                if not data:
-                    st.error("❌ No se pudieron obtener datos válidos.")
-                    data = get_mock_data(ticker)
-                    st.warning("⚠️ Usando datos de demostración.")
-                elif data['data_source'] == 'alpha_vantage_estimated':
-                    st.info("ℹ️ Usando precio estimado (YFinance no disponible)")
-        finally:
-            sys.stdout = old_stdout
-        
-        st.divider()
-        
-        # Header con info básica
-        source_colors = {
-            'alpha_vantage': '🟢', 
-            'yfinance': '🟡', 
-            'combined': '🔵', 
-            'alpha_vantage_estimated': '🟠', 
-            'mock': '🔴'
-        }
-        source_names = {
-            'alpha_vantage': 'Alpha Vantage', 
-            'yfinance': 'Yahoo Finance', 
-            'combined': 'Alpha Vantage + YF',
-            'alpha_vantage_estimated': 'AV (Precio Estimado)',
-            'mock': 'Demo'
-        }
-        
-        col_info, col_price = st.columns([2, 1])
-        
-        with col_info:
-            st.markdown(
-                f"""
-                **{source_colors.get(data['data_source'], '⚪')} Fuente:** {source_names.get(data['data_source'], 'Desconocida')}
-                
-                ### {data['name']} ({data['ticker']})
-                {data.get('sector', 'N/A')} • {data.get('industry', 'N/A')} • {data.get('country', 'N/A')}
-                """,
-                unsafe_allow_html=True
-            )
-        
-        with col_price:
-            change_color = "#00ffad" if data.get('change_pct', 0) >= 0 else "#f23645"
-            st.markdown(
-                f"""
-                <div style="text-align: right;">
-                    <div style="font-size: 2.5rem; font-weight: bold; color: white;">${data['price']:.2f}</div>
-                    <div style="color: {change_color}; font-size: 1.2rem;">{data.get('change_pct', 0):+.2f}%</div>
-                    <div style="color: #666; font-size: 11px;">Cap: {format_value(data['market_cap'], '$')}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        
-        # 1. EARNINGS SECTION
-        st.markdown("---")
-        st.markdown("### 1️⃣ Resumen Financiero")
-        render_earnings_section(data, av_data)
-        
-        # 2. REVENUE BY SEGMENT
-        st.markdown("---")
-        st.markdown("### 2️⃣ Ingresos por Segmento")
-        
-        if data.get('segments') and data['data_source'] != 'mock':
-            st.success("✅ Datos de segmentos reales de Finnhub")
-            render_segment_chart(data['segments'], f"{data['ticker']} - Ingresos por Segmento")
-        else:
-            st.info("ℹ️ Datos de segmentos no disponibles. Configura FINNHUB_API_KEY para datos reales.")
-            # Datos de ejemplo
-            segment_data = {
-                'Producto A': 65,
-                'Producto B': 25,
-                'Servicios': 10
-            }
-            render_segment_chart(segment_data, f"{data['ticker']} - Ingresos por Segmento (Ejemplo)")
-        
-        # 3. FORWARD GUIDANCE
-        st.markdown("---")
-        st.markdown("### 3️⃣ Perspectivas Futuras")
-        st.info("ℹ️ Este análisis se genera automáticamente basado en tendencias reales de los últimos trimestres.")
-        
-        render_forward_guidance(data, av_data)
-        
-        # 4. METRICS GRID
-        st.markdown("---")
-        st.markdown("### 4️⃣ Métricas Fundamentales")
-        
-        if data['data_source'] == 'mock':
-            st.error("⚠️ Datos de demostración. Configura ALPHA_VANTAGE_API_KEY.")
-        
-        # Grid 4x3
-        row1 = st.columns(4)
-        with row1[0]:
-            render_metric_card("Crec. Ingresos", data.get('rev_growth'), is_pct=True, decimals=1)
-        with row1[1]:
-            render_metric_card("Margen Neto", data.get('profit_margin'), is_pct=True, decimals=1)
-        with row1[2]:
-            render_metric_card("ROE", data.get('roe'), is_pct=True, decimals=1)
-        with row1[3]:
-            render_metric_card("P/E Trailing", data.get('pe_trailing'), is_pct=False, decimals=1)
-        
-        row2 = st.columns(4)
-        with row2[0]:
-            render_metric_card("P/E Forward", data.get('pe_forward'), is_pct=False, decimals=1)
-        with row2[1]:
-            render_metric_card("PEG Ratio", data.get('peg_ratio'), is_pct=False, decimals=2)
-        with row2[2]:
-            render_metric_card("P/B", data.get('price_to_book'), is_pct=False, decimals=1)
-        with row2[3]:
-            render_metric_card("Beta", data.get('beta'), is_pct=False, decimals=2)
-        
-        row3 = st.columns(4)
-        with row3[0]:
-            render_metric_card("Deuda/Equity", data.get('debt_to_equity'), is_pct=False, decimals=1)
-        with row3[1]:
-            render_metric_card("Current Ratio", data.get('current_ratio'), is_pct=False, decimals=2)
-        with row3[2]:
-            fcf_yield = (data.get('free_cashflow', 0) / data['market_cap'] * 100) if data['market_cap'] > 0 else 0
-            render_metric_card("FCF Yield", fcf_yield, is_pct=True, decimals=2)
-        with row3[3]:
-            render_metric_card("Div Yield", data.get('dividend_yield'), is_pct=True, decimals=2)
-        
-        # 5. CHART + KEY METRICS
-        st.markdown("---")
-        st.markdown("### 5️⃣ Acción del Precio y Métricas Clave")
-        
-        col_chart, col_info = st.columns([2, 1])
-        
-        with col_chart:
-            if not data.get('hist', pd.DataFrame()).empty:
-                hist = data['hist']
-                
-                fig = make_subplots(
-                    rows=2, cols=1, 
-                    shared_xaxes=True,
-                    vertical_spacing=0.03, 
-                    row_heights=[0.7, 0.3]
-                )
-                
-                fig.add_trace(go.Candlestick(
-                    x=hist.index, 
-                    open=hist['Open'], 
-                    high=hist['High'],
-                    low=hist['Low'], 
-                    close=hist['Close'],
-                    increasing_line_color='#00ffad', 
-                    decreasing_line_color='#f23645',
-                    name='Precio'
-                ), row=1, col=1)
-                
-                if len(hist) >= 50:
-                    hist['SMA50'] = hist['Close'].rolling(window=50).mean()
-                    fig.add_trace(go.Scatter(
-                        x=hist.index, 
-                        y=hist['SMA50'], 
-                        line=dict(color='#f5a623', width=1), 
-                        name='SMA 50'
-                    ), row=1, col=1)
-                
-                if len(hist) >= 200:
-                    hist['SMA200'] = hist['Close'].rolling(window=200).mean()
-                    fig.add_trace(go.Scatter(
-                        x=hist.index, 
-                        y=hist['SMA200'], 
-                        line=dict(color='#5b8ff9', width=1), 
-                        name='SMA 200'
-                    ), row=1, col=1)
-                
-                colors = ['#00ffad' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] else '#f23645' 
-                         for i in range(len(hist))]
-                fig.add_trace(go.Bar(
-                    x=hist.index, 
-                    y=hist['Volume'], 
-                    marker_color=colors, 
-                    name='Volumen', 
-                    opacity=0.3
-                ), row=2, col=1)
-                
-                fig.update_layout(
-                    template="plotly_dark", 
-                    plot_bgcolor='#0c0e12', 
-                    paper_bgcolor='#11141a',
-                    font=dict(color='white'), 
-                    xaxis_rangeslider_visible=False,
-                    height=500, 
-                    margin=dict(l=30, r=30, t=30, b=30),
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                
-                fig.update_xaxes(gridcolor='#1a1e26')
-                fig.update_yaxes(gridcolor='#1a1e26', title_text="Precio", row=1, col=1)
-                fig.update_yaxes(gridcolor='#1a1e26', title_text="Volumen", row=2, col=1)
-                
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                fig = go.Figure()
-                fig.add_annotation(
-                    text="📊 Datos históricos no disponibles",
-                    xref="paper", yref="paper",
-                    showarrow=False, 
-                    font=dict(size=16, color="#666"),
-                    align="center"
-                )
-                fig.update_layout(
-                    template="plotly_dark",
-                    plot_bgcolor='#0c0e12',
-                    paper_bgcolor='#11141a',
-                    height=400
-                )
-                st.plotly_chart(fig, use_container_width=True)
-        
-        with col_info:
-            st.markdown("#### 📋 Información de la Empresa")
-            summary = data.get('summary', 'N/A')
-            if len(summary) > 300:
-                st.markdown(summary[:300] + "...")
-            else:
-                st.markdown(summary)
-            
-            st.markdown("#### 💰 Métricas Clave")
-            
-            metrics_list = [
-                ("Cash", data.get('cash'), True),
-                ("Deuda", data.get('debt'), True),
-                ("FCF", data.get('free_cashflow'), True),
-                ("Op. Cash Flow", data.get('operating_cashflow'), True),
-                ("Empleados", data.get('employees'), False),
-                ("Book Value/Acción", data.get('book_value_ps'), False),
-            ]
-            
-            for label, value, is_currency in metrics_list:
-                if is_currency:
-                    val_str = format_value(value, '$')
-                elif label == "Empleados":
-                    val_str = format_value(value, '', '', 0)
-                else:
-                    val_str = f"${value:.2f}" if value else "N/D"
-                
-                st.markdown(f"**{label}:** {val_str}")
-            
-            if data.get('institutional_ownership', 0) > 0:
-                st.markdown("#### 🏛️ Propiedad")
-                st.markdown(f"Institucional: **{data.get('institutional_ownership', 0):.1f}%**")
-                st.markdown(f"Insider: **{data.get('insider_ownership', 0):.1f}%**")
-            
-            if data.get('num_analysts', 0) > 0:
-                st.markdown("#### 👥 Consenso de Analistas")
-                
-                ratings = {
-                    'Strong Buy': data.get('rating_strong_buy', 0),
-                    'Buy': data.get('rating_buy', 0),
-                    'Hold': data.get('rating_hold', 0),
-                    'Sell': data.get('rating_sell', 0),
-                    'Strong Sell': data.get('rating_strong_sell', 0)
-                }
-                
-                total = sum(ratings.values())
-                if total > 0:
-                    for rating, count in ratings.items():
-                        pct = (count / total) * 100
-                        st.markdown(f"{rating}: {count} ({pct:.0f}%)")
-        
-        # 6. EARNINGS SURPRISE HISTORY
-        st.markdown("---")
-        st.markdown("### 6️⃣ Historial de Earnings Surprises")
-        render_earnings_surprise_chart(data.get('earnings_surprises', []))
-        
-        # 7. NEWS SENTIMENT
-        st.markdown("---")
-        st.markdown("### 7️⃣ Sentimiento de Noticias")
-        
-        render_news_sentiment(data.get('news_sentiment'))
-        
-        # 8. RSU ANALYSIS TERMINAL
-        st.markdown("---")
-        st.markdown("### 8️⃣ Análisis RSU AI")
-        render_rsu_analysis(data)
-        
-        # Footer
-        st.markdown(
-            f"""
-            <div style="text-align: center; color: #444; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1a1e26;">
-                RSU Dashboard Pro • Alpha Vantage + Yahoo Finance + Finnhub • {datetime.now().year}
+        <div style="text-align:center; margin-top:24px;">
+            <div class="hq">▸ Introduce un ticker para iniciar el análisis de earnings ◂</div>
+            <div style="margin-top:28px; font-family:'Courier New',monospace; color:#333; font-size:11px; letter-spacing:1px;">
+                Datos: Yahoo Finance · Alpha Vantage · Finnhub · Gemini AI
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    st.session_state['last_ticker'] = t_in
+
+    # CARGA DE DATOS
+    with st.spinner(f"[ CARGANDO {t_in} ... ]"):
+        yf_data      = get_yfinance_full(t_in)
+        av_surprises = get_alpha_vantage_earnings(t_in, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
+        finnhub_data = get_finnhub_data(t_in, api_keys['finnhub']) if api_keys['finnhub'] else None
+
+    if not yf_data:
+        st.error(f"❌ No se encontraron datos para **'{t_in}'**. Verifica que el ticker sea válido.")
+        return
+
+    info              = yf_data['info']
+    recommendations   = yf_data['recommendations']
+    rec_summary       = yf_data['rec_summary']
+    target_data       = yf_data['target_data']
+    metrics           = yf_data['metrics']
+    profitability     = yf_data['profitability']
+    market            = yf_data['market']
+    events            = yf_data['events']
+    analyst_estimates = yf_data['analyst_estimates']
+    sparkline         = yf_data['sparkline']
+    hist_1y           = yf_data['hist_1y']
+    yf_surprises      = yf_data['earnings_surprises']
+
+    # Usar sorpresas de AV si disponibles (más precisas), si no las de yfinance
+    earnings_surprises = av_surprises if av_surprises else yf_surprises
+
+    # Traduccción descripción
+    translated_summary = translate_text_cached(info.get('longBusinessSummary', ''), t_in)
+
+    # Segmentos y sentimiento de Finnhub
+    segments  = process_finnhub_segments(finnhub_data) if finnhub_data else None
+    sentiment = calculate_news_sentiment(finnhub_data) if finnhub_data else None
+
+    # Cálculos header
+    cp           = market.get('price') or 0
+    prev_close   = market.get('prev_close') or cp
+    price_change = ((cp - prev_close) / prev_close * 100) if prev_close else 0
+    change_color = "#00ffad" if price_change >= 0 else "#f23645"
+    change_arrow = "▲" if price_change >= 0 else "▼"
+    market_cap   = market.get('market_cap') or 0
+    spark_svg    = build_sparkline_svg(sparkline)
+
+    # ── TICKER HEADER ──
+    st.markdown(f"""
+    <div class="ticker-box">
+        <div>
+            <div class="ticker-name">{info.get('shortName', t_in)}</div>
+            <div class="ticker-meta">
+                {info.get('sector', 'N/A')} &nbsp;·&nbsp; {info.get('industry', 'N/A')}
+                &nbsp;·&nbsp; Cap: {format_value(market_cap, '$')}
+                &nbsp;·&nbsp; {info.get('exchange', 'N/A')}
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:20px;">
+            <div>{spark_svg}</div>
+            <div>
+                <div class="ticker-price">${cp:,.2f}</div>
+                <div class="ticker-change" style="color:{change_color};">{change_arrow} {abs(price_change):.2f}%</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── GRÁFICO TRADINGVIEW ──
+    chart_html = f"""<!DOCTYPE html><html><head>
+    <style>body{{margin:0;padding:0;background:#0a0c10;}}</style></head><body>
+    <div id="tv_chart" style="width:100%;height:460px;"></div>
+    <script src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+    new TradingView.widget({{
+        "autosize":true,"symbol":"{t_in}","interval":"D",
+        "timezone":"Europe/Madrid","theme":"dark","style":"1","locale":"es",
+        "toolbar_bg":"#0a0c10","enable_publishing":false,"hide_side_toolbar":false,
+        "allow_symbol_change":true,"container_id":"tv_chart",
+        "studies":["RSI@tv-basicstudies","MASimple@tv-basicstudies","MACD@tv-basicstudies"]
+    }});
+    </script></body></html>"""
+
+    st.markdown(f"""
+    <div class="mod-box" style="margin-bottom:0;">
+        <div class="mod-header">
+            <span class="mod-title">📈 Gráfico Avanzado — {t_in}</span>
+            <div class="tip-box">
+                <div class="tip-icon">?</div>
+                <div class="tip-text">Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores.</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:18px;">', unsafe_allow_html=True)
+        components.html(chart_html, height=462)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── SOBRE LA EMPRESA ──
+    st.markdown(f"""
+    <div class="mod-box">
+        <div class="mod-header">
+            <span class="mod-title">ℹ️ Sobre {info.get('shortName', t_in)}</span>
+        </div>
+        <div class="mod-body"><p class="about-text">{html.escape(translated_summary)}</p></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════
+    # PESTAÑAS PRINCIPALES
+    # ══════════════════════════════════════════════
+    tabs = st.tabs([
+        "📊 Valoración",
+        "📈 Rentabilidad",
+        "💰 Precio Objetivo",
+        "📋 Recomendaciones",
+        "🎯 Earnings Surprises",
+        "📅 Eventos & Calendario",
+        "🏦 Fondos Institucionales",
+        "📰 Segmentos & Sentimiento",
+    ])
+
+    # ══ TAB 1: VALORACIÓN ══
+    with tabs[0]:
+        def valuation_color(name, val):
+            v = _safe(val)
+            if v is None: return "#888"
+            if v < 0: return "#f23645"
+            thresholds = {
+                "P/E": (15, 30), "P/S": (2, 8), "EV/EBITDA": (10, 20),
+                "Forward P/E": (12, 25), "PEG Ratio": (1, 2), "P/B": (1, 4),
+            }
+            lo, hi = thresholds.get(name, (0, 9999))
+            if v <= lo: return "#00ffad"
+            if v >= hi: return "#f23645"
+            return "#ff9800"
+
+        valuation_data = [
+            ("P/E",         metrics['trailing_pe'],    "Trailing",    "Precio / Beneficio"),
+            ("P/S",         metrics['price_to_sales'], "TTM",         "Precio / Ventas"),
+            ("EV/EBITDA",   metrics['ev_ebitda'],      "TTM",         "Valor Empresa / EBITDA"),
+            ("Forward P/E", metrics['forward_pe'],     "Próx. 12M",   "Precio / BPA Futuro"),
+            ("PEG Ratio",   metrics['peg_ratio'],      "P/E ÷ Crec.", "Valoración ajustada al crecimiento"),
+            ("P/B",         metrics['price_to_book'],  "Actual",      "Precio / Valor en Libros"),
+        ]
+
+        rows_html = ""
+        for i in range(0, len(valuation_data), 3):
+            chunk = valuation_data[i:i+3]
+            cells = "".join(
+                f'<div style="flex:1;min-width:0;">'
+                f'<div class="metric-box"><span class="metric-tag">{tag}</span>'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="color:{valuation_color(label, val)};">{fmt_x(val)}</div>'
+                f'<div class="metric-desc">{desc}</div>'
+                f'</div></div>'
+                for label, val, tag, desc in chunk
+            )
+            # Pad if fewer than 3
+            while len(chunk) < 3:
+                cells += '<div style="flex:1;min-width:0;"></div>'
+                chunk.append(None)
+            rows_html += f'<div style="display:flex;gap:10px;margin-bottom:10px;">{cells}</div>'
+
+        st.markdown(f"""
+        <div class="mod-box">
+            <div class="mod-header">
+                <span class="mod-title">💵 Múltiplos de Valoración</span>
+                <div class="tip-box"><div class="tip-icon">?</div>
+                    <div class="tip-text">Verde = barato · Naranja = valoración media · Rojo = caro. Umbrales estándar de análisis fundamental.</div>
+                </div>
+            </div>
+            <div class="mod-body">{rows_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Métricas adicionales
+        eps        = market.get('eps') or 0
+        eps_fwd    = market.get('eps_forward') or 0
+        beta       = market.get('beta') or 0
+        book       = market.get('book_value') or 0
+        hi52       = market.get('52w_high') or 0
+        lo52       = market.get('52w_low') or 0
+        sma50      = market.get('sma_50') or 0
+        sma200     = market.get('sma_200') or 0
+
+        extra_html = f"""
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">EPS (TTM)</div>
+                    <div class="profit-value" style="color:#00ffad;">${eps:.2f}</div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">EPS Forward</div>
+                    <div class="profit-value" style="color:#00d9ff;">${eps_fwd:.2f}</div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">Beta</div>
+                    <div class="profit-value" style="color:{'#ff9800' if beta > 1.5 else '#00ffad'}">{beta:.2f}</div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">Máx. 52 Semanas</div>
+                    <div class="profit-value" style="color:#00ffad;">${hi52:.2f}</div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">Mín. 52 Semanas</div>
+                    <div class="profit-value" style="color:#f23645;">${lo52:.2f}</div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">SMA 50</div>
+                    <div class="profit-value" style="color:#ff9800;">${sma50:.2f}</div>
+                </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+                <div class="profit-box">
+                    <div class="profit-label">SMA 200</div>
+                    <div class="profit-value" style="color:#5b8ff9;">${sma200:.2f}</div>
+                </div>
+            </div>
+        </div>
+        """
+        st.markdown(f"""
+        <div class="mod-box">
+            <div class="mod-header"><span class="mod-title">📌 Datos de Mercado Adicionales</span></div>
+            <div class="mod-body">{extra_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ══ TAB 2: RENTABILIDAD ══
+    with tabs[1]:
+        def pc(v, hi=0.15, lo=0.0):
+            if v is None: return "#666"
+            return "#00ffad" if v >= hi else ("#f23645" if v < lo else "#ff9800")
+
+        roe = profitability.get('roe')
+        roa = profitability.get('roa')
+        nm  = profitability.get('net_margin')
+        om  = profitability.get('op_margin')
+        gm  = profitability.get('gross_margin')
+        rg  = profitability.get('revenue_growth')
+        eg  = profitability.get('earnings_growth')
+        de  = profitability.get('debt_to_equity')
+        cr  = profitability.get('current_ratio')
+        fcf = profitability.get('free_cashflow')
+        ocf = profitability.get('operating_cashflow')
+        rev = profitability.get('revenue_ttm')
+        ebt = profitability.get('ebitda')
+        cash= profitability.get('total_cash')
+        dbt = profitability.get('total_debt')
+
+        profit_items = [
+            ("ROE",              fmt_pct(roe, 100),  pc(roe, 0.20, 0.05), "Rentabilidad s/ Fondos Propios"),
+            ("ROA",              fmt_pct(roa, 100),  pc(roa, 0.10, 0.02), "Rentabilidad s/ Activos"),
+            ("Margen Neto",      fmt_pct(nm, 100),   pc(nm, 0.15, 0.0),   "Beneficio Neto / Ingresos"),
+            ("Margen Operativo", fmt_pct(om, 100),   pc(om, 0.15, 0.0),   "EBIT / Ingresos"),
+            ("Margen Bruto",     fmt_pct(gm, 100),   pc(gm, 0.40, 0.20),  "Beneficio Bruto / Ingresos"),
+            ("Crec. Ingresos",   fmt_pct(rg, 100),   pc(rg, 0.10, 0.0),   "Crecimiento YoY"),
+            ("Crec. Beneficios", fmt_pct(eg, 100),   pc(eg, 0.10, 0.0),   "Crecimiento YoY EPS"),
+            ("Deuda/Capital",    f"{de:.1f}%" if de is not None else "N/D",
+                "#f23645" if de and de > 100 else ("#00ffad" if de and de < 50 else "#ff9800"), "Ratio Apalancamiento"),
+            ("Ratio Corriente",  f"{cr:.2f}×" if cr is not None else "N/D",
+                "#00ffad" if cr and cr >= 1.5 else ("#f23645" if cr and cr < 1.0 else "#ff9800"), "Activo Cte / Pasivo Cte"),
+            ("Free Cash Flow",   format_value(fcf, '$'), "#00ffad" if fcf and fcf > 0 else "#f23645", "Flujo de Caja Libre"),
+            ("Op. Cash Flow",    format_value(ocf, '$'), "#00ffad" if ocf and ocf > 0 else "#f23645", "Flujo Operativo"),
+            ("Ingresos TTM",     format_value(rev, '$'), "#00ffad", "Ingresos totales últimos 12M"),
+            ("EBITDA",           format_value(ebt, '$'), "#00ffad" if ebt and ebt > 0 else "#f23645", "Earnings Before Interest, Tax, D&A"),
+            ("Caja Total",       format_value(cash,'$'), "#00ffad", "Efectivo y equivalentes"),
+            ("Deuda Total",      format_value(dbt, '$'), "#f23645" if dbt and dbt > 0 else "#00ffad", "Deuda financiera total"),
+        ]
+
+        rows_html = ""
+        for i in range(0, len(profit_items), 3):
+            chunk = profit_items[i:i+3]
+            cells = "".join(
+                f'<div style="flex:1;min-width:160px;">'
+                f'<div class="profit-box">'
+                f'<div class="profit-label">{lb}</div>'
+                f'<div class="profit-value" style="color:{col};">{vl}</div>'
+                f'<div class="metric-desc">{ds}</div>'
+                f'</div></div>'
+                for lb, vl, col, ds in chunk
+            )
+            rows_html += f'<div style="display:flex;gap:10px;margin-bottom:10px;">{cells}</div>'
+
+        st.markdown(f"""
+        <div class="mod-box">
+            <div class="mod-header">
+                <span class="mod-title">📈 Rentabilidad y Salud Financiera</span>
+                <div class="tip-box"><div class="tip-icon">?</div>
+                    <div class="tip-text">Verde = bueno · Naranja = neutral · Rojo = precaución. Umbrales de análisis fundamental estándar.</div>
+                </div>
+            </div>
+            <div class="mod-body">{rows_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ══ TAB 3: PRECIO OBJETIVO ══
+    with tabs[2]:
+        if target_data and target_data.get('mean'):
+            upside  = target_data.get('upside') or 0
+            u_arrow = "▲" if upside >= 0 else "▼"
+            b_color = "#00ffad" if upside >= 0 else "#f23645"
+            b_bg    = "rgba(0,255,173,0.10)" if upside >= 0 else "rgba(242,54,69,0.10)"
+            na_str  = _safe(info.get('numberOfAnalystOpinions')) or 'N/D'
+
+            rng_html = "".join(
+                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+                f'<span style="font-family:Courier New,monospace;color:#777;font-size:12px;">{rl}</span>'
+                f'<span style="font-family:VT323,monospace;color:{rc};font-size:1.7rem;">${rv:,.2f}</span>'
+                f'</div>'
+                for rl, rv, rc in [
+                    ("Objetivo Mínimo",  target_data.get('low'),    "#f23645"),
+                    ("Objetivo Mediana", target_data.get('median'), "#ff9800"),
+                    ("Objetivo Máximo",  target_data.get('high'),   "#00ffad"),
+                ] if rv
+            )
+
+            st.markdown(f"""
+            <div class="mod-box">
+                <div class="mod-header"><span class="mod-title">🎯 Precio Objetivo de Analistas</span></div>
+                <div class="mod-body">
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:200px;">
+                            <div class="target-box">
+                                <div class="target-label">Precio Objetivo Medio</div>
+                                <div class="target-price">${target_data['mean']:,.2f}</div>
+                                <div style="display:inline-block;margin:8px 0;padding:4px 12px;border-radius:20px;
+                                    font-family:VT323,monospace;font-size:1rem;
+                                    background:{b_bg};color:{b_color};border:1px solid {b_color}33;">
+                                    {u_arrow} {abs(upside):.1f}% vs ${target_data['current']:,.2f}
+                                </div>
+                                <div style="font-family:Courier New,monospace;color:#444;font-size:11px;margin-top:10px;">
+                                    Consenso de {na_str} analistas
+                                </div>
+                            </div>
+                        </div>
+                        <div style="flex:1;min-width:200px;">
+                            <div class="target-box" style="text-align:left;">
+                                <div style="font-family:VT323,monospace;color:#aaa;font-size:1rem;letter-spacing:2px;text-align:center;margin-bottom:18px;">RANGO DE PRECIOS OBJETIVO</div>
+                                {rng_html}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Gauge potencial alcista
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=upside,
+                delta={'reference': 0, 'increasing': {'color': "#00ffad"}, 'decreasing': {'color': "#f23645"}},
+                domain={'x': [0, 1], 'y': [0, 1]},
+                title={'text': "Potencial Alcista vs Precio Actual", 'font': {'color': 'white', 'size': 14}},
+                gauge={
+                    'axis': {'range': [-50, 100], 'tickcolor': 'white'},
+                    'bar': {'color': b_color, 'thickness': 0.75},
+                    'bgcolor': '#1a1e26',
+                    'steps': [
+                        {'range': [-50, -10], 'color': '#3d1f1f'},
+                        {'range': [-10, 10],  'color': '#3d3520'},
+                        {'range': [10, 100],  'color': '#1f3d2e'},
+                    ],
+                    'threshold': {'line': {'color': 'white', 'width': 3}, 'thickness': 0.8, 'value': upside}
+                }
+            ))
+            fig_gauge.update_layout(template="plotly_dark", paper_bgcolor='#11141a',
+                                    font=dict(color='white'), height=280,
+                                    margin=dict(l=30, r=30, t=50, b=30))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+        else:
+            st.info("No hay datos de precio objetivo disponibles para este ticker.")
+
+    # ══ TAB 4: RECOMENDACIONES ══
+    with tabs[3]:
+        if recommendations and recommendations['total'] > 0:
+            buy_c  = recommendations['strong_buy'] + recommendations['buy']
+            hold_c = recommendations['hold']
+            sell_c = recommendations['sell'] + recommendations['strong_sell']
+            tot    = recommendations['total']
+            if buy_c > sell_c and buy_c > hold_c:
+                consensus, c_color, c_pct = "ALCISTA", "#00ffad", buy_c / tot * 100
+            elif sell_c > buy_c:
+                consensus, c_color, c_pct = "BAJISTA", "#f23645", sell_c / tot * 100
+            else:
+                consensus, c_color, c_pct = "NEUTRAL", "#ff9800", hold_c / tot * 100
+            pos_pct = buy_c / tot * 100
+
+            bars_html = "".join(
+                f'<div class="rating-item">'
+                f'<div class="rating-top">'
+                f'<span class="rating-name">{rl}</span>'
+                f'<span class="rating-count" style="color:{rc};">{cnt}</span>'
+                f'</div>'
+                f'<div class="rating-bar"><div class="rating-fill" style="width:{cnt/tot*100:.1f}%;background:{rc};"></div></div>'
+                f'</div>'
+                for rl, cnt, rc in [
+                    ("Compra Fuerte", recommendations['strong_buy'],  "#00ffad"),
+                    ("Comprar",       recommendations['buy'],          "#4caf50"),
+                    ("Mantener",      recommendations['hold'],         "#ff9800"),
+                    ("Vender",        recommendations['sell'],         "#f57c00"),
+                    ("Venta Fuerte",  recommendations['strong_sell'],  "#f23645"),
+                ]
+            )
+
+            st.markdown(f"""
+            <div class="mod-box">
+                <div class="mod-header"><span class="mod-title">📋 Recomendaciones de Analistas</span></div>
+                <div class="mod-body">
+                    <div style="display:flex;gap:20px;flex-wrap:wrap;">
+                        <div style="flex:3;min-width:240px;">
+                            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;">
+                                Distribución de Ratings <span style="color:#555;font-size:0.82rem;">({tot} analistas)</span>
+                            </div>
+                            {bars_html}
+                        </div>
+                        <div style="flex:2;min-width:160px;">
+                            <div class="consensus-box">
+                                <div style="font-family:VT323,monospace;color:#666;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;">Consenso</div>
+                                <div style="font-family:VT323,monospace;font-size:2.4rem;color:{c_color};text-shadow:0 0 10px {c_color}33;margin-bottom:4px;">{consensus}</div>
+                                <div style="font-family:Courier New,monospace;color:#777;font-size:12px;margin-bottom:16px;">{c_pct:.0f}% de acuerdo</div>
+                                <div style="border-top:1px solid #1a1e26;padding-top:14px;">
+                                    <div style="font-family:VT323,monospace;color:#444;font-size:0.82rem;letter-spacing:1px;">POSITIVOS</div>
+                                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.8rem;">{pos_pct:.0f}%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if rec_summary is not None and not rec_summary.empty:
+                cols_map = {'strongBuy': 'C.Fuerte', 'buy': 'Comprar', 'hold': 'Mantener', 'sell': 'Vender', 'strongSell': 'V.Fuerte'}
+                st.markdown("""<div class="mod-box"><div class="mod-header"><span class="mod-title">📆 Histórico de Recomendaciones (últimos 6 meses)</span></div><div class="mod-body">""", unsafe_allow_html=True)
+                st.dataframe(rec_summary.rename(columns=cols_map), use_container_width=True)
+                st.markdown("</div></div>", unsafe_allow_html=True)
+        else:
+            st.info("No hay recomendaciones de analistas disponibles.")
+
+    # ══ TAB 5: EARNINGS SURPRISES ══
+    with tabs[4]:
+        if earnings_surprises and len(earnings_surprises) > 0:
+            source_label = "Alpha Vantage" if av_surprises else "Yahoo Finance"
+            st.markdown(f"""
+            <div class="mod-box">
+                <div class="mod-header">
+                    <span class="mod-title">🎯 Historial de Earnings Surprises</span>
+                    <span style="font-family:'Courier New',monospace;color:#555;font-size:11px;">Fuente: {source_label}</span>
+                </div>
+                <div class="mod-body">
+            """, unsafe_allow_html=True)
+
+            dates        = [s['date'] for s in reversed(earnings_surprises)]
+            surprises_v  = [s['surprise_pct'] for s in reversed(earnings_surprises)]
+            eps_actual   = [s['eps_actual']   for s in reversed(earnings_surprises)]
+            eps_estimate = [s['eps_estimate'] for s in reversed(earnings_surprises)]
+            bar_colors   = ['#00ffad' if s >= 0 else '#f23645' for s in surprises_v]
+
+            fig_surp = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                     vertical_spacing=0.08, row_heights=[0.5, 0.5])
+
+            fig_surp.add_trace(go.Bar(
+                x=dates, y=surprises_v, marker_color=bar_colors,
+                text=[f"{s:+.1f}%" for s in surprises_v],
+                textposition='outside', textfont=dict(color='white', size=10),
+                name="Sorpresa %"
+            ), row=1, col=1)
+
+            fig_surp.add_trace(go.Scatter(
+                x=dates, y=eps_actual, mode='lines+markers',
+                line=dict(color='#00ffad', width=2), marker=dict(size=8),
+                name="EPS Real"
+            ), row=2, col=1)
+            fig_surp.add_trace(go.Scatter(
+                x=dates, y=eps_estimate, mode='lines+markers',
+                line=dict(color='#5b8ff9', width=2, dash='dash'), marker=dict(size=8),
+                name="EPS Estimado"
+            ), row=2, col=1)
+
+            beat_rate = sum(1 for s in earnings_surprises if s['surprise'] >= 0) / len(earnings_surprises) * 100
+            avg_surp  = sum(s['surprise_pct'] for s in earnings_surprises) / len(earnings_surprises)
+
+            fig_surp.add_hline(y=0, line_dash="dash", line_color="#666", opacity=0.5, row=1, col=1)
+            fig_surp.update_layout(
+                title=dict(text=f"Beat Rate: {beat_rate:.0f}%  |  Sorpresa Media: {avg_surp:+.1f}%",
+                           font=dict(color='white', size=14)),
+                template="plotly_dark", plot_bgcolor='#0c0e12', paper_bgcolor='#11141a',
+                font=dict(color='white'), height=450,
+                margin=dict(l=50, r=50, t=60, b=50),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            fig_surp.update_xaxes(gridcolor='#1a1e26', tickangle=-45)
+            fig_surp.update_yaxes(gridcolor='#1a1e26')
+            st.plotly_chart(fig_surp, use_container_width=True)
+
+            # KPIs de sorpresas
+            beats = sum(1 for s in earnings_surprises if s['surprise'] >= 0)
+            st.markdown(f"""
+            <div style="display:flex;gap:12px;margin-top:8px;">
+                <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="font-family:VT323,monospace;color:#777;font-size:0.85rem;letter-spacing:1px;text-transform:uppercase;">Beat Rate</div>
+                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:2.2rem;">{beat_rate:.0f}%</div>
+                    <div style="font-family:Courier New,monospace;color:#555;font-size:11px;">{beats} de {len(earnings_surprises)} trimestres</div>
+                </div>
+                <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="font-family:VT323,monospace;color:#777;font-size:0.85rem;letter-spacing:1px;text-transform:uppercase;">Sorpresa Media</div>
+                    <div style="font-family:VT323,monospace;color:{'#00ffad' if avg_surp >= 0 else '#f23645'};font-size:2.2rem;">{avg_surp:+.1f}%</div>
+                    <div style="font-family:Courier New,monospace;color:#555;font-size:11px;">últimos {len(earnings_surprises)} trimestres</div>
+                </div>
+                <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="font-family:VT323,monospace;color:#777;font-size:0.85rem;letter-spacing:1px;text-transform:uppercase;">Fuente</div>
+                    <div style="font-family:VT323,monospace;color:#00d9ff;font-size:1.4rem;">{'🟢 ' + source_label}</div>
+                    <div style="font-family:Courier New,monospace;color:#555;font-size:11px;">datos reales</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("</div></div>", unsafe_allow_html=True)
+        else:
+            if not api_keys['alpha_vantage']:
+                st.warning("⚠️ Configura **ALPHA_VANTAGE_API_KEY** para obtener datos precisos de earnings surprises.")
+            st.info("No hay datos de earnings surprises disponibles para este ticker.")
+
+    # ══ TAB 6: EVENTOS & CALENDARIO ══
+    with tabs[5]:
+        event_map = {
+            'Earnings Date':        ('📅', 'Próximos Resultados Trimestrales'),
+            'Ex-Dividend Date':     ('💵', 'Fecha Ex-Dividendo'),
+            'Dividend Date':        ('💰', 'Fecha de Pago del Dividendo'),
+            'Fecha Ex-Dividendo':   ('💵', 'Fecha Ex-Dividendo'),
+            'Fecha Pago Dividendo': ('💰', 'Fecha de Pago del Dividendo'),
+        }
+
+        fechas_html = ""
+        for key, val in events.items():
+            icon, label = event_map.get(key, ('📌', key))
+            if isinstance(val, (int, float)) and val > 1e8:
+                val = ts_to_date(val)
+            elif isinstance(val, list):
+                val = ', '.join(str(v) for v in val if v)
+            if val:
+                fechas_html += (
+                    f'<div class="event-row">'
+                    f'<span class="event-label">{icon} {label}</span>'
+                    f'<span class="event-value">{val}</span>'
+                    f'</div>'
+                )
+
+        dy  = _safe(info.get('dividendYield'))
+        dr  = _safe(info.get('dividendRate'))
+        eps = _safe(info.get('trailingEps'))
+        nfy = _safe(info.get('nextFiscalYearEnd'))
+        emps= market.get('employees')
+
+        if dy:   fechas_html += f'<div class="event-row"><span class="event-label">💹 Dividend Yield</span><span class="event-value">{dy*100:.2f}%</span></div>'
+        if dr:   fechas_html += f'<div class="event-row"><span class="event-label">💳 Dividendo Anual / Acción</span><span class="event-value">${dr:.2f}</span></div>'
+        if eps:  fechas_html += f'<div class="event-row"><span class="event-label">📊 BPA (Trailing)</span><span class="event-value">${eps:.2f}</span></div>'
+        if nfy:  fechas_html += f'<div class="event-row"><span class="event-label">📆 Fin Año Fiscal</span><span class="event-value">{ts_to_date(nfy)}</span></div>'
+        if emps: fechas_html += f'<div class="event-row"><span class="event-label">👥 Empleados</span><span class="event-value">{int(emps):,}</span></div>'
+
+        if not fechas_html:
+            fechas_html = '<div style="font-family:Courier New,monospace;color:#444;font-size:13px;">No hay eventos disponibles.</div>'
+
+        st.markdown(f"""
+        <div class="mod-box">
+            <div class="mod-header"><span class="mod-title">📅 Calendario Corporativo</span></div>
+            <div class="mod-body">{fechas_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if analyst_estimates:
+            eps_hi  = analyst_estimates.get('Earnings High')
+            eps_lo  = analyst_estimates.get('Earnings Low')
+            eps_avg = analyst_estimates.get('Earnings Average')
+            rev_hi  = analyst_estimates.get('Revenue High')
+            rev_lo  = analyst_estimates.get('Revenue Low')
+            rev_avg = analyst_estimates.get('Revenue Average')
+
+            est_html = ""
+            if any([eps_hi, eps_lo, eps_avg]):
+                est_html += """
+                <div style="font-family:VT323,monospace;color:#00ffad;font-size:1rem;letter-spacing:2px;margin-bottom:12px;">ESTIMACIONES DE BPA — PRÓXIMO TRIMESTRE</div>
+                <div style="font-family:Courier New,monospace;color:#555;font-size:11px;margin-bottom:10px;">Consenso de analistas de Wall Street</div>
+                """
+                for lbl, val in [("Estimación Alta", eps_hi), ("Estimación Media (consenso)", eps_avg), ("Estimación Baja", eps_lo)]:
+                    if val is not None:
+                        color = "#00ffad" if lbl == "Estimación Media (consenso)" else "#aaa"
+                        est_html += f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #111520;"><span style="font-family:Courier New,monospace;color:#666;font-size:11px;">{lbl}</span><span style="font-family:VT323,monospace;color:{color};font-size:1.1rem;">${val:.2f}</span></div>'
+
+            if any([rev_hi, rev_lo, rev_avg]):
+                est_html += """
+                <div style="font-family:VT323,monospace;color:#00d9ff;font-size:1rem;letter-spacing:2px;margin:16px 0 10px;">ESTIMACIONES DE INGRESOS — PRÓXIMO TRIMESTRE</div>
+                """
+                for lbl, val in [("Estimación Alta", rev_hi), ("Estimación Media (consenso)", rev_avg), ("Estimación Baja", rev_lo)]:
+                    if val is not None:
+                        color = "#00ffad" if lbl == "Estimación Media (consenso)" else "#aaa"
+                        est_html += f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #111520;"><span style="font-family:Courier New,monospace;color:#666;font-size:11px;">{lbl}</span><span style="font-family:VT323,monospace;color:{color};font-size:1.1rem;">{format_value(val, "$")}</span></div>'
+
+            if est_html:
+                st.markdown(f"""
+                <div class="mod-box">
+                    <div class="mod-header"><span class="mod-title">🔮 Estimaciones de Analistas — Próximos Resultados</span></div>
+                    <div class="mod-body">{est_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ══ TAB 7: FONDOS INSTITUCIONALES ══
+    with tabs[6]:
+        st.markdown("""
+        <div class="mod-box">
+            <div class="mod-header">
+                <span class="mod-title">🏦 Fondos Institucionales — Declaraciones 13F (SEC)</span>
+                <div class="tip-box"><div class="tip-icon">?</div>
+                    <div class="tip-text">Declaraciones trimestrales obligatorias a la SEC (formulario 13F). Datos reales de Yahoo Finance / SEC EDGAR.</div>
+                </div>
+            </div>
+            <div class="mod-body">
+        """, unsafe_allow_html=True)
+
+        with st.spinner("[ CARGANDO DATOS 13F ... ]"):
+            holders_data = get_institutional_holders(t_in)
+
+        if holders_data:
+            major = holders_data.get('major')
+            inst  = holders_data.get('institutional')
+            mf    = holders_data.get('mutual_funds')
+
+            if major is not None and not major.empty:
+                try:
+                    pct_inst   = major.iloc[2, 0] if len(major) > 2 else "N/D"
+                    pct_retail = major.iloc[3, 0] if len(major) > 3 else "N/D"
+                    if isinstance(pct_inst,   float): pct_inst   = f"{pct_inst*100:.1f}%"
+                    if isinstance(pct_retail, float): pct_retail = f"{pct_retail*100:.1f}%"
+                    st.markdown(f"""
+                    <div style="display:flex;gap:12px;margin-bottom:18px;">
+                        <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
+                            <div style="font-family:VT323,monospace;color:#777;font-size:0.85rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">% Institucional</div>
+                            <div style="font-family:VT323,monospace;color:#00ffad;font-size:2rem;">{pct_inst}</div>
+                        </div>
+                        <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
+                            <div style="font-family:VT323,monospace;color:#777;font-size:0.85rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">% Retail</div>
+                            <div style="font-family:VT323,monospace;color:#00d9ff;font-size:2rem;">{pct_retail}</div>
+                        </div>
+                        <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
+                            <div style="font-family:VT323,monospace;color:#777;font-size:0.85rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">% Insiders</div>
+                            <div style="font-family:VT323,monospace;color:#ff9800;font-size:2rem;">{fmt_pct(market.get('insider_pct'), 100) if market.get('insider_pct') else 'N/D'}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                except: pass
+
+            if inst is not None and not inst.empty:
+                st.markdown("""
+                <div style="font-family:VT323,monospace;color:#00ffad;font-size:1rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">
+                    🏛 Top Tenedores Institucionales (Fondos, ETFs, Gestoras)
+                </div>
+                """, unsafe_allow_html=True)
+                col_map = {'Holder': 'Institución', 'Shares': 'Acciones',
+                           'Date Reported': 'Fecha', '% Out': '% del Float', 'Value': 'Valor (USD)'}
+                inst_display = inst.rename(columns=col_map).head(15)
+                if 'Valor (USD)' in inst_display.columns:
+                    inst_display['Valor (USD)'] = inst_display['Valor (USD)'].apply(
+                        lambda x: format_value(x, '$') if _safe(x) else "N/D")
+                if 'Acciones' in inst_display.columns:
+                    inst_display['Acciones'] = inst_display['Acciones'].apply(
+                        lambda x: f"{int(x):,}" if _safe(x) else "N/D")
+                st.dataframe(inst_display, use_container_width=True, hide_index=True)
+
+            if mf is not None and not mf.empty:
+                st.markdown("""
+                <div style="font-family:VT323,monospace;color:#00d9ff;font-size:1rem;letter-spacing:2px;text-transform:uppercase;margin:16px 0 10px;">
+                    📦 Top Fondos de Inversión (Mutual Funds)
+                </div>
+                """, unsafe_allow_html=True)
+                mf_col_map = {'Holder': 'Fondo', 'Shares': 'Acciones',
+                              'Date Reported': 'Fecha', '% Out': '% del Float', 'Value': 'Valor (USD)'}
+                mf_display = mf.rename(columns=mf_col_map).head(10)
+                if 'Valor (USD)' in mf_display.columns:
+                    mf_display['Valor (USD)'] = mf_display['Valor (USD)'].apply(
+                        lambda x: format_value(x, '$') if _safe(x) else "N/D")
+                if 'Acciones' in mf_display.columns:
+                    mf_display['Acciones'] = mf_display['Acciones'].apply(
+                        lambda x: f"{int(x):,}" if _safe(x) else "N/D")
+                st.dataframe(mf_display, use_container_width=True, hide_index=True)
+
+            if (inst is None or inst.empty) and (mf is None or mf.empty):
+                st.info("No se encontraron datos de tenedores institucionales.")
+        else:
+            st.info("No se pudieron obtener datos 13F para este ticker.")
+
+        st.markdown("""
+        <div style="font-family:Courier New,monospace;color:#333;font-size:11px;margin-top:12px;padding-top:12px;border-top:1px solid #111520;">
+            ⚠️ Fuente: SEC EDGAR vía Yahoo Finance. Los datos 13F tienen rezago de hasta 45 días. No reflejan posiciones en tiempo real.
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("</div></div>", unsafe_allow_html=True)
+
+    # ══ TAB 8: SEGMENTOS & SENTIMIENTO ══
+    with tabs[7]:
+        col_seg, col_sent = st.columns(2)
+
+        with col_seg:
+            st.markdown("""
+            <div class="mod-box">
+                <div class="mod-header"><span class="mod-title">🍕 Ingresos por Segmento</span></div>
+                <div class="mod-body">
+            """, unsafe_allow_html=True)
+
+            if segments:
+                labels = list(segments.keys())
+                values = list(segments.values())
+                colors = ['#5b8ff9', '#00ffad', '#f5a623', '#f23645', '#9b59b6', '#1abc9c']
+
+                fig_seg = go.Figure(data=[go.Pie(
+                    labels=labels, values=values, hole=0.4,
+                    marker_colors=colors[:len(labels)],
+                    textinfo='label+percent', textfont=dict(size=12, color='white')
+                )])
+                fig_seg.update_layout(
+                    template="plotly_dark", plot_bgcolor='#0c0e12', paper_bgcolor='#0c0e12',
+                    font=dict(color='white'), height=320,
+                    margin=dict(l=20, r=20, t=20, b=20), showlegend=False
+                )
+                st.plotly_chart(fig_seg, use_container_width=True)
+                st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:11px;">✅ Datos reales de Finnhub</div>', unsafe_allow_html=True)
+            else:
+                if not api_keys['finnhub']:
+                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Configura FINNHUB_API_KEY para ver datos de segmentos reales.</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Datos de segmentos no disponibles para este ticker.</div>', unsafe_allow_html=True)
+
+            st.markdown("</div></div>", unsafe_allow_html=True)
+
+        with col_sent:
+            st.markdown("""
+            <div class="mod-box">
+                <div class="mod-header"><span class="mod-title">📰 Sentimiento de Noticias</span></div>
+                <div class="mod-body">
+            """, unsafe_allow_html=True)
+
+            if sentiment:
+                sent_val   = sentiment.get('overall_sentiment', 'neutral')
+                score      = sentiment.get('sentiment_score', 0)
+                bull_pct   = sentiment.get('bullish_pct', 0)
+                bear_pct   = sentiment.get('bearish_pct', 0)
+                news_count = sentiment.get('news_count', 0)
+                analyzed   = sentiment.get('analyzed_count', 0)
+
+                sent_colors = {'alcista': '#00ffad', 'bajista': '#f23645', 'neutral': '#ff9800'}
+                sent_color  = sent_colors.get(sent_val, '#888')
+
+                fig_gauge2 = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=score * 100,
+                    domain={'x': [0, 1], 'y': [0, 1]},
+                    title={'text': "Score de Sentimiento", 'font': {'color': 'white', 'size': 13}},
+                    gauge={
+                        'axis': {'range': [-100, 100], 'tickcolor': 'white'},
+                        'bar': {'color': sent_color, 'thickness': 0.75},
+                        'bgcolor': '#1a1e26',
+                        'steps': [
+                            {'range': [-100, -33], 'color': '#3d1f1f'},
+                            {'range': [-33, 33],   'color': '#3d3520'},
+                            {'range': [33, 100],   'color': '#1f3d2e'},
+                        ],
+                    }
+                ))
+                fig_gauge2.update_layout(template="plotly_dark", paper_bgcolor='#0c0e12',
+                                         font=dict(color='white'), height=220,
+                                         margin=dict(l=20, r=20, t=40, b=10))
+                st.plotly_chart(fig_gauge2, use_container_width=True)
+
+                st.markdown(f"""
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                        <div style="font-family:VT323,monospace;color:#777;font-size:0.8rem;">SENTIMIENTO</div>
+                        <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.3rem;">{sent_val.upper()}</div>
+                    </div>
+                    <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                        <div style="font-family:VT323,monospace;color:#777;font-size:0.8rem;">ALCISTAS</div>
+                        <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.3rem;">{bull_pct:.0f}%</div>
+                    </div>
+                    <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                        <div style="font-family:VT323,monospace;color:#777;font-size:0.8rem;">BAJISTAS</div>
+                        <div style="font-family:VT323,monospace;color:#f23645;font-size:1.3rem;">{bear_pct:.0f}%</div>
+                    </div>
+                </div>
+                <div style="font-family:Courier New,monospace;color:#444;font-size:11px;margin-top:8px;">
+                    📊 {analyzed} noticias analizadas de {news_count} disponibles (últimos 30 días)
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                if not api_keys['finnhub']:
+                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Configura FINNHUB_API_KEY para ver el análisis de sentimiento de noticias reales.</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Sentimiento no disponible para este ticker.</div>', unsafe_allow_html=True)
+
+            st.markdown("</div></div>", unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════
+    # SUGERENCIAS AUTOMÁTICAS
+    # ══════════════════════════════════════════════
+    st.markdown("<hr>", unsafe_allow_html=True)
+    suggestions = get_suggestions(info, recommendations, target_data, profitability)
+    sug_html = "".join(
+        f'<div class="suggestion-item"><strong style="color:#00ffad;">{i}.</strong> {s}</div>'
+        for i, s in enumerate(suggestions, 1)
+    )
+    st.markdown(f"""
+    <div class="mod-box">
+        <div class="mod-header">
+            <span class="mod-title">💡 Sugerencias de Inversión</span>
+            <div class="tip-box"><div class="tip-icon">?</div>
+                <div class="tip-text">Análisis automatizado con datos reales de Yahoo Finance. No constituye asesoramiento financiero.</div>
+            </div>
+        </div>
+        <div class="mod-body">{sug_html}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════
+    # RSU IA — ANÁLISIS COMPLETO O RÁPIDO
+    # ══════════════════════════════════════════════
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    datos_cuantitativos = f"""
+| Métrica | Valor |
+|---|---|
+| Precio actual | ${cp:,.2f} |
+| Market Cap | {format_value(market_cap, '$')} |
+| P/E Trailing | {fmt_x(metrics['trailing_pe'])} |
+| Forward P/E | {fmt_x(metrics['forward_pe'])} |
+| PEG Ratio | {fmt_x(metrics['peg_ratio'])} |
+| EV/EBITDA | {fmt_x(metrics['ev_ebitda'])} |
+| P/S (TTM) | {fmt_x(metrics['price_to_sales'])} |
+| ROE | {fmt_pct(profitability.get('roe'), 100)} |
+| ROA | {fmt_pct(profitability.get('roa'), 100)} |
+| Margen Neto | {fmt_pct(profitability.get('net_margin'), 100)} |
+| Margen Operativo | {fmt_pct(profitability.get('op_margin'), 100)} |
+| Crec. Ingresos YoY | {fmt_pct(profitability.get('revenue_growth'), 100)} |
+| Crec. Beneficios YoY | {fmt_pct(profitability.get('earnings_growth'), 100)} |
+| Deuda/Capital | {fmt_pct(profitability.get('debt_to_equity'), 1)} |
+| Free Cash Flow | {format_value(profitability.get('free_cashflow'), '$')} |
+| Precio objetivo medio | {"$"+str(round(target_data['mean'],2)) if target_data.get('mean') else 'N/A'} |
+| Potencial alcista | {(str(round(target_data['upside'],1))+"%") if target_data.get('upside') else 'N/A'} |
+| Sector | {info.get('sector', 'N/A')} |
+| País | {info.get('country', 'N/A')} |
+"""
+
+    st.markdown("""
+    <div class="rsu-box">
+        <div class="rsu-title">🤖 RSU Artificial Intelligence</div>
+        <p style="font-family:'Courier New',monospace;color:#666;font-size:13px;line-height:1.6;margin-bottom:16px;">
+            Dos modos de análisis: <strong style="color:#00ffad;">Rápido</strong> (snapshot ejecutivo en segundos) 
+            o <strong style="color:#00d9ff;">Completo</strong> (informe de 11 secciones con técnico, smart money y catalizadores).
+        </p>
+    """, unsafe_allow_html=True)
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        btn_rapido = st.button("⚡ ANÁLISIS RÁPIDO", key="btn_rapido")
+    with col_btn2:
+        btn_completo = st.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    model_ia, modelo_nombre, error_ia = get_ia_model()
+
+    if btn_rapido or btn_completo:
+        if error_ia:
+            st.error(f"❌ Error al conectar con el modelo IA: {error_ia}")
+        else:
+            prompt_template = PROMPT_RSU_RAPIDO if btn_rapido else PROMPT_RSU_COMPLETO
+            prompt_final = (prompt_template
+                            .replace("{t}", t_in)
+                            .replace("{datos_cuantitativos}", datos_cuantitativos))
+
+            label_spinner = "ANÁLISIS RÁPIDO" if btn_rapido else "GENERANDO INFORME COMPLETO"
+            with st.spinner(f"[ {label_spinner} {t_in} ... ]"):
+                try:
+                    res = model_ia.generate_content(
+                        prompt_final,
+                        generation_config={"temperature": 0.2, "max_output_tokens": 8192}
+                    )
+                    st.session_state['last_report']        = res.text
+                    st.session_state['last_report_ticker'] = t_in
+                except Exception as e:
+                    st.error(f"❌ Error generando el informe: {e}")
+
+    if st.session_state.get('last_report') and st.session_state.get('last_report_ticker') == t_in:
+        st.markdown(f"""
+        <div class="mod-box">
+            <div class="mod-header">
+                <span class="mod-title">📋 Informe RSU IA — {t_in}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.container():
+            st.markdown(
+                '<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;'
+                'padding:24px;background:#0a0c10;margin-bottom:18px;">',
+                unsafe_allow_html=True
+            )
+            st.markdown(st.session_state['last_report'])
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        col_dl, _ = st.columns([1, 3])
+        with col_dl:
+            st.download_button(
+                label="⬇️ DESCARGAR INFORME (.md)",
+                data=st.session_state['last_report'].encode('utf-8'),
+                file_name=f"RSU_Earnings_{t_in}_{datetime.now().strftime('%Y%m%d')}.md",
+                mime="text/markdown",
+                key="download_report"
+            )
+
+    # ══ FOOTER ══
+    st.markdown("""
+    <div style="text-align:center;margin-top:50px;padding:20px;border-top:1px solid #0f1218;">
+        <div style="font-family:'VT323',monospace;color:#222;font-size:0.82rem;letter-spacing:2px;">
+            [END OF REPORT // RSU_EARNINGS_v4.0]<br>
+            [DATA SOURCE: YAHOO FINANCE · ALPHA VANTAGE · FINNHUB · TRADINGVIEW · GEMINI AI]<br>
+            [STATUS: ACTIVE // {year}]
+        </div>
+    </div>
+    """.replace("{year}", str(datetime.now().year)), unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     render()
+
 
 

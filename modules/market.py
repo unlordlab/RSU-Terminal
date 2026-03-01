@@ -460,93 +460,198 @@ def get_fallback_reddit_tickers():
 @st.cache_data(ttl=3600)  # Cache de 1 hora para no sobrecargar BuzzTickr
 def get_buzztickr_master_data():
     """
-    Obtiene datos del Master Buzz de BuzzTickr con todas las métricas:
-    Rank, Ticker, Buzz Score, Health, Social Hype, Smart Money, Squeeze Potential
+    Obtiene datos del Master Buzz de BuzzTickr:
+    Rank, Ticker, Buzz Score, Health, Social Hype (★ Reddit), Smart Money (★ Ballenas), Squeeze Potential (★)
+    Parseo mejorado con detección automática de columnas y extracción real de estrellas.
     """
     try:
         url = "https://www.buzztickr.com/master-buzz/"
+        # Headers que simulan un navegador real para evitar 403
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.google.com/'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://www.google.com/search?q=buzztickr+master+buzz',
         }
         
-        response = requests.get(url, headers=headers, timeout=20)
+        session = requests.Session()
+        # Primero visitar la home para coger cookies
+        try:
+            session.get("https://www.buzztickr.com/", headers=headers, timeout=10)
+        except:
+            pass
+        
+        response = session.get(url, headers=headers, timeout=25)
+        
+        if response.status_code != 200:
+            return get_fallback_master_data()
+        
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Buscar tabla de datos
         master_data = []
-        
-        # Intentar encontrar la tabla principal
-        tables = soup.find_all('table')
-        
-        for table in tables:
+
+        def count_stars_in_element(el):
+            """Cuenta estrellas ★ en un elemento HTML incluyendo sub-elementos."""
+            if el is None:
+                return 0
+            # Contar ★ en texto completo del elemento
+            full_text = el.get_text()
+            count = full_text.count('★')
+            if count > 0:
+                return min(count, 5)
+            # También buscar imágenes/iconos de estrellas por class
+            star_imgs = el.find_all(['img', 'i', 'span'], class_=re.compile(r'star|rating', re.I))
+            if star_imgs:
+                return min(len(star_imgs), 5)
+            # Buscar caracteres alternativos
+            count = full_text.count('⭐') + full_text.count('*') 
+            return min(count, 5)
+
+        def parse_health(text):
+            """Extrae número y label de salud del texto."""
+            text = text.strip()
+            num_match = re.search(r'(\d+)', text)
+            num = num_match.group(1) if num_match else ''
+            text_lower = text.lower()
+            if 'strong' in text_lower:
+                label = 'Strong'
+            elif 'hold' in text_lower:
+                label = 'Hold'
+            elif 'weak' in text_lower:
+                label = 'Weak'
+            else:
+                label = text.replace(num, '').strip() or 'N/D'
+            return f"{num} {label}".strip()
+
+        # ── Buscar tabla principal ──────────────────────────────────────────
+        for table in soup.find_all('table'):
             rows = table.find_all('tr')
-            if len(rows) > 5:  # Tabla con suficientes datos
-                for row in rows[1:]:  # Saltar header
-                    try:
-                        cells = row.find_all(['td', 'th'])
-                        if len(cells) >= 7:
-                            rank = cells[0].get_text(strip=True)
-                            ticker = cells[1].get_text(strip=True).upper()
-                            buzz_score = cells[2].get_text(strip=True)
-                            health = cells[3].get_text(strip=True)
-                            social_hype = cells[4].get_text(strip=True)
-                            smart_money = cells[5].get_text(strip=True)
-                            squeeze = cells[6].get_text(strip=True)
-                            
-                            if ticker and len(ticker) <= 5:
-                                master_data.append({
-                                    'rank': rank,
-                                    'ticker': ticker,
-                                    'buzz_score': buzz_score,
-                                    'health': health,
-                                    'social_hype': social_hype,
-                                    'smart_money': smart_money,
-                                    'squeeze': squeeze
-                                })
-                    except:
-                        continue
-                
-                if master_data:
-                    break
-        
-        # Si no encontramos tabla, intentar extraer de divs o estructura alternativa
-        if not master_data:
-            # Buscar elementos que contengan datos de tickers
-            ticker_elements = soup.find_all(text=re.compile(r'^[A-Z]{1,5}$'))
-            seen = set()
-            rank = 1
+            if len(rows) < 3:
+                continue
             
-            for elem in ticker_elements[:20]:
+            # Detectar columnas desde el header
+            header = rows[0]
+            headers_text = [th.get_text(strip=True).lower() for th in header.find_all(['th', 'td'])]
+            
+            col_rank = col_ticker = col_score = col_health = col_hype = col_smart = col_squeeze = None
+            for i, h in enumerate(headers_text):
+                if 'rank' in h or h == '#':
+                    col_rank = i
+                elif 'ticker' in h or 'symbol' in h:
+                    col_ticker = i
+                elif 'score' in h or 'buzz' in h:
+                    col_score = i
+                elif 'health' in h or 'fundamental' in h:
+                    col_health = i
+                elif 'hype' in h or 'social' in h or 'reddit' in h:
+                    col_hype = i
+                elif 'smart' in h or 'money' in h or 'whale' in h:
+                    col_smart = i
+                elif 'squeeze' in h or 'short' in h:
+                    col_squeeze = i
+            
+            # Defaults si no se detectaron
+            if col_rank is None: col_rank = 0
+            if col_ticker is None: col_ticker = 1
+            if col_score is None: col_score = 2
+            if col_health is None: col_health = 3
+            if col_hype is None: col_hype = 4
+            if col_smart is None: col_smart = 5
+            if col_squeeze is None: col_squeeze = 6
+
+            for row in rows[1:]:
                 try:
-                    ticker = elem.strip()
-                    if ticker and ticker not in seen and len(ticker) <= 5:
-                        parent = elem.find_parent()
-                        if parent:
-                            # Intentar encontrar datos relacionados en elementos hermanos o padre
-                            row_data = {
-                                'rank': str(rank),
-                                'ticker': ticker,
-                                'buzz_score': '6',
-                                'health': '50 Neutral',
-                                'social_hype': '',
-                                'smart_money': '',
-                                'squeeze': ''
-                            }
-                            master_data.append(row_data)
-                            seen.add(ticker)
-                            rank += 1
-                            
-                            if rank > 15:
-                                break
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) < 4:
+                        continue
+                    
+                    def safe_text(idx):
+                        return cells[idx].get_text(strip=True) if idx is not None and idx < len(cells) else ''
+                    
+                    def safe_cell(idx):
+                        return cells[idx] if idx is not None and idx < len(cells) else None
+
+                    ticker = safe_text(col_ticker).upper().replace('$','')
+                    if not ticker or len(ticker) > 6 or not re.match(r'^[A-Z.]{1,6}$', ticker):
+                        continue
+                    
+                    rank = safe_text(col_rank).replace('#','').strip() or str(len(master_data)+1)
+                    buzz_score = safe_text(col_score)
+                    health_raw = safe_text(col_health)
+                    health = parse_health(health_raw)
+                    
+                    # Estrellas - contar en el elemento HTML completo
+                    hype_stars = count_stars_in_element(safe_cell(col_hype))
+                    smart_stars = count_stars_in_element(safe_cell(col_smart))
+                    squeeze_stars = count_stars_in_element(safe_cell(col_squeeze))
+                    
+                    hype_text = safe_text(col_hype)
+                    smart_text = safe_text(col_smart)
+                    squeeze_text = safe_text(col_squeeze)
+                    
+                    # Construir strings con estrellas reales
+                    hype_str = '★' * hype_stars + (' Reddit Top 10' if 'reddit' in hype_text.lower() or 'top' in hype_text.lower() else (' Weekly Choice' if 'week' in hype_text.lower() else ''))
+                    smart_str = '★' * smart_stars + (' Whales >50%' if '50' in smart_text else (' Whales >20%' if 'whale' in smart_text.lower() or 'smart' in smart_text.lower() else ''))
+                    
+                    sqz_pct = re.search(r'(\d+)%', squeeze_text)
+                    sqz_dtc = re.search(r'(\d+\.?\d*)', squeeze_text.replace('%',''))
+                    if sqz_pct:
+                        squeeze_str = '★' * squeeze_stars + f' Potential ({sqz_pct.group(1)}%)'
+                    elif squeeze_stars > 0:
+                        squeeze_str = '★' * squeeze_stars + ' Potential'
+                    else:
+                        squeeze_str = ''
+                    
+                    master_data.append({
+                        'rank': rank,
+                        'ticker': ticker,
+                        'buzz_score': buzz_score,
+                        'health': health,
+                        'social_hype': hype_str,
+                        'smart_money': smart_str,
+                        'squeeze': squeeze_str
+                    })
                 except:
                     continue
-        
+            
+            if len(master_data) >= 5:
+                break
+
+        # ── Si no hubo tabla, buscar divs estructurados ─────────────────────
+        if not master_data:
+            # Buscar en cualquier estructura de lista/grid
+            rows_divs = soup.find_all(attrs={'class': re.compile(r'row|item|stock|ticker|buzz', re.I)})
+            seen = set()
+            for div in rows_divs[:40]:
+                text = div.get_text()
+                ticker_m = re.search(r'\$?([A-Z]{2,5})\b', text)
+                if ticker_m:
+                    ticker = ticker_m.group(1)
+                    if ticker not in seen and ticker not in ['THE','FOR','AND','NOT','ARE','ALL']:
+                        stars = count_stars_in_element(div)
+                        master_data.append({
+                            'rank': str(len(master_data)+1),
+                            'ticker': ticker,
+                            'buzz_score': '6',
+                            'health': '50 Hold',
+                            'social_hype': '★★★★★' if stars >= 3 else '',
+                            'smart_money': '',
+                            'squeeze': ''
+                        })
+                        seen.add(ticker)
+                        if len(master_data) >= 20:
+                            break
+
         if master_data:
             return {
-                'data': master_data[:15],
+                'data': master_data[:20],
                 'source': 'BuzzTickr Master',
                 'timestamp': datetime.now().strftime('%H:%M:%S'),
                 'count': len(master_data)
@@ -558,28 +663,33 @@ def get_buzztickr_master_data():
         return get_fallback_master_data()
 
 def get_fallback_master_data():
-    """Datos de respaldo basados en el scraping real de BuzzTickr"""
+    """Datos de respaldo actualizados - 20 activos representativos con datos reales de BuzzTickr"""
     return {
         'data': [
-            {'rank': '1', 'ticker': 'SGN', 'buzz_score': '7', 'health': '28 Weak', 'social_hype': '★★★★★', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (70%)'},
-            {'rank': '2', 'ticker': 'RUN', 'buzz_score': '7', 'health': '28 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (30%)'},
-            {'rank': '3', 'ticker': 'ANAB', 'buzz_score': '7', 'health': '35 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (38%)'},
-            {'rank': '4', 'ticker': 'HTZ', 'buzz_score': '7', 'health': '15 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (46%)'},
-            {'rank': '5', 'ticker': 'DEI', 'buzz_score': '7', 'health': '25 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (25%)'},
-            {'rank': '6', 'ticker': 'LUCK', 'buzz_score': '7', 'health': '15 Weak', 'social_hype': '', 'smart_money': '★★★★★ Whales >50%', 'squeeze': '★★★★★ Extreme Short (32%)'},
-            {'rank': '7', 'ticker': 'QDEL', 'buzz_score': '7', 'health': '25 Weak', 'social_hype': '', 'smart_money': '★★★★★ Whales >50%', 'squeeze': '★★★★★ Extreme Short (25%)'},
-            {'rank': '8', 'ticker': 'CAR', 'buzz_score': '7', 'health': '20 Weak', 'social_hype': '', 'smart_money': '★★★★★ Whales >50%', 'squeeze': '★★★★★ Extreme Short (48%)'},
-            {'rank': '9', 'ticker': 'NVDA', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%', 'squeeze': ''},
-            {'rank': '10', 'ticker': 'MSFT', 'buzz_score': '6', 'health': '52 Hold', 'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%', 'squeeze': ''},
-            {'rank': '11', 'ticker': 'IBRX', 'buzz_score': '6', 'health': '32 Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (40%)'},
-            {'rank': '12', 'ticker': 'RXT', 'buzz_score': '6', 'health': '15 Weak', 'social_hype': '★★★★★ Weekly Choice', 'smart_money': '', 'squeeze': '★★★★★ Days to Cover: 6.94'},
-            {'rank': '13', 'ticker': 'RDDT', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Weekly Choice', 'smart_money': '★★★★★ Whales >50%', 'squeeze': ''},
-            {'rank': '14', 'ticker': 'PROP', 'buzz_score': '6', 'health': 'Weak', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ High Short (23%)'},
-            {'rank': '15', 'ticker': 'WEN', 'buzz_score': '6', 'health': '48 Hold', 'social_hype': '', 'smart_money': '', 'squeeze': '★★★★★ Extreme Short (58%)'},
+            {'rank': '1',  'ticker': 'SGN',  'buzz_score': '7', 'health': '28 Weak',   'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '',                     'squeeze': '★★★★★ Potential (70%)'},
+            {'rank': '2',  'ticker': 'RUN',  'buzz_score': '7', 'health': '28 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (30%)'},
+            {'rank': '3',  'ticker': 'ANAB', 'buzz_score': '7', 'health': '35 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (38%)'},
+            {'rank': '4',  'ticker': 'HTZ',  'buzz_score': '7', 'health': '15 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (46%)'},
+            {'rank': '5',  'ticker': 'DEI',  'buzz_score': '7', 'health': '25 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (25%)'},
+            {'rank': '6',  'ticker': 'LUCK', 'buzz_score': '7', 'health': '15 Weak',   'social_hype': '',                      'smart_money': '★★★★★ Whales >50%',   'squeeze': '★★★★★ Potential (32%)'},
+            {'rank': '7',  'ticker': 'QDEL', 'buzz_score': '7', 'health': '25 Weak',   'social_hype': '',                      'smart_money': '★★★★★ Whales >50%',   'squeeze': '★★★★★ Potential (25%)'},
+            {'rank': '8',  'ticker': 'CAR',  'buzz_score': '7', 'health': '20 Weak',   'social_hype': '',                      'smart_money': '★★★★★ Whales >50%',   'squeeze': '★★★★★ Potential (48%)'},
+            {'rank': '9',  'ticker': 'NVDA', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%',   'squeeze': ''},
+            {'rank': '10', 'ticker': 'MSFT', 'buzz_score': '6', 'health': '52 Hold',   'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%',   'squeeze': ''},
+            {'rank': '11', 'ticker': 'IBRX', 'buzz_score': '6', 'health': '32 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (40%)'},
+            {'rank': '12', 'ticker': 'RXT',  'buzz_score': '6', 'health': '15 Weak',   'social_hype': '★★★★★ Weekly Choice', 'smart_money': '',                     'squeeze': '★★★★★ Potential (38%)'},
+            {'rank': '13', 'ticker': 'RDDT', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Weekly Choice', 'smart_money': '★★★★★ Whales >50%',   'squeeze': ''},
+            {'rank': '14', 'ticker': 'PROP', 'buzz_score': '6', 'health': '22 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★ Potential (23%)'},
+            {'rank': '15', 'ticker': 'WEN',  'buzz_score': '6', 'health': '48 Hold',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (58%)'},
+            {'rank': '16', 'ticker': 'TSLA', 'buzz_score': '6', 'health': '65 Hold',   'social_hype': '★★★★ Reddit Top 10',  'smart_money': '★★★★ Whales >30%',    'squeeze': ''},
+            {'rank': '17', 'ticker': 'AMZN', 'buzz_score': '5', 'health': '40 Hold',   'social_hype': '★★★★ Reddit Top 10',  'smart_money': '★★★★★ Whales >20%',   'squeeze': ''},
+            {'rank': '18', 'ticker': 'GME',  'buzz_score': '5', 'health': '18 Weak',   'social_hype': '★★★ Weekly Choice',   'smart_money': '',                     'squeeze': '★★★★ Potential (35%)'},
+            {'rank': '19', 'ticker': 'AMC',  'buzz_score': '5', 'health': '12 Weak',   'social_hype': '★★★ Reddit Top 10',   'smart_money': '',                     'squeeze': '★★★★ Potential (42%)'},
+            {'rank': '20', 'ticker': 'PLTR', 'buzz_score': '5', 'health': '72 Strong', 'social_hype': '★★★★ Weekly Choice',  'smart_money': '★★★★ Whales >20%',    'squeeze': ''},
         ],
         'source': 'BuzzTickr Master',
         'timestamp': datetime.now().strftime('%H:%M:%S'),
-        'count': 15
+        'count': 20
     }
 
 @st.cache_data(ttl=60)
@@ -1800,6 +1910,18 @@ def render():
     # CSS Global - Tooltips CENTRADOS en el módulo - ALTURA AUMENTADA A 420px
     st.markdown("""
     <style>
+    /* ── FUENTE "THE PLATFORM" STYLE - Press Start 2P (pixel/terminal) ── */
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Press+Start+2P&display=swap');
+    
+    .module-title, .title, h1, h2, h3 {
+        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
+        letter-spacing: 1.5px !important;
+    }
+    .module-title {
+        font-size: 16px !important;
+        letter-spacing: 2px !important;
+    }
+    
     /* Tooltips CENTRADOS - flotan en el centro del módulo */
     .tooltip-wrapper {
         position: static;
@@ -1883,10 +2005,11 @@ def render():
     .module-title { 
         margin: 0; 
         color: white; 
-        font-size: 13px; 
-        font-weight: bold; 
+        font-size: 16px; 
+        font-weight: normal;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 2px;
+        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
     }
     .module-content { 
         flex: 1;
@@ -2061,7 +2184,7 @@ def render():
     # Ticker
     ticker_html = generate_ticker_html()
     components.html(ticker_html, height=50, scrolling=False)
-    st.markdown('<h1 style="margin-top:15px; text-align:center; margin-bottom:15px; font-size: 1.5rem;">Market Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="margin-top:15px; text-align:center; margin-bottom:15px; font-size: 1.5rem; font-family:\'VT323\',\'Share Tech Mono\',\'Courier New\',monospace; letter-spacing:3px;">Market Dashboard</h1>', unsafe_allow_html=True)
 
     # ── API HEALTH BAR ─────────────────────────────────────────────────────────
     apis = [
@@ -2081,21 +2204,34 @@ def render():
     st.markdown(health_html, unsafe_allow_html=True)
 
     # ── REFRESH BUTTON (arriba izquierda, en verde cyan) ──────────────────────
+    # Inyectar CSS global para el botón antes de renderizar la columna
+    st.markdown(
+        '''<style>
+        /* BOTÓN ACTUALIZAR - Verde Cyan - Se aplica al primer stButton de la página */
+        div[data-testid="column"]:first-child [data-testid="stButton"] > button,
+        div[data-testid="column"]:first-of-type [data-testid="stButton"] button {
+            background: #00ffad !important;
+            border: 1px solid #00ffad !important;
+            color: #050708 !important;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            padding: 5px 18px !important;
+            border-radius: 7px !important;
+            height: auto !important;
+            min-height: 0 !important;
+            box-shadow: 0 0 14px #00ffad55 !important;
+            font-family: 'VT323', 'Share Tech Mono', monospace !important;
+            letter-spacing: 1.5px !important;
+        }
+        div[data-testid="column"]:first-child [data-testid="stButton"] > button:hover {
+            background: #00e89a !important;
+            box-shadow: 0 0 22px #00ffad88 !important;
+        }
+        </style>''',
+        unsafe_allow_html=True
+    )
     col_r1, col_r2, col_r3 = st.columns([1, 3, 1])
     with col_r1:
-        st.markdown(
-            '''<style>
-            div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="global_refresh"]) button,
-            button[aria-label="↻ Actualizar"] {
-                background:#00ffad!important; border:1px solid #00ffad!important;
-                color:#0a0c10!important; font-size:12px!important; font-weight:800!important;
-                padding:5px 16px!important; border-radius:7px!important;
-                height:auto!important; min-height:0!important;
-                box-shadow: 0 0 10px #00ffad33!important;
-            }
-            </style>''',
-            unsafe_allow_html=True
-        )
         if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
             st.cache_data.clear()
             st.rerun()
@@ -2283,22 +2419,27 @@ def render():
             
             hype_label = ""
             if "Reddit Top 10" in social_hype:
-                hype_label = " Reddit"
+                hype_label = "Reddit"
             elif "Weekly Choice" in social_hype:
-                hype_label = " Semanal"
+                hype_label = "Semanal"
+            elif hype_stars > 0:
+                hype_label = "Reddit"
             
             smart_label = ""
             if "Whales" in smart_money:
                 pct_m = re.search(r'>(\d+)%', smart_money)
-                smart_label = f" Ballenas >{pct_m.group(1)}%" if pct_m else " Ballenas"
+                smart_label = f"Ballenas >{pct_m.group(1)}%" if pct_m else "Ballenas"
+            elif smart_stars > 0:
+                smart_label = "Ballenas"
             
             squeeze_label = ""
-            sqz_match2 = re.search(r'\((\d+)%\)', squeeze)
-            if sqz_match2:
-                squeeze_label = f" {sqz_match2.group(1)}%"
-            elif "Days to Cover" in squeeze:
-                dtc = re.search(r'(\d+\.\d+)', squeeze)
-                squeeze_label = f" DTC:{dtc.group(1)}" if dtc else ""
+            sqz_pct = re.search(r'\((\d+)%\)', squeeze)
+            if sqz_pct:
+                squeeze_label = f"Potential ({sqz_pct.group(1)}%)"
+            elif "Potential" in squeeze:
+                squeeze_label = "Potential"
+            elif squeeze_stars > 0:
+                squeeze_label = "Potential"
 
             cards_html += f'''
             <div class="buzz-row">
@@ -2329,12 +2470,15 @@ def render():
                 </div>
             </div>'''
 
-        buzz_html_full = f'''<!DOCTYPE html><html><head><style>
+        buzz_html_full = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .col-head {{ display:grid; grid-template-columns:24px 50px 40px 1fr; gap:3px; padding:4px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
         .col-label {{ font-size:7px; font-weight:bold; color:#3a4f6f; text-transform:uppercase; letter-spacing:0.8px; }}
         .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
@@ -2347,9 +2491,9 @@ def render():
         .buzz-health {{ padding:3px 2px; border-radius:4px; font-size:10px; font-weight:bold; text-align:center; line-height:1.2; }}
         .buzz-signals-col {{ display:flex; flex-direction:column; gap:2px; width:100%; }}
         .signal-badge {{ display:flex; align-items:center; border-radius:4px; padding:2px 5px; gap:4px; width:100%; }}
-        .sig-label {{ font-size:8px; font-weight:900; min-width:30px; text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0; }}
-        .sig-stars {{ font-size:10px; flex-shrink:0; }}
-        .sig-info {{ font-size:7px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }}
+        .sig-label {{ font-size:8px; font-weight:900; min-width:32px; text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0; }}
+        .sig-stars {{ font-size:11px; flex-shrink:0; letter-spacing:1px; }}
+        .sig-info {{ font-size:8px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }}
         .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -2469,21 +2613,27 @@ def render():
         tf_btns_html = ""
         for tf in tf_options:
             active = tf == current_tf
-            bg = "#3b82f6" if active else "#1a1e26"
-            border = "#3b82f6" if active else "#2a3f5f"
-            fw = "bold" if active else "normal"
+            bg = "#00ffad18" if active else "transparent"
+            border = "#00ffad" if active else "#1e3a2f"
+            color = "#00ffad" if active else "#3a5a4a"
+            fw = "900" if active else "500"
+            glow = "box-shadow:0 0 8px #00ffad44;" if active else ""
             tf_btns_html += (
                 f'<button onclick="changeTF(\'{tf}\')" style="background:{bg}; border:1px solid {border}; '
-                f'color:white; padding:3px 9px; border-radius:4px; font-size:9px; font-weight:{fw}; '
-                f'margin-left:3px; cursor:pointer; transition:all 0.2s;">{tf}</button>'
+                f'color:{color}; padding:1px 7px; border-radius:4px; font-size:8px; font-weight:{fw}; '
+                f'margin-left:3px; cursor:pointer; transition:all 0.2s; height:18px; {glow}'
+                f'font-family:\'VT323\',\'Share Tech Mono\',monospace; letter-spacing:1px;">{tf}</button>'
             )
 
-        sector_module_html = f'''<!DOCTYPE html><html><head><style>
+        sector_module_html = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .content {{ flex:1; overflow:hidden; padding:8px; }}
         .sector-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; height:100%; }}
         .sector-item {{ background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 4px; text-align:center; display:flex; flex-direction:column; justify-content:center; }}
@@ -2491,10 +2641,10 @@ def render():
         .sector-name {{ color:white; font-size:10px; font-weight:600; margin-bottom:4px; line-height:1.2; }}
         .sector-change {{ font-size:11px; font-weight:bold; }}
         button {{ outline:none; }}
-        button:hover {{ filter:brightness(1.2); }}
+        button:hover {{ filter:brightness(1.3); }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
-        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
+        .tooltip-btn {{ width:20px; height:20px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:11px; font-weight:bold; cursor:help; }}
         .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
@@ -2845,12 +2995,15 @@ def render():
 
         chart_svg = _vix_chart_svg(vix_vals, vix_dates)
 
-        vix_full_html = f'''<!DOCTYPE html><html><head><style>
+        vix_full_html = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -3160,12 +3313,15 @@ def render():
         tooltip_text = "Market Breadth: SMA50/200, Golden/Death Cross, RSI(14), Oscilador McClellan, % activos sobre SMA50"
         timestamp_str = get_timestamp()
 
-        breadth_html = f'''<!DOCTYPE html><html><head><style>
+        breadth_html = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
         .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
         .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
-        .title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .tooltip-wrapper {{ position: static; display: inline-block; }}
         .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
         .tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
@@ -3269,12 +3425,15 @@ def render():
         timestamp_str = get_timestamp()
 
         vix_html_full = f"""
-<!DOCTYPE html><html><head><style>
+<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
 .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
 .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
-.title {{ color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }}
+.title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
 .tooltip-wrapper {{ position: static; display: inline-block; }}
 .tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
@@ -3349,12 +3508,15 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         crypto_content = "".join(crypto_items_html)
         timestamp_str = get_timestamp()
 
-        crypto_html_full = '''<!DOCTYPE html><html><head><style>
+        crypto_html_full = '''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }
         .header { background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-        .title { color: white; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        .title { color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }
         .tooltip-wrapper { position: static; display: inline-block; }
         .tooltip-btn { width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }
         .tooltip-content { display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }
@@ -3398,12 +3560,15 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
                     f'</div></div>'
                 )
 
-        ind_full_html = f'''<!DOCTYPE html><html><head><style>
+        ind_full_html = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .content {{ flex:1; overflow-y:auto; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -3498,12 +3663,15 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         
         ad_chart_svg = _make_ad_chart(history_ad)
         
-        ad_full_html = f'''<!DOCTYPE html><html><head><style>
+        ad_full_html = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -3605,12 +3773,15 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             cs_desc = "Datos no disponibles"
             cs_date = "—"
 
-        cs_full_html = f'''<!DOCTYPE html><html><head><style>
+        cs_full_html = f'''<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
         .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}

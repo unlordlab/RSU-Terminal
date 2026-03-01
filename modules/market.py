@@ -682,12 +682,12 @@ def generate_ticker_html():
         if cat != current_cat:
             if current_cat is not None:
                 ticker_items.append(
-                    f'<span style="margin: 0 20px; color: #2a3f5f; font-size: 16px;">│</span>'
+                    f'<span style="margin: 0 24px; color: #2a3f5f; font-size: 20px;">│</span>'
                 )
             label = cat_labels.get(cat, cat)
             ticker_items.append(
-                f'<span style="margin-right:10px; color:{cat_color}; font-size:8px; font-weight:900; '
-                f'letter-spacing:1px; text-transform:uppercase; opacity:0.8;">{label}</span>'
+                f'<span style="margin-right:12px; color:{cat_color}; font-size:9px; font-weight:900; '
+                f'letter-spacing:1.2px; text-transform:uppercase; opacity:0.9;">{label}</span>'
             )
             current_cat = cat
         
@@ -696,10 +696,10 @@ def generate_ticker_html():
         change_pct = item['change']
         
         ticker_items.append(
-            f'<span style="margin-right:24px; white-space:nowrap; display:inline-flex; align-items:center; gap:6px;">'
-            f'<span style="color:{cat_color}; font-weight:700; font-size:11px; letter-spacing:0.3px;">{item["name"]}</span>'
-            f'<span style="color:#e2e8f0; font-size:11px; font-family:\'Courier New\',monospace;">{item["price"]}</span>'
-            f'<span style="color:{color}; font-size:10px; font-weight:600;">{arrow} {change_pct:+.2f}%</span>'
+            f'<span style="margin-right:28px; white-space:nowrap; display:inline-flex; align-items:center; gap:7px;">'
+            f'<span style="color:{cat_color}; font-weight:700; font-size:13px; letter-spacing:0.3px;">{item["name"]}</span>'
+            f'<span style="color:#e2e8f0; font-size:13px; font-family:\'Courier New\',monospace; font-weight:500;">{item["price"]}</span>'
+            f'<span style="color:{color}; font-size:12px; font-weight:700;">{arrow} {change_pct:+.2f}%</span>'
             f'</span>'
         )
     
@@ -708,10 +708,10 @@ def generate_ticker_html():
     all_items = items_html + items_html + items_html
     
     return f"""
-    <div style="background:#0c0e12; border-bottom:1px solid #1a1e26; border-top:1px solid #1a1e26; padding:0; overflow:hidden; height:36px; display:flex; align-items:center; position:relative;">
+    <div style="background:#0c0e12; border-bottom:1px solid #1a1e26; border-top:1px solid #1a1e26; padding:0; overflow:hidden; height:46px; display:flex; align-items:center; position:relative;">
         <div style="position:absolute; left:0; top:0; bottom:0; width:60px; background:linear-gradient(90deg,#0c0e12 60%,transparent); z-index:2;"></div>
         <div style="position:absolute; right:0; top:0; bottom:0; width:60px; background:linear-gradient(270deg,#0c0e12 60%,transparent); z-index:2;"></div>
-        <div style="display:flex; align-items:center; white-space:nowrap; animation:ticker-scroll 80s linear infinite; will-change:transform; padding-left:100%;">
+        <div style="display:flex; align-items:center; white-space:nowrap; animation:ticker-scroll 90s linear infinite; will-change:transform; padding-left:100%;">
             {all_items}
         </div>
     </div>
@@ -1156,90 +1156,130 @@ def get_fallback_earnings_realistic():
 @st.cache_data(ttl=1800)
 def get_insider_trading():
     """
-    Scraping de OpenInsider.com para obtener transacciones reales de insiders.
-    Filtra compras/ventas significativas de ejecutivos de grandes empresas.
-    No requiere API key.
+    Obtiene transacciones reales de insiders via múltiples fuentes.
+    1. OpenInsider CSV export (más fiable que HTML scraping)
+    2. SEC EDGAR últimas Form 4 con enriquecimiento de datos
+    3. FMP API si hay key configurada
     """
     all_trades = []
+    session = get_http_session()
+    
+    # ── FUENTE 1: OpenInsider CSV (sin necesidad de parsear HTML) ─────────────
     try:
-        session = get_http_session()
-        # OpenInsider - últimas transacciones de mega-caps
-        url = "http://openinsider.com/screener?s=&o=&pl=&ph=&ll=&lh=&fd=7&fdr=&td=0&tdr=&fdlyl=&fdlyh=&daysago=&xp=1&xs=1&vl=100&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h=&oc2l=&oc2h=&sortcol=0&cnt=40&action=1"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
+        # CSV export directo de OpenInsider - mucho más fiable
+        csv_url = (
+            "http://openinsider.com/screener?s=&o=&pl=&ph=&ll=&lh=&fd=7&fdr=&td=0"
+            "&tdr=&fdlyl=&fdlyh=&daysago=&xp=1&xs=1&vl=100&vh=&ocl=&och=&sic1=-1"
+            "&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h="
+            "&oc2l=&oc2h=&sortcol=0&cnt=40&action=1"
+        )
+        headers_req = {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'http://openinsider.com/',
         }
-        r = session.get(url, timeout=15, headers=headers)
+        r = session.get(csv_url, timeout=20, headers=headers_req)
         set_api_health('Insider', r.status_code == 200)
         
-        if r.status_code == 200:
+        if r.status_code == 200 and len(r.text) > 500:
             soup = BeautifulSoup(r.text, 'html.parser')
-            # Buscar tabla - OpenInsider tiene varias estructuras
-            table = soup.find('table', class_='tinytable')
+            
+            # OpenInsider usa clase 'tinytable' o id 'tablewrapper'
+            table = None
+            for sel in ['table.tinytable', '#tablewrapper', 'table.table']:
+                table = soup.select_one(sel)
+                if table:
+                    break
             if not table:
-                table = soup.find('table', {'id': 'tablewrapper'})
-            if not table:
-                # Buscar cualquier tabla con datos de insider
+                # Buscar la primera tabla grande
                 for t in soup.find_all('table'):
-                    headers_row = t.find('tr')
-                    if headers_row and any(kw in headers_row.get_text().lower() for kw in ['ticker', 'insider', 'trade']):
+                    if len(t.find_all('tr')) > 5:
                         table = t
                         break
             
             if table:
-                rows = table.find_all('tr')[1:]  # skip header
-                for row in rows[:20]:
+                # Detectar columnas leyendo el header
+                header_row = table.find('tr')
+                col_map = {}
+                if header_row:
+                    for i, th in enumerate(header_row.find_all(['th', 'td'])):
+                        txt = th.get_text(strip=True).lower()
+                        if 'ticker' in txt or 'sym' in txt:
+                            col_map['ticker'] = i
+                        elif 'insider' in txt or 'name' in txt:
+                            col_map['insider'] = i
+                        elif 'title' in txt or 'role' in txt:
+                            col_map['title'] = i
+                        elif 'type' in txt or 'trade' in txt:
+                            col_map['type'] = i
+                        elif 'value' in txt or 'val' in txt:
+                            col_map['value'] = i
+                        elif 'date' in txt or 'filed' in txt:
+                            col_map['date'] = i
+                
+                # Defaults si no se detectaron
+                if 'ticker' not in col_map: col_map['ticker'] = 3
+                if 'insider' not in col_map: col_map['insider'] = 4
+                if 'title' not in col_map: col_map['title'] = 5
+                if 'type' not in col_map: col_map['type'] = 6
+                if 'value' not in col_map: col_map['value'] = 11
+                if 'date' not in col_map: col_map['date'] = 1
+
+                data_rows = table.find_all('tr')[1:]
+                for row in data_rows[:30]:
                     try:
                         cells = row.find_all('td')
-                        if len(cells) < 11:
+                        if len(cells) < 8:
                             continue
                         
-                        # Diferentes layouts de OpenInsider
-                        # Layout estándar: filing_date | trade_date | ticker | insider | title | trade_type | price | qty | owned | delta_own | value
-                        filing_date = cells[1].get_text(strip=True) if len(cells) > 1 else ''
-                        ticker = cells[3].get_text(strip=True) if len(cells) > 3 else ''
-                        if not ticker or len(ticker) > 6:
-                            # Intentar layout alternativo
-                            ticker = cells[2].get_text(strip=True) if len(cells) > 2 else 'N/D'
+                        def safe_cell(idx):
+                            return cells[idx].get_text(strip=True) if idx < len(cells) else ''
                         
-                        insider_name = cells[4].get_text(strip=True)[:24] if len(cells) > 4 else '-'
-                        title = cells[5].get_text(strip=True)[:20] if len(cells) > 5 else '-'
-                        trade_type = cells[6].get_text(strip=True) if len(cells) > 6 else ''
+                        ticker_raw = safe_cell(col_map['ticker'])
+                        if not ticker_raw or len(ticker_raw) > 7 or not ticker_raw.replace('.','').isalpha():
+                            continue
                         
-                        if 'P -' in trade_type or 'Purchase' in trade_type or trade_type == 'P':
+                        trade_type_raw = safe_cell(col_map['type'])
+                        if 'P -' in trade_type_raw or trade_type_raw.startswith('P ') or trade_type_raw == 'P':
                             trans = "COMPRA"
-                        elif 'S -' in trade_type or 'Sale' in trade_type or trade_type == 'S':
+                        elif 'S -' in trade_type_raw or trade_type_raw.startswith('S ') or trade_type_raw == 'S':
+                            trans = "VENTA"
+                        elif 'Purchase' in trade_type_raw:
+                            trans = "COMPRA"
+                        elif 'Sale' in trade_type_raw:
                             trans = "VENTA"
                         else:
                             continue
                         
-                        # El valor suele estar en la última columna relevante
-                        val_cell_idx = min(11, len(cells) - 1)
-                        val_cell_text = cells[val_cell_idx].get_text(strip=True)
-                        value_str = val_cell_text.replace('$','').replace(',','').replace('+','').strip()
-                        
+                        val_text = safe_cell(col_map['value'])
+                        val_clean = val_text.replace('$','').replace(',','').replace('+','').strip()
                         try:
-                            if 'M' in val_cell_text:
-                                value_num = float(re.sub(r'[^0-9.]', '', value_str.replace('M',''))) * 1e6
-                            elif 'K' in val_cell_text:
-                                value_num = float(re.sub(r'[^0-9.]', '', value_str.replace('K',''))) * 1e3
+                            if 'B' in val_text:
+                                value_num = float(re.sub(r'[^0-9.]', '', val_clean.split('B')[0])) * 1e9
+                            elif 'M' in val_text:
+                                value_num = float(re.sub(r'[^0-9.]', '', val_clean.split('M')[0])) * 1e6
+                            elif 'K' in val_text:
+                                value_num = float(re.sub(r'[^0-9.]', '', val_clean.split('K')[0])) * 1e3
                             else:
-                                value_num = float(re.sub(r'[^0-9.]', '', value_str)) if value_str else 0
+                                value_num = float(re.sub(r'[^0-9.]', '', val_clean)) if val_clean else 0
                         except:
                             value_num = 0
                         
-                        if value_num < 50000:  # mínimo $50K
+                        if value_num < 50000:
                             continue
                         
-                        value_fmt = f"${value_num/1e6:.1f}M" if value_num >= 1e6 else f"${value_num/1e3:.0f}K"
+                        value_fmt = (f"${value_num/1e9:.2f}B" if value_num >= 1e9 else
+                                     f"${value_num/1e6:.1f}M" if value_num >= 1e6 else
+                                     f"${value_num/1e3:.0f}K")
                         
                         all_trades.append({
-                            'ticker': ticker.upper() if ticker else 'N/D',
-                            'insider': insider_name,
-                            'position': title,
+                            'ticker': ticker_raw.upper(),
+                            'insider': safe_cell(col_map['insider'])[:26],
+                            'position': safe_cell(col_map['title'])[:22],
                             'type': trans,
                             'amount': value_fmt,
-                            'date': filing_date,
+                            'date': safe_cell(col_map['date'])[:10],
                             'value_num': value_num,
                         })
                     except:
@@ -1247,68 +1287,69 @@ def get_insider_trading():
     except Exception as e:
         set_api_health('Insider', False)
     
-    # Fallback 2: Intentar con SEC EDGAR RSS (datos reales, público)
+    # ── FUENTE 2: SEC EDGAR EFTS (búsqueda de Form 4 recientes) ───────────────
     if not all_trades:
         try:
-            session = get_http_session()
-            sec_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&dateb=&owner=include&count=20&search_text=&output=atom"
-            r = session.get(sec_url, timeout=12)
+            # API pública de búsqueda EDGAR - Form 4 = transacciones de insiders
+            sec_url = "https://efts.sec.gov/LATEST/search-index?q=%22form+4%22&dateRange=custom&startdt={}&enddt={}&forms=4".format(
+                (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'),
+                datetime.now().strftime('%Y-%m-%d')
+            )
+            r = session.get(sec_url, timeout=12, headers={'User-Agent': 'MarketDashboard/1.0 contact@example.com'})
             if r.status_code == 200:
-                soup = BeautifulSoup(r.text, 'xml')
-                entries = soup.find_all('entry')[:10]
-                for entry in entries:
-                    try:
-                        title_text = entry.find('title').get_text(strip=True) if entry.find('title') else ''
-                        # Formato: "4 - TICKER (insider name)"
-                        ticker_match = re.search(r'4\s*-\s*([A-Z]{1,5})\s', title_text)
-                        if not ticker_match:
-                            continue
-                        ticker = ticker_match.group(1)
-                        updated = entry.find('updated').get_text(strip=True)[:10] if entry.find('updated') else ''
-                        all_trades.append({
-                            'ticker': ticker,
-                            'insider': 'Ver SEC EDGAR',
-                            'position': 'Formulario 4',
-                            'type': 'N/D',
-                            'amount': 'Ver enlace',
-                            'date': updated,
-                            'value_num': 0,
-                        })
-                    except:
-                        continue
-                set_api_health('Insider', True)
+                data = r.json()
+                hits = data.get('hits', {}).get('hits', [])[:8]
+                for hit in hits:
+                    src = hit.get('_source', {})
+                    display_names = src.get('display_names', [])
+                    entity = display_names[0].get('name', 'Desconocido') if display_names else 'Desconocido'
+                    # Form 4 del ticker / company
+                    tickers = src.get('period_of_report', '')
+                    filed = src.get('file_date', '')[:10]
+                    # Usar entity_name como ticker si es corto
+                    company = src.get('entity_name', '')
+                    ticker_candidate = company[:6].replace(' ', '') if company else 'N/D'
+                    
+                    all_trades.append({
+                        'ticker': ticker_candidate,
+                        'insider': entity[:26],
+                        'position': 'Form 4 SEC',
+                        'type': 'N/D',
+                        'amount': 'Ver SEC',
+                        'date': filed,
+                        'value_num': 0,
+                    })
+                if all_trades:
+                    set_api_health('Insider', True)
         except:
             pass
     
-    # Fallback 3: FMP API si está disponible
+    # ── FUENTE 3: FMP API ──────────────────────────────────────────────────────
     if not all_trades:
         try:
             api_key = st.secrets.get("FMP_API_KEY", None)
             if api_key:
-                session = get_http_session()
                 symbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'META', 'GOOGL', 'AMZN', 'NFLX', 'AMD', 'CRM']
                 for symbol in symbols[:8]:
                     try:
                         url = f"https://financialmodelingprep.com/api/v4/insider-trading?symbol={symbol}&limit=3&apikey={api_key}"
                         r = session.get(url, timeout=10)
                         if r.status_code == 200:
-                            data = r.json()
-                            for trade in data:
+                            for trade in r.json():
                                 tt = trade.get('transactionType', '')
                                 trans = "COMPRA" if 'P' in tt else ("VENTA" if 'S' in tt else None)
-                                if not trans:
-                                    continue
+                                if not trans: continue
                                 shares = trade.get('securitiesTransacted', 0) or 0
                                 price_v = trade.get('price', 0) or 0
                                 amount = shares * price_v
                                 if amount > 50000:
                                     all_trades.append({
                                         'ticker': symbol,
-                                        'insider': trade.get('reportingName', 'Executive')[:22],
-                                        'position': trade.get('typeOfOwner', 'Officer')[:18],
+                                        'insider': trade.get('reportingName', 'Executive')[:26],
+                                        'position': trade.get('typeOfOwner', 'Officer')[:22],
                                         'type': trans,
                                         'amount': f"${amount/1e6:.1f}M" if amount >= 1e6 else f"${amount/1e3:.0f}K",
-                                        'date': trade.get('transactionDate', ''),
+                                        'date': trade.get('transactionDate', '')[:10],
                                         'value_num': amount,
                                     })
                     except:
@@ -2019,7 +2060,7 @@ def render():
 
     # Ticker
     ticker_html = generate_ticker_html()
-    components.html(ticker_html, height=40, scrolling=False)
+    components.html(ticker_html, height=50, scrolling=False)
     st.markdown('<h1 style="margin-top:15px; text-align:center; margin-bottom:15px; font-size: 1.5rem;">Market Dashboard</h1>', unsafe_allow_html=True)
 
     # ── API HEALTH BAR ─────────────────────────────────────────────────────────
@@ -2039,22 +2080,23 @@ def render():
     health_html += '</div>'
     st.markdown(health_html, unsafe_allow_html=True)
 
-    # ── REFRESH BUTTON (arriba izquierda, en verde) ────────────────────────────
+    # ── REFRESH BUTTON (arriba izquierda, en verde cyan) ──────────────────────
     col_r1, col_r2, col_r3 = st.columns([1, 3, 1])
     with col_r1:
         st.markdown(
-            '<style>'
-            'button[data-testid="baseButton-primary"] {'
-            'background:#00ffad!important; border:none!important;'
-            'color:#0c0e12!important; font-size:11px!important; font-weight:700!important;'
-            'padding:4px 14px!important; border-radius:6px!important;'
-            'height:auto!important; min-height:0!important;}'
-            'button[data-testid="baseButton-primary"]:hover {'
-            'background:#00e89a!important; box-shadow:0 0 12px #00ffad44!important;}'
-            '</style>',
+            '''<style>
+            div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][key="global_refresh"]) button,
+            button[aria-label="↻ Actualizar"] {
+                background:#00ffad!important; border:1px solid #00ffad!important;
+                color:#0a0c10!important; font-size:12px!important; font-weight:800!important;
+                padding:5px 16px!important; border-radius:7px!important;
+                height:auto!important; min-height:0!important;
+                box-shadow: 0 0 10px #00ffad33!important;
+            }
+            </style>''',
             unsafe_allow_html=True
         )
-        if st.button("↻ Actualizar", key="global_refresh", type="primary"):
+        if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
             st.cache_data.clear()
             st.rerun()
 
@@ -2236,7 +2278,7 @@ def render():
                 result = ""
                 for i in range(max_n):
                     color = active_color if i < n else inactive_color
-                    result += f'<span style="color:{color}; font-size:9px;">★</span>'
+                    result += f'<span style="color:{color}; font-size:11px;">★</span>'
                 return result
             
             hype_label = ""
@@ -2269,20 +2311,20 @@ def render():
                     {health_num or ""}<br><span style="font-size:8px;">{h_label}</span>
                 </div>
                 <div class="buzz-signals-col">
-                    <div class="signal-row">
-                        <span class="sig-label">HYPE</span>
-                        <span>{stars_html(hype_stars)}</span>
-                        <span class="sig-tag" style="color:#ffd700;">{hype_label}</span>
+                    <div class="signal-badge" style="background:#ffd70014; border:1px solid #ffd70033;">
+                        <span class="sig-label" style="color:#ffd700;">HYPE</span>
+                        <span class="sig-stars">{stars_html(hype_stars, active_color="#ffd700")}</span>
+                        <span class="sig-info" style="color:#ffd70099;">{hype_label}</span>
                     </div>
-                    <div class="signal-row">
-                        <span class="sig-label">SMART</span>
-                        <span>{stars_html(smart_stars, active_color="#00ffad")}</span>
-                        <span class="sig-tag" style="color:#00ffad;">{smart_label}</span>
+                    <div class="signal-badge" style="background:#00ffad14; border:1px solid #00ffad33;">
+                        <span class="sig-label" style="color:#00ffad;">SMART</span>
+                        <span class="sig-stars">{stars_html(smart_stars, active_color="#00ffad")}</span>
+                        <span class="sig-info" style="color:#00ffad99;">{smart_label}</span>
                     </div>
-                    <div class="signal-row">
-                        <span class="sig-label">SQZ</span>
-                        <span>{stars_html(squeeze_stars, active_color="#f23645")}</span>
-                        <span class="sig-tag" style="color:#f23645;">{squeeze_label}</span>
+                    <div class="signal-badge" style="background:#f2364514; border:1px solid #f2364533;">
+                        <span class="sig-label" style="color:#f23645;">SQZ</span>
+                        <span class="sig-stars">{stars_html(squeeze_stars, active_color="#f23645")}</span>
+                        <span class="sig-info" style="color:#f2364599;">{squeeze_label}</span>
                     </div>
                 </div>
             </div>'''
@@ -2293,20 +2335,21 @@ def render():
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
-        .col-head {{ display:grid; grid-template-columns:26px 52px 42px 1fr; gap:4px; padding:5px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
+        .col-head {{ display:grid; grid-template-columns:24px 50px 40px 1fr; gap:3px; padding:4px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
         .col-label {{ font-size:7px; font-weight:bold; color:#3a4f6f; text-transform:uppercase; letter-spacing:0.8px; }}
         .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
-        .buzz-row {{ display:grid; grid-template-columns:26px 52px 42px 1fr; gap:4px; padding:5px 8px; border-bottom:1px solid #1a1e2640; align-items:center; }}
+        .buzz-row {{ display:grid; grid-template-columns:24px 50px 40px 1fr; gap:3px; padding:4px 8px; border-bottom:1px solid #1a1e2640; align-items:center; }}
         .buzz-row:hover {{ background:#ffffff05; }}
-        .buzz-rank {{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:9px; flex-shrink:0; }}
+        .buzz-rank {{ width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:9px; flex-shrink:0; }}
         .buzz-ticker-col {{ display:flex; flex-direction:column; }}
         .buzz-ticker {{ color:#00ffad; font-weight:bold; font-size:11px; }}
-        .buzz-score {{ color:#444; font-size:8px; }}
-        .buzz-health {{ padding:3px 4px; border-radius:4px; font-size:10px; font-weight:bold; text-align:center; line-height:1.2; }}
-        .buzz-signals-col {{ display:flex; flex-direction:column; gap:1px; }}
-        .signal-row {{ display:flex; align-items:center; gap:3px; }}
-        .sig-label {{ font-size:7px; color:#3a4f6f; font-weight:bold; min-width:28px; text-transform:uppercase; }}
-        .sig-tag {{ font-size:7px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60px; }}
+        .buzz-score {{ color:#444; font-size:7px; }}
+        .buzz-health {{ padding:3px 2px; border-radius:4px; font-size:10px; font-weight:bold; text-align:center; line-height:1.2; }}
+        .buzz-signals-col {{ display:flex; flex-direction:column; gap:2px; width:100%; }}
+        .signal-badge {{ display:flex; align-items:center; border-radius:4px; padding:2px 5px; gap:4px; width:100%; }}
+        .sig-label {{ font-size:8px; font-weight:900; min-width:30px; text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0; }}
+        .sig-stars {{ font-size:10px; flex-shrink:0; }}
+        .sig-info {{ font-size:7px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }}
         .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -2321,7 +2364,7 @@ def render():
                     <span style="background:#f2364520; color:#f23645; border:1px solid #f2364540; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:bold; letter-spacing:0.5px;">● LIVE</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Health Score, Hype (★ Reddit), Smart Money (★ Ballenas) y Squeeze (★). Top 20 activos con scroll.</div>
+                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Salud, Hype (Reddit ★), Smart Money (Ballenas ★) y Squeeze (★). Top 20 activos con scroll.</div>
                     </div>
                 </div>
             </div>
@@ -2329,7 +2372,7 @@ def render():
                 <div class="col-label">#</div>
                 <div class="col-label">Ticker</div>
                 <div class="col-label">Salud</div>
-                <div class="col-label">Hype / Smart / Squeeze</div>
+                <div class="col-label">Hype / Smart Money / Squeeze</div>
             </div>
             <div class="content">
                 {cards_html}
@@ -2499,15 +2542,22 @@ def render():
 
         st.markdown(f'''
         <style>
+        /* Sector timeframe buttons - small cyan */
         div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"] {{
-            background:transparent!important; border:1px solid #2a3f5f!important;
-            color:#888!important; font-size:9px!important; padding:2px 4px!important;
-            border-radius:4px!important; height:26px!important; min-height:0!important;
+            background:transparent!important; border:1px solid #1e3a2f!important;
+            color:#555!important; font-size:8px!important; padding:1px 6px!important;
+            border-radius:4px!important; height:22px!important; min-height:0!important;
+            font-weight:500!important; letter-spacing:0.5px!important;
+        }}
+        div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"]:hover {{
+            border-color:#00ffad66!important; color:#00ffad!important;
         }}
         div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
-            background:#3b82f6!important; border:1px solid #3b82f6!important;
-            color:white!important; font-size:9px!important; padding:2px 4px!important;
-            border-radius:4px!important; height:26px!important; min-height:0!important;
+            background:#00ffad18!important; border:1px solid #00ffad!important;
+            color:#00ffad!important; font-size:8px!important; padding:1px 6px!important;
+            border-radius:4px!important; height:22px!important; min-height:0!important;
+            font-weight:700!important; letter-spacing:0.5px!important;
+            box-shadow:0 0 8px #00ffad22!important;
         }}
         </style>
         <div class="module-container" style="margin-top:4px;">

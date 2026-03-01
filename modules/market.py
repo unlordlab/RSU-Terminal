@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config import get_market_index, get_cnn_fear_greed
 import requests
 import streamlit.components.v1 as components
@@ -41,7 +41,9 @@ def get_http_session():
     return s
 
 def get_timestamp():
-    return datetime.now().strftime('%H:%M:%S')
+    """Timestamp en hora española (CET = UTC+1)"""
+    cet = timezone(timedelta(hours=1))
+    return datetime.now(cet).strftime('%H:%M:%S')
 
 # Diccionario de traducción de eventos económicos
 EVENT_TRANSLATIONS = {
@@ -190,7 +192,7 @@ def get_economic_calendar():
     events = []
     try:
         session = get_http_session()
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
         date_from = now.strftime('%Y-%m-%d')
         date_to = (now + timedelta(days=15)).strftime('%Y-%m-%d')
         
@@ -310,7 +312,7 @@ def get_forexfactory_calendar():
     events = []
     try:
         session = get_http_session()
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
         url = f"https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         r = session.get(url, timeout=10)
         set_api_health('ForexFactory', r.status_code == 200)
@@ -446,7 +448,7 @@ def get_reddit_buzz():
             return get_fallback_reddit_tickers()
         return {
             'tickers': top_10_tickers[:10], 'source': 'BuzzTickr',
-            'timestamp': datetime.now().strftime('%H:%M:%S')
+            'timestamp': get_timestamp()
         }
     except:
         return get_fallback_reddit_tickers()
@@ -454,7 +456,7 @@ def get_reddit_buzz():
 def get_fallback_reddit_tickers():
     return {
         'tickers': ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD", "PLTR", "GME"],
-        'source': 'Fallback', 'timestamp': datetime.now().strftime('%H:%M:%S')
+        'source': 'Fallback', 'timestamp': get_timestamp()
     }
 
 @st.cache_data(ttl=3600)  # Cache de 1 hora para no sobrecargar BuzzTickr
@@ -653,7 +655,7 @@ def get_buzztickr_master_data():
             return {
                 'data': master_data[:20],
                 'source': 'BuzzTickr Master',
-                'timestamp': datetime.now().strftime('%H:%M:%S'),
+                'timestamp': get_timestamp(),
                 'count': len(master_data)
             }
         
@@ -663,32 +665,33 @@ def get_buzztickr_master_data():
         return get_fallback_master_data()
 
 def get_fallback_master_data():
-    """Datos de respaldo actualizados - 20 activos representativos con datos reales de BuzzTickr"""
+    """Datos de respaldo basados en datos REALES de BuzzTickr Master Buzz (última captura disponible)"""
     return {
         'data': [
-            {'rank': '1',  'ticker': 'SGN',  'buzz_score': '7', 'health': '28 Weak',   'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '',                     'squeeze': '★★★★★ Potential (70%)'},
-            {'rank': '2',  'ticker': 'RUN',  'buzz_score': '7', 'health': '28 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (30%)'},
-            {'rank': '3',  'ticker': 'ANAB', 'buzz_score': '7', 'health': '35 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (38%)'},
-            {'rank': '4',  'ticker': 'HTZ',  'buzz_score': '7', 'health': '15 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (46%)'},
-            {'rank': '5',  'ticker': 'DEI',  'buzz_score': '7', 'health': '25 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (25%)'},
-            {'rank': '6',  'ticker': 'LUCK', 'buzz_score': '7', 'health': '15 Weak',   'social_hype': '',                      'smart_money': '★★★★★ Whales >50%',   'squeeze': '★★★★★ Potential (32%)'},
-            {'rank': '7',  'ticker': 'QDEL', 'buzz_score': '7', 'health': '25 Weak',   'social_hype': '',                      'smart_money': '★★★★★ Whales >50%',   'squeeze': '★★★★★ Potential (25%)'},
-            {'rank': '8',  'ticker': 'CAR',  'buzz_score': '7', 'health': '20 Weak',   'social_hype': '',                      'smart_money': '★★★★★ Whales >50%',   'squeeze': '★★★★★ Potential (48%)'},
-            {'rank': '9',  'ticker': 'NVDA', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%',   'squeeze': ''},
-            {'rank': '10', 'ticker': 'MSFT', 'buzz_score': '6', 'health': '52 Hold',   'social_hype': '★★★★★ Reddit Top 10', 'smart_money': '★★★★★ Whales >20%',   'squeeze': ''},
-            {'rank': '11', 'ticker': 'IBRX', 'buzz_score': '6', 'health': '32 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (40%)'},
-            {'rank': '12', 'ticker': 'RXT',  'buzz_score': '6', 'health': '15 Weak',   'social_hype': '★★★★★ Weekly Choice', 'smart_money': '',                     'squeeze': '★★★★★ Potential (38%)'},
-            {'rank': '13', 'ticker': 'RDDT', 'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Weekly Choice', 'smart_money': '★★★★★ Whales >50%',   'squeeze': ''},
-            {'rank': '14', 'ticker': 'PROP', 'buzz_score': '6', 'health': '22 Weak',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★ Potential (23%)'},
-            {'rank': '15', 'ticker': 'WEN',  'buzz_score': '6', 'health': '48 Hold',   'social_hype': '',                      'smart_money': '',                     'squeeze': '★★★★★ Potential (58%)'},
-            {'rank': '16', 'ticker': 'TSLA', 'buzz_score': '6', 'health': '65 Hold',   'social_hype': '★★★★ Reddit Top 10',  'smart_money': '★★★★ Whales >30%',    'squeeze': ''},
-            {'rank': '17', 'ticker': 'AMZN', 'buzz_score': '5', 'health': '40 Hold',   'social_hype': '★★★★ Reddit Top 10',  'smart_money': '★★★★★ Whales >20%',   'squeeze': ''},
-            {'rank': '18', 'ticker': 'GME',  'buzz_score': '5', 'health': '18 Weak',   'social_hype': '★★★ Weekly Choice',   'smart_money': '',                     'squeeze': '★★★★ Potential (35%)'},
-            {'rank': '19', 'ticker': 'AMC',  'buzz_score': '5', 'health': '12 Weak',   'social_hype': '★★★ Reddit Top 10',   'smart_money': '',                     'squeeze': '★★★★ Potential (42%)'},
-            {'rank': '20', 'ticker': 'PLTR', 'buzz_score': '5', 'health': '72 Strong', 'social_hype': '★★★★ Weekly Choice',  'smart_money': '★★★★ Whales >20%',    'squeeze': ''},
+            # Datos reales observados en BuzzTickr Master Buzz
+            {'rank': '1',  'ticker': 'LCID',  'buzz_score': '7', 'health': '25 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★★ Potential (43.81%) · DTC:5.20'},
+            {'rank': '2',  'ticker': 'RCKT',  'buzz_score': '7', 'health': '25 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★★ Potential (25.94%) · DTC:6.83'},
+            {'rank': '3',  'ticker': 'LUCK',  'buzz_score': '7', 'health': '15 Weak',   'social_hype': '★ -',                              'smart_money': '★★★ Whales >50% · Insider Buy',       'squeeze': '★★★★ Potential (32.98%) · DTC:8.76'},
+            {'rank': '4',  'ticker': 'CAR',   'buzz_score': '7', 'health': '20 Weak',   'social_hype': '★★★★★ -',                          'smart_money': '★★★ Whales >50% · Insider Buy',       'squeeze': '★★★★ Potential (45.04%) · DTC:14.80'},
+            {'rank': '5',  'ticker': 'MSFT',  'buzz_score': '6', 'health': '62 Hold',   'social_hype': '★★★★ Reddit Top 10 · Weekly Top 10','smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★★★ -'},
+            {'rank': '6',  'ticker': 'NVDA',  'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★ Reddit Top 10 · Weekly Top 10','smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★★★ -'},
+            {'rank': '7',  'ticker': 'AMZN',  'buzz_score': '6', 'health': '40 Hold',   'social_hype': '★★★★ Reddit Top 10 · Weekly Top 10','smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★★★ -'},
+            {'rank': '8',  'ticker': 'DNUT',  'buzz_score': '6', 'health': '15 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★ Potential (23.78%) · DTC:9.27'},
+            {'rank': '9',  'ticker': 'SAIL',  'buzz_score': '6', 'health': '38 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★ Potential (22.75%) · DTC:5.98'},
+            {'rank': '10', 'ticker': 'CCOI',  'buzz_score': '6', 'health': '28 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★ Potential (18.35%) · DTC:7.34'},
+            {'rank': '11', 'ticker': 'CBRL',  'buzz_score': '6', 'health': '20 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★ Potential (40.74%)'},
+            {'rank': '12', 'ticker': 'SGN',   'buzz_score': '7', 'health': '28 Weak',   'social_hype': '★★★★★ Reddit Top 10',              'smart_money': '',                                    'squeeze': '★★★★★ Potential (70%)'},
+            {'rank': '13', 'ticker': 'RUN',   'buzz_score': '7', 'health': '28 Weak',   'social_hype': '',                                 'smart_money': '',                                    'squeeze': '★★★★★ Potential (30%)'},
+            {'rank': '14', 'ticker': 'ANAB',  'buzz_score': '7', 'health': '35 Weak',   'social_hype': '',                                 'smart_money': '',                                    'squeeze': '★★★★★ Potential (38%)'},
+            {'rank': '15', 'ticker': 'HTZ',   'buzz_score': '7', 'health': '15 Weak',   'social_hype': '',                                 'smart_money': '',                                    'squeeze': '★★★★★ Potential (46%)'},
+            {'rank': '16', 'ticker': 'RDDT',  'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Weekly Choice',              'smart_money': '★★★★★ Whales >50%',                   'squeeze': ''},
+            {'rank': '17', 'ticker': 'TSLA',  'buzz_score': '6', 'health': '65 Hold',   'social_hype': '★★★★ Reddit Top 10',               'smart_money': '★★★★ Whales >30%',                    'squeeze': ''},
+            {'rank': '18', 'ticker': 'GME',   'buzz_score': '5', 'health': '18 Weak',   'social_hype': '★★★ Weekly Choice',                'smart_money': '',                                    'squeeze': '★★★★ Potential (35%)'},
+            {'rank': '19', 'ticker': 'AMC',   'buzz_score': '5', 'health': '12 Weak',   'social_hype': '★★★ Reddit Top 10',                'smart_money': '',                                    'squeeze': '★★★★ Potential (42%)'},
+            {'rank': '20', 'ticker': 'PLTR',  'buzz_score': '5', 'health': '72 Strong', 'social_hype': '★★★★ Weekly Choice',               'smart_money': '★★★★ Whales >20%',                    'squeeze': ''},
         ],
         'source': 'BuzzTickr Master',
-        'timestamp': datetime.now().strftime('%H:%M:%S'),
+        'timestamp': get_timestamp(),
         'count': 20
     }
 
@@ -915,7 +918,7 @@ def get_vix_term_structure():
 
         # Intentar obtener futuros VIX reales (VX1-VX8 en CBOE via yfinance)
         # Los futuros VIX tienen símbolos como VXH25, VXJ25, etc. en yfinance
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
         month_codes = ['F','G','H','J','K','M','N','Q','U','V','X','Z']
         month_names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
         
@@ -1070,7 +1073,7 @@ def generate_vix_chart_html(vix_data):
         x = padding + (i / (len(months) - 1)) * (chart_width - 2 * padding)
         x_labels += f'<text x="{x}" y="{chart_height-8}" text-anchor="middle" fill="#666" font-size="8">{month}</text>'
 
-    today_str = datetime.now().strftime('%d/%m')
+    today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%d/%m')
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%d/%m')
     two_days_str = (datetime.now() - timedelta(days=2)).strftime('%d/%m')
     legend_y = 15
@@ -1144,7 +1147,7 @@ def get_earnings_calendar():
     Si hoy es fin de semana (sáb/dom), el filtro mínimo es mañana (days>=1).
     Si hoy es día laborable, mostramos hoy (days>=0) solo si aún no pasó.
     """
-    now = datetime.now()
+    now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
     today = now.date()
     is_weekend = today.weekday() >= 5  # sábado=5, domingo=6
     min_days = 1 if is_weekend else 0
@@ -1403,7 +1406,7 @@ def get_insider_trading():
             # API pública de búsqueda EDGAR - Form 4 = transacciones de insiders
             sec_url = "https://efts.sec.gov/LATEST/search-index?q=%22form+4%22&dateRange=custom&startdt={}&enddt={}&forms=4".format(
                 (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'),
-                datetime.now().strftime('%Y-%m-%d')
+                datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
             )
             r = session.get(sec_url, timeout=12, headers={'User-Agent': 'MarketDashboard/1.0 contact@example.com'})
             if r.status_code == 200:
@@ -1781,7 +1784,7 @@ def get_economic_indicators():
                 'unit': '%',
                 'change': change,
                 'pct': pct,
-                'date': datetime.now().strftime('%b %d, %Y'),
+                'date': datetime.now(timezone(timedelta(hours=1))).strftime('%b %d, %Y'),
                 'up': change >= 0
             })
     except:
@@ -2181,10 +2184,24 @@ def render():
     </style>
     """, unsafe_allow_html=True)
 
-    # Ticker
+    # Ticker - lo primero que se ve, en la parte superior del site
     ticker_html = generate_ticker_html()
     components.html(ticker_html, height=50, scrolling=False)
-    st.markdown('<h1 style="margin-top:15px; text-align:center; margin-bottom:15px; font-size: 1.5rem; font-family:\'VT323\',\'Share Tech Mono\',\'Courier New\',monospace; letter-spacing:3px;">Market Dashboard</h1>', unsafe_allow_html=True)
+    
+    # Título principal con halo verde cyan estilo "2026 ROADMAP"
+    st.markdown('''
+    <div style="text-align:center; padding:18px 0 10px 0; background:#0c0e12;">
+        <span style="
+            font-family: \'VT323\', \'Share Tech Mono\', \'Courier New\', monospace;
+            font-size: 2.8rem;
+            font-weight: normal;
+            color: #00ffad;
+            text-shadow: 0 0 20px #00ffad, 0 0 40px #00ffad88, 0 0 80px #00ffad44;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+        ">Market Dashboard</span>
+    </div>
+    ''', unsafe_allow_html=True)
 
     # ── API HEALTH BAR ─────────────────────────────────────────────────────────
     apis = [
@@ -2203,38 +2220,73 @@ def render():
     health_html += '</div>'
     st.markdown(health_html, unsafe_allow_html=True)
 
-    # ── REFRESH BUTTON (arriba izquierda, en verde cyan) ──────────────────────
-    # Inyectar CSS global para el botón antes de renderizar la columna
-    st.markdown(
-        '''<style>
-        /* BOTÓN ACTUALIZAR - Verde Cyan - Se aplica al primer stButton de la página */
-        div[data-testid="column"]:first-child [data-testid="stButton"] > button,
-        div[data-testid="column"]:first-of-type [data-testid="stButton"] button {
-            background: #00ffad !important;
-            border: 1px solid #00ffad !important;
-            color: #050708 !important;
-            font-size: 12px !important;
-            font-weight: 800 !important;
-            padding: 5px 18px !important;
-            border-radius: 7px !important;
-            height: auto !important;
-            min-height: 0 !important;
-            box-shadow: 0 0 14px #00ffad55 !important;
-            font-family: 'VT323', 'Share Tech Mono', monospace !important;
-            letter-spacing: 1.5px !important;
-        }
-        div[data-testid="column"]:first-child [data-testid="stButton"] > button:hover {
-            background: #00e89a !important;
-            box-shadow: 0 0 22px #00ffad88 !important;
-        }
-        </style>''',
-        unsafe_allow_html=True
-    )
+    # ── REFRESH BUTTON con estilo cyan via JS DOM injection ───────────────────
     col_r1, col_r2, col_r3 = st.columns([1, 3, 1])
     with col_r1:
         if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
             st.cache_data.clear()
             st.rerun()
+    
+    # JS que recorre todos los botones del iframe padre y aplica estilo cyan al botón Actualizar
+    # y estilo pequeño+cyan a los botones de temporalidad del sector
+    components.html("""
+    <script>
+    (function applyStyles() {
+        try {
+            var doc = window.parent.document;
+            // --- Botón Actualizar ---
+            var allBtns = doc.querySelectorAll('button[data-testid="baseButton-secondary"]');
+            for (var i = 0; i < allBtns.length; i++) {
+                var btn = allBtns[i];
+                if (btn.innerText && btn.innerText.trim().includes('Actualizar')) {
+                    btn.style.cssText = [
+                        'background: #00ffad !important',
+                        'border: 1px solid #00ffad !important',
+                        'color: #050708 !important',
+                        'font-family: VT323, Share Tech Mono, Courier New, monospace !important',
+                        'font-size: 15px !important',
+                        'font-weight: 800 !important',
+                        'letter-spacing: 2px !important',
+                        'padding: 4px 18px !important',
+                        'border-radius: 6px !important',
+                        'box-shadow: 0 0 16px #00ffad66 !important',
+                        'cursor: pointer !important'
+                    ].join('; ');
+                }
+            }
+            // --- Botones sector (1D, 3D, 1W, 1M) ---
+            var labels = ['1D','3D','1W','1M'];
+            var allBtns2 = doc.querySelectorAll('button[data-testid="baseButton-primary"], button[data-testid="baseButton-secondary"]');
+            for (var j = 0; j < allBtns2.length; j++) {
+                var b = allBtns2[j];
+                var txt = b.innerText ? b.innerText.trim() : '';
+                if (labels.indexOf(txt) !== -1) {
+                    var isActive = b.getAttribute('data-testid') === 'baseButton-primary';
+                    b.style.cssText = [
+                        'background: ' + (isActive ? '#00ffad22' : 'transparent') + ' !important',
+                        'border: 1px solid ' + (isActive ? '#00ffad' : '#1a3a2a') + ' !important',
+                        'color: ' + (isActive ? '#00ffad' : '#2a5040') + ' !important',
+                        'font-family: VT323, Share Tech Mono, Courier New, monospace !important',
+                        'font-size: 11px !important',
+                        'font-weight: ' + (isActive ? '900' : '400') + ' !important',
+                        'letter-spacing: 1.5px !important',
+                        'padding: 0px 8px !important',
+                        'height: 20px !important',
+                        'min-height: 0 !important',
+                        'border-radius: 3px !important',
+                        'box-shadow: ' + (isActive ? '0 0 6px #00ffad33' : 'none') + ' !important',
+                        'cursor: pointer !important'
+                    ].join('; ');
+                }
+            }
+        } catch(e) {}
+        // Re-aplicar tras cada posible re-render de Streamlit
+        setTimeout(applyStyles, 300);
+        setTimeout(applyStyles, 800);
+        setTimeout(applyStyles, 2000);
+    })();
+    </script>
+    """, height=0, scrolling=False)
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -2691,25 +2743,6 @@ def render():
             st.rerun()
 
         st.markdown(f'''
-        <style>
-        /* Sector timeframe buttons - small cyan */
-        div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"] {{
-            background:transparent!important; border:1px solid #1e3a2f!important;
-            color:#555!important; font-size:8px!important; padding:1px 6px!important;
-            border-radius:4px!important; height:22px!important; min-height:0!important;
-            font-weight:500!important; letter-spacing:0.5px!important;
-        }}
-        div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"]:hover {{
-            border-color:#00ffad66!important; color:#00ffad!important;
-        }}
-        div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
-            background:#00ffad18!important; border:1px solid #00ffad!important;
-            color:#00ffad!important; font-size:8px!important; padding:1px 6px!important;
-            border-radius:4px!important; height:22px!important; min-height:0!important;
-            font-weight:700!important; letter-spacing:0.5px!important;
-            box-shadow:0 0 8px #00ffad22!important;
-        }}
-        </style>
         <div class="module-container" style="margin-top:4px;">
             <div class="module-header" style="justify-content:space-between;">
                 <div class="module-title">Rotación Sectorial</div>
@@ -3821,7 +3854,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

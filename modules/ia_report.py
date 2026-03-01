@@ -16,7 +16,7 @@ PROMPT_RSU = """Por favor, analiza {t} para mí y proporciona lo siguiente, de f
 
 ---
 
-## 1. Explica a qué se dedica la empresa como si tuviera 12 años
+## 1. Explica a qué se dedica la empresa con lenguaje sencillo.
 
 * Tres puntos breves sobre lo que hace.
 * Incluye ejemplos o analogías sencillas con las que pueda identificarme.
@@ -1398,6 +1398,7 @@ def render():
 # ────────────────────────────────────────────────
 if __name__ == "__main__":
     render()
+
 
 
 

@@ -187,14 +187,14 @@ st.markdown("""
         border: 1px solid rgba(242, 54, 69, 0.3);
     }
     
-    /* MENÚ ESTÉTICO - Botones con tipografía pixelada VT323 */
-    .stRadio > div {
+    /* MENÚ ESTÉTICO - Selectores más específicos para Streamlit */
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
         gap: 4px;
     }
     
-    .stRadio > div > label {
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label {
         background: linear-gradient(135deg, #11141a 0%, #0c0e12 100%);
         border: 1px solid #1a1e26;
         border-radius: 6px;
@@ -207,43 +207,45 @@ st.markdown("""
         min-height: auto !important;
     }
     
-    .stRadio > div > label:hover {
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {
         border-color: #2a3f5f;
         background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%);
         transform: translateX(2px);
     }
     
-    .stRadio > div > label[data-baseweb="radio"] > div:first-child {
-        display: none;
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
     }
     
-    .stRadio > div > label > div {
-        color: #888;
-        font-size: 1.1rem !important;
+    /* Selector específico para el texto del menú - TIPOGRAFÍA VT323 */
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label p,
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label span,
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label div[data-testid="stMarkdownContainer"] p {
+        color: #888 !important;
+        font-size: 1.3rem !important;
         font-weight: 400 !important;
         font-family: 'VT323', monospace !important;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
         line-height: 1.2 !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        margin: 0 !important;
     }
     
-    /* Estado seleccionado */
-    .stRadio > div > label[aria-checked="true"] {
+    /* Estado seleccionado - texto en verde */
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] {
         background: linear-gradient(135deg, #1a3a2f 0%, #0f2a1f 100%);
         border-color: #00ffad;
         box-shadow: 0 0 10px rgba(0, 255, 173, 0.1);
     }
     
-    .stRadio > div > label[aria-checked="true"] > div {
-        color: #00ffad;
-        font-weight: 400 !important;
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] p,
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] span,
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] div[data-testid="stMarkdownContainer"] p {
+        color: #00ffad !important;
         font-family: 'VT323', monospace !important;
     }
     
-    .stRadio > div > label[aria-checked="true"]::before {
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"]::before {
         content: '';
         position: absolute;
         left: 0;

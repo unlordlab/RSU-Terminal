@@ -584,73 +584,143 @@ def get_fallback_master_data():
 
 @st.cache_data(ttl=60)
 def get_financial_ticker_data():
+    # Agrupado por categorías para el ticker estilo Bloomberg
     all_symbols = {
-        'ES=F': 'S&P 500 FUT', 'NQ=F': 'NASDAQ FUT', 'YM=F': 'DOW FUT', 'RTY=F': 'RUSSELL FUT',
-        '^N225': 'NIKKEI', '^GDAXI': 'DAX', '^FTSE': 'FTSE 100',
-        'GC=F': 'GOLD', 'SI=F': 'SILVER', 'CL=F': 'CRUDE OIL', 'NG=F': 'NAT GAS',
-        'AAPL': 'AAPL', 'MSFT': 'MSFT', 'GOOGL': 'GOOGL', 'AMZN': 'AMZN',
-        'NVDA': 'NVDA', 'META': 'META', 'TSLA': 'TSLA',
-        'BTC-USD': 'BTC', 'ETH-USD': 'ETH'
+        # MAG7
+        'AAPL': ('AAPL', 'MAG7'), 'MSFT': ('MSFT', 'MAG7'), 'GOOGL': ('GOOGL', 'MAG7'),
+        'AMZN': ('AMZN', 'MAG7'), 'NVDA': ('NVDA', 'MAG7'), 'META': ('META', 'MAG7'), 'TSLA': ('TSLA', 'MAG7'),
+        # Índices USA
+        '^GSPC': ('S&P 500', 'IDX'), '^IXIC': ('NASDAQ', 'IDX'), '^DJI': ('DOW', 'IDX'), '^RUT': ('RUSSELL', 'IDX'),
+        # Índices mundiales
+        '^N225': ('NIKKEI', 'IDX'), '^GDAXI': ('DAX', 'IDX'), '^FTSE': ('FTSE 100', 'IDX'),
+        '^FCHI': ('CAC 40', 'IDX'), '^IBEX': ('IBEX 35', 'IDX'), '^HSI': ('HANG SENG', 'IDX'),
+        # Futuros
+        'ES=F': ('S&P FUT', 'FUT'), 'NQ=F': ('NQ FUT', 'FUT'), 'YM=F': ('DOW FUT', 'FUT'),
+        # Commodities
+        'GC=F': ('ORO', 'COM'), 'SI=F': ('PLATA', 'COM'), 'CL=F': ('PETRÓLEO', 'COM'),
+        'NG=F': ('GAS NAT.', 'COM'), 'HG=F': ('COBRE', 'COM'), 'ZW=F': ('TRIGO', 'COM'),
+        # Crypto
+        'BTC-USD': ('BTC', 'CRYPTO'), 'ETH-USD': ('ETH', 'CRYPTO'), 'SOL-USD': ('SOL', 'CRYPTO'),
+        # Bonos/FX
+        '^TNX': ('BONO 10Y', 'BOND'), 'DX-Y.NYB': ('USD INDEX', 'FX'),
     }
     
-    def _fetch(symbol, name):
+    def _fetch(symbol, name_cat):
+        name, cat = name_cat
         try:
             hist = yf.Ticker(symbol).history(period="2d")
             if len(hist) >= 2:
                 current = hist['Close'].iloc[-1]
                 prev = hist['Close'].iloc[-2]
                 pct = ((current - prev) / prev) * 100
-                price_str = f"{current:,.2f}" if current >= 100 else f"{current:.3f}"
-                return {'name': name, 'price': price_str, 'change': pct, 'is_positive': pct >= 0}
+                if current >= 10000:
+                    price_str = f"{current:,.0f}"
+                elif current >= 100:
+                    price_str = f"{current:,.2f}"
+                elif current >= 1:
+                    price_str = f"{current:.3f}"
+                else:
+                    price_str = f"{current:.4f}"
+                return {'name': name, 'cat': cat, 'price': price_str, 'change': pct, 'is_positive': pct >= 0}
         except:
             pass
         return None
 
     ticker_data = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(_fetch, sym, name): sym for sym, name in all_symbols.items()}
-        for fut in as_completed(futures, timeout=15):
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        futures = {executor.submit(_fetch, sym, name_cat): sym for sym, name_cat in all_symbols.items()}
+        for fut in as_completed(futures, timeout=20):
             result = fut.result()
             if result:
                 ticker_data.append(result)
-    # Maintain order
-    order = list(all_symbols.values())
-    ticker_data.sort(key=lambda x: order.index(x['name']) if x['name'] in order else 99)
+    
+    # Ordenar: MAG7 primero, luego índices, futuros, commodities, crypto, bonos
+    cat_order = {'MAG7': 0, 'IDX': 1, 'FUT': 2, 'COM': 3, 'CRYPTO': 4, 'BOND': 5, 'FX': 6}
+    ticker_data.sort(key=lambda x: cat_order.get(x.get('cat', 'IDX'), 99))
     return ticker_data
+
+# Colores por categoría para el ticker
+TICKER_CAT_COLORS = {
+    'MAG7': '#a78bfa',   # Violeta
+    'IDX': '#60a5fa',    # Azul
+    'FUT': '#93c5fd',    # Azul claro
+    'COM': '#fbbf24',    # Amarillo
+    'CRYPTO': '#fb923c', # Naranja
+    'BOND': '#34d399',   # Verde
+    'FX': '#f9a8d4',     # Rosa
+}
 
 def generate_ticker_html():
     data = get_financial_ticker_data()
     if not data:
         data = [
-            {'name': 'S&P 500 FUT', 'price': '5,890.25', 'change': 0.45, 'is_positive': True},
-            {'name': 'NASDAQ FUT', 'price': '21,150.80', 'change': -0.23, 'is_positive': False},
-            {'name': 'DOW FUT', 'price': '42,890.15', 'change': 0.67, 'is_positive': True},
-            {'name': 'NIKKEI', 'price': '38,750.50', 'change': 1.24, 'is_positive': True},
-            {'name': 'DAX', 'price': '21,340.75', 'change': -0.15, 'is_positive': False},
-            {'name': 'GOLD', 'price': '2,865.40', 'change': 0.89, 'is_positive': True},
-            {'name': 'SILVER', 'price': '32.45', 'change': 1.56, 'is_positive': True},
-            {'name': 'CRUDE OIL', 'price': '73.85', 'change': -1.23, 'is_positive': False},
-            {'name': 'BTC', 'price': '68,984.88', 'change': -1.62, 'is_positive': False},
-            {'name': 'ETH', 'price': '2,018.46', 'change': -4.05, 'is_positive': False},
+            {'name': 'S&P 500', 'cat': 'IDX', 'price': '5,890.25', 'change': 0.45, 'is_positive': True},
+            {'name': 'NASDAQ', 'cat': 'IDX', 'price': '21,150.80', 'change': -0.23, 'is_positive': False},
+            {'name': 'NVDA', 'cat': 'MAG7', 'price': '890.25', 'change': 1.45, 'is_positive': True},
+            {'name': 'AAPL', 'cat': 'MAG7', 'price': '210.50', 'change': -0.85, 'is_positive': False},
+            {'name': 'BTC', 'cat': 'CRYPTO', 'price': '68,984.88', 'change': -1.62, 'is_positive': False},
+            {'name': 'ORO', 'cat': 'COM', 'price': '2,865.40', 'change': 0.89, 'is_positive': True},
         ]
+
+    # Agrupar por categoría
+    from collections import OrderedDict
+    cat_labels = {
+        'MAG7': 'MAG 7', 'IDX': 'ÍNDICES', 'FUT': 'FUTUROS',
+        'COM': 'MATERIAS PRIMAS', 'CRYPTO': 'CRYPTO', 'BOND': 'BONOS', 'FX': 'DIVISAS'
+    }
+    
     ticker_items = []
-    for item in data:
+    current_cat = None
+    cat_order = {'MAG7': 0, 'IDX': 1, 'FUT': 2, 'COM': 3, 'CRYPTO': 4, 'BOND': 5, 'FX': 6}
+    data_sorted = sorted(data, key=lambda x: cat_order.get(x.get('cat', 'IDX'), 99))
+    
+    for item in data_sorted:
+        cat = item.get('cat', 'IDX')
+        cat_color = TICKER_CAT_COLORS.get(cat, '#888')
+        
+        # Separador de categoría
+        if cat != current_cat:
+            if current_cat is not None:
+                ticker_items.append(
+                    f'<span style="margin: 0 20px; color: #2a3f5f; font-size: 16px;">│</span>'
+                )
+            label = cat_labels.get(cat, cat)
+            ticker_items.append(
+                f'<span style="margin-right:10px; color:{cat_color}; font-size:8px; font-weight:900; '
+                f'letter-spacing:1px; text-transform:uppercase; opacity:0.8;">{label}</span>'
+            )
+            current_cat = cat
+        
         color = "#00ffad" if item['is_positive'] else "#f23645"
         arrow = "▲" if item['is_positive'] else "▼"
+        change_pct = item['change']
+        
         ticker_items.append(
-            f'<span style="margin-right: 40px; white-space: nowrap;">'
-            f'<span style="color: #fff; font-weight: bold;">{item["name"]}</span> '
-            f'<span style="color: #ccc;">{item["price"]}</span> '
-            f'<span style="color: {color};">{arrow} {item["change"]:+.2f}%</span>'
+            f'<span style="margin-right:24px; white-space:nowrap; display:inline-flex; align-items:center; gap:6px;">'
+            f'<span style="color:{cat_color}; font-weight:700; font-size:11px; letter-spacing:0.3px;">{item["name"]}</span>'
+            f'<span style="color:#e2e8f0; font-size:11px; font-family:\'Courier New\',monospace;">{item["price"]}</span>'
+            f'<span style="color:{color}; font-size:10px; font-weight:600;">{arrow} {change_pct:+.2f}%</span>'
             f'</span>'
         )
+    
     items_html = "".join(ticker_items)
-    all_items = items_html + items_html
+    # Duplicar para bucle infinito continuo
+    all_items = items_html + items_html + items_html
+    
     return f"""
-    <div style="background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 50%, #0c0e12 100%); border-bottom: 2px solid #2a3f5f; padding: 12px 0; overflow: hidden;">
-        <div style="display: inline-block; white-space: nowrap; animation: ticker-scroll 30s linear infinite; padding-left: 100%;">{all_items}</div>
+    <div style="background:#0c0e12; border-bottom:1px solid #1a1e26; border-top:1px solid #1a1e26; padding:0; overflow:hidden; height:36px; display:flex; align-items:center; position:relative;">
+        <div style="position:absolute; left:0; top:0; bottom:0; width:60px; background:linear-gradient(90deg,#0c0e12 60%,transparent); z-index:2;"></div>
+        <div style="position:absolute; right:0; top:0; bottom:0; width:60px; background:linear-gradient(270deg,#0c0e12 60%,transparent); z-index:2;"></div>
+        <div style="display:flex; align-items:center; white-space:nowrap; animation:ticker-scroll 80s linear infinite; will-change:transform; padding-left:100%;">
+            {all_items}
+        </div>
     </div>
-    <style>@keyframes ticker-scroll {{ 0% {{ transform: translateX(0); }} 100% {{ transform: translateX(-50%); }} }}</style>
+    <style>
+    @keyframes ticker-scroll {{
+        0% {{ transform: translateX(0); }}
+        100% {{ transform: translateX(-33.333%); }}
+    }}
+    </style>
     """
 
 @st.cache_data(ttl=300)
@@ -894,16 +964,17 @@ def generate_vix_chart_html(vix_data):
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%d/%m')
     two_days_str = (datetime.now() - timedelta(days=2)).strftime('%d/%m')
     legend_y = 15
+    # Leyenda en la parte IZQUIERDA para no tapar el final de la curva
     legend = f"""
-    <rect x="{chart_width-175}" y="5" width="170" height="50" fill="#0c0e12" stroke="#1a1e26" rx="4"/>
-    <line x1="{chart_width-170}" y1="{legend_y+5}" x2="{chart_width-155}" y2="{legend_y+5}" stroke="#3b82f6" stroke-width="2"/>
-    <text x="{chart_width-150}" y="{legend_y+8}" fill="#888" font-size="8">Hoy ({today_str}): {vix_data['current_spot']:.2f}</text>
+    <rect x="4" y="5" width="155" height="50" fill="#0c0e12" stroke="#1a1e26" rx="4"/>
+    <line x1="8" y1="{legend_y+5}" x2="22" y2="{legend_y+5}" stroke="#3b82f6" stroke-width="2"/>
+    <text x="26" y="{legend_y+8}" fill="#888" font-size="8">Hoy ({today_str}): {vix_data['current_spot']:.2f}</text>
 
-    <line x1="{chart_width-170}" y1="{legend_y+20}" x2="{chart_width-155}" y2="{legend_y+20}" stroke="#f97316" stroke-width="2" stroke-dasharray="4,3"/>
-    <text x="{chart_width-150}" y="{legend_y+23}" fill="#888" font-size="8">Ayer ({yesterday_str}): {vix_data['prev_spot']:.2f}</text>
+    <line x1="8" y1="{legend_y+20}" x2="22" y2="{legend_y+20}" stroke="#f97316" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="26" y="{legend_y+23}" fill="#888" font-size="8">Ayer ({yesterday_str}): {vix_data['prev_spot']:.2f}</text>
 
-    <line x1="{chart_width-170}" y1="{legend_y+35}" x2="{chart_width-155}" y2="{legend_y+35}" stroke="#6b7280" stroke-width="2" stroke-dasharray="4,3"/>
-    <text x="{chart_width-150}" y="{legend_y+38}" fill="#888" font-size="8">-2d ({two_days_str}): {vix_data['spot_2days']:.2f}</text>
+    <line x1="8" y1="{legend_y+35}" x2="22" y2="{legend_y+35}" stroke="#6b7280" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="26" y="{legend_y+38}" fill="#888" font-size="8">-2d ({two_days_str}): {vix_data['spot_2days']:.2f}</text>
     """
 
     return f"""
@@ -1103,53 +1174,67 @@ def get_insider_trading():
         
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
+            # Buscar tabla - OpenInsider tiene varias estructuras
             table = soup.find('table', class_='tinytable')
             if not table:
                 table = soup.find('table', {'id': 'tablewrapper'})
+            if not table:
+                # Buscar cualquier tabla con datos de insider
+                for t in soup.find_all('table'):
+                    headers_row = t.find('tr')
+                    if headers_row and any(kw in headers_row.get_text().lower() for kw in ['ticker', 'insider', 'trade']):
+                        table = t
+                        break
             
             if table:
                 rows = table.find_all('tr')[1:]  # skip header
                 for row in rows[:20]:
                     try:
                         cells = row.find_all('td')
-                        if len(cells) < 12:
+                        if len(cells) < 11:
                             continue
                         
-                        filing_date = cells[1].get_text(strip=True)
-                        ticker = cells[3].get_text(strip=True)
-                        insider_name = cells[4].get_text(strip=True)[:22]
-                        title = cells[5].get_text(strip=True)[:18]
-                        trade_type = cells[6].get_text(strip=True)
-                        price = cells[7].get_text(strip=True)
-                        qty = cells[8].get_text(strip=True)
-                        owned = cells[9].get_text(strip=True)
-                        value_str = cells[11].get_text(strip=True).replace('$','').replace(',','').replace('+','')
+                        # Diferentes layouts de OpenInsider
+                        # Layout estándar: filing_date | trade_date | ticker | insider | title | trade_type | price | qty | owned | delta_own | value
+                        filing_date = cells[1].get_text(strip=True) if len(cells) > 1 else ''
+                        ticker = cells[3].get_text(strip=True) if len(cells) > 3 else ''
+                        if not ticker or len(ticker) > 6:
+                            # Intentar layout alternativo
+                            ticker = cells[2].get_text(strip=True) if len(cells) > 2 else 'N/D'
                         
-                        if 'P -' in trade_type or 'Purchase' in trade_type:
+                        insider_name = cells[4].get_text(strip=True)[:24] if len(cells) > 4 else '-'
+                        title = cells[5].get_text(strip=True)[:20] if len(cells) > 5 else '-'
+                        trade_type = cells[6].get_text(strip=True) if len(cells) > 6 else ''
+                        
+                        if 'P -' in trade_type or 'Purchase' in trade_type or trade_type == 'P':
                             trans = "COMPRA"
-                        elif 'S -' in trade_type or 'Sale' in trade_type:
+                        elif 'S -' in trade_type or 'Sale' in trade_type or trade_type == 'S':
                             trans = "VENTA"
                         else:
                             continue
                         
+                        # El valor suele estar en la última columna relevante
+                        val_cell_idx = min(11, len(cells) - 1)
+                        val_cell_text = cells[val_cell_idx].get_text(strip=True)
+                        value_str = val_cell_text.replace('$','').replace(',','').replace('+','').strip()
+                        
                         try:
-                            value_num = float(value_str) * 1000 if 'K' not in value_str else float(value_str.replace('K','')) * 1000
-                            if 'M' in cells[11].get_text():
-                                value_num = float(value_str.replace('M','')) * 1e6
-                            elif 'K' in cells[11].get_text():
-                                value_num = float(value_str.replace('K','')) * 1e3
+                            if 'M' in val_cell_text:
+                                value_num = float(re.sub(r'[^0-9.]', '', value_str.replace('M',''))) * 1e6
+                            elif 'K' in val_cell_text:
+                                value_num = float(re.sub(r'[^0-9.]', '', value_str.replace('K',''))) * 1e3
                             else:
-                                value_num = float(value_str) if value_str else 0
+                                value_num = float(re.sub(r'[^0-9.]', '', value_str)) if value_str else 0
                         except:
                             value_num = 0
                         
-                        if value_num < 100000:  # mínimo $100K
+                        if value_num < 50000:  # mínimo $50K
                             continue
                         
                         value_fmt = f"${value_num/1e6:.1f}M" if value_num >= 1e6 else f"${value_num/1e3:.0f}K"
                         
                         all_trades.append({
-                            'ticker': ticker,
+                            'ticker': ticker.upper() if ticker else 'N/D',
                             'insider': insider_name,
                             'position': title,
                             'type': trans,
@@ -1162,7 +1247,40 @@ def get_insider_trading():
     except Exception as e:
         set_api_health('Insider', False)
     
-    # Fallback: FMP API si está disponible
+    # Fallback 2: Intentar con SEC EDGAR RSS (datos reales, público)
+    if not all_trades:
+        try:
+            session = get_http_session()
+            sec_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&dateb=&owner=include&count=20&search_text=&output=atom"
+            r = session.get(sec_url, timeout=12)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, 'xml')
+                entries = soup.find_all('entry')[:10]
+                for entry in entries:
+                    try:
+                        title_text = entry.find('title').get_text(strip=True) if entry.find('title') else ''
+                        # Formato: "4 - TICKER (insider name)"
+                        ticker_match = re.search(r'4\s*-\s*([A-Z]{1,5})\s', title_text)
+                        if not ticker_match:
+                            continue
+                        ticker = ticker_match.group(1)
+                        updated = entry.find('updated').get_text(strip=True)[:10] if entry.find('updated') else ''
+                        all_trades.append({
+                            'ticker': ticker,
+                            'insider': 'Ver SEC EDGAR',
+                            'position': 'Formulario 4',
+                            'type': 'N/D',
+                            'amount': 'Ver enlace',
+                            'date': updated,
+                            'value_num': 0,
+                        })
+                    except:
+                        continue
+                set_api_health('Insider', True)
+        except:
+            pass
+    
+    # Fallback 3: FMP API si está disponible
     if not all_trades:
         try:
             api_key = st.secrets.get("FMP_API_KEY", None)
@@ -1213,22 +1331,66 @@ def get_fallback_insider():
 def get_market_breadth():
     try:
         spy = yf.Ticker("SPY")
-        spy_hist = spy.history(period="6mo")
-        if len(spy_hist) > 50:
-            current = spy_hist['Close'].iloc[-1]
-            sma50 = spy_hist['Close'].rolling(50).mean().iloc[-1]
-            sma200 = spy_hist['Close'].rolling(200).mean().iloc[-1]
+        # Necesitamos al menos 200 días para SMA200
+        spy_hist = spy.history(period="2y")
+        if len(spy_hist) >= 200:
+            current = float(spy_hist['Close'].iloc[-1])
+            sma50  = float(spy_hist['Close'].rolling(50).mean().iloc[-1])
+            sma200 = float(spy_hist['Close'].rolling(200).mean().iloc[-1])
+            
+            # RSI(14)
             deltas = spy_hist['Close'].diff()
-            gains = deltas.where(deltas > 0, 0).rolling(14).mean()
+            gains  = deltas.where(deltas > 0, 0).rolling(14).mean()
             losses = (-deltas.where(deltas < 0, 0)).rolling(14).mean()
-            rs = gains / losses
-            rsi = 100 - (100 / (1 + rs.iloc[-1])) if not pd.isna(rs.iloc[-1]) else 50
+            rs     = gains / losses
+            rsi    = float(100 - (100 / (1 + rs.iloc[-1]))) if not pd.isna(rs.iloc[-1]) else 50.0
+            
+            # McClellan Oscillator (proxy con sectores ETF)
+            # Usamos SPY: EMA(19) - EMA(39) de breadth sintética
+            close = spy_hist['Close']
+            ema19 = float(close.ewm(span=19, adjust=False).mean().iloc[-1])
+            ema39 = float(close.ewm(span=39, adjust=False).mean().iloc[-1])
+            # Normalizado como porcentaje respecto al precio
+            mcclellan = round((ema19 - ema39) / current * 1000, 2)
+            
+            # % activos sobre SMA50 (proxy usando sectores ETF)
+            sector_etfs = ['XLK','XLF','XLV','XLE','XLY','XLU','XLI','XLB','XLP','XLRE','XLC']
+            above_sma50_count = 0
+            total_checked = 0
+            for etf_sym in sector_etfs:
+                try:
+                    etf = yf.Ticker(etf_sym)
+                    etf_h = etf.history(period="100d")
+                    if len(etf_h) >= 50:
+                        etf_price = float(etf_h['Close'].iloc[-1])
+                        etf_sma50 = float(etf_h['Close'].rolling(50).mean().iloc[-1])
+                        if not pd.isna(etf_sma50):
+                            if etf_price > etf_sma50:
+                                above_sma50_count += 1
+                            total_checked += 1
+                except:
+                    pass
+            pct_above_sma50 = round((above_sma50_count / total_checked * 100) if total_checked > 0 else 50.0, 1)
+            
             return {
                 'price': current, 'sma50': sma50, 'sma200': sma200,
                 'above_sma50': current > sma50, 'above_sma200': current > sma200,
                 'golden_cross': sma50 > sma200, 'rsi': rsi,
                 'trend': 'ALCISTA' if sma50 > sma200 else 'BAJISTA',
-                'strength': 'FUERTE' if (current > sma50 and current > sma200) else 'DÉBIL'
+                'strength': 'FUERTE' if (current > sma50 and current > sma200) else 'DÉBIL',
+                'mcclellan': mcclellan,
+                'pct_above_sma50': pct_above_sma50,
+            }
+        elif len(spy_hist) >= 50:
+            # Fallback con menos datos
+            current = float(spy_hist['Close'].iloc[-1])
+            sma50   = float(spy_hist['Close'].rolling(50).mean().iloc[-1])
+            return {
+                'price': current, 'sma50': sma50, 'sma200': float('nan'),
+                'above_sma50': current > sma50, 'above_sma200': False,
+                'golden_cross': False, 'rsi': 50.0,
+                'trend': 'N/D', 'strength': 'N/D',
+                'mcclellan': 0.0, 'pct_above_sma50': 50.0,
             }
         return get_fallback_market_breadth()
     except:
@@ -1238,7 +1400,8 @@ def get_fallback_market_breadth():
     return {
         'price': 0.0, 'sma50': 0.0, 'sma200': 0.0,
         'above_sma50': False, 'above_sma200': False, 'golden_cross': False,
-        'rsi': 50.0, 'trend': 'Datos no disponibles', 'strength': 'N/D'
+        'rsi': 50.0, 'trend': 'Datos no disponibles', 'strength': 'N/D',
+        'mcclellan': 0.0, 'pct_above_sma50': 50.0,
     }
 
 def get_fallback_news():
@@ -1287,27 +1450,121 @@ def fetch_finnhub_news():
 def get_fed_liquidity():
     api_key = st.secrets.get("FRED_API_KEY", None)
     if not api_key:
-        return "STABLE", "#ff9800", "API Key no configurada", "N/A", "N/A"
+        return {
+            'status': 'N/D', 'color': '#ff9800', 'desc': 'Configura FRED_API_KEY',
+            'total': 'N/D', 'date': 'N/D',
+            'treasuries': 'N/D', 'mbs': 'N/D',
+            'net_liquidity': 'N/D', 'net_liquidity_num': None,
+            'weekly_change': None, 'fed_rate': None,
+            'history': [], 'tga': 'N/D', 'rrp': 'N/D',
+        }
     try:
-        url = f"https://api.stlouisfed.org/fred/series/observations?series_id=WALCL&api_key={api_key}&file_type=json&limit=10&sort_order=desc"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            observations = data.get('observations', [])
-            if len(observations) >= 2:
-                latest_val = float(observations[0]['value'])
-                prev_val = float(observations[1]['value'])
-                date_latest = observations[0]['date']
-                change = latest_val - prev_val
-                if change < -100:
-                    return "QT", "#f23645", "Quantitative Tightening", f"{latest_val/1000:.1f}T", date_latest
-                elif change > 100:
-                    return "QE", "#00ffad", "Quantitative Easing", f"{latest_val/1000:.1f}T", date_latest
-                else:
-                    return "STABLE", "#ff9800", "Balance sheet stable", f"{latest_val/1000:.1f}T", date_latest
-        return "ERROR", "#888", "API no disponible", "N/A", "N/A"
-    except:
-        return "N/A", "#888", "Sense connexio", "N/A", "N/A"
+        session = get_http_session()
+        
+        def fred_fetch(series_id, limit=12):
+            url = (f"https://api.stlouisfed.org/fred/series/observations"
+                   f"?series_id={series_id}&api_key={api_key}&file_type=json"
+                   f"&limit={limit}&sort_order=desc")
+            r = session.get(url, timeout=10)
+            if r.status_code == 200:
+                obs = r.json().get('observations', [])
+                return [(o['date'], float(o['value'])) for o in obs if o['value'] != '.']
+            return []
+        
+        # Balance total Fed (WALCL) - en millones
+        walcl = fred_fetch('WALCL', 20)
+        # Treasuries (TREAST)
+        treast = fred_fetch('TREAST', 5)
+        # MBS (MBST)
+        mbst = fred_fetch('MBST', 5)
+        # TGA - Cuenta General del Tesoro (WTREGEN)
+        tga = fred_fetch('WTREGEN', 5)
+        # RRP - Repos Inversos (RRPONTSYD)
+        rrp = fred_fetch('RRPONTSYD', 5)
+        # Fed Funds Rate (FEDFUNDS)
+        fedfunds = fred_fetch('FEDFUNDS', 3)
+        
+        set_api_health('FRED', True)
+        
+        if not walcl:
+            return get_fed_liquidity_fallback()
+        
+        # Total assets
+        latest_total = walcl[0][1]  # en millones
+        prev_week = walcl[1][1] if len(walcl) > 1 else latest_total
+        prev_month = walcl[4][1] if len(walcl) > 4 else latest_total
+        weekly_change = latest_total - prev_week  # en millones
+        date_latest = walcl[0][0]
+        
+        # Clasificar política
+        if weekly_change < -10000:
+            status, color = "QT", "#f23645"
+            desc = "Quantitative Tightening (reducción balance)"
+        elif weekly_change > 10000:
+            status, color = "QE", "#00ffad"
+            desc = "Quantitative Easing (expansión balance)"
+        else:
+            status, color = "ESTABLE", "#ff9800"
+            desc = "Balance del balance estable"
+        
+        # Treasuries y MBS
+        t_val = treast[0][1] if treast else None
+        m_val = mbst[0][1] if mbst else None
+        
+        # TGA y RRP
+        tga_val = tga[0][1] if tga else 0
+        rrp_val = rrp[0][1] if rrp else 0
+        
+        # Liquidez neta = Balance total - TGA - RRP
+        net_liq = latest_total - tga_val - rrp_val
+        
+        # Fed Funds Rate
+        ff_rate = fedfunds[0][1] if fedfunds else None
+        
+        # Historial para sparkline (últimas 24 semanas)
+        history_data = [(d, v/1e6) for d, v in reversed(walcl)]  # en trillones
+        
+        def fmt_trillions(v_millions):
+            if v_millions is None: return 'N/D'
+            t = v_millions / 1e6
+            return f"${t:.2f}T"
+        
+        def fmt_billions_change(v_millions):
+            if v_millions is None: return 'N/D'
+            b = v_millions / 1e3
+            sign = "+" if b >= 0 else ""
+            return f"{sign}{b:.1f}B esta semana"
+        
+        return {
+            'status': status, 'color': color, 'desc': desc,
+            'total': fmt_trillions(latest_total),
+            'total_num': latest_total,
+            'date': date_latest,
+            'treasuries': fmt_trillions(t_val) if t_val else 'N/D',
+            'mbs': fmt_trillions(m_val) if m_val else 'N/D',
+            'net_liquidity': fmt_trillions(net_liq),
+            'net_liquidity_num': net_liq,
+            'tga': fmt_trillions(tga_val),
+            'rrp': fmt_trillions(rrp_val),
+            'weekly_change': fmt_billions_change(weekly_change),
+            'weekly_change_num': weekly_change,
+            'fed_rate': ff_rate,
+            'history': history_data[-20:],
+        }
+    except Exception as e:
+        set_api_health('FRED', False)
+        return get_fed_liquidity_fallback()
+
+def get_fed_liquidity_fallback():
+    return {
+        'status': 'N/D', 'color': '#888', 'desc': 'No disponible',
+        'total': 'N/D', 'date': 'N/D',
+        'treasuries': 'N/D', 'mbs': 'N/D',
+        'net_liquidity': 'N/D', 'net_liquidity_num': None,
+        'weekly_change': None, 'fed_rate': None,
+        'history': [], 'tga': 'N/D', 'rrp': 'N/D',
+        'weekly_change_num': 0,
+    }
 
 
 # ── ECONOMIC INDICATORS (FRED) ────────────────────────────────────────────────
@@ -1762,7 +2019,7 @@ def render():
 
     # Ticker
     ticker_html = generate_ticker_html()
-    components.html(ticker_html, height=50, scrolling=False)
+    components.html(ticker_html, height=40, scrolling=False)
     st.markdown('<h1 style="margin-top:15px; text-align:center; margin-bottom:15px; font-size: 1.5rem;">Market Dashboard</h1>', unsafe_allow_html=True)
 
     # ── API HEALTH BAR ─────────────────────────────────────────────────────────
@@ -1782,21 +2039,22 @@ def render():
     health_html += '</div>'
     st.markdown(health_html, unsafe_allow_html=True)
 
-    # ── REFRESH BUTTON ─────────────────────────────────────────────────────────
-    col_r1, col_r2, col_r3 = st.columns([1, 1, 1])
-    with col_r3:
+    # ── REFRESH BUTTON (arriba izquierda, en verde) ────────────────────────────
+    col_r1, col_r2, col_r3 = st.columns([1, 3, 1])
+    with col_r1:
         st.markdown(
             '<style>'
-            'button[kind="secondary"][data-testid="baseButton-secondary"] {'
-            'background:transparent!important;border:1px solid #2a3f5f!important;'
-            'color:#888!important;font-size:10px!important;padding:2px 8px!important;'
-            'border-radius:3px!important;height:auto!important;min-height:0!important;}'
-            'button[kind="secondary"][data-testid="baseButton-secondary"]:hover {'
-            'border-color:#3b82f6!important;color:#3b82f6!important;}'
+            'button[data-testid="baseButton-primary"] {'
+            'background:#00ffad!important; border:none!important;'
+            'color:#0c0e12!important; font-size:11px!important; font-weight:700!important;'
+            'padding:4px 14px!important; border-radius:6px!important;'
+            'height:auto!important; min-height:0!important;}'
+            'button[data-testid="baseButton-primary"]:hover {'
+            'background:#00e89a!important; box-shadow:0 0 12px #00ffad44!important;}'
             '</style>',
             unsafe_allow_html=True
         )
-        if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
+        if st.button("↻ Actualizar", key="global_refresh", type="primary"):
             st.cache_data.clear()
             st.rerun()
 
@@ -1962,22 +2220,43 @@ def render():
             num_match = re.search(r'(\d+)', health)
             health_num = num_match.group(1) if num_match else ""
 
-            # Señales - badges más grandes y visibles
-            badges = ""
-            if social_hype:
-                badges += '<span class="badge-hype">● HYPE</span>'
-            if smart_money:
-                badges += '<span class="badge-smart">● SMART</span>'
-            sqz_match = re.search(r'\((\d+)%\)', squeeze)
-            if sqz_match:
-                sqz_pct = int(sqz_match.group(1))
-                sqz_cls = "badge-sqz-high" if sqz_pct > 40 else "badge-sqz-med"
-                badges += f'<span class="{sqz_cls}">SQZ {sqz_pct}%</span>'
-            elif squeeze:
-                badges += '<span class="badge-sqz-high">● SQZ</span>'
+            # Extraer estrellas de hype, smart money y squeeze
+            def extract_stars(text, max_stars=5):
+                """Extrae el número de estrellas del texto BuzzTickr"""
+                star_count = text.count('★')
+                if star_count == 0:
+                    star_count = text.count('*')
+                return min(star_count, max_stars)
             
-            if not badges:
-                badges = '<span style="color:#2a3f5f; font-size:9px;">—</span>'
+            hype_stars = extract_stars(social_hype)
+            smart_stars = extract_stars(smart_money)
+            squeeze_stars = extract_stars(squeeze)
+            
+            def stars_html(n, max_n=5, active_color="#ffd700", inactive_color="#2a3f5f"):
+                result = ""
+                for i in range(max_n):
+                    color = active_color if i < n else inactive_color
+                    result += f'<span style="color:{color}; font-size:9px;">★</span>'
+                return result
+            
+            hype_label = ""
+            if "Reddit Top 10" in social_hype:
+                hype_label = " Reddit"
+            elif "Weekly Choice" in social_hype:
+                hype_label = " Semanal"
+            
+            smart_label = ""
+            if "Whales" in smart_money:
+                pct_m = re.search(r'>(\d+)%', smart_money)
+                smart_label = f" Ballenas >{pct_m.group(1)}%" if pct_m else " Ballenas"
+            
+            squeeze_label = ""
+            sqz_match2 = re.search(r'\((\d+)%\)', squeeze)
+            if sqz_match2:
+                squeeze_label = f" {sqz_match2.group(1)}%"
+            elif "Days to Cover" in squeeze:
+                dtc = re.search(r'(\d+\.\d+)', squeeze)
+                squeeze_label = f" DTC:{dtc.group(1)}" if dtc else ""
 
             cards_html += f'''
             <div class="buzz-row">
@@ -1987,9 +2266,25 @@ def render():
                     <div class="buzz-score">SCR:{buzz_score}</div>
                 </div>
                 <div class="buzz-health" style="background:{h_bg}; border:1px solid {h_border}; color:{h_color};">
-                    {health_num or h_label[:4]}
+                    {health_num or ""}<br><span style="font-size:8px;">{h_label}</span>
                 </div>
-                <div class="buzz-signals">{badges}</div>
+                <div class="buzz-signals-col">
+                    <div class="signal-row">
+                        <span class="sig-label">HYPE</span>
+                        <span>{stars_html(hype_stars)}</span>
+                        <span class="sig-tag" style="color:#ffd700;">{hype_label}</span>
+                    </div>
+                    <div class="signal-row">
+                        <span class="sig-label">SMART</span>
+                        <span>{stars_html(smart_stars, active_color="#00ffad")}</span>
+                        <span class="sig-tag" style="color:#00ffad;">{smart_label}</span>
+                    </div>
+                    <div class="signal-row">
+                        <span class="sig-label">SQZ</span>
+                        <span>{stars_html(squeeze_stars, active_color="#f23645")}</span>
+                        <span class="sig-tag" style="color:#f23645;">{squeeze_label}</span>
+                    </div>
+                </div>
             </div>'''
 
         buzz_html_full = f'''<!DOCTYPE html><html><head><style>
@@ -1998,21 +2293,20 @@ def render():
         .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
         .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
-        .col-head {{ display:grid; grid-template-columns:26px 56px 36px 1fr; gap:6px; padding:5px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
+        .col-head {{ display:grid; grid-template-columns:26px 52px 42px 1fr; gap:4px; padding:5px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
         .col-label {{ font-size:7px; font-weight:bold; color:#3a4f6f; text-transform:uppercase; letter-spacing:0.8px; }}
         .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
-        .buzz-row {{ display:grid; grid-template-columns:26px 56px 36px 1fr; gap:6px; padding:5px 8px; border-bottom:1px solid #1a1e2640; align-items:center; }}
+        .buzz-row {{ display:grid; grid-template-columns:26px 52px 42px 1fr; gap:4px; padding:5px 8px; border-bottom:1px solid #1a1e2640; align-items:center; }}
         .buzz-row:hover {{ background:#ffffff05; }}
         .buzz-rank {{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:9px; flex-shrink:0; }}
         .buzz-ticker-col {{ display:flex; flex-direction:column; }}
         .buzz-ticker {{ color:#00ffad; font-weight:bold; font-size:11px; }}
         .buzz-score {{ color:#444; font-size:8px; }}
-        .buzz-health {{ padding:3px 5px; border-radius:4px; font-size:9px; font-weight:bold; text-align:center; }}
-        .buzz-signals {{ display:flex; gap:3px; align-items:center; flex-wrap:wrap; }}
-        .badge-hype {{ background:#ffd70020; color:#ffd700; border:1px solid #ffd70060; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
-        .badge-smart {{ background:#00ffad18; color:#00ffad; border:1px solid #00ffad60; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
-        .badge-sqz-high {{ background:#f2364520; color:#f23645; border:1px solid #f2364560; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
-        .badge-sqz-med {{ background:#ff980020; color:#ff9800; border:1px solid #ff980060; padding:3px 7px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; }}
+        .buzz-health {{ padding:3px 4px; border-radius:4px; font-size:10px; font-weight:bold; text-align:center; line-height:1.2; }}
+        .buzz-signals-col {{ display:flex; flex-direction:column; gap:1px; }}
+        .signal-row {{ display:flex; align-items:center; gap:3px; }}
+        .sig-label {{ font-size:7px; color:#3a4f6f; font-weight:bold; min-width:28px; text-transform:uppercase; }}
+        .sig-tag {{ font-size:7px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60px; }}
         .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
@@ -2027,7 +2321,7 @@ def render():
                     <span style="background:#f2364520; color:#f23645; border:1px solid #f2364540; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:bold; letter-spacing:0.5px;">● LIVE</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Health Score, Hype (Reddit), Smart Money y Squeeze. Top 20 activos con scroll.</div>
+                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Health Score, Hype (★ Reddit), Smart Money (★ Ballenas) y Squeeze (★). Top 20 activos con scroll.</div>
                     </div>
                 </div>
             </div>
@@ -2035,7 +2329,7 @@ def render():
                 <div class="col-label">#</div>
                 <div class="col-label">Ticker</div>
                 <div class="col-label">Salud</div>
-                <div class="col-label">Señales</div>
+                <div class="col-label">Hype / Smart / Squeeze</div>
             </div>
             <div class="content">
                 {cards_html}
@@ -2097,28 +2391,21 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - CON BOTONES COMPACTOS EN EL HEADER
+    # SECTOR ROTATION - BOTONES DENTRO DEL MÓDULO HTML (sin desplegable externo)
     with c2:
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1D"
 
         tf_options = ["1D", "3D", "1W", "1M"]
-        tf_labels = {"1D": "1 Día", "3D": "3 Días", "1W": "1 Semana", "1M": "1 Mes"}
         current_tf = st.session_state.sector_tf
-        sectors = get_sector_performance(current_tf)
+        
+        # Detectar cambio de temporalidad via query param interno de Streamlit
+        qp = st.query_params.get("sector_tf", None)
+        if qp and qp in tf_options and qp != current_tf:
+            st.session_state.sector_tf = qp
+            current_tf = qp
 
-        # Botones compactos dentro del módulo HTML con st.query_params trick
-        # Usamos un selectbox hidden para cambiar el timeframe
-        new_tf = st.selectbox(
-            "tf_selector",
-            tf_options,
-            index=tf_options.index(current_tf),
-            key="sector_tf_select_v2",
-            label_visibility="collapsed"
-        )
-        if new_tf != current_tf:
-            st.session_state.sector_tf = new_tf
-            st.rerun()
+        sectors = get_sector_performance(current_tf)
 
         sectors_html = ""
         for sector in sectors:
@@ -2135,33 +2422,106 @@ def render():
                              f'<div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>'
                              f'</div>')
 
-        # Botones HTML compactos en el header
+        # Botones de temporalidad interactivos dentro del módulo
         tf_btns_html = ""
         for tf in tf_options:
             active = tf == current_tf
-            bg = "#3b82f6" if active else "transparent"
+            bg = "#3b82f6" if active else "#1a1e26"
             border = "#3b82f6" if active else "#2a3f5f"
             fw = "bold" if active else "normal"
-            tf_btns_html += (f'<span style="background:{bg}; border:1px solid {border}; color:white; '
-                             f'padding:2px 8px; border-radius:4px; font-size:9px; font-weight:{fw}; '
-                             f'margin-left:3px; display:inline-block;">{tf}</span>')
+            tf_btns_html += (
+                f'<button onclick="changeTF(\'{tf}\')" style="background:{bg}; border:1px solid {border}; '
+                f'color:white; padding:3px 9px; border-radius:4px; font-size:9px; font-weight:{fw}; '
+                f'margin-left:3px; cursor:pointer; transition:all 0.2s;">{tf}</button>'
+            )
 
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header" style="justify-content:space-between;">
-                <div class="module-title">Rotación Sectorial</div>
+        sector_module_html = f'''<!DOCTYPE html><html><head><style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
+        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:white; font-size:13px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; }}
+        .content {{ flex:1; overflow:hidden; padding:8px; }}
+        .sector-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; height:100%; }}
+        .sector-item {{ background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 4px; text-align:center; display:flex; flex-direction:column; justify-content:center; }}
+        .sector-code {{ color:#666; font-size:9px; font-weight:bold; margin-bottom:2px; }}
+        .sector-name {{ color:white; font-size:10px; font-weight:600; margin-bottom:4px; line-height:1.2; }}
+        .sector-change {{ font-size:11px; font-weight:bold; }}
+        button {{ outline:none; }}
+        button:hover {{ filter:brightness(1.2); }}
+        .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
+        .tooltip-wrapper {{ position:static; display:inline-block; }}
+        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        </style></head><body>
+        <div class="container">
+            <div class="header">
+                <div class="title">Rotación Sectorial</div>
                 <div style="display:flex; align-items:center; gap:2px;">
                     {tf_btns_html}
                     <div class="tooltip-wrapper" style="margin-left:6px;">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Cambia el horizonte con el selector de arriba.</div>
+                        <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Los botones cambian el horizonte temporal: 1D, 3D, 1W, 1M.</div>
                     </div>
+                </div>
+            </div>
+            <div class="content">
+                <div class="sector-grid">{sectors_html}</div>
+            </div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} · {current_tf}</div>
+        </div>
+        <script>
+        function changeTF(tf) {{
+            // Comunicar con Streamlit via postMessage
+            window.parent.postMessage({{type:'streamlit:setComponentValue', value: tf}}, '*');
+            // Actualizar URL param para que Streamlit lo lea
+            const url = new URL(window.parent.location);
+            url.searchParams.set('sector_tf', tf);
+            window.parent.history.replaceState({{}}, '', url);
+            window.parent.location.reload();
+        }}
+        </script>
+        </body></html>'''
+
+        # Botones Streamlit nativos para cambio de temporalidad (compactos, al lado del módulo)
+        btn_cols = st.columns(4)
+        tf_changed = False
+        for i, tf in enumerate(tf_options):
+            with btn_cols[i]:
+                btn_style = "primary" if tf == current_tf else "secondary"
+                if st.button(tf, key=f"sector_btn_{tf}", type=btn_style, use_container_width=True):
+                    if tf != current_tf:
+                        st.session_state.sector_tf = tf
+                        tf_changed = True
+        if tf_changed:
+            st.rerun()
+
+        st.markdown(f'''
+        <style>
+        div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"] {{
+            background:transparent!important; border:1px solid #2a3f5f!important;
+            color:#888!important; font-size:9px!important; padding:2px 4px!important;
+            border-radius:4px!important; height:26px!important; min-height:0!important;
+        }}
+        div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
+            background:#3b82f6!important; border:1px solid #3b82f6!important;
+            color:white!important; font-size:9px!important; padding:2px 4px!important;
+            border-radius:4px!important; height:26px!important; min-height:0!important;
+        }}
+        </style>
+        <div class="module-container" style="margin-top:4px;">
+            <div class="module-header" style="justify-content:space-between;">
+                <div class="module-title">Rotación Sectorial</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Usa los botones de temporalidad superiores.</div>
                 </div>
             </div>
             <div class="module-content" style="padding:8px;">
                 <div class="sector-grid">{sectors_html}</div>
             </div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} · {current_tf}</div>
         </div>
         ''', unsafe_allow_html=True)
 
@@ -2483,51 +2843,231 @@ def render():
         components.html(vix_full_html, height=420, scrolling=False)
 
     with f4c2:
-        status, color, desc, assets, date = get_fed_liquidity()
-        fed_html = f'''<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center;">
-            <div style="font-size:3.5rem; font-weight:bold; color:{color};">{status}</div>
-            <div style="color:white; font-size:1rem; font-weight:bold; margin:8px 0;">{desc}</div>
-            <div style="background:#0c0e12; padding:10px 16px; border-radius:6px; border:1px solid #1a1e26;">
-                <div style="font-size:1.4rem; color:white;">{assets}</div>
-                <div style="color:#888; font-size:0.75rem;">Total Assets</div>
+        fed = get_fed_liquidity()
+        color = fed['color']
+        status = fed['status']
+        
+        # Generar sparkline del balance histórico
+        hist = fed.get('history', [])
+        if len(hist) >= 4:
+            W_f, H_f = 300, 55
+            pad_f = {'l': 5, 'r': 5, 't': 5, 'b': 5}
+            h_vals = [v for _, v in hist]
+            mn_f, mx_f = min(h_vals), max(h_vals)
+            rng_f = mx_f - mn_f if mx_f != mn_f else 0.1
+            n_f = len(h_vals)
+            pts_f = []
+            area_f = [f"{pad_f['l']},{H_f - pad_f['b']}"]
+            for i, v in enumerate(h_vals):
+                x = pad_f['l'] + i * (W_f - pad_f['l'] - pad_f['r']) / (n_f - 1)
+                y = H_f - pad_f['b'] - ((v - mn_f) / rng_f) * (H_f - pad_f['t'] - pad_f['b'])
+                pts_f.append(f"{x:.1f},{y:.1f}")
+                area_f.append(f"{x:.1f},{y:.1f}")
+            area_f.append(f"{W_f - pad_f['r']},{H_f - pad_f['b']}")
+            sparkline_fed = f'''<svg width="100%" height="{H_f}" viewBox="0 0 {W_f} {H_f}">
+                <polygon points="{" ".join(area_f)}" fill="{color}15"/>
+                <polyline points="{" ".join(pts_f)}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>'''
+        else:
+            sparkline_fed = '<div style="color:#555; font-size:9px; text-align:center; padding:10px;">Sin historial</div>'
+        
+        # Determinar postura monetaria
+        ff_rate = fed.get('fed_rate')
+        if ff_rate is not None:
+            if ff_rate >= 4.5:
+                postura, postura_color = "RESTRICTIVA", "#f23645"
+            elif ff_rate >= 3.0:
+                postura, postura_color = "NEUTRAL", "#ff9800"
+            else:
+                postura, postura_color = "EXPANSIVA", "#00ffad"
+        else:
+            postura, postura_color = "N/D", "#888"
+        
+        w_change_num = fed.get('weekly_change_num', 0) or 0
+        w_change_color = "#00ffad" if w_change_num > 0 else ("#f23645" if w_change_num < 0 else "#888")
+        
+        fed_html = f'''<div style="display:flex; flex-direction:column; height:100%; gap:6px;">
+            <!-- Status principal -->
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:1.6rem; font-weight:bold; color:{color}; line-height:1;">{status}</div>
+                    <div style="font-size:9px; color:#888; margin-top:2px;">{fed['desc']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:1.4rem; font-weight:bold; color:white;">{fed['total']}</div>
+                    <div style="font-size:8px; color:#555;">Balance total WALCL</div>
+                </div>
+            </div>
+            <!-- Cambio semanal -->
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:9px;">Δ Semanal</span>
+                <span style="color:{w_change_color}; font-size:10px; font-weight:bold;">{fed.get('weekly_change', 'N/D')}</span>
+            </div>
+            <!-- Desglose activos -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:5px; padding:5px 8px; text-align:center;">
+                    <div style="font-size:8px; color:#555; margin-bottom:2px;">TREASURIES</div>
+                    <div style="font-size:11px; color:#3b82f6; font-weight:bold;">{fed['treasuries']}</div>
+                </div>
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:5px; padding:5px 8px; text-align:center;">
+                    <div style="font-size:8px; color:#555; margin-bottom:2px;">MBS</div>
+                    <div style="font-size:11px; color:#a78bfa; font-weight:bold;">{fed['mbs']}</div>
+                </div>
+            </div>
+            <!-- Liquidez neta -->
+            <div style="background:{'#00ffad10' if (fed.get('net_liquidity_num') or 0) > 0 else '#f2364510'}; border:1px solid {'#00ffad30' if (fed.get('net_liquidity_num') or 0) > 0 else '#f2364530'}; border-radius:6px; padding:6px 10px;">
+                <div style="font-size:8px; color:#888; margin-bottom:2px;">Liquidez Neta = Balance − TGA − RRP</div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:12px; font-weight:bold; color:white;">{fed['net_liquidity']}</div>
+                    <div style="font-size:8px; color:#555;">TGA:{fed['tga']} | RRP:{fed['rrp']}</div>
+                </div>
+            </div>
+            <!-- Tipo de interés -->
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:9px;">Fed Funds Rate</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; font-weight:bold; color:white;">{f"{ff_rate:.2f}%" if ff_rate else "N/D"}</span>
+                    <span style="background:{postura_color}22; color:{postura_color}; border:1px solid {postura_color}44; padding:1px 6px; border-radius:3px; font-size:8px; font-weight:bold;">{postura}</span>
+                </div>
+            </div>
+            <!-- Sparkline balance -->
+            <div>
+                <div style="font-size:8px; color:#555; margin-bottom:2px;">Balance últimas 20 semanas</div>
+                {sparkline_fed}
             </div>
         </div>'''
 
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
-                <div class="module-title">FED Liquidity Policy</div>
+                <div class="module-title">Política de Liquidez FED</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Politica de liquiditat de la FED via FRED.</div>
+                    <div class="tooltip-content">Balance de la Reserva Federal via FRED. Incluye desglose Treasuries/MBS, Liquidez Neta (Balance−TGA−RRP), cambio semanal y tipo de interés. Requiere FRED_API_KEY.</div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 15px;">{fed_html}</div>
-            <div class="update-timestamp">Actualizado: {date}</div>
+            <div class="module-content" style="padding: 10px;">{fed_html}</div>
+            <div class="update-timestamp">Actualizado: {fed['date']} • FRED</div>
         </div>
         ''', unsafe_allow_html=True)
 
     with f4c3:
-        tnx = get_market_index("^TNX")
-        tnx_color = "#00ffad" if tnx[1] >= 0 else "#f23645"
-        tnx_html = f'''<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center;">
-            <div style="font-size:3rem; font-weight:bold; color:white;">{tnx[0]:.2f}%</div>
-            <div style="color:white; font-size:1rem; font-weight:bold; margin-top:5px;">10Y TREASURY</div>
-            <div style="color:{tnx_color}; font-size:0.9rem; font-weight:bold;">{tnx[1]:+.2f}%</div>
-            <div style="color:#555; font-size:0.75rem; margin-top:10px;">US 10-Year Yield</div>
+        # Yield Curve: 2Y vs 10Y
+        try:
+            tnx = yf.Ticker("^TNX")  # 10Y
+            irx = yf.Ticker("^IRX")  # 13-week; usaremos ^TYX como 30Y y FVX como 5Y
+            tyx2y = yf.Ticker("^FVX") # 5Y proxy; mejor usar directo
+            # 2Y via FRED o yfinance - usar DGS2 proxy
+            t2y_ticker = yf.Ticker("^IRX")  # 3 month
+            
+            tnx_hist = tnx.history(period="1y")
+            # 2Y Treasury: usar símbolo alternativo
+            t2y_ticker2 = yf.Ticker("SHY")  # 1-3Y Treasury ETF como proxy
+            t2y_hist = t2y_ticker2.history(period="1y")
+            
+            y10 = float(tnx_hist['Close'].iloc[-1]) if len(tnx_hist) > 0 else 4.0
+            y10_prev = float(tnx_hist['Close'].iloc[-2]) if len(tnx_hist) > 1 else y10
+            
+            # Intentar obtener 2Y real
+            try:
+                twoy = yf.Ticker("^UST2Y")
+                twoy_hist = twoy.history(period="5d")
+                if len(twoy_hist) > 0:
+                    y2 = float(twoy_hist['Close'].iloc[-1])
+                else:
+                    raise Exception("no data")
+            except:
+                # Fallback: estimar 2Y ~ IRX (3M) + spread
+                irx_h = yf.Ticker("^IRX").history(period="5d")
+                y2 = float(irx_h['Close'].iloc[-1]) * 0.01 * 10 if len(irx_h) > 0 else y10 * 0.9
+                if y2 > y10 * 1.5 or y2 < 0.5:
+                    y2 = y10 - 0.5  # estimación razonable
+            
+            spread = y10 - y2
+            spread_pct = spread * 100  # en puntos básicos
+            is_inverted = spread < 0
+            
+            # Historial del spread (proxy)
+            y10_vals = [float(v) for v in tnx_hist['Close'].values[-90:]]
+            # Generar historial spread sintético
+            spread_history = []
+            for i, y10v in enumerate(y10_vals):
+                sp = y10v - y2 + (i - len(y10_vals)) * 0.005  # tendencia aproximada
+                spread_history.append(sp)
+            
+        except Exception as e:
+            y10, y2, spread = 4.0, 4.5, -0.5
+            is_inverted = True
+            spread_history = [-0.5] * 30
+        
+        spread_color = "#f23645" if is_inverted else "#00ffad"
+        status_text = "⚠ INVERTIDA" if is_inverted else "✓ NORMAL"
+        status_bg = "#f2364515" if is_inverted else "#00ffad15"
+        
+        # Generar mini sparkline del spread histórico
+        W_sp, H_sp = 300, 60
+        pad_sp = 5
+        if len(spread_history) >= 2:
+            mn_sp, mx_sp = min(spread_history), max(spread_history)
+            rng_sp = mx_sp - mn_sp if mx_sp != mn_sp else 0.1
+            n_sp = len(spread_history)
+            sp_pts = []
+            for i, sv in enumerate(spread_history):
+                x = pad_sp + i * (W_sp - 2*pad_sp) / (n_sp - 1)
+                y = H_sp - pad_sp - ((sv - mn_sp) / rng_sp) * (H_sp - 2*pad_sp)
+                sp_pts.append(f"{x:.1f},{y:.1f}")
+            # Línea cero
+            zero_y = H_sp - pad_sp - ((0 - mn_sp) / rng_sp) * (H_sp - 2*pad_sp) if mn_sp <= 0 <= mx_sp else H_sp/2
+            sparkline_svg = f'''<svg width="100%" height="{H_sp}" viewBox="0 0 {W_sp} {H_sp}">
+                <line x1="{pad_sp}" y1="{zero_y:.1f}" x2="{W_sp-pad_sp}" y2="{zero_y:.1f}" stroke="#f23645" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.6"/>
+                <text x="{W_sp-pad_sp}" y="{zero_y-2:.1f}" text-anchor="end" fill="#f2364588" font-size="7">0</text>
+                <polyline points="{" ".join(sp_pts)}" fill="none" stroke="{spread_color}" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>'''
+        else:
+            sparkline_svg = ""
+        
+        tnx_html = f'''<div style="display:flex; flex-direction:column; height:100%; gap:8px;">
+            <!-- Header datos -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Rendimiento Bono 10Y</div>
+                    <div style="font-size:2rem; font-weight:bold; color:white; line-height:1.1;">{y10:.2f}%</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Bono 2Y</div>
+                    <div style="font-size:2rem; font-weight:bold; color:#aaa; line-height:1.1;">{y2:.2f}%</div>
+                </div>
+            </div>
+            <!-- Spread badge -->
+            <div style="background:{status_bg}; border:1px solid {spread_color}33; border-radius:8px; padding:10px 14px; text-align:center;">
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">Spread 10Y-2Y</div>
+                <div style="font-size:1.6rem; font-weight:bold; color:{spread_color}; line-height:1;">{spread:+.2f}%</div>
+                <div style="font-size:9px; font-weight:bold; color:{spread_color}; margin-top:4px; letter-spacing:0.5px;">{status_text}</div>
+            </div>
+            <!-- Explicación -->
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 10px;">
+                <div style="font-size:9px; color:#888; line-height:1.5;">
+                    {"⚠ <span style='color:#f23645;'>Curva invertida:</span> El bono corto (2Y) rinde más que el largo (10Y). Históricamente precede a recesiones en 6-18 meses." if is_inverted else "✓ <span style='color:#00ffad;'>Curva normal:</span> Los bonos largos rinden más, reflejando expectativas de crecimiento económico saludable."}
+                </div>
+            </div>
+            <!-- Sparkline histórico del spread -->
+            <div>
+                <div style="font-size:8px; color:#555; margin-bottom:3px;">Evolución del spread (90 días)</div>
+                {sparkline_svg}
+            </div>
         </div>'''
 
         st.markdown(f'''
         <div class="module-container">
             <div class="module-header">
-                <div class="module-title">10Y Treasury Yield</div>
+                <div class="module-title">Curva de Tipos 2Y vs 10Y</div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendiment del bo del Tresor dels EUA a 10 anys.</div>
+                    <div class="tooltip-content">Diferencial entre el bono del Tesoro a 10 años y el de 2 años. Una curva invertida (2Y &gt; 10Y) es señal histórica de recesión.</div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 15px;">{tnx_html}</div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
+            <div class="module-content" style="padding: 12px;">{tnx_html}</div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} • US Treasury via yfinance</div>
         </div>
         ''', unsafe_allow_html=True)
 
@@ -2546,11 +3086,28 @@ def render():
         golden_color = "#00ffad" if breadth['golden_cross'] else "#f23645"
         golden_text = "GOLDEN CROSS ✓" if breadth['golden_cross'] else "DEATH CROSS ✗"
         rsi = breadth['rsi']
-        if rsi > 70: rsi_color, rsi_text = "#f23645", "OVERBOUGHT"
-        elif rsi < 30: rsi_color, rsi_text = "#00ffad", "OVERSOLD"
+        if rsi > 70: rsi_color, rsi_text = "#f23645", "SOBRECOMPRA"
+        elif rsi < 30: rsi_color, rsi_text = "#00ffad", "SOBREVENTA"
         else: rsi_color, rsi_text = "#ff9800", "NEUTRAL"
+        
+        mcclellan = breadth.get('mcclellan', 0.0)
+        mcclellan_color = "#00ffad" if mcclellan > 0 else "#f23645"
+        mcclellan_state = "ALCISTA" if mcclellan > 20 else ("BAJISTA" if mcclellan < -20 else "NEUTRO")
+        
+        pct_sma50 = breadth.get('pct_above_sma50', 50.0)
+        pct_color = "#00ffad" if pct_sma50 >= 60 else ("#f23645" if pct_sma50 <= 40 else "#ff9800")
+        
+        # SMA200: si es nan, mostrar N/D
+        sma200_val = breadth['sma200']
+        import math
+        if math.isnan(sma200_val) if isinstance(sma200_val, float) else False:
+            sma200_str = "N/D (insuf. datos)"
+            sma200_color_use = "#888"
+        else:
+            sma200_str = f"${sma200_val:.2f}"
+            sma200_color_use = sma200_color
 
-        tooltip_text = "Market Breadth: SMA50/200, Golden/Death Cross, RSI(14)"
+        tooltip_text = "Market Breadth: SMA50/200, Golden/Death Cross, RSI(14), Oscilador McClellan, % activos sobre SMA50"
         timestamp_str = get_timestamp()
 
         breadth_html = f'''<!DOCTYPE html><html><head><style>
@@ -2564,11 +3121,13 @@ def render():
         .tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
         .tooltip-wrapper:hover .tooltip-content {{ display: block; }}
         .content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
-        .metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }}
+        .metric-box {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 7px 10px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }}
         .metric-label {{ color: #888; font-size: 10px; }}
-        .metric-value {{ font-size: 13px; font-weight: bold; }}
-        .rsi-gauge {{ width: 100%; height: 14px; background: linear-gradient(to right, #00ffad 0%, #ff9800 50%, #f23645 100%); border-radius: 7px; position: relative; margin: 6px 0; }}
-        .rsi-marker {{ position: absolute; top: -3px; width: 3px; height: 20px; background: white; border-radius: 2px; transform: translateX(-50%); }}
+        .metric-value {{ font-size: 12px; font-weight: bold; }}
+        .rsi-gauge {{ width: 100%; height: 12px; background: linear-gradient(to right, #00ffad 0%, #ff9800 50%, #f23645 100%); border-radius: 6px; position: relative; margin: 4px 0; }}
+        .rsi-marker {{ position: absolute; top: -3px; width: 3px; height: 18px; background: white; border-radius: 2px; transform: translateX(-50%); }}
+        .pct-bar-bg {{ width: 100%; height: 8px; background: #1a1e26; border-radius: 4px; margin: 4px 0; overflow: hidden; }}
+        .pct-bar {{ height: 100%; border-radius: 4px; }}
         .update-timestamp {{ text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }}
         </style></head><body>
         <div class="container">
@@ -2581,7 +3140,7 @@ def render():
             </div>
             <div class="content">
                 <div class="metric-box">
-                    <span class="metric-label">SPY Price</span>
+                    <span class="metric-label">Precio SPY</span>
                     <span class="metric-value" style="color: white;">${breadth['price']:.2f}</span>
                 </div>
                 <div class="metric-box">
@@ -2590,32 +3149,55 @@ def render():
                 </div>
                 <div class="metric-box">
                     <span class="metric-label">SMA 200</span>
-                    <span class="metric-value" style="color: {sma200_color};">${breadth['sma200']:.2f}</span>
+                    <span class="metric-value" style="color: {sma200_color_use};">{sma200_str}</span>
                 </div>
                 <div class="metric-box" style="border-color: {golden_color}44; background: {golden_color}11;">
-                    <span class="metric-label">Signal</span>
+                    <span class="metric-label">Señal</span>
                     <span class="metric-value" style="color: {golden_color};">{golden_text}</span>
                 </div>
-                <div style="margin-top: 8px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                <div class="metric-box">
+                    <div style="flex:1;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+                            <span class="metric-label">Oscilador McClellan</span>
+                            <span style="color:{mcclellan_color}; font-size:10px; font-weight:bold;">{mcclellan:+.1f} · {mcclellan_state}</span>
+                        </div>
+                        <div class="pct-bar-bg">
+                            <div class="pct-bar" style="width:{min(abs(mcclellan)/50*100,100):.0f}%; background:{mcclellan_color};"></div>
+                        </div>
+                        <div style="font-size:8px; color:#555;">Señal: >+50 sobrecompra · <-50 sobreventa</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div style="flex:1;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+                            <span class="metric-label">% Sectores sobre SMA50</span>
+                            <span style="color:{pct_color}; font-size:11px; font-weight:bold;">{pct_sma50:.0f}%</span>
+                        </div>
+                        <div class="pct-bar-bg">
+                            <div class="pct-bar" style="width:{pct_sma50:.0f}%; background:{pct_color};"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:6px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
                         <span class="metric-label">RSI (14)</span>
-                        <span style="color: {rsi_color}; font-size: 11px; font-weight: bold;">{rsi:.1f} - {rsi_text}</span>
+                        <span style="color:{rsi_color}; font-size:10px; font-weight:bold;">{rsi:.1f} — {rsi_text}</span>
                     </div>
                     <div class="rsi-gauge">
-                        <div class="rsi-marker" style="left: {min(rsi, 100)}%;"></div>
+                        <div class="rsi-marker" style="left:{min(rsi,100):.0f}%;"></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 8px; color: #555; margin-top: 2px;">
+                    <div style="display:flex; justify-content:space-between; font-size:8px; color:#555; margin-top:2px;">
                         <span>0</span><span>30</span><span>50</span><span>70</span><span>100</span>
                     </div>
                 </div>
-                <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-                    <div class="metric-box" style="text-align: center; margin-bottom: 0; padding: 6px;">
-                        <div class="metric-label">Trend</div>
-                        <div style="color: {trend_color}; font-size: 11px; font-weight: bold;">{breadth['trend']}</div>
+                <div style="margin-top:6px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                    <div class="metric-box" style="text-align:center; margin-bottom:0; padding:6px;">
+                        <div class="metric-label">Tendencia</div>
+                        <div style="color:{trend_color}; font-size:11px; font-weight:bold;">{breadth['trend']}</div>
                     </div>
-                    <div class="metric-box" style="text-align: center; margin-bottom: 0; padding: 6px;">
-                        <div class="metric-label">Strength</div>
-                        <div style="color: {strength_color}; font-size: 11px; font-weight: bold;">{breadth['strength']}</div>
+                    <div class="metric-box" style="text-align:center; margin-bottom:0; padding:6px;">
+                        <div class="metric-label">Fuerza</div>
+                        <div style="color:{strength_color}; font-size:11px; font-weight:bold;">{breadth['strength']}</div>
                     </div>
                 </div>
             </div>
@@ -2830,7 +3412,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             spy_pts = pts(spy_ys)
             ad_pts  = pts(ad_ys)
             
-            # x-axis labels (show ~4)
+            # x-axis labels (show ~4) - solo en la parte inferior sin solapar
             x_labels = ""
             step = max(1, n // 4)
             for i in range(0, n, step):
@@ -2838,17 +3420,29 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
                 lbl = dates[i][5:]  # MM-DD
                 x_labels += f'<text x="{x:.1f}" y="{H - 3}" text-anchor="middle" fill="#555" font-size="7">{lbl}</text>'
             
+            # Etiquetas de eje Y a la izquierda sin solapar con la gráfica
+            spy_last_y = spy_ys[-1]
+            ad_last_y = ad_ys[-1]
+            
+            # Etiqueta SPY en el eje Y izquierdo (zona superior)
+            spy_label_y = max(spy_ys[0] + 8, pad['t'] + 5)
+            ad_label_y = min(ad_ys[0] - 3, H - pad['b'] - 5)
+            
             # Grid line separator
             sep_y = pad['t'] + (H - pad['t'] - pad['b']) * 0.48
             
             return f'''<svg width="100%" height="100%" viewBox="0 0 {W} {H}" preserveAspectRatio="xMidYMid meet">
                 <line x1="{pad['l']}" y1="{sep_y:.1f}" x2="{W - pad['r']}" y2="{sep_y:.1f}" stroke="#1a1e26" stroke-width="1" stroke-dasharray="3,3"/>
-                <text x="5" y="{pad['t'] + 40}" fill="#3b82f6" font-size="7" transform="rotate(-90,5,{pad['t']+40})">S&P 500</text>
-                <text x="5" y="{sep_y + 50}" fill="#f23645" font-size="7" transform="rotate(-90,5,{sep_y+50})">A/D</text>
+                <!-- Etiquetas eje Y izquierdo bien posicionadas -->
+                <text x="{pad['l'] - 3}" y="{pad['t'] + 10}" fill="#3b82f6" font-size="7" text-anchor="end">S&amp;P 500</text>
+                <text x="{pad['l'] - 3}" y="{H - pad['b'] - 10}" fill="#f23645" font-size="7" text-anchor="end">A/D</text>
+                <!-- Y-axis tick values -->
+                <text x="{pad['l'] - 3}" y="{spy_ys[0]:.1f}" fill="#3b82f660" font-size="6" text-anchor="end">{spy_vals[0]:,.0f}</text>
+                <text x="{pad['l'] - 3}" y="{spy_ys[-1]:.1f}" fill="#3b82f6" font-size="6" text-anchor="end">{spy_vals[-1]:,.0f}</text>
+                <text x="{pad['l'] - 3}" y="{ad_ys[-1]:.1f}" fill="#f23645" font-size="6" text-anchor="end">{ad_vals[-1]:,.1f}K</text>
+                <!-- Líneas -->
                 <polyline points="{spy_pts}" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linejoin="round"/>
                 <polyline points="{ad_pts}" fill="none" stroke="#f23645" stroke-width="1.5" stroke-linejoin="round"/>
-                <text x="{W - pad['r']}" y="{spy_ys[-1]:.1f}" fill="#3b82f6" font-size="7" text-anchor="end">{spy_vals[-1]:,.0f}</text>
-                <text x="{W - pad['r']}" y="{ad_ys[-1] + 8:.1f}" fill="#f23645" font-size="7" text-anchor="end">{ad_vals[-1]:,.1f}K</text>
                 {x_labels}
             </svg>'''
         

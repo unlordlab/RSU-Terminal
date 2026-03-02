@@ -165,7 +165,7 @@ def create_z_score_gauge(z_score):
             'bar': {'color': get_z_color(z_score), 'thickness': 0.75},
             'bgcolor': "#0a0c10",
             'borderwidth': 2,
-            'bordercolor': "#00ffad33",
+            'bordercolor': "rgba(0,255,173,0.2)",
             'steps': [
                 {'range': [-3, -2], 'color': hex_to_rgba("#f23645", 0.15)},
                 {'range': [-2, -1], 'color': hex_to_rgba("#ff9800", 0.15)},
@@ -192,7 +192,7 @@ def create_trend_alignment_chart(trends):
             values.append(0); colors.append("#444"); labels.append("N/A")
     fig = go.Figure(data=[go.Bar(
         x=timeframes, y=values, marker_color=colors,
-        marker_line=dict(color="#00ffad44", width=1),
+        marker_line=dict(color="rgba(0,255,173,0.27)", width=1),
         text=labels, textposition='outside',
         textfont=dict(color='white', size=11, family='VT323, monospace')
     )])
@@ -222,11 +222,11 @@ def create_volume_heatmap(data, vol_analysis):
         colors.append("#00ffad" if ratio > 2 else "#4caf50" if ratio > 1.5 else "#ff9800" if ratio > 1 else "#f23645")
     fig = go.Figure(data=[go.Bar(
         x=recent_data.index.strftime('%m-%d'), y=volume, marker_color=colors,
-        marker_line=dict(color="#00ffad22", width=0.5),
+        marker_line=dict(color="rgba(0,255,173,0.13)", width=0.5),
         hovertemplate='Fecha: %{x}<br>Volumen: %{y:,.0f}<br>Ratio: %{text:.2f}x<extra></extra>',
         text=[v/avg_vol for v in volume]
     )])
-    fig.add_hline(y=avg_vol, line_dash="dash", line_color="#00ffad66",
+    fig.add_hline(y=avg_vol, line_dash="dash", line_color="rgba(0,255,173,0.4)",
                   annotation_text="AVG", annotation_position="right",
                   annotation_font=dict(color="#00ffad", family="Courier New"))
     fig.update_layout(
@@ -303,13 +303,13 @@ def create_price_chart_with_emas(data, symbol):
 
     for level in [-2, -1, 1, 2]:
         fig.add_hline(y=level, line_dash="dash", line_color="#333", line_width=1, row=2, col=1)
-    fig.add_hline(y=0, line_color="#00ffad44", line_width=1.5, row=2, col=1)
+    fig.add_hline(y=0, line_color="rgba(0,255,173,0.27)", line_width=1.5, row=2, col=1)
 
     fig.update_layout(
         **PLOTLY_LAYOUT,
         xaxis_rangeslider_visible=False, height=520,
         margin=dict(l=50, r=50, t=60, b=40),
-        legend=dict(bgcolor='rgba(12,14,18,0.9)', bordercolor='#00ffad33', borderwidth=1,
+        legend=dict(bgcolor='rgba(12,14,18,0.9)', bordercolor='rgba(0,255,173,0.2)', borderwidth=1,
                     font=dict(color='white', family='Courier New', size=11))
     )
     fig.update_annotations(font=dict(color='#00ffad', family='VT323, monospace', size=14))

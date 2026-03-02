@@ -27,17 +27,17 @@ if __name__ == "__main__":
 # ───────────────────────────────────────────────────────────────────────────────
 
 COLORS = {
-    'bg_dark': '#050505',
-    'bg_panel': '#0a0a0a',
-    'grid': '#1a1a1a',
-    'text': '#e0e0e0',
+    'bg_dark': '#0c0e12',
+    'bg_panel': '#1a1e26',
+    'grid': '#2a3f5f',
+    'text': '#cccccc',
     'text_dim': '#666666',
-    'accent_green': '#00ff41',      # Matrix green
-    'accent_cyan': '#00d4ff',       # Cyberpunk cyan
-    'accent_red': '#ff003c',        # Alert red
-    'accent_orange': '#ff9f1c',     # Warning orange
+    'accent_green': '#00ffad',      # Terminal mint — roadmap primary
+    'accent_cyan': '#00d9ff',       # Electric cyan
+    'accent_red': '#f23645',        # Alert red
+    'accent_orange': '#ff9800',     # Warning orange
     'accent_yellow': '#ffd60a',     # Caution yellow
-    'accent_purple': '#9d4edd',     # Deep purple
+    'accent_purple': '#9c27b0',     # Deep purple
     'zone_max': '#006b1b',          # Maximum opportunity - deep green
     'zone_agg': '#009627',          # Aggressive buy
     'zone_strong': '#28a745',       # Strong buy
@@ -45,14 +45,14 @@ COLORS = {
     'zone_dca': '#aa8c28',          # DCA zone
     'zone_light': '#aa5028',        # Light buy
     'zone_wait': '#666666',         # Wait zone
-    'rsu_extreme': '#00ff00',       # RSU Score < 20
-    'rsu_strong': '#00ff88',        # RSU Score 20-40
-    'rsu_moderate': '#ffff00',      # RSU Score 40-60
-    'rsu_weak': '#ff8800',          # RSU Score 60-80
-    'rsu_poor': '#ff0044',           # RSU Score > 80
-    'stress_extreme': '#ff0000',    # Stress test extremo
-    'stress_moderate': '#ff6600',   # Stress test moderado
-    'alert_info': '#00d4ff'         # Alertas informativas
+    'rsu_extreme': '#00ffad',       # RSU Score < 20
+    'rsu_strong': '#00d9ff',        # RSU Score 20-40
+    'rsu_moderate': '#ffd60a',      # RSU Score 40-60
+    'rsu_weak': '#ff9800',          # RSU Score 60-80
+    'rsu_poor': '#f23645',          # RSU Score > 80
+    'stress_extreme': '#f23645',    # Stress test extremo
+    'stress_moderate': '#ff9800',   # Stress test moderado
+    'alert_info': '#00d9ff'         # Alertas informativas
 }
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ def get_halving_cycle():
         phase = "DISTRIBUCIÓN"
         phase_color = COLORS['zone_dca']
     else:
-        phase = "MERADO BAJISTA"
+        phase = "MERCADO BAJISTA"
         phase_color = COLORS['zone_light']
     
     return {
@@ -731,8 +731,8 @@ def create_main_chart(data, zone_data, symbol="BTC-USD"):
     
     fig.update_layout(
         title=dict(
-            text=f'₿ {symbol} | MODELO RSU v2.1 - ACUMULACIÓN MULTI-INDICADOR',
-            font=dict(family='Courier New, monospace', size=20, color=COLORS['accent_cyan']),
+            text=f'₿ {symbol}  //  MODELO RSU v2.1  —  ACUMULACIÓN MULTI-INDICADOR',
+            font=dict(family='VT323, monospace', size=24, color=COLORS['accent_green']),
             x=0.5
         ),
         xaxis=dict(
@@ -773,11 +773,11 @@ def create_rsu_gauge(rsu_data):
         value=score,
         domain={'x': [0, 1], 'y': [0, 1]},
         title={
-            'text': "RSU SCORE", 
-            'font': {'size': 16, 'color': COLORS['accent_cyan'], 'family': 'Courier New, monospace', 'weight': 'bold'}
+            'text': "// RSU SCORE //", 
+            'font': {'size': 18, 'color': COLORS['accent_green'], 'family': 'VT323, monospace'}
         },
         number={
-            'font': {'size': 40, 'color': rsu_data['signal_color'], 'family': 'Courier New, monospace'},
+            'font': {'size': 48, 'color': rsu_data['signal_color'], 'family': 'VT323, monospace'},
             'valueformat': '.1f'
         },
         gauge={
@@ -860,8 +860,8 @@ def create_rsu_breakdown(rsu_data):
         paper_bgcolor=COLORS['bg_dark'],
         plot_bgcolor=COLORS['bg_panel'],
         title=dict(
-            text='DESGLOSE RSU SCORE',
-            font=dict(color=COLORS['accent_cyan'], family='Courier New, monospace', size=14)
+            text='// DESGLOSE RSU SCORE //',
+            font=dict(color=COLORS['accent_green'], family='VT323, monospace', size=18)
         ),
         xaxis=dict(
             color=COLORS['text_dim'],
@@ -891,8 +891,8 @@ def create_zone_gauge(deviation_pct, current_zone):
         value=gauge_val,
         domain={'x': [0, 1], 'y': [0, 1]},
         title={
-            'text': "DESVIACIÓN MA 200S", 
-            'font': {'size': 14, 'color': COLORS['text_dim'], 'family': 'Courier New, monospace'}
+            'text': "// DESVIACIÓN MA 200S //", 
+            'font': {'size': 16, 'color': COLORS['accent_cyan'], 'family': 'VT323, monospace'}
         },
         number={
             'font': {'size': 36, 'color': COLORS['accent_cyan'], 'family': 'Courier New, monospace'},
@@ -988,8 +988,8 @@ def create_allocation_matrix(zone_data):
         paper_bgcolor=COLORS['bg_dark'],
         plot_bgcolor=COLORS['bg_panel'],
         title=dict(
-            text='ESTRATEGIA DE ASIGNACIÓN',
-            font=dict(color=COLORS['accent_green'], family='Courier New, monospace', size=16)
+            text='// ESTRATEGIA DE ASIGNACIÓN //',
+            font=dict(color=COLORS['accent_green'], family='VT323, monospace', size=20)
         ),
         xaxis=dict(
             color=COLORS['text_dim'],
@@ -1098,8 +1098,8 @@ def create_stress_test_chart(stress_data):
         height=400,
         margin=dict(l=60, r=40, t=80, b=100),
         title=dict(
-            text='STRESS TEST - ESCENARIOS EXTREMOS',
-            font=dict(color=COLORS['accent_red'], family='Courier New, monospace', size=16),
+            text='// STRESS TEST — ESCENARIOS EXTREMOS //',
+            font=dict(color=COLORS['accent_red'], family='VT323, monospace', size=22),
             x=0.5
         )
     )
@@ -1120,8 +1120,13 @@ def render_alerts_panel(alerts):
         st.info("No hay alertas activas en este momento. El mercado está en rango neutral.")
         return
     
-    st.markdown("---")
-    st.markdown(f"<h3 style='color: {COLORS['accent_yellow']};'>🔔 ALERTAS DE MERCADO</h3>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="font-family: 'VT323', monospace; font-size: 1.5rem; color: {COLORS['accent_green']};
+                letter-spacing: 3px; text-transform: uppercase; margin-bottom: 15px;">
+        🔔 // ALERTAS DE MERCADO
+    </div>
+    """, unsafe_allow_html=True)
     
     for alert in alerts:
         alert_color = alert['color']
@@ -1129,27 +1134,26 @@ def render_alerts_panel(alerts):
         message = alert['message']
         
         st.markdown(f"""
-        <div style="
-            background: {hex_to_rgba(alert_color, 0.1)};
-            border-left: 4px solid {alert_color};
-            padding: 12px 20px;
-            margin: 8px 0;
-            border-radius: 4px;
-        ">
+        <div class="phase-box" style="border-left-color: {alert_color}; margin: 8px 0;">
             <span style="font-size: 20px; margin-right: 10px;">{icon}</span>
-            <span style="color: {alert_color}; font-weight: bold; font-family: 'Courier New', monospace;">
+            <span style="color: {alert_color}; font-family: 'VT323', monospace; font-size: 1.15rem; letter-spacing: 1px;">
                 {message}
             </span>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
+    st.markdown("<hr>", unsafe_allow_html=True)
 
 def render_stress_test_panel(stress_data):
     """Renderiza el panel de stress test"""
     
-    st.markdown("---")
-    st.markdown(f"<h3 style='color: {COLORS['stress_extreme']};'>💥 STRESS TEST - GESTIÓN DE EXPECTATIVAS</h3>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="font-family: 'VT323', monospace; font-size: 1.5rem; color: {COLORS['stress_extreme']};
+                letter-spacing: 3px; text-transform: uppercase; margin-bottom: 15px;">
+        💥 // STRESS TEST — GESTIÓN DE EXPECTATIVAS
+    </div>
+    """, unsafe_allow_html=True)
     
     summary = stress_data['summary']
     
@@ -1229,17 +1233,17 @@ def render_rsu_dashboard(zone_data, macro_data, halving_data):
             box-shadow: 0 0 40px {hex_to_rgba(rsu['signal_color'], 0.4)};
         ">
             <div style="text-align: center;">
-                <div style="color: {COLORS['text_dim']}; font-size: 12px; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 10px;">
-                    RSU SCORE COMPUESTO
+                <div style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 1rem; text-transform: uppercase; letter-spacing: 4px; margin-bottom: 10px;">
+                    // RSU SCORE COMPUESTO //
                 </div>
-                <div style="color: {rsu['signal_color']}; font-size: 56px; font-weight: bold; font-family: 'Courier New', monospace; text-shadow: 0 0 20px {hex_to_rgba(rsu['signal_color'], 0.8)};">
+                <div style="color: {rsu['signal_color']}; font-size: 5rem; font-family: 'VT323', monospace; text-shadow: 0 0 25px {hex_to_rgba(rsu['signal_color'], 0.8)}; line-height: 1;">
                     {rsu['total_score']:.1f}
                 </div>
-                <div style="color: {rsu['signal_color']}; font-size: 18px; font-weight: bold; margin-top: 10px;">
+                <div style="color: {rsu['signal_color']}; font-family: 'VT323', monospace; font-size: 1.5rem; letter-spacing: 3px; margin-top: 10px;">
                     {rsu['signal']}
                 </div>
-                <div style="color: {COLORS['text_dim']}; font-size: 11px; margin-top: 5px;">
-                    Asignación Sugerida: <span style="color: {COLORS['accent_green']}; font-weight: bold;">{rsu['allocation']}%</span>
+                <div style="color: {COLORS['text_dim']}; font-family: 'Courier New', monospace; font-size: 11px; margin-top: 8px;">
+                    Asignación Sugerida: <span style="color: {COLORS['accent_green']}; font-family: 'VT323', monospace; font-size: 1.2rem;">{rsu['allocation']}%</span>
                 </div>
             </div>
         </div>
@@ -1256,20 +1260,20 @@ def render_rsu_dashboard(zone_data, macro_data, halving_data):
             padding: 20px;
             height: 100%;
         ">
-            <div style="color: {COLORS['accent_cyan']}; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-align: center;">
-                CONDICIONES MACRO
+            <div style="color: {COLORS['accent_cyan']}; font-family: 'VT323', monospace; font-size: 1rem; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 15px; text-align: center;">
+                // CONDICIONES MACRO //
             </div>
-            <div style="margin-bottom: 10px;">
-                <span style="color: {COLORS['text_dim']}; font-size: 10px;">LIQUIDEZ:</span><br>
-                <span style="color: {liquidity_color}; font-size: 16px; font-weight: bold;">{macro_data['status']}</span>
+            <div style="margin-bottom: 12px;">
+                <span style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 0.85rem; letter-spacing: 2px;">LIQUIDEZ:</span><br>
+                <span style="color: {liquidity_color}; font-family: 'VT323', monospace; font-size: 1.3rem; letter-spacing: 2px;">{macro_data['status']}</span>
             </div>
-            <div style="margin-bottom: 10px;">
-                <span style="color: {COLORS['text_dim']}; font-size: 10px;">DXY:</span><br>
-                <span style="color: {COLORS['text']}; font-size: 14px; font-family: monospace;">{macro_data['dxy']:.2f}</span>
+            <div style="margin-bottom: 12px;">
+                <span style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 0.85rem; letter-spacing: 2px;">DXY:</span><br>
+                <span style="color: {COLORS['text']}; font-family: 'VT323', monospace; font-size: 1.3rem;">{macro_data['dxy']:.2f}</span>
             </div>
             <div>
-                <span style="color: {COLORS['text_dim']}; font-size: 10px;">SCORE:</span><br>
-                <span style="color: {liquidity_color}; font-size: 14px; font-weight: bold;">{macro_data['liquidity_score']:.0f}/100</span>
+                <span style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 0.85rem; letter-spacing: 2px;">SCORE:</span><br>
+                <span style="color: {liquidity_color}; font-family: 'VT323', monospace; font-size: 1.3rem;">{macro_data['liquidity_score']:.0f}/100</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1283,25 +1287,25 @@ def render_rsu_dashboard(zone_data, macro_data, halving_data):
             padding: 20px;
             height: 100%;
         ">
-            <div style="color: {COLORS['accent_cyan']}; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; text-align: center;">
-                CICLO HALVING
+            <div style="color: {COLORS['accent_cyan']}; font-family: 'VT323', monospace; font-size: 1rem; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 15px; text-align: center;">
+                // CICLO HALVING //
             </div>
-            <div style="margin-bottom: 10px;">
-                <span style="color: {COLORS['text_dim']}; font-size: 10px;">FASE:</span><br>
-                <span style="color: {halving_data['phase_color']}; font-size: 14px; font-weight: bold;">{halving_data['phase']}</span>
+            <div style="margin-bottom: 12px;">
+                <span style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 0.85rem; letter-spacing: 2px;">FASE:</span><br>
+                <span style="color: {halving_data['phase_color']}; font-family: 'VT323', monospace; font-size: 1.3rem; letter-spacing: 2px;">{halving_data['phase']}</span>
             </div>
-            <div style="margin-bottom: 10px;">
-                <span style="color: {COLORS['text_dim']}; font-size: 10px;">PROGRESO:</span><br>
-                <span style="color: {COLORS['text']}; font-size: 14px; font-family: monospace;">{halving_data['progress_pct']:.1f}%</span>
+            <div style="margin-bottom: 12px;">
+                <span style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 0.85rem; letter-spacing: 2px;">PROGRESO:</span><br>
+                <span style="color: {COLORS['text']}; font-family: 'VT323', monospace; font-size: 1.3rem;">{halving_data['progress_pct']:.1f}%</span>
             </div>
             <div>
-                <span style="color: {COLORS['text_dim']}; font-size: 10px;">PRÓXIMO:</span><br>
-                <span style="color: {COLORS['text']}; font-size: 12px; font-family: monospace;">{halving_data['days_to_next']} días</span>
+                <span style="color: {COLORS['text_dim']}; font-family: 'VT323', monospace; font-size: 0.85rem; letter-spacing: 2px;">PRÓXIMO:</span><br>
+                <span style="color: {COLORS['text']}; font-family: 'VT323', monospace; font-size: 1.3rem;">{halving_data['days_to_next']} días</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
+    st.markdown("<hr>", unsafe_allow_html=True)
 
 def render_status_panel(zone_data):
     """Renderiza el panel de estado de zona clásica"""
@@ -1336,8 +1340,10 @@ def render_zone_levels(zone_data):
     
     levels = zone_data['levels']
     
-    st.markdown("---")
-    st.markdown("**NIVELES DE ZONAS DE ACUMULACIÓN (Basado en MA 200 Semanas)**")
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown(f"""<div style="font-family: 'VT323', monospace; color: {COLORS['accent_cyan']}; font-size: 1.2rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 15px;">
+        // NIVELES DE ZONAS — MA 200 SEMANAS //
+    </div>""", unsafe_allow_html=True)
     
     cols = st.columns(6)
     
@@ -1359,53 +1365,124 @@ def render_zone_levels(zone_data):
 def render_warning_section():
     """Sección de advertencias"""
     
-    with st.expander("⚠️ AVISOS DE RIESGO CRÍTICOS", expanded=True):
-        st.markdown(f"""
-        <div style='color: {COLORS['text_dim']};'>
-        
-        **1. RSU Score es un Modelo Probabilístico**
-        La combinación de indicadores mejora la filtración de falsos positivos,
-        pero no elimina el riesgo. Los mercados pueden comportarse de manera irracional.
-        
-        **2. Stress Test son Simulaciones**
-        Los escenarios presentados son hipotéticos. Las probabilidades asignadas 
-        son estimaciones subjetivas basadas en eventos históricos similares.
-        
-        **3. Alertas Progresivas No son Señales de Trading**
-        Las alertas de proximidad a zonas son informativas. No garantizan que 
-        el precio alcance dichos niveles.
-        
-        **4. Curvatura MA200 es Rezagada**
-        La detección de tendencia usa medias móviles de 30 días sobre la MA200W,
-        lo que introduce retraso en la señal.
-        
-        **5. Esto NO es Asesoramiento Financiero**
-        Nunca inviertas más de lo que puedas permitirte perder.
-        </div>
-        """, unsafe_allow_html=True)
+    with st.expander("⚠️ // AVISOS DE RIESGO CRÍTICOS", expanded=True):
+        risks = [
+            ("01", "RSU SCORE ES UN MODELO PROBABILÍSTICO", "La combinación de indicadores mejora la filtración de falsos positivos, pero no elimina el riesgo. Los mercados pueden comportarse de manera irracional."),
+            ("02", "STRESS TEST SON SIMULACIONES", "Los escenarios presentados son hipotéticos. Las probabilidades asignadas son estimaciones subjetivas basadas en eventos históricos similares."),
+            ("03", "ALERTAS PROGRESIVAS NO SON SEÑALES DE TRADING", "Las alertas de proximidad a zonas son informativas. No garantizan que el precio alcance dichos niveles."),
+            ("04", "CURVATURA MA200 ES REZAGADA", "La detección de tendencia usa medias móviles de 30 días sobre la MA200W, lo que introduce retraso en la señal."),
+            ("05", "ESTO NO ES ASESORAMIENTO FINANCIERO", "Nunca inviertas más de lo que puedas permitirte perder."),
+        ]
+        for num, title, desc in risks:
+            st.markdown(f"""
+            <div class="risk-box" style="margin-bottom: 10px;">
+                <div style="font-family: 'VT323', monospace; color: {COLORS['accent_red']}; font-size: 0.8rem; letter-spacing: 3px; margin-bottom: 4px;">{num} //</div>
+                <div style="font-family: 'VT323', monospace; color: {COLORS['accent_orange']}; font-size: 1.1rem; letter-spacing: 2px; margin-bottom: 6px;">{title}</div>
+                <div style="font-family: 'Courier New', monospace; color: {COLORS['text_dim']}; font-size: 0.85rem; line-height: 1.6;">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ───────────────────────────────────────────────────────────────────────────────
 # MAIN RENDER
 # ───────────────────────────────────────────────────────────────────────────────
 
 def main():
-    # CSS Global
+    # CSS Global — RSU Terminal v3 (roadmap_2026 fusion)
     st.markdown(f"""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
     .stApp {{
-        background-color: {COLORS['bg_dark']};
+        background: {COLORS['bg_dark']};
     }}
-    h1, h2, h3 {{
-        color: {COLORS['accent_cyan']} !important;
-        font-family: 'Courier New', monospace !important;
+
+    h1, h2, h3, h4, h5, h6 {{
+        font-family: 'VT323', monospace !important;
+        color: {COLORS['accent_green']} !important;
         text-transform: uppercase;
         letter-spacing: 2px;
     }}
+    h1 {{
+        font-size: 3.2rem !important;
+        text-shadow: 0 0 20px {hex_to_rgba(COLORS['accent_green'], 0.4)};
+        border-bottom: 2px solid {COLORS['accent_green']};
+        padding-bottom: 15px;
+    }}
+    h2 {{
+        font-size: 2rem !important;
+        color: {COLORS['accent_cyan']} !important;
+        border-left: 4px solid {COLORS['accent_green']};
+        padding-left: 15px;
+        margin-top: 30px !important;
+    }}
+    h3 {{
+        font-size: 1.6rem !important;
+        color: {COLORS['accent_orange']} !important;
+    }}
+
+    p, li {{
+        font-family: 'Courier New', monospace;
+        color: {COLORS['text']} !important;
+        line-height: 1.8;
+    }}
+
+    strong {{
+        color: {COLORS['accent_green']};
+    }}
+
+    hr {{
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, {COLORS['accent_green']}, transparent);
+        margin: 30px 0;
+    }}
+
+    /* Clases reutilizadas de roadmap_2026 */
+    .terminal-box {{
+        background: linear-gradient(135deg, {COLORS['bg_dark']} 0%, {COLORS['bg_panel']} 100%);
+        border: 1px solid {hex_to_rgba(COLORS['accent_green'], 0.27)};
+        border-radius: 8px;
+        padding: 25px;
+        margin: 20px 0;
+        box-shadow: 0 0 15px {hex_to_rgba(COLORS['accent_green'], 0.07)};
+    }}
+
+    .phase-box {{
+        background: {COLORS['bg_dark']};
+        border-left: 3px solid {COLORS['accent_green']};
+        padding: 20px;
+        margin: 15px 0;
+        border-radius: 0 8px 8px 0;
+    }}
+
+    .highlight-quote {{
+        background: {hex_to_rgba(COLORS['accent_green'], 0.07)};
+        border: 1px solid {hex_to_rgba(COLORS['accent_green'], 0.2)};
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        font-family: 'VT323', monospace;
+        font-size: 1.2rem;
+        color: {COLORS['accent_green']};
+        text-align: center;
+        letter-spacing: 1px;
+    }}
+
+    .risk-box {{
+        background: linear-gradient(135deg, #1a0f0f 0%, #261a1a 100%);
+        border: 1px solid {hex_to_rgba(COLORS['accent_red'], 0.27)};
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+    }}
+
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
         background-color: {COLORS['bg_panel']};
         padding: 10px;
         border-radius: 8px;
+        border: 1px solid {hex_to_rgba(COLORS['accent_green'], 0.15)};
     }}
     .stTabs [data-baseweb="tab"] {{
         background: {COLORS['bg_dark']};
@@ -1413,41 +1490,77 @@ def main():
         border: 1px solid {COLORS['grid']};
         border-radius: 4px;
         padding: 10px 20px;
-        font-family: 'Courier New', monospace;
+        font-family: 'VT323', monospace;
         text-transform: uppercase;
-        font-size: 12px;
+        font-size: 1rem;
+        letter-spacing: 2px;
     }}
     .stTabs [aria-selected="true"] {{
         background: {COLORS['bg_panel']};
-        color: {COLORS['accent_green']};
+        color: {COLORS['accent_green']} !important;
         border: 1px solid {COLORS['accent_green']};
         box-shadow: 0 0 10px {hex_to_rgba(COLORS['accent_green'], 0.3)};
+        font-family: 'VT323', monospace;
     }}
+
+    /* Botones */
     .stButton>button {{
         background: {COLORS['bg_panel']};
-        color: {COLORS['accent_cyan']};
-        border: 1px solid {COLORS['accent_cyan']};
+        color: {COLORS['accent_green']};
+        border: 1px solid {COLORS['accent_green']};
         border-radius: 4px;
-        font-family: 'Courier New', monospace;
+        font-family: 'VT323', monospace;
         text-transform: uppercase;
-        letter-spacing: 2px;
+        letter-spacing: 3px;
+        font-size: 1rem;
+        transition: all 0.2s ease;
     }}
     .stButton>button:hover {{
-        background: {COLORS['accent_cyan']};
+        background: {COLORS['accent_green']};
         color: {COLORS['bg_dark']};
-        box-shadow: 0 0 20px {hex_to_rgba(COLORS['accent_cyan'], 0.5)};
+        box-shadow: 0 0 20px {hex_to_rgba(COLORS['accent_green'], 0.5)};
+    }}
+
+    /* Inputs */
+    .stTextInput>div>div>input {{
+        background: {COLORS['bg_panel']};
+        color: {COLORS['accent_green']};
+        border: 1px solid {COLORS['grid']};
+        font-family: 'VT323', monospace;
+        font-size: 1.1rem;
+        letter-spacing: 2px;
+    }}
+
+    /* Métricas */
+    [data-testid="metric-container"] {{
+        background: {COLORS['bg_panel']};
+        border: 1px solid {COLORS['grid']};
+        border-radius: 8px;
+        padding: 15px;
+    }}
+    [data-testid="metric-container"] label {{
+        font-family: 'VT323', monospace !important;
+        color: {COLORS['text_dim']} !important;
+        letter-spacing: 2px;
+        font-size: 0.9rem !important;
     }}
     </style>
     """, unsafe_allow_html=True)
     
     # Header
     st.markdown(f"""
-    <div style="text-align: center; margin-bottom: 30px; padding: 20px; border-bottom: 1px solid {COLORS['grid']};">
-        <div style="font-size: 48px; margin-bottom: 10px;">₿</div>
-        <h1 style="margin: 0; font-size: 2rem;">Modelo RSU Bitcoin v2.1</h1>
-        <p style="color: {COLORS['text_dim']}; font-family: 'Courier New', monospace; font-size: 14px; margin-top: 10px;">
-            Multi-Indicador + Alertas Progresivas + Stress Test | Ciclo Halving Integrado
-        </p>
+    <div style="text-align: center; margin-bottom: 40px; padding: 30px 20px;">
+        <div style="font-family: 'VT323', monospace; font-size: 0.95rem; color: {COLORS['text_dim']}; margin-bottom: 12px; letter-spacing: 3px;">
+            [SECURE CONNECTION ESTABLISHED // ENCRYPTION: AES-256]
+        </div>
+        <div style="font-size: 56px; margin-bottom: 5px; filter: drop-shadow(0 0 15px {hex_to_rgba(COLORS['accent_green'], 0.5)});">₿</div>
+        <h1 style="margin: 10px 0; font-size: 3rem; font-family: 'VT323', monospace; letter-spacing: 4px;">
+            RSU BITCOIN MODEL v2.1
+        </h1>
+        <div style="font-family: 'VT323', monospace; color: {COLORS['accent_cyan']}; font-size: 1.1rem; letter-spacing: 3px; margin-top: 8px;">
+            PROTOCOLO DE ACUMULACIÓN MULTI-INDICADOR // CICLO HALVING INTEGRADO
+        </div>
+        <div style="height: 1px; background: linear-gradient(90deg, transparent, {COLORS['accent_green']}, transparent); margin-top: 25px;"></div>
     </div>
     """, unsafe_allow_html=True)
     

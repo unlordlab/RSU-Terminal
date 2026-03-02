@@ -439,50 +439,287 @@ def render():
     
     st.markdown("""
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        .stApp {
+            background: #0c0e12;
+        }
+
+        /* VT323 para todos los headings */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'VT323', monospace !important;
+            color: #00ffad !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h1 {
+            font-size: 3.5rem !important;
+            text-shadow: 0 0 20px #00ffad66;
+            border-bottom: 2px solid #00ffad;
+            padding-bottom: 15px;
+            margin-bottom: 30px !important;
+        }
+
+        /* Body text */
+        p, li {
+            font-family: 'Courier New', monospace;
+            color: #ccc !important;
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }
+
+        strong {
+            color: #00ffad;
+            font-weight: bold;
+        }
+
+        /* Bullets custom */
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        ul li::before {
+            content: "▸ ";
+            color: #00ffad;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        /* HR con gradiente */
+        hr {
+            border: none;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00ffad, transparent);
+            margin: 40px 0;
+        }
+
+        /* === COMPONENTES PRINCIPALES === */
+
         .main-header { text-align: center; margin-bottom: 30px; padding: 20px 0; }
-        .main-title { color: white; font-size: 2.5rem; margin-bottom: 10px; font-weight: 700; }
-        .main-subtitle { color: #888; font-size: 1.1rem; max-width: 700px; margin: 0 auto; line-height: 1.6; }
-        .group-container { border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; margin-bottom: 20px; }
-        .group-header { background: #0c0e12; padding: 15px 20px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }
-        .group-title { margin: 0; color: white; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; }
-        .group-content { padding: 20px; background: #11141a; }
-        .metric-card { background: #0c0e12; border: 1px solid #1a1e26; border-radius: 10px; padding: 20px 15px; text-align: center; }
-        .metric-value { font-size: 1.8rem; font-weight: bold; color: white; margin-bottom: 5px; }
-        .metric-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 1.5px; }
-        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-        .badge-hot { background: rgba(242, 54, 69, 0.15); color: #f23645; border: 1px solid rgba(242, 54, 69, 0.3); }
-        .badge-strong { background: rgba(0, 255, 173, 0.15); color: #00ffad; border: 1px solid rgba(0, 255, 173, 0.3); }
-        .badge-info { background: rgba(41, 98, 255, 0.15); color: #2962ff; border: 1px solid rgba(41, 98, 255, 0.3); }
-        .section-divider { border: none; height: 1px; background: linear-gradient(90deg, transparent 0%, #2a3f5f 50%, transparent 100%); margin: 40px 0; position: relative; }
-        .section-divider::after { content: '◆'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #2962ff; font-size: 8px; background: #0c0e12; padding: 0 15px; }
-        .help-box { background: linear-gradient(135deg, rgba(41,98,255,0.1) 0%, rgba(0,255,173,0.05) 100%); border-left: 3px solid #00ffad; padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0; }
-        .help-title { color: #00ffad; font-weight: bold; font-size: 13px; margin-bottom: 5px; }
-        .help-text { color: #aaa; font-size: 12px; line-height: 1.5; }
-        /* Estilo discreto para el botón */
+
+        .main-title {
+            font-family: 'VT323', monospace !important;
+            color: #00ffad !important;
+            font-size: 3.5rem;
+            text-shadow: 0 0 20px #00ffad66;
+            border-bottom: 2px solid #00ffad;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .main-subtitle {
+            font-family: 'Courier New', monospace;
+            color: #00d9ff;
+            font-size: 1rem;
+            max-width: 700px;
+            margin: 0 auto;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        /* Terminal box — equivalente a metric-card + group-container */
+        .terminal-box {
+            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
+            border: 1px solid #00ffad44;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 20px 0;
+            box-shadow: 0 0 15px #00ffad11;
+        }
+
+        .phase-box {
+            background: #0c0e12;
+            border-left: 4px solid #00ffad;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .highlight-quote {
+            background: #00ffad11;
+            border: 1px solid #00ffad33;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            color: #00ffad;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        .risk-box {
+            background: linear-gradient(135deg, #1a0f0f 0%, #261a1a 100%);
+            border: 1px solid #f2364544;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        /* Group containers (tablas RS/RW) */
+        .group-container {
+            border: 1px solid #00ffad33;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #0c0e12;
+            margin-bottom: 20px;
+            box-shadow: 0 0 10px #00ffad0a;
+        }
+
+        .group-header {
+            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
+            padding: 15px 20px;
+            border-bottom: 1px solid #00ffad33;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .group-title {
+            font-family: 'VT323', monospace !important;
+            margin: 0;
+            color: #00ffad !important;
+            font-size: 1.3rem !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .group-content { padding: 20px; background: #0c0e12; }
+
+        /* Metric cards rediseñadas */
+        .metric-card {
+            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
+            border: 1px solid #00ffad33;
+            border-radius: 8px;
+            padding: 20px 15px;
+            text-align: center;
+            box-shadow: 0 0 10px #00ffad0a;
+        }
+
+        .metric-value {
+            font-family: 'VT323', monospace;
+            font-size: 2.2rem;
+            color: white;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+
+        .metric-label {
+            font-family: 'Courier New', monospace;
+            font-size: 0.65rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-family: 'VT323', monospace;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .badge-hot { background: rgba(242,54,69,0.15); color: #f23645; border: 1px solid rgba(242,54,69,0.4); }
+        .badge-strong { background: rgba(0,255,173,0.15); color: #00ffad; border: 1px solid rgba(0,255,173,0.4); }
+        .badge-info { background: rgba(0,217,255,0.1); color: #00d9ff; border: 1px solid rgba(0,217,255,0.3); }
+
+        /* Section headers */
+        .section-header {
+            font-family: 'VT323', monospace;
+            color: #00ffad;
+            font-size: 1.6rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 15px;
+            border-left: 4px solid #00ffad;
+            padding-left: 15px;
+        }
+
+        /* Help/phase boxes */
+        .help-box {
+            background: #0c0e12;
+            border-left: 4px solid #00ffad;
+            padding: 15px 20px;
+            margin: 10px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .help-title {
+            font-family: 'VT323', monospace;
+            color: #00ffad;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+        .help-text {
+            font-family: 'Courier New', monospace;
+            color: #aaa;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        /* HR divisor secciones */
+        .section-divider {
+            border: none;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00ffad, transparent);
+            margin: 40px 0;
+        }
+
+        /* Botón discreto */
         .scan-button-container {
             margin-top: 20px;
             padding-top: 20px;
-            border-top: 1px solid #1a1e26;
+            border-top: 1px solid #00ffad22;
         }
         .stButton > button[kind="secondary"] {
             background-color: transparent !important;
             border: 1px solid #00ffad !important;
             color: #00ffad !important;
-            font-weight: normal !important;
+            font-family: 'VT323', monospace !important;
+            font-size: 1.2rem !important;
+            letter-spacing: 3px !important;
+            text-transform: uppercase !important;
         }
         .stButton > button[kind="secondary"]:hover {
             background-color: rgba(0, 255, 173, 0.1) !important;
+            box-shadow: 0 0 15px #00ffad33 !important;
+        }
+
+        /* Strategy grid */
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .strategy-card {
+            background: #0c0e12;
+            border: 1px solid #2a3f5f;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
         }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
     <div class="main-header">
-        <h1 class="main-title"><span style="color: #00ffad;">🔍</span> Scanner RS/RW Pro</h1>
-        <p class="main-subtitle">
-            Análisis institucional de Fuerza Relativa con contexto sectorial. 
-            Identifica flujo de capital y rotación entre sectores.
-        </p>
+        <div style="font-family: 'VT323', monospace; font-size: 1rem; color: #666; margin-bottom: 10px; letter-spacing: 2px;">
+            [SECURE CONNECTION ESTABLISHED // ENCRYPTION: AES-256]
+        </div>
+        <div class="main-title">🔍 SCANNER RS/RW PRO</div>
+        <div class="main-subtitle">
+            ANÁLISIS INSTITUCIONAL DE FUERZA RELATIVA // ROTACIÓN SECTORIAL
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -511,7 +748,7 @@ def render():
     
     st.markdown(f"""
     <div style="text-align: center; margin-bottom: 20px;">
-        <span class="badge badge-info">📊 {num_tickers} tickers | {num_sectors} sectores | {engine.source}</span>
+        <span class="badge badge-info">▸ {num_tickers} TICKERS &nbsp;|&nbsp; {num_sectors} SECTORES &nbsp;|&nbsp; SRC: {engine.source}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -656,7 +893,7 @@ def render():
             """)
 
     # Configuración
-    st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">⚙️ Configuración del Scanner</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">⚙️ CONFIGURACIÓN DEL SCANNER</div>', unsafe_allow_html=True)
     
     with st.expander("💡 ¿Cómo configurar el scanner? Guía rápida", expanded=False):
         st.markdown("""
@@ -779,8 +1016,8 @@ def render():
                     st.markdown(f"""
                     <div class="metric-card">
                         <div class="metric-value" style="color: {color};">{spy_perf:+.2%}</div>
-                        <div class="metric-label">SPY 20D</div>
-                        <div style="color: {color}; font-size: 11px; margin-top: 5px;">{icon} Tendencia</div>
+                        <div class="metric-label">SPY // 20D</div>
+                        <div style="font-family:'Courier New',monospace; color: {color}; font-size: 11px; margin-top: 5px; letter-spacing:1px;">{icon} TENDENCIA</div>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -789,8 +1026,8 @@ def render():
                     st.markdown(f"""
                     <div class="metric-card">
                         <div class="metric-value" style="color: #00ffad;">{strong}</div>
-                        <div class="metric-label">Strong RS</div>
-                        <div style="color: #666; font-size: 11px; margin-top: 5px;">>{rs_threshold:.0%} vs SPY</div>
+                        <div class="metric-label">STRONG RS</div>
+                        <div style="font-family:'Courier New',monospace; color: #666; font-size: 11px; margin-top: 5px; letter-spacing:1px;">▸ >{rs_threshold:.0%} vs SPY</div>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -798,9 +1035,9 @@ def render():
                     high_rvol = len(results[results['RVOL'] > 1.5])
                     st.markdown(f"""
                     <div class="metric-card">
-                        <div class="metric-value" style="color: #ffaa00;">{high_rvol}</div>
-                        <div class="metric-label">High RVOL</div>
-                        <div style="color: #666; font-size: 11px; margin-top: 5px;">>1.5x volumen</div>
+                        <div class="metric-value" style="color: #ff9800;">{high_rvol}</div>
+                        <div class="metric-label">HIGH RVOL</div>
+                        <div style="font-family:'Courier New',monospace; color: #666; font-size: 11px; margin-top: 5px; letter-spacing:1px;">▸ >1.5x VOLUMEN</div>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -808,9 +1045,9 @@ def render():
                     setups = len(results[(results['RS_Score'] > rs_threshold) & (results['RVOL'] > min_rvol)])
                     st.markdown(f"""
                     <div class="metric-card">
-                        <div class="metric-value" style="color: #2962ff;">{setups}</div>
-                        <div class="metric-label">Setups Activos</div>
-                        <div style="color: #666; font-size: 11px; margin-top: 5px;">RS+Vol confirmado</div>
+                        <div class="metric-value" style="color: #00d9ff;">{setups}</div>
+                        <div class="metric-label">SETUPS ACTIVOS</div>
+                        <div style="font-family:'Courier New',monospace; color: #666; font-size: 11px; margin-top: 5px; letter-spacing:1px;">▸ RS+VOL CONFIRMADO</div>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -820,16 +1057,16 @@ def render():
                         top_sector_rs = sector_data.loc[top_sector, 'RS']
                         st.markdown(f"""
                         <div class="metric-card">
-                            <div class="metric-value" style="color: #00ffad; font-size: 1.4rem;">{top_sector}</div>
-                            <div class="metric-label">Sector Líder</div>
-                            <div style="color: #00ffad; font-size: 11px; margin-top: 5px;">{top_sector_rs:+.2%} vs SPY</div>
+                            <div class="metric-value" style="color: #00ffad; font-size: 1.5rem;">{top_sector}</div>
+                            <div class="metric-label">SECTOR LÍDER</div>
+                            <div style="font-family:'Courier New',monospace; color: #00ffad; font-size: 11px; margin-top: 5px; letter-spacing:1px;">▸ {top_sector_rs:+.2%} vs SPY</div>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
                         <div class="metric-card">
-                            <div class="metric-value">-</div>
-                            <div class="metric-label">Sector Líder</div>
+                            <div class="metric-value">—</div>
+                            <div class="metric-label">SECTOR LÍDER</div>
                         </div>
                         """, unsafe_allow_html=True)
                 
@@ -837,7 +1074,7 @@ def render():
 
                 # Análisis de rotación sectorial
                 if not sector_data.empty:
-                    st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🔄 Rotación Sectorial</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="section-header">🔄 ROTACIÓN SECTORIAL</div>', unsafe_allow_html=True)
                     
                     with st.expander("💡 ¿Qué es la Rotación Sectorial y cómo interpretarla?", expanded=False):
                         st.markdown("""
@@ -906,7 +1143,7 @@ def render():
 
                 # Gráfico de dispersión
                 st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-                st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">📊 Mapa de Oportunidades</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header">📊 MAPA DE OPORTUNIDADES</div>', unsafe_allow_html=True)
                 
                 with st.expander("💡 Cómo interpretar el gráfico de dispersión", expanded=False):
                     st.markdown("""
@@ -975,7 +1212,7 @@ def render():
                 # Tablas de resultados por sector
                 st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
                 
-                st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🎯 Resultados Detallados</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header">🎯 RESULTADOS DETALLADOS</div>', unsafe_allow_html=True)
                 
                 available_sectors = ['Todos'] + sorted(results['Sector'].unique().tolist())
                 selected_sector = st.selectbox(
@@ -996,7 +1233,7 @@ def render():
                     <div class="group-container">
                         <div class="group-header">
                             <span class="group-title">🚀 LÍDERES RS</span>
-                            <span class="badge badge-strong">LONG CANDIDATES</span>
+                            <span class="badge badge-strong">▸ LONG CANDIDATES</span>
                         </div>
                         <div class="group-content">
                     """, unsafe_allow_html=True)
@@ -1044,7 +1281,7 @@ def render():
                     <div class="group-container">
                         <div class="group-header">
                             <span class="group-title">📉 LAGGARDS</span>
-                            <span class="badge badge-hot">AVOID / SHORT</span>
+                            <span class="badge badge-hot">▸ AVOID / SHORT</span>
                         </div>
                         <div class="group-content">
                     """, unsafe_allow_html=True)
@@ -1088,7 +1325,7 @@ def render():
 
     # VWAP
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    st.markdown('<div style="margin-bottom: 15px; color: #00ffad; font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">🎯 Validación Intradía con VWAP</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🎯 VALIDACIÓN INTRADÍA CON VWAP</div>', unsafe_allow_html=True)
     
     with st.expander("💡 Cómo usar el VWAP con el Scanner RS", expanded=False):
         st.markdown("""
@@ -1206,3 +1443,13 @@ def render():
                     st.warning("Sin datos disponibles. El mercado puede estar cerrado.")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
+
+    st.markdown("""
+    <div style="text-align:center; margin-top: 60px; padding: 20px; border-top: 1px solid #00ffad22;">
+        <p style="font-family: 'VT323', monospace; color: #444; font-size: 0.9rem; letter-spacing: 2px;">
+            [END OF TRANSMISSION // RSRW_SCANNER_v2.0]<br>
+            [BENCHMARK: SPY // UNIVERSE: S&amp;P500 // TIMEFRAMES: 5D · 20D · 60D]<br>
+            [STATUS: ACTIVE]
+        </p>
+    </div>
+    """, unsafe_allow_html=True)

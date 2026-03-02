@@ -338,16 +338,18 @@ def get_forexfactory_calendar():
                     impact = impact_map.get(item.get('impact', 'Low'), 'Low')
                     title = item.get('title', 'Evento')
                     title_es = translate_event(title)
-                    # ForexFactory entrega horas en UTC — convertir a hora española (CET/CEST)
+                    # ForexFactory entrega horas en ET (Nueva York), NO en UTC
+                    # ET→España: +6h tanto en invierno como en verano (ambos cambian DST el mismo día)
                     try:
                         import pytz as _pytz
+                        _et     = _pytz.timezone('America/New_York')
                         _madrid = _pytz.timezone('Europe/Madrid')
-                        _utc_ff = event_dt.replace(tzinfo=_pytz.utc)
-                        _mad_ff = _utc_ff.astimezone(_madrid)
-                        hour_cet = _mad_ff.hour
-                        event_dt = _mad_ff.replace(tzinfo=None)
+                        _et_dt  = _et.localize(event_dt)
+                        _mad_dt = _et_dt.astimezone(_madrid)
+                        hour_cet = _mad_dt.hour
+                        event_dt = _mad_dt.replace(tzinfo=None)
                     except:
-                        hour_cet = (event_dt.hour + 1) % 24
+                        hour_cet = (event_dt.hour + 6) % 24  # fallback: ET+6 ≈ hora española
                     if event_dt.date() == now.date():
                         date_display, date_color = "HOY", "#00ffad"
                     elif event_dt.date() == (now + timedelta(days=1)).date():
@@ -2378,18 +2380,14 @@ def render():
         "Nota: Utilitza un to directe, professional i analític. Evita generalitats."
     )
 
-    # Cabecera + área de contenido del briefing — layout compacto en st.markdown
+    # Briefing: todo en components.html + botón oculto Streamlit
     if "briefing_text" not in st.session_state:
         st.session_state["briefing_text"] = ""
         st.session_state["briefing_ts"] = ""
 
-    _generate = False
-
     briefing_text = st.session_state.get("briefing_text", "")
     briefing_ts   = st.session_state.get("briefing_ts", "")
 
-    # Formatear briefing si existe
-    briefing_html_content = ""
     if briefing_text:
         import html as _html, re as _re
         safe = _html.escape(briefing_text)
@@ -2397,62 +2395,95 @@ def render():
         safe = _re.sub(r'^(\d+\..+)$', r'<span style="color:#00d9ff;font-weight:bold;">\1</span>', safe, flags=_re.MULTILINE)
         safe = _re.sub(r'(?i)(Risk-on)', r'<span style="color:#00ffad;font-weight:bold;">\1</span>', safe)
         safe = _re.sub(r'(?i)(Risk-off)', r'<span style="color:#f23645;font-weight:bold;">\1</span>', safe)
-        briefing_html_content = f'''
-        <div style="color:#ccc; font-family:'Courier New',monospace; font-size:12px;
-                    line-height:1.8; white-space:pre-wrap; padding:14px 18px;">{safe}</div>
-        <div style="padding:6px 18px 8px; border-top:1px solid #1a1e26; color:#555;
-                    font-size:10px; font-family:'Courier New',monospace; text-align:center;
-                    background:#0c0e12;">
-            Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
+        body_inner = f'''
+        <div style="flex:1;overflow-y:auto;padding:14px 18px;scrollbar-width:thin;scrollbar-color:#1a1e26 transparent;">
+            <div style="color:#ccc;font-family:Courier New,monospace;font-size:12px;line-height:1.8;white-space:pre-wrap;">{safe}</div>
+        </div>
+        <div style="background:#0c0e12;border-top:1px solid #1a1e26;padding:6px 18px;
+                    display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <span style="color:#555;font-size:10px;font-family:Courier New,monospace;">
+                Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
+            </span>
+            <button onclick="triggerBriefing()" style="background:#00ffad22;border:1px solid #00ffad66;color:#00ffad;
+                padding:2px 10px;border-radius:4px;font-family:VT323,monospace;font-size:14px;
+                letter-spacing:1px;cursor:pointer;box-shadow:0 0 8px #00ffad22;">↻ ACTUALIZAR</button>
         </div>'''
+        briefing_h = 310
     else:
-        briefing_html_content = '''
-        <div style="padding:32px 18px; text-align:center;">
-            <div style="font-size:28px; margin-bottom:10px;">📡</div>
-            <div style="color:#2a4a3a; font-family:'Courier New',monospace; font-size:11px;">
-                Pulsa <strong style="color:#00ffad;">▶ GENERAR BRIEFING</strong>
-                para obtener el análisis diario del mercado
+        body_inner = '''
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+            <div style="font-size:26px;margin-bottom:10px;">📡</div>
+            <div style="color:#2a4a3a;font-family:Courier New,monospace;font-size:11px;text-align:center;line-height:1.6;">
+                Pulsa <strong style="color:#00ffad;">▶ GENERAR BRIEFING</strong><br>
+                para el análisis diario del mercado
             </div>
-            <div style="margin-top:8px; color:#1a2e1a; font-size:10px; font-family:'Courier New',monospace;">
-                [GEMINI 2.0 FLASH // GOOGLE SEARCH ENABLED // ANÁLISIS EN TIEMPO REAL]
-            </div>
-        </div>'''
-
-    st.markdown(f"""
-    <div style="border:1px solid #00ffad33; border-radius:10px; overflow:hidden; background:#11141a;
-                box-shadow:0 0 30px #00ffad0d; margin-bottom:8px;">
-        <div style="background:#0c0e12; padding:10px 18px; border-bottom:2px solid #00ffad22;
-                    display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <div style="font-family:'VT323','Share Tech Mono','Courier New',monospace;
-                            font-size:22px; color:#00ffad; text-transform:uppercase;
-                            letter-spacing:3px; text-shadow:0 0 15px #00ffad55;">
-                    📊 Resumen Diario de Mercado
-                </div>
-                <div style="font-size:9px; color:#555; margin-top:2px; font-family:'Courier New',monospace;">
-                    {today_str} // BRIEFING MATINAL // POWERED BY GEMINI + GOOGLE SEARCH
-                </div>
-            </div>
-            <div style="background:#00ffad22; color:#00ffad; border:1px solid #00ffad44;
-                        padding:3px 10px; border-radius:4px; font-size:9px; font-weight:bold;
-                        letter-spacing:1px; font-family:'Courier New',monospace;">
-                AI POWERED
+            <div style="margin-top:6px;color:#1a2e1a;font-size:10px;font-family:Courier New,monospace;">
+                [GEMINI 2.0 FLASH // GOOGLE SEARCH // TIEMPO REAL]
             </div>
         </div>
-        {briefing_html_content}
+        <div style="background:#0c0e12;border-top:1px solid #1a1e26;padding:8px 18px;flex-shrink:0;display:flex;justify-content:flex-end;">
+            <button onclick="triggerBriefing()" style="background:#00ffad22;border:1px solid #00ffad88;color:#00ffad;
+                padding:3px 16px;border-radius:5px;font-family:VT323,monospace;font-size:16px;
+                letter-spacing:2px;cursor:pointer;box-shadow:0 0 10px #00ffad22;">▶ GENERAR BRIEFING</button>
+        </div>'''
+        briefing_h = 190
+
+    briefing_module_html = f'''<!DOCTYPE html><html><head>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+    *{{margin:0;padding:0;box-sizing:border-box;}}
+    body{{background:#0c0e12;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;}}
+    .wrap{{border:1px solid #00ffad33;border-radius:10px;overflow:hidden;background:#11141a;
+           width:100%;height:{briefing_h}px;display:flex;flex-direction:column;box-shadow:0 0 30px #00ffad0d;}}
+    .hdr{{background:#0c0e12;padding:10px 18px;border-bottom:2px solid #00ffad22;
+          display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
+    .ttl{{color:#00ffad;font-size:22px;text-transform:uppercase;letter-spacing:3px;
+          font-family:VT323,Share Tech Mono,Courier New,monospace;text-shadow:0 0 15px #00ffad55;}}
+    button:hover{{filter:brightness(1.3);}}
+    </style></head><body>
+    <div class="wrap">
+        <div class="hdr">
+            <div>
+                <div class="ttl">📊 Resumen Diario de Mercado</div>
+                <div style="font-size:9px;color:#555;margin-top:2px;font-family:Courier New,monospace;">
+                    {today_str} // BRIEFING MATINAL // GEMINI + GOOGLE SEARCH
+                </div>
+            </div>
+            <div style="background:#00ffad22;color:#00ffad;border:1px solid #00ffad44;
+                        padding:3px 10px;border-radius:4px;font-size:9px;font-weight:bold;
+                        letter-spacing:1px;font-family:Courier New,monospace;">AI POWERED</div>
+        </div>
+        {body_inner}
     </div>
-    """, unsafe_allow_html=True)
+    <script>
+    function triggerBriefing() {{
+        try {{
+            var doc = window.parent.document;
+            var btns = doc.querySelectorAll('button');
+            for (var i = 0; i < btns.length; i++) {{
+                if (btns[i].innerText.trim() === '__BRIEFING_GO__') {{ btns[i].click(); return; }}
+            }}
+        }} catch(e) {{ console.warn(e); }}
+    }}
+    </script>
+    </body></html>'''
 
-    _btn_col, _spacer = st.columns([1, 5])
-    with _btn_col:
-        _generate = st.button("▶ GENERAR BRIEFING", key="briefing_btn", type="primary")
+    components.html(briefing_module_html, height=briefing_h + 2, scrolling=False)
 
-    if _generate:
-        with st.spinner("Analizando mercados con Gemini + Google Search…"):
-            result = _call_gemini_briefing(resumen_prompt)
-        st.session_state["briefing_text"] = result
-        st.session_state["briefing_ts"] = get_timestamp()
-        st.rerun()
+    # Botón Streamlit oculto — identificado por texto único __BRIEFING_GO__
+    st.markdown("""<style>
+    div[data-testid="stVerticalBlock"]:has(button[data-testid="baseButton-secondary"])
+        div[data-testid="stVerticalBlock"] > div.element-container:first-child {
+        height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;
+    }</style>""", unsafe_allow_html=True)
+    _hc = st.columns([1, 20])
+    with _hc[0]:
+        if st.button("__BRIEFING_GO__", key="briefing_hidden", type="secondary"):
+            with st.spinner("Analizando con Gemini + Google Search…"):
+                result = _call_gemini_briefing(resumen_prompt)
+            st.session_state["briefing_text"] = result
+            st.session_state["briefing_ts"] = get_timestamp()
+            st.rerun()
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -2832,127 +2863,120 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — botones dentro del módulo HTML, sin botones externos Streamlit
+    # SECTOR ROTATION — radio oculto controla TF; botones visuales dentro del iframe
     with c2:
-        if 'sector_tf' not in st.session_state:
-            st.session_state.sector_tf = "1D"
-        tf_options = ["1D", "3D", "1W", "1M"]
-        current_tf = st.session_state.sector_tf
+        st.markdown("""<style>
+        /* Ocultar el widget radio completamente — solo usamos su estado */
+        div[data-testid="stRadio"] { 
+            height:0 !important; min-height:0 !important; overflow:hidden !important;
+            margin:0 !important; padding:0 !important; opacity:0 !important; pointer-events:none !important;
+        }
+        </style>""", unsafe_allow_html=True)
+
+        current_tf = st.radio("_tf_", ["1D","3D","1W","1M"],
+                              key="sector_tf_radio",
+                              label_visibility="collapsed",
+                              horizontal=True)
 
         sectors = get_sector_performance(current_tf)
-
         sectors_html = ""
         for sector in sectors:
-            code, name, change = sector['code'], sector['name'], sector['change']
-            if change >= 2:     bg_color, text_color = "#00ffad22", "#00ffad"
-            elif change >= 0.5: bg_color, text_color = "#00ffad18", "#00ffad"
-            elif change >= 0:   bg_color, text_color = "#00ffad10", "#00ffad"
-            elif change >= -0.5:bg_color, text_color = "#f2364510", "#f23645"
-            elif change >= -2:  bg_color, text_color = "#f2364518", "#f23645"
-            else:               bg_color, text_color = "#f2364522", "#f23645"
-            sectors_html += (f'<div class="sector-item" style="background:{bg_color};">'
-                             f'<div class="sector-code">{code}</div>'
-                             f'<div class="sector-name">{name}</div>'
-                             f'<div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>'
-                             f'</div>')
-
-        tf_btns_html = ""
-        for tf in tf_options:
-            active = tf == current_tf
-            bg = "#00ffad22" if active else "transparent"
-            border = "#00ffad88" if active else "#1e3a2f"
-            color = "#00ffad" if active else "#3a5a4a"
-            fw = "900" if active else "500"
-            glow = "box-shadow:0 0 10px #00ffad55;" if active else ""
-            tf_btns_html += (
-                f'<button id="tfbtn_{tf}" onclick="changeTF(\'{tf}\')" '
-                f'style="background:{bg}; border:1px solid {border}; color:{color}; '
-                f'padding:2px 9px; border-radius:4px; font-size:13px; font-weight:{fw}; '
-                f'margin-left:3px; cursor:pointer; transition:all 0.15s; height:20px; {glow}'
-                f'font-family:\'VT323\',\'Share Tech Mono\',monospace; letter-spacing:1px;">{tf}</button>'
+            code, name, change = sector["code"], sector["name"], sector["change"]
+            if   change >=  2:   bg, tc = "#00ffad22","#00ffad"
+            elif change >=  0.5: bg, tc = "#00ffad18","#00ffad"
+            elif change >=  0:   bg, tc = "#00ffad10","#00ffad"
+            elif change >= -0.5: bg, tc = "#f2364510","#f23645"
+            elif change >= -2:   bg, tc = "#f2364518","#f23645"
+            else:                bg, tc = "#f2364522","#f23645"
+            sectors_html += (
+                f'<div class="si" style="background:{bg};">' 
+                f'<div class="sc">{code}</div>'
+                f'<div class="sn">{name}</div>'
+                f'<div class="sv" style="color:{tc};">{change:+.2f}%</div>'
+                f'</div>'
             )
 
-        # Botones Streamlit ocultos — reciben el click via postMessage desde el iframe
-        # Los escondemos con CSS (height:0, overflow:hidden) para que no ocupen espacio
-        st.markdown("""
-        <style>
-        div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] > div.element-container:has(button[data-tf-hidden]) {
-            height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        tf_btns = ""
+        for tf in ["1D","3D","1W","1M"]:
+            act   = tf == current_tf
+            bg    = "#00ffad22" if act else "transparent"
+            bdr   = "#00ffad88" if act else "#1e3a2f"
+            col   = "#00ffad"   if act else "#3a5a4a"
+            fw    = "900"       if act else "500"
+            glow  = "box-shadow:0 0 10px #00ffad55;" if act else ""
+            tf_btns += (
+                f'<button onclick="setTF(\'{tf}\')" ' 
+                f'style="background:{bg};border:1px solid {bdr};color:{col};' 
+                f'padding:2px 9px;border-radius:4px;font-size:13px;font-weight:{fw};' 
+                f'margin-left:3px;cursor:pointer;height:20px;{glow}' 
+                f'font-family:VT323,Share Tech Mono,monospace;letter-spacing:1px;">{tf}</button>'
+            )
 
-        _hidden_cols = st.columns(4)
-        tf_changed = False
-        for i, tf in enumerate(tf_options):
-            with _hidden_cols[i]:
-                # Render as invisible buttons with data attribute for JS to find them
-                st.markdown(f'<span id="hidden_tf_{tf}"></span>', unsafe_allow_html=True)
-                if st.button(tf, key=f"sector_hidden_{tf}", type="secondary"):
-                    if tf != current_tf:
-                        st.session_state.sector_tf = tf
-                        tf_changed = True
-        if tf_changed:
-            st.rerun()
-
-        sector_module_html = f'''<!DOCTYPE html><html><head>
+        sec_html = f'''<!DOCTYPE html><html><head>
         <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
         <style>
-        * {{ margin:0; padding:0; box-sizing:border-box; }}
-        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
-        .content {{ flex:1; overflow:hidden; padding:8px; }}
-        .sector-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; height:100%; }}
-        .sector-item {{ background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 4px; text-align:center; display:flex; flex-direction:column; justify-content:center; }}
-        .sector-code {{ color:#666; font-size:9px; font-weight:bold; margin-bottom:2px; }}
-        .sector-name {{ color:white; font-size:10px; font-weight:600; margin-bottom:4px; line-height:1.2; }}
-        .sector-change {{ font-size:11px; font-weight:bold; }}
-        button {{ outline:none; }}
-        button:hover {{ filter:brightness(1.3); }}
-        .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
-        .tooltip-wrapper {{ position:static; display:inline-block; }}
-        .tooltip-btn {{ width:20px; height:20px; border-radius:50%; background:#1a1e26; border:1px solid #00ffad44; display:flex; align-items:center; justify-content:center; color:#00ffad; font-size:11px; font-weight:bold; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
-        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        *{{margin:0;padding:0;box-sizing:border-box;}}
+        body{{font-family:-apple-system,sans-serif;background:#11141a;}}
+        .wrap{{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;
+               width:100%;height:420px;display:flex;flex-direction:column;box-shadow:0 0 20px #00ffad08;}}
+        .hdr{{background:#0c0e12;padding:10px 12px;border-bottom:1px solid #00ffad22;
+              display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
+        .ttl{{color:#00ffad;font-size:18px;text-transform:uppercase;letter-spacing:2px;
+              font-family:VT323,Share Tech Mono,Courier New,monospace;text-shadow:0 0 10px #00ffad44;}}
+        .body{{flex:1;overflow:hidden;padding:8px;}}
+        .grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;height:100%;}}
+        .si{{background:#0c0e12;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;
+             text-align:center;display:flex;flex-direction:column;justify-content:center;}}
+        .sc{{color:#666;font-size:9px;font-weight:bold;margin-bottom:2px;}}
+        .sn{{color:white;font-size:10px;font-weight:600;margin-bottom:4px;line-height:1.2;}}
+        .sv{{font-size:11px;font-weight:bold;}}
+        button{{outline:none;transition:all 0.15s;}}
+        button:hover{{filter:brightness(1.4);}}
+        .ts{{text-align:center;color:#555;font-size:10px;padding:6px 0;font-family:Courier New,monospace;
+             border-top:1px solid #1a1e26;background:#0c0e12;flex-shrink:0;}}
+        .tip-wrap{{position:static;display:inline-block;}}
+        .tip-btn{{width:20px;height:20px;border-radius:50%;background:#1a1e26;border:1px solid #00ffad44;
+                  display:flex;align-items:center;justify-content:center;color:#00ffad;font-size:11px;font-weight:bold;cursor:help;}}
+        .tip-box{{display:none;position:fixed;width:280px;background:#1e222d;color:#eee;padding:12px;
+                  border-radius:10px;z-index:99999;font-size:11px;border:2px solid #00ffad;
+                  box-shadow:0 15px 40px rgba(0,0,0,0.9);line-height:1.5;left:50%;top:50%;transform:translate(-50%,-50%);}}
+        .tip-wrap:hover .tip-box{{display:block;}}
         </style></head><body>
-        <div class="container">
-            <div class="header">
-                <div class="title">Rotación Sectorial</div>
-                <div style="display:flex; align-items:center; gap:2px;">
-                    {tf_btns_html}
-                    <div class="tooltip-wrapper" style="margin-left:6px;">
-                        <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Rendimiento de sectores del S&P 500 vía ETFs sectoriales (XLK, XLF…). Los botones del header cambian el horizonte temporal sin recargar la página: 1D=hoy, 3D=3 días, 1W=semana, 1M=mes.</div>
+        <div class="wrap">
+            <div class="hdr">
+                <div class="ttl">Rotación Sectorial</div>
+                <div style="display:flex;align-items:center;gap:2px;">
+                    {tf_btns}
+                    <div class="tip-wrap" style="margin-left:6px;">
+                        <div class="tip-btn">?</div>
+                        <div class="tip-box">Rendimiento de sectores del S&P 500 vía ETFs sectoriales. Los botones cambian el horizonte: 1D=hoy, 3D=3 días, 1W=semana, 1M=mes.</div>
                     </div>
                 </div>
             </div>
-            <div class="content">
-                <div class="sector-grid">{sectors_html}</div>
-            </div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()} · {current_tf}</div>
+            <div class="body"><div class="grid">{sectors_html}</div></div>
+            <div class="ts">Actualizado: {get_timestamp()} · {current_tf}</div>
         </div>
         <script>
-        function changeTF(tf) {{
-            // Localizar el botón Streamlit oculto correspondiente en el documento padre y hacer click
+        function setTF(tf) {{
             try {{
                 var doc = window.parent.document;
-                var allBtns = doc.querySelectorAll('button[data-testid="baseButton-secondary"]');
-                for (var i = 0; i < allBtns.length; i++) {{
-                    if (allBtns[i].innerText.trim() === tf) {{
-                        allBtns[i].click();
-                        return;
-                    }}
+                // Buscar los radio inputs y hacer click en el correcto
+                var radios = doc.querySelectorAll('input[type="radio"]');
+                for (var i = 0; i < radios.length; i++) {{
+                    var lbl = radios[i].parentElement ? radios[i].parentElement.textContent.trim() : '';
+                    if (lbl === tf) {{ radios[i].click(); return; }}
                 }}
-            }} catch(e) {{
-                console.warn('sector changeTF error:', e);
-            }}
+                // Fallback: buscar labels
+                var labels = doc.querySelectorAll('label');
+                for (var j = 0; j < labels.length; j++) {{
+                    if (labels[j].textContent.trim() === tf) {{ labels[j].click(); return; }}
+                }}
+            }} catch(e) {{ console.warn('setTF error:', e); }}
         }}
         </script>
         </body></html>'''
 
-        components.html(sector_module_html, height=420, scrolling=False)
+        components.html(sec_html, height=420, scrolling=False)
     with c3:
         crypto_fg = get_crypto_fear_greed()
         val = crypto_fg['value']
@@ -4049,8 +4073,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
 
 
 

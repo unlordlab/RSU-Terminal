@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -2287,142 +2286,156 @@ def render():
         setTimeout(applyStyles, 300);
         setTimeout(applyStyles, 800);
         setTimeout(applyStyles, 2000);
+        setTimeout(applyStyles, 4000);
     })();
     </script>
     """, height=0, scrolling=False)
 
-    # ── RESUMEN DIARIO DE MERCADO ─────────────────────────────────────────────
-    today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
-    resumen_prompt = f"""Actua com un analista sènior de mercats financers. Avui és {today_str}. Genera un briefing concís (màxim 300 paraules) per a un trader professional que acaba d'obrir la terminal.
-Estructura obligatòria:
-1. Sentiment del Mercat: Defineix si estem en mode 'Risk-on', 'Risk-off' o 'Neutral' basant-te en l'acció del preu de les últimes 24 hores (S&P 500, Nasdaq, VIX).
-2. Acció del Preu i Nivells: Identifica 2 nivells clau per a l'S&P 500 (suport i resistència).
-3. Calendari Macro d'Avui: Llista les 2 o 3 dades macroeconòmiques d'impacte (USA) que es publiquen avui, incloent l'hora i la previsió del consens.
-4. Catalitzadors Específics: Resumeix breument qualsevol notícia geopolítica (especialment sobre l'Iran/Aranzels) o resultats corporatius que puguin moure el mercat avui.
-5. Conclusió Tàctica: Una frase sobre si avui convé ser agressiu o defensiu segons el context tècnic/macro.
-Nota: Utilitza un to directe, professional i analític. Evita generalitats."""
-
-    resumen_module_html = f'''<!DOCTYPE html><html><head>
-    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    # CSS adicional para el botón GENERAR BRIEFING (primary de Streamlit)
+    st.markdown("""
     <style>
-    * {{ margin:0; padding:0; box-sizing:border-box; }}
-    body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0c0e12; }}
-    .container {{ border:1px solid #00ffad33; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:280px; display:flex; flex-direction:column; box-shadow:0 0 30px #00ffad0d; }}
-    .header {{ background:#0c0e12; padding:12px 16px; border-bottom:2px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-    .title {{ color:#00ffad; font-size:22px; font-weight:normal; text-transform:uppercase; letter-spacing:3px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 15px #00ffad55; }}
-    .content {{ flex:1; overflow-y:auto; padding:14px 16px; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
-    .briefing-text {{ color:#ccc; font-family:'Courier New',monospace; font-size:12px; line-height:1.7; white-space:pre-wrap; }}
-    .briefing-text strong {{ color:#00ffad; }}
-    .loading {{ color:#555; font-family:'Courier New',monospace; font-size:11px; animation:blink 1s infinite; }}
-    @keyframes blink {{ 0%,100%{{opacity:1}} 50%{{opacity:0.3}} }}
-    .run-btn {{ background:#00ffad22; border:1px solid #00ffad66; color:#00ffad; padding:5px 16px; border-radius:6px;
-               font-family:'VT323',monospace; font-size:16px; letter-spacing:1px; cursor:pointer; 
-               transition:all 0.2s; box-shadow:0 0 10px #00ffad22; }}
-    .run-btn:hover {{ background:#00ffad33; box-shadow:0 0 18px #00ffad44; }}
-    .run-btn:disabled {{ opacity:0.4; cursor:not-allowed; }}
-    .section-title {{ color:#00ffad; font-weight:bold; }}
-    .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
-    .status-badge {{ font-size:9px; padding:2px 8px; border-radius:3px; font-weight:bold; letter-spacing:0.5px; }}
-    .badge-ai {{ background:#3b82f622; color:#3b82f6; border:1px solid #3b82f644; }}
-    .badge-ready {{ background:#00ffad22; color:#00ffad; border:1px solid #00ffad44; }}
+    button[data-testid="baseButton-primary"] {
+        background: linear-gradient(135deg, #00ffad22, #00ffad11) !important;
+        border: 1px solid #00ffad88 !important;
+        color: #00ffad !important;
+        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
+        font-size: 16px !important;
+        font-weight: 800 !important;
+        letter-spacing: 2px !important;
+        border-radius: 6px !important;
+        box-shadow: 0 0 12px #00ffad33 !important;
+    }
+    button[data-testid="baseButton-primary"]:hover {
+        background: linear-gradient(135deg, #00ffad33, #00ffad22) !important;
+        box-shadow: 0 0 20px #00ffad55 !important;
+    }
     </style>
-    </head><body>
-    <div class="container">
-        <div class="header">
+    """, unsafe_allow_html=True)
+
+    # ── RESUMEN DIARIO DE MERCADO ─────────────────────────────────────────────
+    # Llamada 100% backend: evita CORS que bloquea fetch() desde iframes de Streamlit
+    today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+
+    def _call_gemini_briefing(prompt: str) -> str:
+        """Llama a Gemini con Google Search grounding desde el servidor Python."""
+        try:
+            api_key = st.secrets.get("GEMINI_API_KEY", None)
+            if not api_key:
+                return "⚠ Configura GEMINI_API_KEY en st.secrets para activar este módulo."
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(
+                model_name="gemini-2.0-flash",
+                tools="google_search",
+            )
+            response = model.generate_content(prompt)
+            return response.text.strip() or "Sin respuesta del modelo."
+        except Exception as e:
+            return f"⚠ Error al llamar a Gemini: {e}"
+
+    resumen_prompt = (
+        f"Actua com un analista sènior de mercats financers. Avui és {today_str}. "
+        "Genera un briefing concís (màxim 300 paraules) per a un trader professional "
+        "que acaba d'obrir la terminal.\n"
+        "Estructura obligatòria:\n"
+        "1. Sentiment del Mercat: Defineix si estem en mode 'Risk-on', 'Risk-off' o "
+        "'Neutral' basant-te en l'acció del preu de les últimes 24 hores (S&P 500, Nasdaq, VIX).\n"
+        "2. Acció del Preu i Nivells: Identifica 2 nivells clau per a l'S&P 500 (suport i resistència).\n"
+        "3. Calendari Macro d'Avui: Llista les 2 o 3 dades macroeconòmiques d'impacte (USA) "
+        "que es publiquen avui, incloent l'hora i la previsió del consens.\n"
+        "4. Catalitzadors Específics: Resumeix breument qualsevol notícia geopolítica "
+        "(especialment sobre l'Iran/Aranzels) o resultats corporatius que puguin moure el mercat avui.\n"
+        "5. Conclusió Tàctica: Una frase sobre si avui convé ser agressiu o defensiu "
+        "segons el context tècnic/macro.\n"
+        "Nota: Utilitza un to directe, professional i analític. Evita generalitats."
+    )
+
+    # Cabecera del módulo con estética roadmap
+    st.markdown(f"""
+    <div style="border:1px solid #00ffad33; border-radius:10px; overflow:hidden; background:#11141a;
+                box-shadow:0 0 30px #00ffad0d; margin-bottom:4px;">
+        <div style="background:#0c0e12; padding:12px 18px; border-bottom:2px solid #00ffad22;
+                    display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <div class="title">📊 Resumen Diario de Mercado</div>
-                <div style="font-size:9px; color:#555; margin-top:2px; font-family:'Courier New',monospace;">{today_str} // BRIEFING MATINAL</div>
+                <div style="font-family:'VT323','Share Tech Mono','Courier New',monospace;
+                            font-size:22px; color:#00ffad; text-transform:uppercase;
+                            letter-spacing:3px; text-shadow:0 0 15px #00ffad55;">
+                    📊 Resumen Diario de Mercado
+                </div>
+                <div style="font-size:9px; color:#555; margin-top:2px;
+                            font-family:'Courier New',monospace;">
+                    {today_str} // BRIEFING MATINAL // POWERED BY GEMINI + GOOGLE SEARCH
+                </div>
             </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <span class="status-badge badge-ai" id="status-badge">AI POWERED</span>
-                <button class="run-btn" id="runBtn" onclick="generateBriefing()">▶ GENERAR BRIEFING</button>
+            <div style="background:#00ffad22; color:#00ffad; border:1px solid #00ffad44;
+                        padding:3px 10px; border-radius:4px; font-size:9px; font-weight:bold;
+                        letter-spacing:1px; font-family:'Courier New',monospace;">
+                AI POWERED
             </div>
         </div>
-        <div class="content" id="briefing-content">
-            <div style="color:#2a3f5f; font-family:'Courier New',monospace; font-size:11px; text-align:center; margin-top:40px;">
-                <div style="font-size:28px; margin-bottom:12px;">📡</div>
-                <div>Pulsa "GENERAR BRIEFING" para obtener el análisis diario del mercado</div>
-                <div style="margin-top:8px; color:#1a2e1a; font-size:10px;">[CLAUDE SONNET // WEB SEARCH ENABLED // ANÁLISIS EN TIEMPO REAL]</div>
-            </div>
-        </div>
-        <div class="update-timestamp" id="briefing-ts">Listo para generar • Powered by Claude + Web Search</div>
     </div>
-    <script>
-    const PROMPT = {repr(resumen_prompt)};
-    
-    async function generateBriefing() {{
-        const btn = document.getElementById('runBtn');
-        const content = document.getElementById('briefing-content');
-        const ts = document.getElementById('briefing-ts');
-        const badge = document.getElementById('status-badge');
-        
-        btn.disabled = true;
-        btn.textContent = '⏳ ANALIZANDO...';
-        badge.textContent = 'PROCESANDO';
-        badge.className = 'status-badge';
-        badge.style.cssText = 'font-size:9px;padding:2px 8px;border-radius:3px;font-weight:bold;letter-spacing:0.5px;background:#ff980022;color:#ff9800;border:1px solid #ff980044;';
-        
-        content.innerHTML = '<div style="color:#555; font-family:Courier New,monospace; font-size:11px; padding:10px 0;">' +
-            '<span style="color:#00ffad;">█</span> Conectando con Claude + Web Search...<br>' +
-            '<span style="color:#00ffad;">█</span> Analizando S&P 500, VIX, Nasdaq...<br>' +
-            '<span style="color:#00ffad;">█</span> Revisando calendario macro del día...<br>' +
-            '<span style="color:#555;">█</span> Generando briefing...</div>';
-        
-        try {{
-            const resp = await fetch('https://api.anthropic.com/v1/messages', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1000,
-                    tools: [{{ type: 'web_search_20250305', name: 'web_search' }}],
-                    messages: [{{ role: 'user', content: PROMPT }}]
-                }})
-            }});
-            
-            const data = await resp.json();
-            
-            if (data.error) throw new Error(data.error.message || 'API Error');
-            
-            // Extraer texto de los bloques de contenido
-            let fullText = '';
-            if (data.content && Array.isArray(data.content)) {{
-                for (const block of data.content) {{
-                    if (block.type === 'text') fullText += block.text;
-                }}
-            }}
-            
-            if (!fullText) fullText = 'No se pudo obtener respuesta. Verifica la API key de Anthropic.';
-            
-            // Formatear el texto: resaltar los títulos de sección numerados
-            const formatted = fullText
-                .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#00ffad;">$1</strong>')
-                .replace(/^(\\d+\\..+?)$/gm, '<strong style="color:#00d9ff;">$1</strong>')
-                .replace(/Risk-on/gi, '<span style="color:#00ffad;font-weight:bold;">Risk-on</span>')
-                .replace(/Risk-off/gi, '<span style="color:#f23645;font-weight:bold;">Risk-off</span>')
-                .replace(/Neutral/gi, '<span style="color:#ff9800;font-weight:bold;">Neutral</span>');
-            
-            content.innerHTML = '<div style="color:#ccc; font-family:Courier New,monospace; font-size:11.5px; line-height:1.75; white-space:pre-wrap;">' + formatted + '</div>';
-            
-            const now = new Date();
-            ts.textContent = 'Generado: ' + now.toLocaleTimeString('es-ES') + ' • Claude Sonnet + Web Search';
-            badge.textContent = '✓ BRIEFING ACTIVO';
-            badge.style.cssText = 'font-size:9px;padding:2px 8px;border-radius:3px;font-weight:bold;letter-spacing:0.5px;background:#00ffad22;color:#00ffad;border:1px solid #00ffad44;';
-            btn.textContent = '↻ ACTUALIZAR';
-        }} catch(err) {{
-            content.innerHTML = '<div style="color:#f23645; font-family:Courier New,monospace; font-size:11px; padding:10px 0;">⚠ Error: ' + err.message + '</div>';
-            ts.textContent = 'Error al generar • Verifica conexión';
-            badge.textContent = 'ERROR';
-            badge.style.cssText = 'font-size:9px;padding:2px 8px;border-radius:3px;font-weight:bold;background:#f2364522;color:#f23645;border:1px solid #f2364544;';
-        }} finally {{
-            btn.disabled = false;
-            if (btn.textContent === '⏳ ANALIZANDO...') btn.textContent = '▶ GENERAR';
-        }}
-    }}
-    </script>
-    </body></html>'''
-    
-    components.html(resumen_module_html, height=280, scrolling=False)
+    """, unsafe_allow_html=True)
+
+    # Botón nativo Streamlit (sin iframe, sin CORS)
+    _btn_col, _spacer = st.columns([1, 5])
+    with _btn_col:
+        _generate = st.button("▶ GENERAR BRIEFING", key="briefing_btn", type="primary")
+
+    # Área de contenido del briefing
+    _briefing_placeholder = st.empty()
+
+    if _generate:
+        with _briefing_placeholder.container():
+            with st.spinner("Analizando mercados con Gemini + Google Search…"):
+                briefing_text = _call_gemini_briefing(resumen_prompt)
+            st.session_state["briefing_text"] = briefing_text
+            st.session_state["briefing_ts"] = get_timestamp()
+
+    # Mostrar resultado si existe en session_state
+    briefing_text = st.session_state.get("briefing_text", "")
+    briefing_ts   = st.session_state.get("briefing_ts", "")
+
+    if briefing_text:
+        # Formatear markdown → HTML con colores terminal
+        import html as _html
+        safe = _html.escape(briefing_text)
+        # Negrita **...**
+        import re as _re
+        safe = _re.sub(r'\*\*(.*?)\*\*', r'<strong style="color:#00ffad;">\1</strong>', safe)
+        # Encabezados de sección "1. ...", "2. ..."
+        safe = _re.sub(r'^(\d+\..+)$', r'<span style="color:#00d9ff;font-weight:bold;">\1</span>', safe, flags=_re.MULTILINE)
+        # Palabras clave de sentiment
+        safe = _re.sub(r'(?i)(Risk-on)', r'<span style="color:#00ffad;font-weight:bold;">\1</span>', safe)
+        safe = _re.sub(r'(?i)(Risk-off)', r'<span style="color:#f23645;font-weight:bold;">\1</span>', safe)
+
+        _briefing_placeholder.markdown(f"""
+        <div style="border:1px solid #00ffad22; border-radius:0 0 10px 10px; background:#11141a;
+                    padding:16px 18px; margin-top:-4px; box-shadow:0 0 30px #00ffad08;">
+            <div style="color:#ccc; font-family:'Courier New',monospace; font-size:12px;
+                        line-height:1.8; white-space:pre-wrap;">{safe}</div>
+            <div style="margin-top:12px; padding-top:8px; border-top:1px solid #1a1e26;
+                        color:#555; font-size:10px; font-family:'Courier New',monospace;
+                        text-align:center;">
+                Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        _briefing_placeholder.markdown("""
+        <div style="border:1px solid #1a1e26; border-radius:0 0 10px 10px; background:#11141a;
+                    padding:24px 18px; margin-top:-4px; text-align:center;">
+            <div style="font-size:28px; margin-bottom:10px;">📡</div>
+            <div style="color:#2a4a3a; font-family:'Courier New',monospace; font-size:11px;">
+                Pulsa <strong style="color:#00ffad;">"▶ GENERAR BRIEFING"</strong>
+                para obtener el análisis diario del mercado
+            </div>
+            <div style="margin-top:8px; color:#1a2e1a; font-size:10px;
+                        font-family:'Courier New',monospace;">
+                [GEMINI 2.0 FLASH // GOOGLE SEARCH ENABLED // ANÁLISIS EN TIEMPO REAL]
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.write("")
 
     # FILA 1
@@ -3888,11 +3901,11 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         <div class="container">
             <div class="header">
                 <div style="display:flex; flex-direction:column;">
-                    <div class="title">Amplitud: Línea Avance-Descenso</div>
+                    <div class="title">Amplitud: Línea A/D <span style="font-size:11px; color:#ff9800; font-family:'Courier New',monospace;">[SIMULADO]</span></div>
                 </div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">La línea Avance/Descenso mide la amplitud del mercado. Una A/D creciente junto a SPY alcista confirma la tendencia. Datos proxy basados en SPY via yfinance.</div>
+                    <div class="tooltip-content">⚠ DATO SIMULADO — No son datos reales de NYSE. La línea A/D real requiere datos tick a tick de todos los valores del NYSE (no disponibles gratuitamente). Este módulo genera una aproximación sintética basada en el precio y volumen del SPY: días alcistas del SPY → mayoría de valores avanzan; días bajistas → mayoría declinan. Útil como proxy de tendencia, pero NO debe usarse para decisiones de trading. Para A/D real, usa Bloomberg, FactSet o Barchart.</div>
                 </div>
             </div>
             <div class="content">
@@ -3908,7 +3921,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
                     <span>▬ <span style="color:#f23645;">Línea A/D</span></span>
                 </div>
             </div>
-            <div class="update-timestamp">Actualizado: {ts_ad} • yfinance proxy</div>
+            <div class="update-timestamp">Actualizado: {ts_ad} • ⚠ PROXY SIMULADO — no son datos NYSE reales</div>
         </div>
         </body></html>'''
         components.html(ad_full_html, height=420, scrolling=False)

@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -245,16 +246,19 @@ def get_economic_calendar():
                         
                         current_date = event_dt
                         
-                        # Hora en España (CET=UTC+1 invierno, CEST=UTC+2 verano)
-                        # event_dt viene de Investing.com en hora local del servidor (generalmente UTC)
+                        # Investing.com entrega horas en ET (Nueva York) igual que ForexFactory
+                        # ET invierno (UTC-5) → España CET (UTC+1) = +6h
+                        # ET verano  (UTC-4) → España CEST (UTC+2) = +6h también
                         try:
                             import pytz as _pytz
+                            _et     = _pytz.timezone('America/New_York')
                             _madrid = _pytz.timezone('Europe/Madrid')
-                            _utc_dt = event_dt.replace(tzinfo=_pytz.utc)
-                            _mad_dt = _utc_dt.astimezone(_madrid)
+                            _et_dt  = _et.localize(event_dt)
+                            _mad_dt = _et_dt.astimezone(_madrid)
                             time_str = f"{_mad_dt.hour:02d}:{_mad_dt.minute:02d}"
+                            event_dt = _mad_dt.replace(tzinfo=None)
                         except:
-                            hour_cet = (event_dt.hour + 1) % 24
+                            hour_cet = (event_dt.hour + 6) % 24
                             time_str = f"{hour_cet:02d}:{event_dt.minute:02d}"
                         
                         # Nombre del evento
@@ -950,28 +954,34 @@ def get_vix_term_structure():
         # Intentar obtener futuros reales
         futures_obtained = False
         future_vals = []
+        # Intentar varios formatos de símbolo de futuros VIX
         for i in range(1, 8):
             m = (now.month - 1 + i) % 12
             y = now.year + ((now.month - 1 + i) // 12)
             code = month_codes[m]
             yr2 = str(y)[-2:]
-            sym = f"VX{code}{yr2}.CF"
-            try:
-                t = yf.Ticker(sym)
-                h = t.history(period="2d")
-                if len(h) >= 1:
-                    val = float(h['Close'].iloc[-1])
-                    prev_val = float(h['Close'].iloc[-2]) if len(h) >= 2 else val
-                    vix_futures.append({
-                        'month': f"{month_names[m]} {y}",
-                        'current': round(val, 2),
-                        'previous': round(prev_val, 2),
-                        'two_days': round(prev_val * 0.99, 2)
-                    })
-                    future_vals.append(val)
-                    futures_obtained = True
-            except:
-                pass
+            # Probar múltiples formatos que yfinance puede reconocer
+            syms_to_try = [f"VX{code}{yr2}.CF", f"/VX{code}{yr2}", f"VX{code}{yr2}=F"]
+            val, prev_val = None, None
+            for sym in syms_to_try:
+                try:
+                    t = yf.Ticker(sym)
+                    h = t.history(period="2d")
+                    if len(h) >= 1:
+                        val = float(h['Close'].iloc[-1])
+                        prev_val = float(h['Close'].iloc[-2]) if len(h) >= 2 else val
+                        break
+                except:
+                    continue
+            if val is not None:
+                vix_futures.append({
+                    'month': f"{month_names[m]} {y}",
+                    'current': round(val, 2),
+                    'previous': round(prev_val, 2),
+                    'two_days': round(prev_val * 0.99, 2)
+                })
+                future_vals.append(val)
+                futures_obtained = True
 
         # Si no obtuvimos futuros reales, simular curva realista
         if not futures_obtained or len(vix_futures) < 4:
@@ -2335,33 +2345,47 @@ def render():
     # Llamada 100% backend: evita CORS que bloquea fetch() desde iframes de Streamlit
     today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
 
-    def _call_gemini_briefing(prompt: str) -> str:
-        """Llama a Gemini 2.0 Flash con Google Search grounding desde el servidor Python."""
+    @st.cache_data(ttl=21600, show_spinner=False)  # Cache 6h — 1 llamada cada 6h para toda la comunidad
+    def _cached_briefing(prompt_key: str, prompt: str) -> str:
+        """Llama a Gemini — cacheado 6h para minimizar rate limits en comunidades."""
         try:
             api_key = st.secrets.get("GEMINI_API_KEY", None)
             if not api_key:
                 return "⚠ Configura GEMINI_API_KEY en st.secrets para activar este módulo."
             import google.generativeai as genai
-            from google.generativeai.types import Tool, GenerateContentConfig
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            google_search_tool = Tool(google_search=genai.protos.GoogleSearch())
-            response = model.generate_content(
-                prompt,
-                tools=[google_search_tool],
-                generation_config=GenerateContentConfig(temperature=0.3),
-            )
-            return response.text.strip() or "Sin respuesta del modelo."
-        except Exception as e:
-            # Fallback sin grounding si la versión del SDK no soporta GoogleSearch
+            # Intentar con grounding (SDK >= 0.8)
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=st.secrets.get("GEMINI_API_KEY", ""))
+                from google.generativeai.types import Tool, GenerateContentConfig
                 model = genai.GenerativeModel("gemini-2.0-flash")
+                google_search_tool = Tool(google_search=genai.protos.GoogleSearch())
+                response = model.generate_content(
+                    prompt,
+                    tools=[google_search_tool],
+                    generation_config=GenerateContentConfig(temperature=0.3),
+                )
+                return response.text.strip() or "Sin respuesta del modelo."
+            except Exception:
+                # Fallback: gemini-1.5-flash tiene mayor cuota gratuita
+                model = genai.GenerativeModel("gemini-1.5-flash")
                 response = model.generate_content(prompt)
-                return response.text.strip() + "\n\n⚠ (Sin Google Search grounding — actualiza google-generativeai)" or "Sin respuesta."
-            except Exception as e2:
-                return f"⚠ Error al llamar a Gemini: {e2}"
+                return (response.text.strip() or "Sin respuesta.") + "\n\n_(Gemini 1.5 Flash — sin Google Search)_"
+        except Exception as e:
+            err = str(e)
+            if "429" in err or "quota" in err.lower() or "rate" in err.lower():
+                import re as _re
+                retry = _re.search(r'retry.*?(\d+)', err, _re.IGNORECASE)
+                secs = retry.group(1) if retry else "60"
+                return (f"⏳ Límite de cuota alcanzado. Reintenta en ~{secs}s.\n\n"
+                        f"Para comunidades grandes (>10 usuarios) usa una API key de pago "
+                        f"(Google AI Studio → Billing). El plan Pay-as-you-go tiene cuotas "
+                        f"mucho más altas y coste ~0.075$/M tokens con gemini-1.5-flash.")
+            return f"⚠ Error Gemini: {err[:200]}"
+
+    def _call_gemini_briefing(prompt: str) -> str:
+        # Usar cache con clave = fecha de hoy (mismo briefing para todos el mismo día)
+        today_key = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+        return _cached_briefing(today_key, prompt)
 
     resumen_prompt = (
         f"Actua com un analista sènior de mercats financers. Avui és {today_str}. "
@@ -2470,20 +2494,20 @@ def render():
 
     components.html(briefing_module_html, height=briefing_h + 2, scrolling=False)
 
-    # Botón Streamlit oculto — identificado por texto único __BRIEFING_GO__
+    # Botón Streamlit oculto para el briefing — CSS lo hace invisible al 100%
     st.markdown("""<style>
-    div[data-testid="stVerticalBlock"]:has(button[data-testid="baseButton-secondary"])
-        div[data-testid="stVerticalBlock"] > div.element-container:first-child {
-        height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;
-    }</style>""", unsafe_allow_html=True)
-    _hc = st.columns([1, 20])
-    with _hc[0]:
-        if st.button("__BRIEFING_GO__", key="briefing_hidden", type="secondary"):
-            with st.spinner("Analizando con Gemini + Google Search…"):
-                result = _call_gemini_briefing(resumen_prompt)
-            st.session_state["briefing_text"] = result
-            st.session_state["briefing_ts"] = get_timestamp()
-            st.rerun()
+    button[data-testid="baseButton-secondary"][kind="secondary"] {
+        position:absolute!important; width:1px!important; height:1px!important;
+        overflow:hidden!important; opacity:0!important; pointer-events:none!important;
+        clip:rect(0,0,0,0)!important; border:0!important; padding:0!important; margin:0!important;
+    }
+    </style>""", unsafe_allow_html=True)
+    if st.button("__BRIEFING_GO__", key="briefing_hidden", type="secondary"):
+        with st.spinner("Analizando con Gemini + Google Search…"):
+            result = _call_gemini_briefing(resumen_prompt)
+        st.session_state["briefing_text"] = result
+        st.session_state["briefing_ts"] = get_timestamp()
+        st.rerun()
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -2863,21 +2887,22 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — radio oculto controla TF; botones visuales dentro del iframe
+    # SECTOR ROTATION — radio invisible FUERA del with c2 para no afectar altura
+    # El JS del iframe clickea el label del radio para cambiar TF sin rerun externo
+    st.markdown("""<style>
+    div[data-testid="stRadio"]:has(input[name="sector_tf_radio"]),
+    div[data-testid="stRadio"] > div:first-child { 
+        height:0 !important; min-height:0 !important; overflow:hidden !important;
+        margin:0 !important; padding:0 !important; opacity:0 !important; 
+        pointer-events:none !important; position:absolute !important;
+    }
+    </style>""", unsafe_allow_html=True)
+    current_tf = st.radio("_tf_", ["1D","3D","1W","1M"],
+                          key="sector_tf_radio",
+                          label_visibility="collapsed",
+                          horizontal=True)
+
     with c2:
-        st.markdown("""<style>
-        /* Ocultar el widget radio completamente — solo usamos su estado */
-        div[data-testid="stRadio"] { 
-            height:0 !important; min-height:0 !important; overflow:hidden !important;
-            margin:0 !important; padding:0 !important; opacity:0 !important; pointer-events:none !important;
-        }
-        </style>""", unsafe_allow_html=True)
-
-        current_tf = st.radio("_tf_", ["1D","3D","1W","1M"],
-                              key="sector_tf_radio",
-                              label_visibility="collapsed",
-                              horizontal=True)
-
         sectors = get_sector_performance(current_tf)
         sectors_html = ""
         for sector in sectors:
@@ -4073,7 +4098,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

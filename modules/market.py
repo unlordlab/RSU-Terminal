@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -303,7 +304,7 @@ def get_economic_calendar():
     
     if events:
         events.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
-        return events[:12]
+        return events[:25]
     
     return get_fallback_economic_calendar()
 
@@ -1935,11 +1936,11 @@ def render():
         height: 24px;
         border-radius: 50%;
         background: #1a1e26;
-        border: 2px solid #555;
+        border: 1px solid #00ffad44;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #aaa;
+        color: #00ffad;
         font-size: 14px;
         font-weight: bold;
         cursor: help;
@@ -1955,8 +1956,8 @@ def render():
         border-radius: 10px;
         z-index: 99999;
         font-size: 12px;
-        border: 2px solid #3b82f6;
-        box-shadow: 0 15px 40px rgba(0,0,0,0.9);
+        border: 2px solid #00ffad;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.9), 0 0 20px #00ffad22;
         line-height: 1.5;
 
         /* CENTRADO EN LA PANTALLA */
@@ -1987,7 +1988,7 @@ def render():
 
     /* Contenedores - altura AUMENTADA a 420px */
     .module-container { 
-        border: 1px solid #1a1e26; 
+        border: 1px solid #00ffad22; 
         border-radius: 10px; 
         overflow: hidden; 
         background: #11141a; 
@@ -1995,11 +1996,12 @@ def render():
         display: flex;
         flex-direction: column;
         margin-bottom: 0;
+        box-shadow: 0 0 20px #00ffad08;
     }
     .module-header { 
         background: #0c0e12; 
         padding: 10px 12px; 
-        border-bottom: 1px solid #1a1e26; 
+        border-bottom: 1px solid #00ffad22; 
         display: flex; 
         justify-content: space-between; 
         align-items: center; 
@@ -2007,12 +2009,13 @@ def render():
     }
     .module-title { 
         margin: 0; 
-        color: white; 
+        color: #00ffad; 
         font-size: 16px; 
         font-weight: normal;
         text-transform: uppercase;
         letter-spacing: 2px;
         font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
+        text-shadow: 0 0 10px #00ffad44;
     }
     .module-content { 
         flex: 1;
@@ -2288,6 +2291,140 @@ def render():
     </script>
     """, height=0, scrolling=False)
 
+    # ── RESUMEN DIARIO DE MERCADO ─────────────────────────────────────────────
+    today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+    resumen_prompt = f"""Actua com un analista sènior de mercats financers. Avui és {today_str}. Genera un briefing concís (màxim 300 paraules) per a un trader professional que acaba d'obrir la terminal.
+Estructura obligatòria:
+1. Sentiment del Mercat: Defineix si estem en mode 'Risk-on', 'Risk-off' o 'Neutral' basant-te en l'acció del preu de les últimes 24 hores (S&P 500, Nasdaq, VIX).
+2. Acció del Preu i Nivells: Identifica 2 nivells clau per a l'S&P 500 (suport i resistència).
+3. Calendari Macro d'Avui: Llista les 2 o 3 dades macroeconòmiques d'impacte (USA) que es publiquen avui, incloent l'hora i la previsió del consens.
+4. Catalitzadors Específics: Resumeix breument qualsevol notícia geopolítica (especialment sobre l'Iran/Aranzels) o resultats corporatius que puguin moure el mercat avui.
+5. Conclusió Tàctica: Una frase sobre si avui convé ser agressiu o defensiu segons el context tècnic/macro.
+Nota: Utilitza un to directe, professional i analític. Evita generalitats."""
+
+    resumen_module_html = f'''<!DOCTYPE html><html><head>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0c0e12; }}
+    .container {{ border:1px solid #00ffad33; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:280px; display:flex; flex-direction:column; box-shadow:0 0 30px #00ffad0d; }}
+    .header {{ background:#0c0e12; padding:12px 16px; border-bottom:2px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+    .title {{ color:#00ffad; font-size:22px; font-weight:normal; text-transform:uppercase; letter-spacing:3px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 15px #00ffad55; }}
+    .content {{ flex:1; overflow-y:auto; padding:14px 16px; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
+    .briefing-text {{ color:#ccc; font-family:'Courier New',monospace; font-size:12px; line-height:1.7; white-space:pre-wrap; }}
+    .briefing-text strong {{ color:#00ffad; }}
+    .loading {{ color:#555; font-family:'Courier New',monospace; font-size:11px; animation:blink 1s infinite; }}
+    @keyframes blink {{ 0%,100%{{opacity:1}} 50%{{opacity:0.3}} }}
+    .run-btn {{ background:#00ffad22; border:1px solid #00ffad66; color:#00ffad; padding:5px 16px; border-radius:6px;
+               font-family:'VT323',monospace; font-size:16px; letter-spacing:1px; cursor:pointer; 
+               transition:all 0.2s; box-shadow:0 0 10px #00ffad22; }}
+    .run-btn:hover {{ background:#00ffad33; box-shadow:0 0 18px #00ffad44; }}
+    .run-btn:disabled {{ opacity:0.4; cursor:not-allowed; }}
+    .section-title {{ color:#00ffad; font-weight:bold; }}
+    .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
+    .status-badge {{ font-size:9px; padding:2px 8px; border-radius:3px; font-weight:bold; letter-spacing:0.5px; }}
+    .badge-ai {{ background:#3b82f622; color:#3b82f6; border:1px solid #3b82f644; }}
+    .badge-ready {{ background:#00ffad22; color:#00ffad; border:1px solid #00ffad44; }}
+    </style>
+    </head><body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <div class="title">📊 Resumen Diario de Mercado</div>
+                <div style="font-size:9px; color:#555; margin-top:2px; font-family:'Courier New',monospace;">{today_str} // BRIEFING MATINAL</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span class="status-badge badge-ai" id="status-badge">AI POWERED</span>
+                <button class="run-btn" id="runBtn" onclick="generateBriefing()">▶ GENERAR BRIEFING</button>
+            </div>
+        </div>
+        <div class="content" id="briefing-content">
+            <div style="color:#2a3f5f; font-family:'Courier New',monospace; font-size:11px; text-align:center; margin-top:40px;">
+                <div style="font-size:28px; margin-bottom:12px;">📡</div>
+                <div>Pulsa "GENERAR BRIEFING" para obtener el análisis diario del mercado</div>
+                <div style="margin-top:8px; color:#1a2e1a; font-size:10px;">[CLAUDE SONNET // WEB SEARCH ENABLED // ANÁLISIS EN TIEMPO REAL]</div>
+            </div>
+        </div>
+        <div class="update-timestamp" id="briefing-ts">Listo para generar • Powered by Claude + Web Search</div>
+    </div>
+    <script>
+    const PROMPT = {repr(resumen_prompt)};
+    
+    async function generateBriefing() {{
+        const btn = document.getElementById('runBtn');
+        const content = document.getElementById('briefing-content');
+        const ts = document.getElementById('briefing-ts');
+        const badge = document.getElementById('status-badge');
+        
+        btn.disabled = true;
+        btn.textContent = '⏳ ANALIZANDO...';
+        badge.textContent = 'PROCESANDO';
+        badge.className = 'status-badge';
+        badge.style.cssText = 'font-size:9px;padding:2px 8px;border-radius:3px;font-weight:bold;letter-spacing:0.5px;background:#ff980022;color:#ff9800;border:1px solid #ff980044;';
+        
+        content.innerHTML = '<div style="color:#555; font-family:Courier New,monospace; font-size:11px; padding:10px 0;">' +
+            '<span style="color:#00ffad;">█</span> Conectando con Claude + Web Search...<br>' +
+            '<span style="color:#00ffad;">█</span> Analizando S&P 500, VIX, Nasdaq...<br>' +
+            '<span style="color:#00ffad;">█</span> Revisando calendario macro del día...<br>' +
+            '<span style="color:#555;">█</span> Generando briefing...</div>';
+        
+        try {{
+            const resp = await fetch('https://api.anthropic.com/v1/messages', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1000,
+                    tools: [{{ type: 'web_search_20250305', name: 'web_search' }}],
+                    messages: [{{ role: 'user', content: PROMPT }}]
+                }})
+            }});
+            
+            const data = await resp.json();
+            
+            if (data.error) throw new Error(data.error.message || 'API Error');
+            
+            // Extraer texto de los bloques de contenido
+            let fullText = '';
+            if (data.content && Array.isArray(data.content)) {{
+                for (const block of data.content) {{
+                    if (block.type === 'text') fullText += block.text;
+                }}
+            }}
+            
+            if (!fullText) fullText = 'No se pudo obtener respuesta. Verifica la API key de Anthropic.';
+            
+            // Formatear el texto: resaltar los títulos de sección numerados
+            const formatted = fullText
+                .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#00ffad;">$1</strong>')
+                .replace(/^(\\d+\\..+?)$/gm, '<strong style="color:#00d9ff;">$1</strong>')
+                .replace(/Risk-on/gi, '<span style="color:#00ffad;font-weight:bold;">Risk-on</span>')
+                .replace(/Risk-off/gi, '<span style="color:#f23645;font-weight:bold;">Risk-off</span>')
+                .replace(/Neutral/gi, '<span style="color:#ff9800;font-weight:bold;">Neutral</span>');
+            
+            content.innerHTML = '<div style="color:#ccc; font-family:Courier New,monospace; font-size:11.5px; line-height:1.75; white-space:pre-wrap;">' + formatted + '</div>';
+            
+            const now = new Date();
+            ts.textContent = 'Generado: ' + now.toLocaleTimeString('es-ES') + ' • Claude Sonnet + Web Search';
+            badge.textContent = '✓ BRIEFING ACTIVO';
+            badge.style.cssText = 'font-size:9px;padding:2px 8px;border-radius:3px;font-weight:bold;letter-spacing:0.5px;background:#00ffad22;color:#00ffad;border:1px solid #00ffad44;';
+            btn.textContent = '↻ ACTUALIZAR';
+        }} catch(err) {{
+            content.innerHTML = '<div style="color:#f23645; font-family:Courier New,monospace; font-size:11px; padding:10px 0;">⚠ Error: ' + err.message + '</div>';
+            ts.textContent = 'Error al generar • Verifica conexión';
+            badge.textContent = 'ERROR';
+            badge.style.cssText = 'font-size:9px;padding:2px 8px;border-radius:3px;font-weight:bold;background:#f2364522;color:#f23645;border:1px solid #f2364544;';
+        }} finally {{
+            btn.disabled = false;
+            if (btn.textContent === '⏳ ANALIZANDO...') btn.textContent = '▶ GENERAR';
+        }}
+    }}
+    </script>
+    </body></html>'''
+    
+    components.html(resumen_module_html, height=280, scrolling=False)
+    st.write("")
+
     # FILA 1
     col1, col2, col3 = st.columns(3)
 
@@ -2359,50 +2496,86 @@ def render():
         country_flags = {'US': '🇺🇸', 'EU': '🇪🇺', 'EZ': '🇪🇺', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹'}
         
         events_html = ""
-        for ev in events[:6]:
+        for ev in events[:20]:  # Mostrar hasta 20 eventos con scroll
             imp_color = impact_colors.get(ev['imp'], '#888')
             date_color = ev.get('date_color', '#888')
             date_display = ev.get('date_display', '---')
             country = ev.get('country', 'US')
             flag = country_flags.get(country, '🇺🇸')
             
-            # Mostrar previsión si existe y no hay valor actual
-            display_val = ev['val']
-            if display_val == '-' or display_val == 'nan':
-                display_val = ev.get('forecast', '-')
-                if display_val != '-' and display_val != 'nan':
-                    display_val = f"Est: {display_val}"
+            # Valor actual o estimación
+            actual_val = ev.get('val', '-')
+            forecast_val = ev.get('forecast', '-')
+            prev_val = ev.get('prev', '-')
             
-            events_html += f'''<div style="padding:8px; border-bottom:1px solid #1a1e26; display:flex; align-items:center;">
-                <div class="eco-date-badge" style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44;">{date_display}</div>
-                <div class="eco-time">{ev["time"]}</div>
-                <div style="flex-grow:1; margin-left:8px; min-width:0;">
-                    <div style="color:white; font-size:10px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        <span class="eco-flag">{flag}</span>{ev["event"]}
+            # Limpiar valores nulos
+            if actual_val in ('-', 'nan', '', None): actual_val = '-'
+            if forecast_val in ('-', 'nan', '', None): forecast_val = '-'
+            if prev_val in ('-', 'nan', '', None): prev_val = '-'
+            
+            # Color del valor actual (comparar con forecast si existe)
+            actual_color = "white"
+            if actual_val != '-' and forecast_val != '-':
+                try:
+                    a = float(actual_val.replace('%','').replace('K','000').replace('M','000000').replace('B','000000000'))
+                    f = float(forecast_val.replace('%','').replace('K','000').replace('M','000000').replace('B','000000000'))
+                    actual_color = "#00ffad" if a >= f else "#f23645"
+                except:
+                    pass
+            
+            events_html += f'''<div style="padding:6px 8px; border-bottom:1px solid #1a1e2660; display:flex; align-items:center; gap:4px;">
+                <div style="background:{date_color}22; color:{date_color}; border:1px solid {date_color}44; 
+                     padding:2px 5px; border-radius:4px; font-size:8px; font-weight:bold; min-width:46px; text-align:center; flex-shrink:0;">{date_display}</div>
+                <div style="font-family:'Courier New',monospace; font-size:9px; color:#888; min-width:34px; flex-shrink:0;">{ev["time"]}</div>
+                <div style="flex-grow:1; min-width:0;">
+                    <div style="color:white; font-size:9.5px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        {flag} {ev["event"]}
                     </div>
-                    <div style="color:{imp_color}; font-size:7px; font-weight:bold; text-transform:uppercase; margin-top:2px;">● {ev["imp"]}</div>
+                    <div style="color:{imp_color}; font-size:7px; font-weight:bold; text-transform:uppercase; margin-top:1px;">● {ev["imp"]}</div>
                 </div>
-                <div style="text-align:right; min-width:50px; margin-left:6px;">
-                    <div style="color:white; font-size:10px; font-weight:bold;">{display_val}</div>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex-shrink:0; min-width:80px;">
+                    <div style="display:flex; gap:6px; font-size:8px;">
+                        <span style="color:#555;">Est:</span>
+                        <span style="color:#ff9800; font-weight:bold;">{forecast_val}</span>
+                    </div>
+                    <div style="display:flex; gap:6px; font-size:8px;">
+                        <span style="color:#555;">Real:</span>
+                        <span style="color:{actual_color}; font-weight:bold;">{actual_val}</span>
+                    </div>
                 </div>
             </div>'''
 
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Calendario Económico</div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="background: #2a3f5f; color: #00ffad; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;">CET</span>
+        cal_full_html = f'''<!DOCTYPE html><html><head>
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; }}
+        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
+        .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
+        .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
+        .tooltip-wrapper {{ position:static; display:inline-block; }}
+        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #00ffad44; display:flex; align-items:center; justify-content:center; color:#00ffad; font-size:12px; font-weight:bold; cursor:help; }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        </style></head><body>
+        <div class="container">
+            <div class="header">
+                <div class="title">Calendario Económico</div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="background:#00ffad22; color:#00ffad; border:1px solid #00ffad44; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:bold;">CET</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Calendario económico en tiempo real. Datos de hoy en adelante a 15 días. Hora española (CET/CEST). Fuente: Investing.com / ForexFactory.</div>
+                        <div class="tooltip-content">Calendario económico en tiempo real. Hasta 20 eventos, desde hoy a 15 días. Muestra Estimación (Est) y valor Real en cuanto se publica. Hora CET. Fuente: Investing.com / ForexFactory.</div>
                     </div>
                 </div>
             </div>
-            <div class="module-content" style="padding: 0;">{events_html}</div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
+            <div class="content">{events_html}</div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} • {len(events)} eventos</div>
         </div>
-        ''', unsafe_allow_html=True)
+        </body></html>'''
+        components.html(cal_full_html, height=420, scrolling=False)
 
     # === REDDIT SOCIAL PULSE - MASTER BUZZ ===
     with col3:
@@ -2528,9 +2701,9 @@ def render():
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .col-head {{ display:grid; grid-template-columns:24px 50px 40px 1fr; gap:3px; padding:4px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
         .col-label {{ font-size:7px; font-weight:bold; color:#3a4f6f; text-transform:uppercase; letter-spacing:0.8px; }}
         .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
@@ -2550,7 +2723,7 @@ def render():
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
         .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #333; display:flex; align-items:center; justify-content:center; color:#666; font-size:11px; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
         <div class="container">
@@ -2683,9 +2856,9 @@ def render():
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .content {{ flex:1; overflow:hidden; padding:8px; }}
         .sector-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; height:100%; }}
         .sector-item {{ background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 4px; text-align:center; display:flex; flex-direction:column; justify-content:center; }}
@@ -2697,7 +2870,7 @@ def render():
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
         .tooltip-btn {{ width:20px; height:20px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:11px; font-weight:bold; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
         <div class="container">
@@ -3034,14 +3207,14 @@ def render():
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
         .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
         <div class="container">
@@ -3354,7 +3527,7 @@ def render():
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
         .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
         .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .tooltip-wrapper {{ position: static; display: inline-block; }}
         .tooltip-btn {{ width: 24px; height: 24px; border-radius: 50%; background: #1a1e26; border: 2px solid #555; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; font-weight: bold; cursor: help; }}
         .tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
@@ -3466,7 +3639,7 @@ def render():
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
 .container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
 .header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
-.title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+.title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
 .state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
 .tooltip-wrapper {{ position: static; display: inline-block; }}
 .tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
@@ -3599,14 +3772,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .content {{ flex:1; overflow-y:auto; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
         .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
         <div class="container">
@@ -3702,14 +3875,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
         .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
         <div class="container">
@@ -3812,14 +3985,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
         body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #1a1e26; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #1a1e26; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:white; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; }}
+        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
+        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
+        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
         .content {{ flex:1; overflow:hidden; padding:10px; display:flex; flex-direction:column; }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
         .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #3b82f6; box-shadow:0 15px 40px rgba(0,0,0,0.9); line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
+        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
         <div class="container">
@@ -3854,7 +4027,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

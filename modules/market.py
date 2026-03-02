@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -245,9 +246,17 @@ def get_economic_calendar():
                         
                         current_date = event_dt
                         
-                        # Hora en CET (+1)
-                        hour_cet = (event_dt.hour + 1) % 24
-                        time_str = f"{hour_cet:02d}:{event_dt.minute:02d}"
+                        # Hora en España (CET=UTC+1 invierno, CEST=UTC+2 verano)
+                        # event_dt viene de Investing.com en hora local del servidor (generalmente UTC)
+                        try:
+                            import pytz as _pytz
+                            _madrid = _pytz.timezone('Europe/Madrid')
+                            _utc_dt = event_dt.replace(tzinfo=_pytz.utc)
+                            _mad_dt = _utc_dt.astimezone(_madrid)
+                            time_str = f"{_mad_dt.hour:02d}:{_mad_dt.minute:02d}"
+                        except:
+                            hour_cet = (event_dt.hour + 1) % 24
+                            time_str = f"{hour_cet:02d}:{event_dt.minute:02d}"
                         
                         # Nombre del evento
                         name_td = row.find('td', class_='left event')
@@ -330,7 +339,16 @@ def get_forexfactory_calendar():
                     impact = impact_map.get(item.get('impact', 'Low'), 'Low')
                     title = item.get('title', 'Evento')
                     title_es = translate_event(title)
-                    hour_cet = (event_dt.hour + 1) % 24
+                    # ForexFactory entrega horas en UTC — convertir a hora española (CET/CEST)
+                    try:
+                        import pytz as _pytz
+                        _madrid = _pytz.timezone('Europe/Madrid')
+                        _utc_ff = event_dt.replace(tzinfo=_pytz.utc)
+                        _mad_ff = _utc_ff.astimezone(_madrid)
+                        hour_cet = _mad_ff.hour
+                        event_dt = _mad_ff.replace(tzinfo=None)
+                    except:
+                        hour_cet = (event_dt.hour + 1) % 24
                     if event_dt.date() == now.date():
                         date_display, date_color = "HOY", "#00ffad"
                     elif event_dt.date() == (now + timedelta(days=1)).date():
@@ -2317,21 +2335,32 @@ def render():
     today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
 
     def _call_gemini_briefing(prompt: str) -> str:
-        """Llama a Gemini con Google Search grounding desde el servidor Python."""
+        """Llama a Gemini 2.0 Flash con Google Search grounding desde el servidor Python."""
         try:
             api_key = st.secrets.get("GEMINI_API_KEY", None)
             if not api_key:
                 return "⚠ Configura GEMINI_API_KEY en st.secrets para activar este módulo."
             import google.generativeai as genai
+            from google.generativeai.types import Tool, GenerateContentConfig
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                model_name="gemini-2.0-flash",
-                tools="google_search",
+            model = genai.GenerativeModel("gemini-2.0-flash")
+            google_search_tool = Tool(google_search=genai.protos.GoogleSearch())
+            response = model.generate_content(
+                prompt,
+                tools=[google_search_tool],
+                generation_config=GenerateContentConfig(temperature=0.3),
             )
-            response = model.generate_content(prompt)
             return response.text.strip() or "Sin respuesta del modelo."
         except Exception as e:
-            return f"⚠ Error al llamar a Gemini: {e}"
+            # Fallback sin grounding si la versión del SDK no soporta GoogleSearch
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=st.secrets.get("GEMINI_API_KEY", ""))
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                response = model.generate_content(prompt)
+                return response.text.strip() + "\n\n⚠ (Sin Google Search grounding — actualiza google-generativeai)" or "Sin respuesta."
+            except Exception as e2:
+                return f"⚠ Error al llamar a Gemini: {e2}"
 
     resumen_prompt = (
         f"Actua com un analista sènior de mercats financers. Avui és {today_str}. "
@@ -2350,11 +2379,50 @@ def render():
         "Nota: Utilitza un to directe, professional i analític. Evita generalitats."
     )
 
-    # Cabecera del módulo con estética roadmap
+    # Cabecera + área de contenido del briefing — layout compacto en st.markdown
+    if "briefing_text" not in st.session_state:
+        st.session_state["briefing_text"] = ""
+        st.session_state["briefing_ts"] = ""
+
+    _generate = False
+
+    briefing_text = st.session_state.get("briefing_text", "")
+    briefing_ts   = st.session_state.get("briefing_ts", "")
+
+    # Formatear briefing si existe
+    briefing_html_content = ""
+    if briefing_text:
+        import html as _html, re as _re
+        safe = _html.escape(briefing_text)
+        safe = _re.sub(r'\*\*(.*?)\*\*', r'<strong style="color:#00ffad;">\1</strong>', safe)
+        safe = _re.sub(r'^(\d+\..+)$', r'<span style="color:#00d9ff;font-weight:bold;">\1</span>', safe, flags=_re.MULTILINE)
+        safe = _re.sub(r'(?i)(Risk-on)', r'<span style="color:#00ffad;font-weight:bold;">\1</span>', safe)
+        safe = _re.sub(r'(?i)(Risk-off)', r'<span style="color:#f23645;font-weight:bold;">\1</span>', safe)
+        briefing_html_content = f'''
+        <div style="color:#ccc; font-family:'Courier New',monospace; font-size:12px;
+                    line-height:1.8; white-space:pre-wrap; padding:14px 18px;">{safe}</div>
+        <div style="padding:6px 18px 8px; border-top:1px solid #1a1e26; color:#555;
+                    font-size:10px; font-family:'Courier New',monospace; text-align:center;
+                    background:#0c0e12;">
+            Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
+        </div>'''
+    else:
+        briefing_html_content = '''
+        <div style="padding:32px 18px; text-align:center;">
+            <div style="font-size:28px; margin-bottom:10px;">📡</div>
+            <div style="color:#2a4a3a; font-family:'Courier New',monospace; font-size:11px;">
+                Pulsa <strong style="color:#00ffad;">▶ GENERAR BRIEFING</strong>
+                para obtener el análisis diario del mercado
+            </div>
+            <div style="margin-top:8px; color:#1a2e1a; font-size:10px; font-family:'Courier New',monospace;">
+                [GEMINI 2.0 FLASH // GOOGLE SEARCH ENABLED // ANÁLISIS EN TIEMPO REAL]
+            </div>
+        </div>'''
+
     st.markdown(f"""
     <div style="border:1px solid #00ffad33; border-radius:10px; overflow:hidden; background:#11141a;
-                box-shadow:0 0 30px #00ffad0d; margin-bottom:4px;">
-        <div style="background:#0c0e12; padding:12px 18px; border-bottom:2px solid #00ffad22;
+                box-shadow:0 0 30px #00ffad0d; margin-bottom:8px;">
+        <div style="background:#0c0e12; padding:10px 18px; border-bottom:2px solid #00ffad22;
                     display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <div style="font-family:'VT323','Share Tech Mono','Courier New',monospace;
@@ -2362,8 +2430,7 @@ def render():
                             letter-spacing:3px; text-shadow:0 0 15px #00ffad55;">
                     📊 Resumen Diario de Mercado
                 </div>
-                <div style="font-size:9px; color:#555; margin-top:2px;
-                            font-family:'Courier New',monospace;">
+                <div style="font-size:9px; color:#555; margin-top:2px; font-family:'Courier New',monospace;">
                     {today_str} // BRIEFING MATINAL // POWERED BY GEMINI + GOOGLE SEARCH
                 </div>
             </div>
@@ -2373,70 +2440,20 @@ def render():
                 AI POWERED
             </div>
         </div>
+        {briefing_html_content}
     </div>
     """, unsafe_allow_html=True)
 
-    # Botón nativo Streamlit (sin iframe, sin CORS)
     _btn_col, _spacer = st.columns([1, 5])
     with _btn_col:
         _generate = st.button("▶ GENERAR BRIEFING", key="briefing_btn", type="primary")
 
-    # Área de contenido del briefing
-    _briefing_placeholder = st.empty()
-
     if _generate:
-        with _briefing_placeholder.container():
-            with st.spinner("Analizando mercados con Gemini + Google Search…"):
-                briefing_text = _call_gemini_briefing(resumen_prompt)
-            st.session_state["briefing_text"] = briefing_text
-            st.session_state["briefing_ts"] = get_timestamp()
-
-    # Mostrar resultado si existe en session_state
-    briefing_text = st.session_state.get("briefing_text", "")
-    briefing_ts   = st.session_state.get("briefing_ts", "")
-
-    if briefing_text:
-        # Formatear markdown → HTML con colores terminal
-        import html as _html
-        safe = _html.escape(briefing_text)
-        # Negrita **...**
-        import re as _re
-        safe = _re.sub(r'\*\*(.*?)\*\*', r'<strong style="color:#00ffad;">\1</strong>', safe)
-        # Encabezados de sección "1. ...", "2. ..."
-        safe = _re.sub(r'^(\d+\..+)$', r'<span style="color:#00d9ff;font-weight:bold;">\1</span>', safe, flags=_re.MULTILINE)
-        # Palabras clave de sentiment
-        safe = _re.sub(r'(?i)(Risk-on)', r'<span style="color:#00ffad;font-weight:bold;">\1</span>', safe)
-        safe = _re.sub(r'(?i)(Risk-off)', r'<span style="color:#f23645;font-weight:bold;">\1</span>', safe)
-
-        _briefing_placeholder.markdown(f"""
-        <div style="border:1px solid #00ffad22; border-radius:0 0 10px 10px; background:#11141a;
-                    padding:16px 18px; margin-top:-4px; box-shadow:0 0 30px #00ffad08;">
-            <div style="color:#ccc; font-family:'Courier New',monospace; font-size:12px;
-                        line-height:1.8; white-space:pre-wrap;">{safe}</div>
-            <div style="margin-top:12px; padding-top:8px; border-top:1px solid #1a1e26;
-                        color:#555; font-size:10px; font-family:'Courier New',monospace;
-                        text-align:center;">
-                Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        _briefing_placeholder.markdown("""
-        <div style="border:1px solid #1a1e26; border-radius:0 0 10px 10px; background:#11141a;
-                    padding:24px 18px; margin-top:-4px; text-align:center;">
-            <div style="font-size:28px; margin-bottom:10px;">📡</div>
-            <div style="color:#2a4a3a; font-family:'Courier New',monospace; font-size:11px;">
-                Pulsa <strong style="color:#00ffad;">"▶ GENERAR BRIEFING"</strong>
-                para obtener el análisis diario del mercado
-            </div>
-            <div style="margin-top:8px; color:#1a2e1a; font-size:10px;
-                        font-family:'Courier New',monospace;">
-                [GEMINI 2.0 FLASH // GOOGLE SEARCH ENABLED // ANÁLISIS EN TIEMPO REAL]
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.write("")
+        with st.spinner("Analizando mercados con Gemini + Google Search…"):
+            result = _call_gemini_briefing(resumen_prompt)
+        st.session_state["briefing_text"] = result
+        st.session_state["briefing_ts"] = get_timestamp()
+        st.rerun()
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -2816,19 +2833,12 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION - BOTONES DENTRO DEL MÓDULO HTML (sin desplegable externo)
+    # SECTOR ROTATION — botones dentro del módulo HTML, sin botones externos Streamlit
     with c2:
         if 'sector_tf' not in st.session_state:
             st.session_state.sector_tf = "1D"
-
         tf_options = ["1D", "3D", "1W", "1M"]
         current_tf = st.session_state.sector_tf
-        
-        # Detectar cambio de temporalidad via query param interno de Streamlit
-        qp = st.query_params.get("sector_tf", None)
-        if qp and qp in tf_options and qp != current_tf:
-            st.session_state.sector_tf = qp
-            current_tf = qp
 
         sectors = get_sector_performance(current_tf)
 
@@ -2847,24 +2857,46 @@ def render():
                              f'<div class="sector-change" style="color:{text_color};">{change:+.2f}%</div>'
                              f'</div>')
 
-        # Botones de temporalidad interactivos dentro del módulo
         tf_btns_html = ""
         for tf in tf_options:
             active = tf == current_tf
-            bg = "#00ffad18" if active else "transparent"
-            border = "#00ffad" if active else "#1e3a2f"
+            bg = "#00ffad22" if active else "transparent"
+            border = "#00ffad88" if active else "#1e3a2f"
             color = "#00ffad" if active else "#3a5a4a"
             fw = "900" if active else "500"
-            glow = "box-shadow:0 0 8px #00ffad44;" if active else ""
+            glow = "box-shadow:0 0 10px #00ffad55;" if active else ""
             tf_btns_html += (
-                f'<button onclick="changeTF(\'{tf}\')" style="background:{bg}; border:1px solid {border}; '
-                f'color:{color}; padding:1px 7px; border-radius:4px; font-size:8px; font-weight:{fw}; '
-                f'margin-left:3px; cursor:pointer; transition:all 0.2s; height:18px; {glow}'
+                f'<button id="tfbtn_{tf}" onclick="changeTF(\'{tf}\')" '
+                f'style="background:{bg}; border:1px solid {border}; color:{color}; '
+                f'padding:2px 9px; border-radius:4px; font-size:13px; font-weight:{fw}; '
+                f'margin-left:3px; cursor:pointer; transition:all 0.15s; height:20px; {glow}'
                 f'font-family:\'VT323\',\'Share Tech Mono\',monospace; letter-spacing:1px;">{tf}</button>'
             )
 
+        # Botones Streamlit ocultos — reciben el click via postMessage desde el iframe
+        # Los escondemos con CSS (height:0, overflow:hidden) para que no ocupen espacio
+        st.markdown("""
+        <style>
+        div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] > div.element-container:has(button[data-tf-hidden]) {
+            height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        _hidden_cols = st.columns(4)
+        tf_changed = False
+        for i, tf in enumerate(tf_options):
+            with _hidden_cols[i]:
+                # Render as invisible buttons with data attribute for JS to find them
+                st.markdown(f'<span id="hidden_tf_{tf}"></span>', unsafe_allow_html=True)
+                if st.button(tf, key=f"sector_hidden_{tf}", type="secondary"):
+                    if tf != current_tf:
+                        st.session_state.sector_tf = tf
+                        tf_changed = True
+        if tf_changed:
+            st.rerun()
+
         sector_module_html = f'''<!DOCTYPE html><html><head>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
         <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
         <style>
         * {{ margin:0; padding:0; box-sizing:border-box; }}
@@ -2882,7 +2914,7 @@ def render():
         button:hover {{ filter:brightness(1.3); }}
         .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:6px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
         .tooltip-wrapper {{ position:static; display:inline-block; }}
-        .tooltip-btn {{ width:20px; height:20px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:11px; font-weight:bold; cursor:help; }}
+        .tooltip-btn {{ width:20px; height:20px; border-radius:50%; background:#1a1e26; border:1px solid #00ffad44; display:flex; align-items:center; justify-content:center; color:#00ffad; font-size:11px; font-weight:bold; cursor:help; }}
         .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
         </style></head><body>
@@ -2893,7 +2925,7 @@ def render():
                     {tf_btns_html}
                     <div class="tooltip-wrapper" style="margin-left:6px;">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Los botones cambian el horizonte temporal: 1D, 3D, 1W, 1M.</div>
+                        <div class="tooltip-content">Rendimiento de sectores del S&P 500 vía ETFs sectoriales (XLK, XLF…). Los botones del header cambian el horizonte temporal sin recargar la página: 1D=hoy, 3D=3 días, 1W=semana, 1M=mes.</div>
                     </div>
                 </div>
             </div>
@@ -2904,46 +2936,24 @@ def render():
         </div>
         <script>
         function changeTF(tf) {{
-            // Comunicar con Streamlit via postMessage
-            window.parent.postMessage({{type:'streamlit:setComponentValue', value: tf}}, '*');
-            // Actualizar URL param para que Streamlit lo lea
-            const url = new URL(window.parent.location);
-            url.searchParams.set('sector_tf', tf);
-            window.parent.history.replaceState({{}}, '', url);
-            window.parent.location.reload();
+            // Localizar el botón Streamlit oculto correspondiente en el documento padre y hacer click
+            try {{
+                var doc = window.parent.document;
+                var allBtns = doc.querySelectorAll('button[data-testid="baseButton-secondary"]');
+                for (var i = 0; i < allBtns.length; i++) {{
+                    if (allBtns[i].innerText.trim() === tf) {{
+                        allBtns[i].click();
+                        return;
+                    }}
+                }}
+            }} catch(e) {{
+                console.warn('sector changeTF error:', e);
+            }}
         }}
         </script>
         </body></html>'''
 
-        # Botones Streamlit nativos para cambio de temporalidad (compactos, al lado del módulo)
-        btn_cols = st.columns(4)
-        tf_changed = False
-        for i, tf in enumerate(tf_options):
-            with btn_cols[i]:
-                btn_style = "primary" if tf == current_tf else "secondary"
-                if st.button(tf, key=f"sector_btn_{tf}", type=btn_style, use_container_width=True):
-                    if tf != current_tf:
-                        st.session_state.sector_tf = tf
-                        tf_changed = True
-        if tf_changed:
-            st.rerun()
-
-        st.markdown(f'''
-        <div class="module-container" style="margin-top:4px;">
-            <div class="module-header" style="justify-content:space-between;">
-                <div class="module-title">Rotación Sectorial</div>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Rendimiento de sectores vía ETFs sectoriales. Usa los botones de temporalidad superiores.</div>
-                </div>
-            </div>
-            <div class="module-content" style="padding:8px;">
-                <div class="sector-grid">{sectors_html}</div>
-            </div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()} · {current_tf}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-
+        components.html(sector_module_html, height=420, scrolling=False)
     with c3:
         crypto_fg = get_crypto_fear_greed()
         val = crypto_fg['value']
@@ -4040,8 +4050,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
 
 
 

@@ -7,308 +7,438 @@ import os
 from datetime import datetime
 
 def render():
-    # CSS Global consistente con market.py
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        * { font-family: 'Inter', sans-serif; }
-        
-        .main-header {
-            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
-            padding: 30px;
-            border-radius: 15px;
-            border: 1px solid #2a3f5f;
-            margin-bottom: 25px;
-            text-align: center;
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+        /* ── BASE ────────────────────────────────── */
+        .stApp { background: #0a0c10; }
+
+        * { box-sizing: border-box; }
+
+        /* ── HEADINGS ────────────────────────────── */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'VT323', monospace !important;
+            text-transform: uppercase;
+            letter-spacing: 3px;
         }
-        
+
+        /* ── BODY TEXT ───────────────────────────── */
+        p, li, span, div {
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        /* ── MAIN HEADER ─────────────────────────── */
+        .main-header {
+            background: #0a0c10;
+            border: 1px solid #00ffad44;
+            border-radius: 4px;
+            padding: 35px 30px 25px;
+            margin-bottom: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 40px #00ffad0a, inset 0 0 60px #00ffad04;
+        }
+
+        .main-header::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ffad, transparent);
+        }
+
+        .main-header::after {
+            content: "";
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00ffad44, transparent);
+        }
+
+        .header-pre {
+            font-family: 'VT323', monospace;
+            font-size: 0.85rem;
+            color: #444;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+        }
+
         .main-title {
+            font-family: 'VT323', monospace !important;
             color: #00ffad;
-            font-size: 2.5rem;
-            font-weight: 700;
+            font-size: 3.8rem;
+            font-weight: 400;
             margin: 0;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            text-shadow: 0 0 20px rgba(0, 255, 173, 0.3);
+            letter-spacing: 6px;
+            text-shadow: 0 0 30px #00ffad55, 0 0 60px #00ffad22;
+            line-height: 1;
         }
-        
+
         .sub-title {
-            color: #888;
-            font-size: 0.9rem;
-            margin-top: 10px;
-            font-weight: 400;
+            font-family: 'VT323', monospace;
+            color: #00d9ff;
+            font-size: 1rem;
+            margin-top: 12px;
+            letter-spacing: 4px;
         }
-        
+
+        .header-post {
+            font-family: 'VT323', monospace;
+            font-size: 0.75rem;
+            color: #333;
+            margin-top: 15px;
+            letter-spacing: 2px;
+        }
+
+        /* ── METRIC CARDS ────────────────────────── */
         .metric-card {
             background: #0c0e12;
             border: 1px solid #1a1e26;
-            border-radius: 12px;
+            border-top: 2px solid #00ffad33;
+            border-radius: 4px;
             padding: 20px;
             text-align: center;
             transition: all 0.3s ease;
+            position: relative;
         }
-        
+
         .metric-card:hover {
-            border-color: #2a3f5f;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-color: #00ffad55;
+            box-shadow: 0 0 20px #00ffad11;
         }
-        
+
         .metric-value {
-            font-size: 2rem;
-            font-weight: 700;
+            font-family: 'VT323', monospace;
+            font-size: 2.4rem;
             color: white;
-            margin: 10px 0;
+            margin: 8px 0;
+            letter-spacing: 2px;
         }
-        
+
         .metric-label {
-            color: #666;
-            font-size: 0.75rem;
+            font-family: 'Share Tech Mono', monospace;
+            color: #444;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
+            letter-spacing: 2px;
         }
-        
+
+        .metric-change {
+            font-family: 'VT323', monospace;
+            font-size: 1.3rem;
+            letter-spacing: 1px;
+        }
+
         .positive { color: #00ffad; }
         .negative { color: #f23645; }
-        .warning { color: #ff9800; }
-        
-        .section-container {
-            background: #11141a;
-            border: 1px solid #1a1e26;
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 20px;
+        .warning  { color: #ff9800; }
+
+        /* ── SECTION CONTAINERS ──────────────────── */
+        .terminal-box {
+            background: linear-gradient(135deg, #0c0e12 0%, #0e1116 100%);
+            border: 1px solid #00ffad22;
+            border-radius: 4px;
+            padding: 25px;
+            margin: 15px 0;
+            box-shadow: 0 0 15px #00ffad08;
+            position: relative;
         }
-        
-        .section-header {
+
+        .terminal-box::before {
+            content: "//";
+            position: absolute;
+            top: 10px; left: 15px;
+            font-family: 'VT323', monospace;
+            color: #00ffad33;
+            font-size: 0.85rem;
+        }
+
+        .section-header-bar {
             background: #0c0e12;
-            padding: 15px 20px;
-            border-bottom: 1px solid #1a1e26;
-            font-weight: 600;
-            color: white;
-            font-size: 1.1rem;
+            border: 1px solid #1a1e26;
+            border-left: 3px solid #00ffad;
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            border-radius: 0 4px 4px 0;
+            font-family: 'VT323', monospace;
+            color: #00ffad;
+            font-size: 1.2rem;
+            letter-spacing: 3px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        
-        .section-content {
-            padding: 20px;
-        }
-        
+
+        /* ── PHASE CARDS ─────────────────────────── */
         .phase-card {
             background: #0c0e12;
-            border: 2px solid #1a1e26;
-            border-radius: 10px;
+            border: 1px solid #1a1e26;
+            border-radius: 4px;
             padding: 15px;
             margin-bottom: 10px;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            font-family: 'Share Tech Mono', monospace;
         }
-        
+
+        .phase-card::before {
+            content: "";
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: #1a1e26;
+        }
+
         .phase-card.active {
-            border-color: #00ffad;
-            background: linear-gradient(135deg, #0c0e12 0%, #00ffad11 100%);
-            box-shadow: 0 0 20px rgba(0, 255, 173, 0.2);
+            border-color: #00ffad44;
+            background: linear-gradient(135deg, #0c0e12 0%, #00ffad08 100%);
+            box-shadow: 0 0 20px #00ffad11;
         }
-        
-        .phase-card.pending {
-            border-color: #2a3f5f;
-            opacity: 0.6;
-        }
-        
-        .phase-card.completed {
-            border-color: #4caf50;
-            opacity: 0.5;
-        }
-        
+
+        .phase-card.active::before { background: #00ffad; }
+        .phase-card.pending::before { background: #2a3f5f; opacity: 0.4; }
+        .phase-card.completed::before { background: #4caf50; opacity: 0.5; }
+
+        .phase-card.pending { opacity: 0.55; }
+        .phase-card.completed { opacity: 0.45; }
+
         .phase-number {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: #1a1e26;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: #888;
+            top: 10px; right: 12px;
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            color: #2a3f5f;
+            letter-spacing: 1px;
         }
-        
-        .phase-card.active .phase-number { 
-            background: #00ffad; 
-            color: #0c0e12; 
-        }
-        
-        .phase-card.completed .phase-number { 
-            background: #4caf50; 
-            color: white; 
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #0c0e12;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 10px 0;
-            border: 1px solid #1a1e26;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #00ffad 0%, #00ffad88 100%);
-            transition: width 0.5s ease;
-        }
-        
+
+        .phase-card.active .phase-number { color: #00ffad; }
+        .phase-card.completed .phase-number { color: #4caf50; }
+
+        /* ── ALERT BOXES ─────────────────────────── */
         .alert-box {
             padding: 15px 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid;
-            font-weight: 500;
+            border-radius: 4px;
+            margin: 12px 0;
+            border: 1px solid;
+            font-family: 'VT323', monospace;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            position: relative;
         }
-        
+
         .alert-buy {
-            background: rgba(0, 255, 173, 0.1);
-            border-color: #00ffad;
+            background: #00ffad08;
+            border-color: #00ffad55;
             color: #00ffad;
         }
-        
+
         .alert-sell {
-            background: rgba(242, 54, 69, 0.1);
-            border-color: #f23645;
+            background: #f2364508;
+            border-color: #f2364555;
             color: #f23645;
         }
-        
+
         .alert-warning {
-            background: rgba(255, 152, 0, 0.1);
-            border-color: #ff9800;
+            background: #ff980008;
+            border-color: #ff980055;
             color: #ff9800;
         }
-        
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .info-item {
-            background: #0c0e12;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #1a1e26;
-        }
-        
-        .info-label {
-            color: #666;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
-        }
-        
-        .info-value {
-            color: white;
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-        
-        .chart-container {
-            background: #0c0e12;
-            border-radius: 10px;
-            padding: 15px;
-            border: 1px solid #1a1e26;
-        }
-        
-        .cds-gauge {
-            width: 100%;
-            height: 30px;
-            background: linear-gradient(90deg, #00ffad 0%, #ff9800 50%, #f23645 100%);
-            border-radius: 15px;
-            position: relative;
-            margin: 20px 0;
-            border: 2px solid #1a1e26;
-        }
-        
-        .cds-marker {
-            position: absolute;
-            top: -10px;
-            width: 4px;
-            height: 50px;
-            background: white;
-            border: 2px solid #fff;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            transition: left 0.5s ease;
-        }
-        
-        .cds-labels {
-            display: flex;
-            justify-content: space-between;
-            color: #888;
-            font-size: 0.75rem;
-            margin-top: 5px;
-        }
-        
-        .strategy-philosophy {
-            background: linear-gradient(135deg, #0c0e12 0%, #1a1e26 100%);
-            border-left: 4px solid #00ffad;
+
+        /* ── HIGHLIGHT QUOTE ─────────────────────── */
+        .highlight-quote {
+            background: #00ffad08;
+            border: 1px solid #00ffad22;
+            border-radius: 4px;
             padding: 20px;
-            border-radius: 0 10px 10px 0;
+            margin: 20px 0;
+            font-family: 'VT323', monospace;
+            font-size: 1.25rem;
+            color: #00ffad;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        /* ── RISK BOX ────────────────────────────── */
+        .risk-box {
+            background: linear-gradient(135deg, #120a0a 0%, #1a0e0e 100%);
+            border: 1px solid #f2364522;
+            border-radius: 4px;
+            padding: 20px;
             margin: 15px 0;
         }
-        
+
+        /* ── STRATEGY GRID ───────────────────────── */
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .strategy-card {
+            background: #0c0e12;
+            border: 1px solid #1a1e26;
+            border-top: 2px solid #00ffad33;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'VT323', monospace;
+            font-size: 1.05rem;
+            color: #00ffad;
+            letter-spacing: 1px;
+        }
+
+        /* ── RULE ITEMS ──────────────────────────── */
         .rule-item {
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            margin: 12px 0;
-            padding: 12px;
+            margin: 10px 0;
+            padding: 14px;
             background: #0c0e12;
-            border-radius: 8px;
             border: 1px solid #1a1e26;
+            border-radius: 4px;
+            font-family: 'Share Tech Mono', monospace;
         }
-        
+
         .rule-icon {
-            width: 24px;
-            height: 24px;
-            background: #00ffad22;
+            width: 26px;
+            height: 26px;
+            background: #00ffad15;
             color: #00ffad;
-            border-radius: 50%;
+            border: 1px solid #00ffad33;
+            border-radius: 2px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 0.8rem;
+            font-family: 'VT323', monospace;
+            font-size: 1rem;
             flex-shrink: 0;
         }
-        
-        .highlight {
-            color: #00ffad;
-            font-weight: 600;
+
+        /* ── CDS GAUGE ───────────────────────────── */
+        .cds-gauge {
+            width: 100%;
+            height: 24px;
+            background: linear-gradient(90deg, #00ffad 0%, #ff9800 50%, #f23645 100%);
+            border-radius: 2px;
+            position: relative;
+            margin: 20px 0 8px;
+            border: 1px solid #1a1e26;
         }
-        
-        .danger { color: #f23645; font-weight: 600; }
-        .success { color: #00ffad; font-weight: 600; }
+
+        .cds-marker {
+            position: absolute;
+            top: -8px;
+            width: 3px;
+            height: 40px;
+            background: white;
+            box-shadow: 0 0 8px rgba(255,255,255,0.8);
+            transition: left 0.5s ease;
+        }
+
+        .cds-labels {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'VT323', monospace;
+            color: #555;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        /* ── HORIZONTAL RULE ─────────────────────── */
+        hr {
+            border: none;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00ffad44, transparent);
+            margin: 25px 0;
+        }
+
+        /* ── PROGRESS BAR ────────────────────────── */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #0c0e12;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 8px 0;
+            border: 1px solid #1a1e26;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ffad 0%, #00ffad66 100%);
+            transition: width 0.5s ease;
+        }
+
+        /* ── CALC ITEMS ──────────────────────────── */
+        .calc-item {
+            background: #0c0e12;
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin: 6px 0;
+            border-left: 3px solid #00ffad;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .calc-reserve {
+            background: #ff980008;
+            border-left-color: #ff9800;
+        }
+
+        .calc-total {
+            background: #00ffad08;
+            border: 1px solid #00ffad33;
+            border-radius: 4px;
+            padding: 14px 15px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+        }
+
+        /* ── FOOTER ──────────────────────────────── */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            border-top: 1px solid #1a1e26;
+            margin-top: 30px;
+        }
+
+        .footer p {
+            font-family: 'VT323', monospace;
+            color: #333;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+        }
+
+        /* ── STREAMLIT OVERRIDES ──────────────────── */
+        .stTabs [data-baseweb="tab"] {
+            font-family: 'VT323', monospace !important;
+            letter-spacing: 2px;
+            font-size: 1rem;
+        }
     </style>
     """, unsafe_allow_html=True)
 
-    # === HEADER PRINCIPAL ===
+    # === HEADER ===
     st.markdown("""
     <div class="main-header">
+        <div class="header-pre">[SECURE CONNECTION ESTABLISHED // RSU TRADING SYSTEM v2.0]</div>
         <h1 class="main-title">📈 ESTRATEGIA SPXL</h1>
-        <p class="sub-title">Redistribution Strategy Research Unit (RSU) - Trading System v2.0</p>
+        <div class="sub-title">REDISTRIBUTION STRATEGY RESEARCH UNIT // SISTEMA ACTIVO</div>
+        <div class="header-post">[TIMESTAMP: """ + datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC') + """] [STATUS: LIVE]</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # === OBTENCION DE DATOS ===
+    # === DATOS ===
     @st.cache_data(ttl=300)
     def get_market_data():
         try:
@@ -316,21 +446,21 @@ def render():
             spxl_hist = spxl.history(period="1y")
             spx = yf.Ticker("^GSPC")
             spx_hist = spx.history(period="2d")
-            
+
             if not spxl_hist.empty:
                 current_price = spxl_hist['Close'].iloc[-1]
-                prev_price = spxl_hist['Close'].iloc[-2]
-                yearly_high = spxl_hist['High'].max()
-                yearly_low = spxl_hist['Low'].min()
-                
+                prev_price    = spxl_hist['Close'].iloc[-2]
+                yearly_high   = spxl_hist['High'].max()
+                yearly_low    = spxl_hist['Low'].min()
+
                 change_pct = ((current_price - prev_price) / prev_price) * 100
-                drawdown = ((current_price - yearly_high) / yearly_high) * 100
-                
+                drawdown   = ((current_price - yearly_high) / yearly_high) * 100
+
                 p1 = yearly_high * 0.85
                 p2 = p1 * 0.90
                 p3 = p2 * 0.93
                 p4 = p3 * 0.90
-                
+
                 return {
                     'spxl_price': current_price,
                     'spxl_change': change_pct,
@@ -350,78 +480,77 @@ def render():
         st.error("No se pudieron obtener datos del mercado")
         return
 
-    # === METRICAS ===
+    # === MÉTRICAS ===
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         color = "positive" if data['spxl_change'] >= 0 else "negative"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-label">SPXL Actual</div>
+            <div class="metric-label">// SPXL ACTUAL</div>
             <div class="metric-value">${data['spxl_price']:.2f}</div>
-            <div class="{color}" style="font-size: 1.1rem; font-weight: 600;">{data['spxl_change']:+.2f}%</div>
+            <div class="metric-change {color}">{data['spxl_change']:+.2f}%</div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col2:
         color2 = "positive" if data['spx_change'] >= 0 else "negative"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-label">S&P 500</div>
-            <div class="metric-value">{data['spx_price']:,.2f}</div>
-            <div class="{color2}" style="font-size: 1.1rem; font-weight: 600;">{data['spx_change']:+.2f}%</div>
+            <div class="metric-label">// S&P 500</div>
+            <div class="metric-value">{data['spx_price']:,.0f}</div>
+            <div class="metric-change {color2}">{data['spx_change']:+.2f}%</div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col3:
         dd_color = "positive" if data['drawdown'] > -10 else "warning" if data['drawdown'] > -15 else "negative"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-label">Drawdown desde Max</div>
-            <div class="metric-value {dd_color}">{data['drawdown']:.2f}%</div>
-            <div style="color: #666; font-size: 0.8rem;">Max: ${data['spxl_high']:.2f}</div>
+            <div class="metric-label">// DRAWDOWN vs MAX</div>
+            <div class="metric-value {dd_color}">{data['drawdown']:.1f}%</div>
+            <div class="metric-change" style="color:#444;">MAX: ${data['spxl_high']:.2f}</div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col4:
         current_dd = abs(data['drawdown'])
         if current_dd < 15:
-            phase, phase_color = "ESPERANDO", "#888"
+            phase, phase_color = "STAND BY", "#555"
         elif current_dd < 25:
-            phase, phase_color = "FASE 1 ACTIVA", "#00ffad"
+            phase, phase_color = "FASE 1 //", "#00ffad"
         elif current_dd < 32:
-            phase, phase_color = "FASE 2 ACTIVA", "#00ffad"
+            phase, phase_color = "FASE 2 //", "#00ffad"
         elif current_dd < 39:
-            phase, phase_color = "FASE 3 ACTIVA", "#00ffad"
+            phase, phase_color = "FASE 3 //", "#ff9800"
         else:
-            phase, phase_color = "FASE 4 ACTIVA", "#f23645"
-        
+            phase, phase_color = "FASE 4 //", "#f23645"
+
         st.markdown(f"""
-        <div class="metric-card" style="border-color: {phase_color};">
-            <div class="metric-label">Estado Estrategia</div>
-            <div class="metric-value" style="color: {phase_color}; font-size: 1.3rem;">{phase}</div>
-            <div style="color: #666; font-size: 0.8rem;">Basado en caida actual</div>
+        <div class="metric-card" style="border-top-color: {phase_color}55;">
+            <div class="metric-label">// ESTADO</div>
+            <div class="metric-value" style="color: {phase_color}; font-size: 1.8rem;">{phase}</div>
+            <div class="metric-change" style="color:#444;">DD: {current_dd:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<hr>", unsafe_allow_html=True)
 
     # === TABS ===
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "📖 Estrategia", "💰 Calculadora", "⚠️ Riesgo"])
+    tab1, tab2, tab3, tab4 = st.tabs(["DASHBOARD", "ESTRATEGIA", "CALCULADORA", "RIESGO_CDS"])
 
+    # ── TAB 1: DASHBOARD ────────────────────────────────────────────────────
     with tab1:
         col_left, col_right = st.columns([2, 1])
-        
+
         with col_left:
-            st.markdown('<div class="section-container"><div class="section-header">📈 Grafico SPXL con Niveles</div><div class="section-content">', unsafe_allow_html=True)
-            
-            levels = data['buy_levels']
-            chart_html = f"""
+            st.markdown('<div class="section-header-bar">▸ GRAFICO SPXL // NIVELES</div>', unsafe_allow_html=True)
+            chart_html = """
             <div class="tradingview-widget-container">
               <div id="tradingview_spxl"></div>
               <script src="https://s3.tradingview.com/tv.js"></script>
               <script>
-              new TradingView.widget({{
+              new TradingView.widget({
                 "width": "100%",
                 "height": 500,
                 "symbol": "AMEX:SPXL",
@@ -434,184 +563,241 @@ def render():
                 "hide_side_toolbar": false,
                 "allow_symbol_change": false,
                 "container_id": "tradingview_spxl",
-                "overrides": {{
-                    "paneProperties.background": "#0c0e12",
-                    "paneProperties.vertGridProperties.color": "#1a1e26",
-                    "paneProperties.horzGridProperties.color": "#1a1e26"
-                }}
-              }});
+                "overrides": {
+                    "paneProperties.background": "#0a0c10",
+                    "paneProperties.vertGridProperties.color": "#0e1116",
+                    "paneProperties.horzGridProperties.color": "#0e1116"
+                }
+              });
               </script>
             </div>
             """
             components.html(chart_html, height=520)
-            st.markdown("</div></div>", unsafe_allow_html=True)
-        
+
         with col_right:
-            st.markdown('<div class="section-container"><div class="section-header">🔔 Senales</div><div class="section-content">', unsafe_allow_html=True)
-            
+            st.markdown('<div class="section-header-bar">▸ SEÑALES // FASES</div>', unsafe_allow_html=True)
+
             current_price = data['spxl_price']
             levels = data['buy_levels']
-            
+
             phases = [
-                ("Fase 1: Compra Inicial", levels['phase1'], 0.20, 15, current_price <= levels['phase1']),
-                ("Fase 2: Segunda Entrada", levels['phase2'], 0.15, 10, current_price <= levels['phase2']),
-                ("Fase 3: Tercera Entrada", levels['phase3'], 0.20, 7, current_price <= levels['phase3']),
-                ("Fase 4: Entrada Final", levels['phase4'], 0.20, 10, current_price <= levels['phase4'])
+                ("FASE 1: COMPRA INICIAL",  levels['phase1'], 0.20, 15, current_price <= levels['phase1']),
+                ("FASE 2: SEGUNDA ENTRADA", levels['phase2'], 0.15, 10, current_price <= levels['phase2']),
+                ("FASE 3: TERCERA ENTRADA", levels['phase3'], 0.20,  7, current_price <= levels['phase3']),
+                ("FASE 4: ENTRADA FINAL",   levels['phase4'], 0.20, 10, current_price <= levels['phase4']),
             ]
-            
+
             for i, (name, price, allocation, drop, is_active) in enumerate(phases, 1):
                 if is_active:
-                    status_class, status_text = "active", "🎯 ACTIVA"
+                    status_class, status_text = "active", ">> ACTIVA"
                 elif current_price < price:
-                    status_class, status_text = "completed", "✓ COMPLETADA"
+                    status_class, status_text = "completed", "// DONE"
                 else:
-                    status_class, status_text = "pending", "⏳ PENDIENTE"
-                
+                    status_class, status_text = "pending", "__ ESPERA"
+
                 distance = ((current_price - price) / price) * 100
-                distance_text = f"{distance:+.1f}%" if distance > 0 else f"{distance:.1f}%"
-                distance_color = "positive" if distance <= 0 else "negative"
-                
+                dist_color = "#00ffad" if distance <= 0 else "#f23645"
+
                 st.markdown(f"""
                 <div class="phase-card {status_class}">
-                    <div class="phase-number">{i}</div>
-                    <div style="font-weight: 600; color: white; margin-bottom: 5px;">{name}</div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span style="color: #00ffad; font-size: 1.2rem; font-weight: 700;">${price:.2f}</span>
-                        <span style="color: #888; font-size: 0.8rem;">{status_text}</span>
+                    <div class="phase-number">[{i}]</div>
+                    <div style="font-family:'VT323',monospace; color:#00ffad; font-size:0.95rem; letter-spacing:2px; margin-bottom:6px;">{name}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                        <span style="font-family:'VT323',monospace; color:white; font-size:1.6rem; letter-spacing:2px;">${price:.2f}</span>
+                        <span style="font-family:'VT323',monospace; color:#444; font-size:0.85rem;">{status_text}</span>
                     </div>
-                    <div style="margin-top: 8px; font-size: 0.8rem;">
-                        <span style="color: #666;">Alloc: {allocation:.0%}</span> | 
-                        <span class="{distance_color}">Dist: {distance_text}</span>
+                    <div style="margin-top:8px; font-family:'Share Tech Mono',monospace; font-size:0.75rem; display:flex; gap:12px;">
+                        <span style="color:#444;">ALLOC: {allocation:.0%}</span>
+                        <span style="color:{dist_color};">DIST: {distance:+.1f}%</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-            
-            if current_price <= levels['phase4']:
-                st.markdown('<div class="alert-box alert-buy pulse"><strong>🚨 COMPRA MAXIMA</strong><br>Todas las fases disponibles.</div>', unsafe_allow_html=True)
-            elif current_price <= levels['phase1']:
-                st.markdown('<div class="alert-box alert-buy"><strong>✅ COMPRA ACTIVA</strong></div>', unsafe_allow_html=True)
-            else:
-                distance_to_p1 = ((current_price - levels['phase1']) / levels['phase1']) * 100
-                st.markdown(f'<div class="alert-box alert-warning"><strong>⏳ ESPERA</strong><br>Faltan {distance_to_p1:.1f}% para comprar.</div>', unsafe_allow_html=True)
-            
-            st.markdown("</div></div>", unsafe_allow_html=True)
 
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if current_price <= levels['phase4']:
+                st.markdown('<div class="alert-box alert-sell">🚨 COMPRA MÁXIMA ACTIVA<br>TODAS LAS FASES DISPONIBLES</div>', unsafe_allow_html=True)
+            elif current_price <= levels['phase1']:
+                st.markdown('<div class="alert-box alert-buy">✅ COMPRA ACTIVA<br>EJECUTAR PROTOCOLO</div>', unsafe_allow_html=True)
+            else:
+                d = ((current_price - levels['phase1']) / levels['phase1']) * 100
+                st.markdown(f'<div class="alert-box alert-warning">⏳ STAND BY<br>FALTAN {d:.1f}% PARA FASE 1</div>', unsafe_allow_html=True)
+
+    # ── TAB 2: ESTRATEGIA ────────────────────────────────────────────────────
     with tab2:
-        st.markdown('<div class="section-container"><div class="section-header">🎯 Filosofia</div><div class="section-content">', unsafe_allow_html=True)
-        
         st.markdown("""
-        <div class="strategy-philosophy">
-            <h3 style="color: #00ffad; margin-top: 0;">Premisa Fundamental</h3>
-            <p style="color: #ccc;">Estrategia basada en que el S&P 500 mantiene <span class="highlight">macro tendencia alcista</span> a largo plazo.</p>
+        <div class="terminal-box">
+            <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1.4rem; letter-spacing:3px; margin-bottom:12px;">
+                PREMISA FUNDAMENTAL
+            </div>
+            <p style="color:#ccc; font-size:0.95rem; line-height:1.8;">
+                Estrategia basada en que el S&P 500 mantiene 
+                <span style="color:#00ffad;">macro tendencia alcista</span> a largo plazo.
+                SPXL amplifica ese movimiento 3x. La estrategia explota correcciones
+                para acumular posición escalonada.
+            </p>
         </div>
         """, unsafe_allow_html=True)
-        
+
+        st.markdown('<div class="section-header-bar">▸ REGLAS DE ENTRADA</div>', unsafe_allow_html=True)
+
+        rules = [
+            ("1", "PRIMERA CAÍDA (-15% desde máximo)", "Invertir 20% del capital asignado"),
+            ("2", "SEGUNDA CAÍDA (-10% desde Fase 1)",  "Invertir 15% del capital asignado"),
+            ("3", "TERCERA CAÍDA (-7% desde Fase 2)",   "Invertir 20% del capital asignado"),
+            ("4", "CUARTA CAÍDA  (-10% desde Fase 3)",  "Invertir 20% del capital // 75% total"),
+        ]
+
+        for icon, title, desc in rules:
+            st.markdown(f"""
+            <div class="rule-item">
+                <div class="rule-icon">{icon}</div>
+                <div>
+                    <div style="color:white; font-size:0.9rem; margin-bottom:4px;">{title}</div>
+                    <div style="color:#555; font-size:0.8rem;">{desc}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('<div class="section-header-bar" style="margin-top:20px;">▸ REGLA DE SALIDA</div>', unsafe_allow_html=True)
+
         st.markdown("""
-        <h3 style="color: white;">📋 Reglas de Entrada</h3>
-        <div class="rule-item"><div class="rule-icon">1</div><div><strong>Primera Caida (-15%)</strong><br><span style="color: #888;">Invertir 20% del capital</span></div></div>
-        <div class="rule-item"><div class="rule-icon">2</div><div><strong>Segunda Caida (-10%)</strong><br><span style="color: #888;">Invertir 15% del capital</span></div></div>
-        <div class="rule-item"><div class="rule-icon">3</div><div><strong>Tercera Caida (-7%)</strong><br><span style="color: #888;">Invertir 20% del capital</span></div></div>
-        <div class="rule-item"><div class="rule-icon">4</div><div><strong>Cuarta Caida (-10%)</strong><br><span style="color: #888;">Invertir 20% del capital (75% total)</span></div></div>
-        
-        <h3 style="color: white; margin-top: 20px;">🎯 Regla de Salida</h3>
-        <div class="rule-item" style="border-color: #f23645;"><div class="rule-icon" style="background: #f2364522; color: #f23645;">$</div><div><strong>Take Profit (+20%)</strong><br><span style="color: #888;">Vender todo al alcanzar +20% sobre precio medio</span></div></div>
+        <div class="rule-item" style="border-left: 3px solid #f23645;">
+            <div class="rule-icon" style="border-color:#f2364533; color:#f23645; background:#f2364511;">$</div>
+            <div>
+                <div style="color:white; font-size:0.9rem; margin-bottom:4px;">TAKE PROFIT (+20% sobre precio medio)</div>
+                <div style="color:#555; font-size:0.8rem;">Vender toda la posición al alcanzar objetivo. Sin parciales.</div>
+            </div>
+        </div>
         """, unsafe_allow_html=True)
-        
+
+        st.markdown("""
+        <div class="highlight-quote" style="margin-top:25px;">
+            "LA CAÍDA NO ES EL PROBLEMA. ES LA OPORTUNIDAD."
+        </div>
+        """, unsafe_allow_html=True)
+
         pdf_path = "assets/SPXL.pdf"
         if os.path.exists(pdf_path):
             with open(pdf_path, "rb") as f:
                 pdf_bytes = f.read()
-            st.download_button("📄 Descargar Estrategia PDF", pdf_bytes, "SPXL.pdf", "application/pdf", use_container_width=True)
-        
-        st.markdown("</div></div>", unsafe_allow_html=True)
+            st.download_button("▸ DESCARGAR ESTRATEGIA PDF", pdf_bytes, "SPXL.pdf", "application/pdf", use_container_width=True)
 
+    # ── TAB 3: CALCULADORA ───────────────────────────────────────────────────
     with tab3:
-        st.markdown('<div class="section-container"><div class="section-header">💰 Calculadora</div><div class="section-content">', unsafe_allow_html=True)
-        
+        st.markdown('<div class="section-header-bar">▸ CALCULADORA DE CAPITAL</div>', unsafe_allow_html=True)
+
         col_calc1, col_calc2 = st.columns(2)
-        
+        levels = data['buy_levels']
+
         with col_calc1:
+            st.markdown("""
+            <div style="font-family:'VT323',monospace; color:#444; font-size:0.85rem; letter-spacing:2px; margin-bottom:10px;">
+                // INPUT PARAMETERS
+            </div>
+            """, unsafe_allow_html=True)
             capital_total = st.number_input("Capital Total ($):", min_value=1000, value=10000, step=1000)
-            tiene_posicion = st.checkbox("Tienes posicion abierta?")
+            tiene_posicion = st.checkbox("¿Tienes posición abierta?")
             if tiene_posicion:
-                precio_medio = st.number_input("Precio medio ($):", min_value=0.0, value=0.0, step=0.1)
-                cantidad_acciones = st.number_input("Acciones:", min_value=0, value=0, step=1)
+                precio_medio      = st.number_input("Precio medio ($):", min_value=0.0, value=0.0, step=0.1)
+                cantidad_acciones = st.number_input("Nº Acciones:", min_value=0, value=0, step=1)
             else:
                 precio_medio, cantidad_acciones = 0, 0
-        
+
         with col_calc2:
-            allocations = [("Fase 1", 0.20, levels['phase1']), ("Fase 2", 0.15, levels['phase2']), 
-                          ("Fase 3", 0.20, levels['phase3']), ("Fase 4", 0.20, levels['phase4'])]
-            
+            st.markdown("""
+            <div style="font-family:'VT323',monospace; color:#444; font-size:0.85rem; letter-spacing:2px; margin-bottom:10px;">
+                // ALLOCATION OUTPUT
+            </div>
+            """, unsafe_allow_html=True)
+
+            allocations = [
+                ("FASE 1", 0.20, levels['phase1']),
+                ("FASE 2", 0.15, levels['phase2']),
+                ("FASE 3", 0.20, levels['phase3']),
+                ("FASE 4", 0.20, levels['phase4']),
+            ]
+
             total_invertido = 0
             for fase, pct, precio in allocations:
                 monto = capital_total * pct
                 total_invertido += monto
                 st.markdown(f"""
-                <div style="background: #0c0e12; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 3px solid #00ffad;">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span style="color: white;">{fase}</span>
-                        <span style="color: #00ffad; font-weight: bold;">${monto:,.2f}</span>
+                <div class="calc-item">
+                    <span style="color:white;">{fase}</span>
+                    <div style="text-align:right;">
+                        <span style="color:#00ffad; font-family:'VT323',monospace; font-size:1.2rem;">${monto:,.0f}</span>
+                        <span style="color:#333; font-size:0.75rem; margin-left:8px;">@ ${precio:.2f}</span>
                     </div>
-                    <div style="color: #666; font-size: 0.8rem;">@${precio:.2f}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
+
             reserva = capital_total * 0.25
             st.markdown(f"""
-            <div style="background: #ff980022; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 3px solid #ff9800;">
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="color: #888;">Reserva</span>
-                    <span style="color: #ff9800; font-weight: bold;">${reserva:,.2f}</span>
-                </div>
+            <div class="calc-item calc-reserve">
+                <span style="color:#666;">RESERVA (25%)</span>
+                <span style="color:#ff9800; font-family:'VT323',monospace; font-size:1.2rem;">${reserva:,.0f}</span>
             </div>
-            <div style="background: #00ffad11; padding: 15px; border-radius: 8px; margin-top: 10px; border: 1px solid #00ffad;">
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="color: white; font-weight: 600;">Total a invertir:</span>
-                    <span style="color: #00ffad; font-size: 1.2rem; font-weight: bold;">${total_invertido:,.2f}</span>
-                </div>
+            <div class="calc-total">
+                <span style="color:white;">TOTAL A DESPLEGAR</span>
+                <span style="color:#00ffad;">${total_invertido:,.0f}</span>
             </div>
             """, unsafe_allow_html=True)
-        
+
         if tiene_posicion and precio_medio > 0:
-            st.markdown("---")
+            st.markdown("<hr>", unsafe_allow_html=True)
+            st.markdown('<div class="section-header-bar">▸ ESTADO POSICIÓN ACTUAL</div>', unsafe_allow_html=True)
+
             valor_actual = cantidad_acciones * data['spxl_price']
-            costo_total = cantidad_acciones * precio_medio
-            pnl = valor_actual - costo_total
-            pnl_pct = (pnl / costo_total) * 100 if costo_total > 0 else 0
+            costo_total  = cantidad_acciones * precio_medio
+            pnl          = valor_actual - costo_total
+            pnl_pct      = (pnl / costo_total) * 100 if costo_total > 0 else 0
             target_price = precio_medio * 1.20
-            
+
             c1, c2, c3 = st.columns(3)
-            c1.metric("Valor Actual", f"${valor_actual:,.2f}", f"{pnl_pct:+.2f}%")
-            c2.metric("Objetivo Venta", f"${target_price:.2f}", "+20%")
-            c3.metric("Distancia", f"{((target_price - data['spxl_price']) / data['spxl_price'] * 100):.2f}%")
-            
+            c1.metric("Valor Actual",    f"${valor_actual:,.2f}", f"{pnl_pct:+.2f}%")
+            c2.metric("Objetivo Venta",  f"${target_price:.2f}", "+20%")
+            c3.metric("Distancia Target", f"{((target_price - data['spxl_price']) / data['spxl_price'] * 100):.2f}%")
+
             if data['spxl_price'] >= target_price:
                 st.balloons()
-                st.markdown('<div class="alert-box alert-sell pulse"><strong>🎯 OBJETIVO ALCANZADO!</strong></div>', unsafe_allow_html=True)
-        
-        st.markdown("</div></div>", unsafe_allow_html=True)
+                st.markdown('<div class="alert-box alert-sell">🎯 OBJETIVO ALCANZADO // EJECUTAR SALIDA TOTAL</div>', unsafe_allow_html=True)
+            else:
+                remaining = ((target_price - data['spxl_price']) / data['spxl_price']) * 100
+                st.markdown(f'<div class="alert-box alert-warning">⏳ EN POSICIÓN // FALTAN {remaining:.1f}% PARA TARGET</div>', unsafe_allow_html=True)
 
+    # ── TAB 4: RIESGO CDS ────────────────────────────────────────────────────
     with tab4:
-        st.markdown('<div class="section-container"><div class="section-header">⚠️ Riesgo Sistemico (CDS)</div><div class="section-content">', unsafe_allow_html=True)
-        
+        st.markdown('<div class="section-header-bar">▸ RIESGO SISTÉMICO // CDS MONITOR</div>', unsafe_allow_html=True)
+
         st.markdown("""
-        <div style="background: #0c0e12; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-            <strong style="color: white;">Indice: BAMLH0A0HYM2</strong><br>
-            <span style="color: #666;">ICE BofA US High Yield Index Option-Adjusted Spread</span>
+        <div class="terminal-box">
+            <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1rem; letter-spacing:2px; margin-bottom:8px;">
+                INDICE: BAMLH0A0HYM2
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace; color:#555; font-size:0.8rem;">
+                ICE BofA US High Yield Index Option-Adjusted Spread
+            </div>
         </div>
-        
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="margin: 20px 0 5px; font-family:'VT323',monospace; color:#444; font-size:0.85rem; letter-spacing:2px;">
+            // NIVEL DE ESTRÉS SISTÉMICO
+        </div>
         <div class="cds-gauge">
             <div class="cds-marker" style="left: 30%;"></div>
         </div>
         <div class="cds-labels">
-            <span>Normal</span>
-            <span>Atencion</span>
-            <span>Peligro</span>
-            <span style="color: #f23645; font-weight: bold;">CRISIS (>10.7)</span>
+            <span style="color:#00ffad;">NORMAL</span>
+            <span>ATENCIÓN</span>
+            <span>PELIGRO</span>
+            <span style="color:#f23645;">CRISIS &gt;10.7</span>
         </div>
         """, unsafe_allow_html=True)
-        
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
         cds_chart = """
         <div class="tradingview-widget-container">
           <div id="tradingview_cds"></div>
@@ -627,18 +813,41 @@ def render():
             "locale": "es",
             "enable_publishing": false,
             "hide_side_toolbar": true,
-            "container_id": "tradingview_cds"
+            "container_id": "tradingview_cds",
+            "overrides": {
+                "paneProperties.background": "#0a0c10",
+                "paneProperties.vertGridProperties.color": "#0e1116",
+                "paneProperties.horzGridProperties.color": "#0e1116"
+            }
           });
           </script>
         </div>
         """
         components.html(cds_chart, height=420)
-        
-        st.markdown('<div class="alert-box alert-warning"><strong>⚠️ STOP DE CRISIS:</strong> Si CDS > 10.7, DETENER TODAS LAS COMPRAS inmediatamente.</div>', unsafe_allow_html=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown('<div style="text-align: center; color: #555; font-size: 0.8rem;"><p>RSU - Redistribution Strategy Research Unit</p></div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="risk-box" style="margin-top:20px;">
+            <div style="font-family:'VT323',monospace; color:#f23645; font-size:1.2rem; letter-spacing:2px; margin-bottom:10px;">
+                ⚠️ PROTOCOLO DE CRISIS
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace; color:#888; font-size:0.85rem; line-height:1.8;">
+                Si CDS &gt; 10.7 → DETENER TODAS LAS COMPRAS INMEDIATAMENTE<br>
+                No importa en qué fase esté la corrección.<br>
+                El stop sistémico tiene prioridad absoluta sobre cualquier nivel técnico.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # === FOOTER ===
+    st.markdown("""
+    <div class="footer">
+        <p>
+            [END OF TRANSMISSION // RSU TRADING SYSTEM v2.0]<br>
+            [REDISTRIBUTION STRATEGY RESEARCH UNIT // ALL RIGHTS RESERVED]
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     render()

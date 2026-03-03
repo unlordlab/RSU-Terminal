@@ -2400,17 +2400,29 @@ def render():
                 return "⚠ Configura GEMINI_API_KEY en st.secrets."
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            try:
-                from google.generativeai.types import Tool, GenerateContentConfig
-                model = genai.GenerativeModel("gemini-2.0-flash")
-                tool  = Tool(google_search=genai.protos.GoogleSearch())
-                resp  = model.generate_content(prompt, tools=[tool],
-                            generation_config=GenerateContentConfig(temperature=0.3))
-                return resp.text.strip() or "Sin respuesta."
-            except Exception:
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                resp  = model.generate_content(prompt)
-                return (resp.text.strip() or "Sin respuesta.") + "\n\n_(sin Google Search)_"
+            for _att in range(3):
+                try:
+                    if _att == 0:
+                        from google.generativeai.types import Tool, GenerateContentConfig
+                        _m = genai.GenerativeModel("gemini-2.0-flash")
+                        _t = Tool(google_search=genai.protos.GoogleSearch())
+                        _r = _m.generate_content(prompt, tools=[_t],
+                                generation_config=GenerateContentConfig(temperature=0.3))
+                        _sfx = ""
+                    elif _att == 1:
+                        _m = genai.GenerativeModel("gemini-2.0-flash")
+                        _r = _m.generate_content(prompt)
+                        _sfx = "\n\n_(sin Google Search grounding)_"
+                    else:
+                        _m = genai.GenerativeModel("gemini-2.0-flash-lite")
+                        _r = _m.generate_content(prompt)
+                        _sfx = "\n\n_(gemini-2.0-flash-lite)_"
+                    _txt = (_r.text or "").strip()
+                    if _txt:
+                        return _txt + _sfx
+                except Exception as _ex:
+                    if _att == 2: raise _ex
+                    continue
         except Exception as e:
             err = str(e)
             if "429" in err or "quota" in err.lower():
@@ -2894,109 +2906,75 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — TF via query_params URL (sin botones Streamlit, funciona en mobile)
-    _qp = st.query_params
-    current_tf = _qp.get("tf", st.session_state.get("sector_tf", "1W"))
-    if current_tf not in ["1D","3D","1W","1M"]:
-        current_tf = "1W"
-    st.session_state["sector_tf"] = current_tf
+    # SECTOR ROTATION — 100% nativo Streamlit
+    if 'sector_tf' not in st.session_state:
+        st.session_state['sector_tf'] = '1W'
 
     with c2:
-        current_tf = st.session_state.get('sector_tf', '1W')
+        current_tf = st.session_state['sector_tf']
         sectors = get_sector_performance(current_tf)
+
         sectors_html = ""
         for sector in sectors:
             code, name, change = sector["code"], sector["name"], sector["change"]
-            if   change >=  2:   bg, tc = "#00ffad22","#00ffad"
-            elif change >=  0.5: bg, tc = "#00ffad18","#00ffad"
-            elif change >=  0:   bg, tc = "#00ffad10","#00ffad"
-            elif change >= -0.5: bg, tc = "#f2364510","#f23645"
-            elif change >= -2:   bg, tc = "#f2364518","#f23645"
-            else:                bg, tc = "#f2364522","#f23645"
+            if   change >=  2.0: bg, tc = "#00ffad22", "#00ffad"
+            elif change >=  0.5: bg, tc = "#00ffad18", "#00ffad"
+            elif change >=  0.0: bg, tc = "#00ffad10", "#00ffad"
+            elif change >= -0.5: bg, tc = "#f2364510", "#f23645"
+            elif change >= -2.0: bg, tc = "#f2364518", "#f23645"
+            else:                bg, tc = "#f2364522", "#f23645"
             sectors_html += (
-                f'<div class="si" style="background:{bg};">' 
-                f'<div class="sc">{code}</div>'
-                f'<div class="sn">{name}</div>'
-                f'<div class="sv" style="color:{tc};">{change:+.2f}%</div>'
-                f'</div>'
+                '<div style="background:' + bg + ';border:1px solid #1a1e26;border-radius:6px;'
+                'padding:8px 4px;text-align:center;">'
+                '<div style="color:#666;font-size:9px;font-weight:bold;margin-bottom:2px;">' + code + '</div>'
+                '<div style="color:white;font-size:10px;font-weight:600;margin-bottom:4px;">' + name + '</div>'
+                '<div style="font-size:11px;font-weight:bold;color:' + tc + ';">' + f'{change:+.2f}%' + '</div>'
+                '</div>'
             )
 
-        tf_btns = ""
-        for tf in ["1D","3D","1W","1M"]:
-            act   = tf == current_tf
-            bg    = "#00ffad22" if act else "transparent"
-            bdr   = "#00ffad88" if act else "#1e3a2f"
-            col   = "#00ffad"   if act else "#3a5a4a"
-            fw    = "900"       if act else "500"
-            glow  = "box-shadow:0 0 10px #00ffad55;" if act else ""
-            tf_btns += (
-                f'<button onclick="setTF(\'{tf}\')" ' 
-                f'style="background:{bg};border:1px solid {bdr};color:{col};' 
-                f'padding:2px 9px;border-radius:4px;font-size:13px;font-weight:{fw};' 
-                f'margin-left:3px;cursor:pointer;height:20px;{glow}' 
-                f'font-family:VT323,Share Tech Mono,monospace;letter-spacing:1px;">{tf}</button>'
-            )
+        ts = get_timestamp()
+        st.markdown(
+            '<div style="border:1px solid #00ffad22;border-radius:10px 10px 0 0;'
+            'background:#0c0e12;padding:8px 12px;">'
+            '<span style="color:#00ffad;font-size:18px;text-transform:uppercase;letter-spacing:2px;'
+            "font-family:'VT323','Share Tech Mono','Courier New',monospace;"
+            'text-shadow:0 0 10px #00ffad44;">Rotación Sectorial</span>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            '<div style="border-left:1px solid #00ffad22;border-right:1px solid #00ffad22;'
+            'background:#0c0e12;padding:2px 6px 4px 6px;">',
+            unsafe_allow_html=True
+        )
+        _ca, _cb, _cc, _cd, _cx = st.columns([1, 1, 1, 1, 6])
+        with _ca:
+            if st.button("1D", key="tf_1D", type="primary" if current_tf == "1D" else "secondary"):
+                st.session_state['sector_tf'] = "1D"; st.rerun()
+        with _cb:
+            if st.button("3D", key="tf_3D", type="primary" if current_tf == "3D" else "secondary"):
+                st.session_state['sector_tf'] = "3D"; st.rerun()
+        with _cc:
+            if st.button("1W", key="tf_1W", type="primary" if current_tf == "1W" else "secondary"):
+                st.session_state['sector_tf'] = "1W"; st.rerun()
+        with _cd:
+            if st.button("1M", key="tf_1M", type="primary" if current_tf == "1M" else "secondary"):
+                st.session_state['sector_tf'] = "1M"; st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        sec_html = f'''<!DOCTYPE html><html><head>
-        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-        <style>
-        *{{margin:0;padding:0;box-sizing:border-box;}}
-        body{{font-family:-apple-system,sans-serif;background:#11141a;}}
-        .wrap{{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;
-               width:100%;height:420px;display:flex;flex-direction:column;box-shadow:0 0 20px #00ffad08;}}
-        .hdr{{background:#0c0e12;padding:10px 12px;border-bottom:1px solid #00ffad22;
-              display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
-        .ttl{{color:#00ffad;font-size:18px;text-transform:uppercase;letter-spacing:2px;
-              font-family:VT323,Share Tech Mono,Courier New,monospace;text-shadow:0 0 10px #00ffad44;}}
-        .body{{flex:1;overflow:hidden;padding:8px;}}
-        .grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;height:100%;}}
-        .si{{background:#0c0e12;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;
-             text-align:center;display:flex;flex-direction:column;justify-content:center;}}
-        .sc{{color:#666;font-size:9px;font-weight:bold;margin-bottom:2px;}}
-        .sn{{color:white;font-size:10px;font-weight:600;margin-bottom:4px;line-height:1.2;}}
-        .sv{{font-size:11px;font-weight:bold;}}
-        button{{outline:none;transition:all 0.15s;}}
-        button:hover{{filter:brightness(1.4);}}
-        .ts{{text-align:center;color:#555;font-size:10px;padding:6px 0;font-family:Courier New,monospace;
-             border-top:1px solid #1a1e26;background:#0c0e12;flex-shrink:0;}}
-        .tip-wrap{{position:static;display:inline-block;}}
-        .tip-btn{{width:20px;height:20px;border-radius:50%;background:#1a1e26;border:1px solid #00ffad44;
-                  display:flex;align-items:center;justify-content:center;color:#00ffad;font-size:11px;font-weight:bold;cursor:help;}}
-        .tip-box{{display:none;position:fixed;width:280px;background:#1e222d;color:#eee;padding:12px;
-                  border-radius:10px;z-index:99999;font-size:11px;border:2px solid #00ffad;
-                  box-shadow:0 15px 40px rgba(0,0,0,0.9);line-height:1.5;left:50%;top:50%;transform:translate(-50%,-50%);}}
-        .tip-wrap:hover .tip-box{{display:block;}}
-        </style></head><body>
-        <div class="wrap">
-            <div class="hdr">
-                <div class="ttl">Rotación Sectorial</div>
-                <div style="display:flex;align-items:center;gap:2px;">
-                    {tf_btns}
-                    <div class="tip-wrap" style="margin-left:6px;">
-                        <div class="tip-btn">?</div>
-                        <div class="tip-box">Rendimiento de sectores del S&P 500 vía ETFs sectoriales. Los botones cambian el horizonte: 1D=hoy, 3D=3 días, 1W=semana, 1M=mes.</div>
-                    </div>
-                </div>
-            </div>
-            <div class="body"><div class="grid">{sectors_html}</div></div>
-            <div class="ts">Actualizado: {get_timestamp()} · {current_tf}</div>
-        </div>
-        <script>
-        function setTF(tf) {{
-            try {{
-                // Cambiar query param en la URL padre → Streamlit recarga con nuevo TF
-                var url = new URL(window.parent.location.href);
-                url.searchParams.set('tf', tf);
-                window.parent.location.href = url.toString();
-            }} catch(e) {{
-                // Fallback: intentar postMessage
-                window.parent.postMessage({{type:'streamlit:setComponentValue', value:tf}}, '*');
-            }}
-        }}
-        </script>
-        </body></html>'''
+        st.markdown(
+            '<div style="border:1px solid #00ffad22;border-top:0;border-radius:0 0 10px 10px;'
+            'background:#11141a;padding:8px;">'
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
+            + sectors_html +
+            '</div>'
+            '</div>'
+            '<div style="text-align:center;color:#555;font-size:10px;padding:6px 0 0;font-family:Courier New,monospace;">'
+            'Actualizado: ' + ts + ' · ' + current_tf +
+            '</div></div>',
+            unsafe_allow_html=True
+        )
 
-        components.html(sec_html, height=420, scrolling=False)
     with c3:
         crypto_fg = get_crypto_fear_greed()
         val = crypto_fg['value']

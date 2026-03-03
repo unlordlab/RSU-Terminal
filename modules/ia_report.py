@@ -16,7 +16,7 @@ PROMPT_RSU = """Por favor, analiza {t} para mí y proporciona lo siguiente, de f
 
 ---
 
-## 1. Explica a qué se dedica la empresa con lenguaje sencillo.
+## 1. Explica a qué se dedica la empresa como si tuviera 12 años
 
 * Tres puntos breves sobre lo que hace.
 * Incluye ejemplos o analogías sencillas con las que pueda identificarme.
@@ -203,15 +203,31 @@ def ts_to_date(ts):
 # DATOS — CACHÉ
 # ────────────────────────────────────────────────
 
-@st.cache_data(ttl=300, show_spinner=False)
+
+@st.cache_data(ttl=600, show_spinner=False)
 def get_stock_data(ticker):
+    """
+    Descarga TODOS los datos en UNA SOLA sesión yfinance.
+    TTL=600s — caché compartida: 100 usuarios consultando el mismo ticker
+    sólo generan 1 llamada a Yahoo Finance cada 10 min.
+    """
     try:
         stock = yf.Ticker(ticker)
         info  = stock.info
-        if not info or not (_safe(info.get('currentPrice')) or _safe(info.get('regularMarketPrice')) or _safe(info.get('regularMarketOpen'))):
+
+        # Validación amplia: acepta cualquier ticker con precio básico
+        cp = (
+            _safe(info.get('currentPrice')) or
+            _safe(info.get('regularMarketPrice')) or
+            _safe(info.get('regularMarketOpen')) or
+            _safe(info.get('ask')) or
+            _safe(info.get('bid')) or
+            _safe(info.get('navPrice'))
+        )
+        if not info or not cp:
             return None
 
-        # Recomendaciones actuales
+        # ── Recomendaciones actuales ──
         recommendations = None
         try:
             recs = stock.recommendations
@@ -222,10 +238,13 @@ def get_stock_data(ticker):
                 h  = int(_safe(latest.get('hold'))       or 0)
                 s  = int(_safe(latest.get('sell'))       or 0)
                 ss = int(_safe(latest.get('strongSell')) or 0)
-                recommendations = {'strong_buy': sb, 'buy': b, 'hold': h, 'sell': s, 'strong_sell': ss, 'total': sb+b+h+s+ss}
+                recommendations = {
+                    'strong_buy': sb, 'buy': b, 'hold': h,
+                    'sell': s, 'strong_sell': ss, 'total': sb+b+h+s+ss
+                }
         except Exception: pass
 
-        # Histórico recomendaciones
+        # ── Histórico recomendaciones ──
         rec_summary = None
         try:
             rs = stock.recommendations_summary
@@ -233,16 +252,17 @@ def get_stock_data(ticker):
                 rec_summary = rs.head(6)
         except Exception: pass
 
-        # Precio objetivo
+        # ── Precio objetivo ──
         tm = _safe(info.get('targetMeanPrice'))
-        cp = _safe(info.get('currentPrice')) or _safe(info.get('regularMarketPrice'))
         target_data = {
             'mean': tm, 'high': _safe(info.get('targetHighPrice')),
-            'low': _safe(info.get('targetLowPrice')), 'median': _safe(info.get('targetMedianPrice')),
-            'current': cp, 'upside': ((tm - cp) / cp * 100) if (tm and cp) else None
+            'low':  _safe(info.get('targetLowPrice')),
+            'median': _safe(info.get('targetMedianPrice')),
+            'current': cp,
+            'upside': ((tm - cp) / cp * 100) if (tm and cp) else None
         }
 
-        # Métricas valoración
+        # ── Métricas valoración ──
         metrics = {
             'trailing_pe':    _safe(info.get('trailingPE')),
             'forward_pe':     _safe(info.get('forwardPE')),
@@ -251,7 +271,7 @@ def get_stock_data(ticker):
             'peg_ratio':      _safe(info.get('pegRatio')),
         }
 
-        # Rentabilidad
+        # ── Rentabilidad ──
         profitability = {
             'roe':             _safe(info.get('returnOnEquity')),
             'roa':             _safe(info.get('returnOnAssets')),
@@ -265,99 +285,88 @@ def get_stock_data(ticker):
             'free_cashflow':   _safe(info.get('freeCashflow')),
         }
 
-        # Eventos calendario — sólo los relevantes
-        events = {}
+        # ── Calendario — UNA SOLA LLAMADA para eventos y estimaciones ──
+        events            = {}
+        analyst_estimates = {}
         try:
             cal = stock.calendar
             if cal is not None:
                 raw = cal if isinstance(cal, dict) else cal.to_dict()
-                # Filtrar sólo claves conocidas y útiles
-                useful_keys = {'Earnings Date', 'Ex-Dividend Date', 'Dividend Date'}
+                useful_events = {'Earnings Date', 'Ex-Dividend Date', 'Dividend Date'}
+                estimate_keys = {
+                    'Earnings High', 'Earnings Low', 'Earnings Average',
+                    'Revenue High',  'Revenue Low',  'Revenue Average'
+                }
                 for k, v in raw.items():
-                    if k in useful_keys:
-                        events[k] = v
-        except Exception: pass
-        # Complementar desde info
-        for k, label in [('exDividendDate', 'Fecha Ex-Dividendo'), ('dividendDate', 'Fecha Pago Dividendo')]:
-            v = _safe(info.get(k))
-            if v and 'Ex-Dividend Date' not in events and 'Dividend Date' not in events:
-                events[label] = v
-
-        # Estimaciones analistas para próximos earnings
-        analyst_estimates = {}
-        try:
-            cal_raw = stock.calendar
-            if cal_raw is not None:
-                raw = cal_raw if isinstance(cal_raw, dict) else cal_raw.to_dict()
-                for k in ['Earnings High', 'Earnings Low', 'Earnings Average',
-                          'Revenue High', 'Revenue Low', 'Revenue Average']:
-                    if k in raw and raw[k] is not None:
-                        analyst_estimates[k] = raw[k]
+                    if v is None: continue
+                    if k in useful_events:   events[k]            = v
+                    elif k in estimate_keys: analyst_estimates[k] = v
         except Exception: pass
 
-        # Sparkline
+        # Complementar fechas desde info si calendar no las devuelve
+        for k_info, label in [
+            ('exDividendDate', 'Fecha Ex-Dividendo'),
+            ('dividendDate',   'Fecha Pago Dividendo')
+        ]:
+            if label not in events and 'Ex-Dividend Date' not in events:
+                v = _safe(info.get(k_info))
+                if v: events[label] = v
+
+        # ── Sparkline — stock.history() reutiliza la sesión, sin llamada extra ──
         sparkline = None
         try:
-            hist = yf.download(ticker, period="3mo", interval="1d", progress=False, auto_adjust=True)
-            if not hist.empty:
-                close_col = ('Close', ticker) if isinstance(hist.columns, pd.MultiIndex) else 'Close'
-                sparkline = [p for p in [_safe(x) for x in hist[close_col].dropna().tolist()] if p is not None]
+            hist = stock.history(period="3mo", interval="1d", auto_adjust=True)
+            if hist is not None and not hist.empty and 'Close' in hist.columns:
+                sparkline = [p for p in [_safe(x) for x in hist['Close'].dropna().tolist()] if p is not None]
+        except Exception: pass
+
+        # ── Fondos institucionales — mismo objeto stock, sin nueva instancia ──
+        inst_data = {}
+        try:
+            inst_data['institutional'] = stock.institutional_holders
+            inst_data['major']         = stock.major_holders
+            inst_data['mutual_funds']  = stock.mutualfund_holders
         except Exception: pass
 
         return {
-            'info': info, 'recommendations': recommendations, 'rec_summary': rec_summary,
-            'target_data': target_data, 'metrics': metrics, 'profitability': profitability,
-            'events': events, 'analyst_estimates': analyst_estimates, 'sparkline': sparkline,
+            'info': info,
+            'recommendations': recommendations,
+            'rec_summary': rec_summary,
+            'target_data': target_data,
+            'metrics': metrics,
+            'profitability': profitability,
+            'events': events,
+            'analyst_estimates': analyst_estimates,
+            'sparkline': sparkline,
+            'inst_data': inst_data,
         }
     except Exception:
         return None
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)   # 24h — la descripción no cambia a diario
 def translate_text_cached(text, ticker):
-    """Traduce descripción de empresa al castellano con caché 1h."""
+    """Traduce descripción al castellano. TTL=24h minimiza llamadas a MyMemory."""
     if not text: return 'Descripción no disponible.'
     try:
         chunks = [text[i:i+500] for i in range(0, len(text), 500)]
         translated = []
         for chunk in chunks:
             url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(chunk)}&langpair=en|es"
-            resp = requests.get(url, timeout=6)
-            if resp.status_code == 200:
-                d = resp.json()
-                if d.get('responseStatus') == 200:
-                    translated.append(d['responseData']['translatedText'])
-                    time.sleep(0.05)
-                    continue
+            try:
+                resp = requests.get(url, timeout=6)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    if d.get('responseStatus') == 200:
+                        translated.append(d['responseData']['translatedText'])
+                        time.sleep(0.05)
+                        continue
+            except Exception: pass
             translated.append(chunk)
             time.sleep(0.05)
         return ' '.join(translated)
     except Exception:
         return text
-
-
-@st.cache_data(ttl=1800, show_spinner=False)
-def get_institutional_holders_sec(ticker):
-    """
-    Obtiene los 13F holders (fondos institucionales) desde yfinance.
-    Datos reales de declaraciones 13F a la SEC.
-    """
-    try:
-        stock = yf.Ticker(ticker)
-        # institutional_holders: top tenedores institucionales
-        inst = stock.institutional_holders
-        # major_holders: resumen de % institucional vs retail
-        major = stock.major_holders
-        # mutual_fund_holders: fondos de inversión
-        mutual = stock.mutualfund_holders
-        return {
-            'institutional': inst,
-            'major': major,
-            'mutual_funds': mutual,
-        }
-    except Exception:
-        return None
-
 
 def get_suggestions(info, recommendations, target_data, profitability):
     """Genera sugerencias de inversión basadas en datos reales de la API."""
@@ -722,6 +731,7 @@ def render():
     events            = data['events']
     analyst_estimates = data['analyst_estimates']
     sparkline         = data['sparkline']
+    # inst_data ya incluido — sin llamada extra a Yahoo Finance
 
     # TRADUCCIÓN (castellano, cacheada)
     translated_summary = translate_text_cached(info.get('longBusinessSummary', ''), t_in)
@@ -1164,8 +1174,8 @@ def render():
             <div class="mod-body">
         """, unsafe_allow_html=True)
 
-        with st.spinner("[ CARGANDO DATOS 13F ... ]"):
-            holders_data = get_institutional_holders_sec(t_in)
+        # Datos ya cargados en get_stock_data — sin llamada adicional
+        holders_data = data.get('inst_data', {})
 
         if holders_data:
             major = holders_data.get('major')
@@ -1398,8 +1408,3 @@ def render():
 # ────────────────────────────────────────────────
 if __name__ == "__main__":
     render()
-
-
-
-
-

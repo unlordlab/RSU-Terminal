@@ -2860,108 +2860,62 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — 100% nativo Streamlit
-    # ── SECTOR ROTATION ──────────────────────────────────────────────────────
-    # Radio FUERA de with c2: para no crear columnas anidadas
-    # CSS lo convierte en botones visualmente integrados en el módulo
-    st.markdown("""<style>
-    /* Convertir radio en fila de botones compactos estilo terminal */
-    div[data-testid="stRadio"][data-st-key="sector_tf"] > div:first-child {
-        display: none !important;
-    }
-    div[data-testid="stRadio"][data-st-key="sector_tf"] > div:last-child {
-        display: flex !important;
-        flex-direction: row !important;
-        gap: 4px !important;
-        background: #0c0e12 !important;
-        padding: 3px 8px !important;
-        border-left: 1px solid #00ffad22 !important;
-        border-right: 1px solid #00ffad22 !important;
-        margin: 0 !important;
-    }
-    div[data-testid="stRadio"][data-st-key="sector_tf"] label {
-        background: transparent !important;
-        border: 1px solid #1a3a2a !important;
-        color: #2a5a3a !important;
-        font-family: 'VT323','Share Tech Mono','Courier New',monospace !important;
-        font-size: 13px !important;
-        letter-spacing: 1.5px !important;
-        padding: 1px 10px !important;
-        border-radius: 3px !important;
-        cursor: pointer !important;
-        margin: 0 !important;
-        min-height: 0 !important;
-        line-height: 20px !important;
-        display: inline-block !important;
-    }
-    div[data-testid="stRadio"][data-st-key="sector_tf"] label:has(input:checked) {
-        background: #00ffad18 !important;
-        border-color: #00ffad !important;
-        color: #00ffad !important;
-        box-shadow: 0 0 6px #00ffad33 !important;
-    }
-    div[data-testid="stRadio"][data-st-key="sector_tf"] label span[data-testid="stMarkdownContainer"] p {
-        font-size: 13px !important;
-        font-family: 'VT323','Share Tech Mono','Courier New',monospace !important;
-        letter-spacing: 1.5px !important;
-    }
-    div[data-testid="stRadio"][data-st-key="sector_tf"] input[type="radio"] {
-        display: none !important;
-    }
-    /* Ocultar el padding que Streamlit añade al contenedor del radio */
-    div[data-testid="stRadio"][data-st-key="sector_tf"] {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    </style>""", unsafe_allow_html=True)
-
-    current_tf = st.radio(
-        label="TF",
-        options=["1D", "3D", "1W", "1M"],
-        index=["1D", "3D", "1W", "1M"].index(st.session_state.get("sector_tf", "1W")),
-        horizontal=True,
-        label_visibility="collapsed",
-        key="sector_tf"
-    )
-    # sector_tf gestionado automáticamente por st.radio con key="sector_tf"
+    # SECTOR ROTATION — TF inside components.html, no Streamlit widgets outside
+    _tf_opts = ['1D', '3D', '1W', '1M']
+    _qp_tf = st.query_params.get('tf', '1W')
+    current_tf = _qp_tf if _qp_tf in _tf_opts else '1W'
 
     with c2:
         sectors = get_sector_performance(current_tf)
-        sectors_html = ""
+        _s_html = ''
         for sector in sectors:
-            code, name, change = sector["code"], sector["name"], sector["change"]
-            if   change >=  2.0: bg, tc = "#00ffad22", "#00ffad"
-            elif change >=  0.5: bg, tc = "#00ffad18", "#00ffad"
-            elif change >=  0.0: bg, tc = "#00ffad10", "#00ffad"
-            elif change >= -0.5: bg, tc = "#f2364510", "#f23645"
-            elif change >= -2.0: bg, tc = "#f2364518", "#f23645"
-            else:                bg, tc = "#f2364522", "#f23645"
-            sectors_html += (
-                '<div style="background:' + bg + ';border:1px solid #1a1e26;border-radius:6px;'
-                'padding:8px 4px;text-align:center;">'
-                '<div style="color:#666;font-size:9px;font-weight:bold;margin-bottom:2px;">' + code + '</div>'
-                '<div style="color:white;font-size:10px;font-weight:600;margin-bottom:4px;">' + name + '</div>'
-                '<div style="font-size:11px;font-weight:bold;color:' + tc + ';">' + f'{change:+.2f}%' + '</div>'
-                '</div>'
-            )
-        ts = get_timestamp()
-        sec_full_html = (
-            '<div style="border:1px solid #00ffad22;border-radius:10px;'
-            'background:#11141a;overflow:hidden;">'
-            '<div style="background:#0c0e12;padding:8px 12px;border-bottom:1px solid #00ffad22;">'
-            '<span style="color:#00ffad;font-size:18px;text-transform:uppercase;letter-spacing:2px;'
-            'font-family:VT323,monospace;text-shadow:0 0 10px #00ffad44;">Rotación Sectorial</span>'
+            _c, _n, _ch = sector['code'], sector['name'], sector['change']
+            if   _ch >=  2.0: _bg, _tc = '#00ffad22', '#00ffad'
+            elif _ch >=  0.5: _bg, _tc = '#00ffad18', '#00ffad'
+            elif _ch >=  0.0: _bg, _tc = '#00ffad10', '#00ffad'
+            elif _ch >= -0.5: _bg, _tc = '#f2364510', '#f23645'
+            elif _ch >= -2.0: _bg, _tc = '#f2364518', '#f23645'
+            else:             _bg, _tc = '#f2364522', '#f23645'
+            _s_html += ('<div style="background:' + _bg + ';border:1px solid #1a1e26;border-radius:6px;padding:10px 4px;text-align:center;">'
+                '<div style="color:#555;font-size:9px;font-weight:bold;margin-bottom:3px;">' + _c + '</div>'
+                '<div style="color:white;font-size:11px;font-weight:600;margin-bottom:5px;">' + _n + '</div>'
+                '<div style="font-size:12px;font-weight:bold;color:' + _tc + ';">' + f'{_ch:+.2f}%' + '</div></div>')
+
+        _ts = get_timestamp()
+        _tb = ''
+        for _tf in _tf_opts:
+            _a = _tf == current_tf
+            _tb += ('<button onclick="setTF(\'' + _tf + '\')" style="'
+                'background:' + ('#00ffad18' if _a else 'transparent') + ';'
+                'border:1px solid ' + ('#00ffad' if _a else '#1a3a2a') + ';'
+                'color:' + ('#00ffad' if _a else '#2a5a3a') + ';'
+                'font-family:VT323,monospace;font-size:14px;letter-spacing:1.5px;'
+                'padding:2px 11px;border-radius:3px;cursor:pointer;'
+                'box-shadow:' + ('0 0 6px #00ffad44' if _a else 'none') + ';'
+                'line-height:22px;">' + _tf + '</button>')
+
+        _sec = ('<!DOCTYPE html><html><head><style>'
+            '* {margin:0;padding:0;box-sizing:border-box;}'
+            'body{background:#11141a;}'
+            '.mod{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;width:100%;}'
+            '.hdr{background:#0c0e12;padding:9px 12px;border-bottom:1px solid #00ffad22;display:flex;justify-content:space-between;align-items:center;}'
+            '.ttl{color:#00ffad;font-family:VT323,monospace;font-size:19px;text-transform:uppercase;letter-spacing:2px;text-shadow:0 0 10px #00ffad44;}'
+            '.tfs{display:flex;gap:4px;}'
+            '.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px;}'
+            '.ts{text-align:right;color:#444;font-size:9px;padding:4px 10px;font-family:Courier New,monospace;border-top:1px solid #1a1e26;}'
+            '</style></head><body>'
+            '<div class="mod">'
+            '<div class="hdr"><span class="ttl">Rotaci\u00f3n Sectorial</span>'
+            '<div class="tfs">' + _tb + '</div></div>'
+            '<div class="grid">' + _s_html + '</div>'
+            '<div class="ts">Actualizado: ' + _ts + ' \u00b7 ' + current_tf + '</div>'
             '</div>'
-            '<div style="padding:8px;">'
-            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
-            + sectors_html +
-            '</div></div>'
-            '<div style="text-align:right;color:#555;font-size:9px;padding:4px 10px;'
-            'font-family:Courier New,monospace;border-top:1px solid #1a1e26;">'
-            'Actualizado: ' + ts + ' · ' + current_tf +
-            '</div></div>'
-        )
-        st.markdown(sec_full_html, unsafe_allow_html=True)
+            '<script>function setTF(tf){'
+            'var u=new URL(window.parent.location.href);'
+            'u.searchParams.set("tf",tf);'
+            'window.parent.location.href=u.toString();}'
+            '</script></body></html>')
+        components.html(_sec, height=440, scrolling=False)
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
@@ -4059,7 +4013,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

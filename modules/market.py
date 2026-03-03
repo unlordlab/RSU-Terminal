@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -2388,20 +2387,20 @@ def render():
         return _cached_briefing(day_key, prompt)
 
     resumen_prompt = (
-        f"Actua com un analista sènior de mercats financers. Avui és {today_str}. "
-        "Genera un briefing concís (màxim 300 paraules) per a un trader professional "
-        "que acaba d'obrir la terminal.\n"
-        "Estructura obligatòria:\n"
-        "1. Sentiment del Mercat: Defineix si estem en mode 'Risk-on', 'Risk-off' o "
-        "'Neutral' basant-te en l'acció del preu de les últimes 24 hores (S&P 500, Nasdaq, VIX).\n"
-        "2. Acció del Preu i Nivells: Identifica 2 nivells clau per a l'S&P 500 (suport i resistència).\n"
-        "3. Calendari Macro d'Avui: Llista les 2 o 3 dades macroeconòmiques d'impacte (USA) "
-        "que es publiquen avui, incloent l'hora i la previsió del consens.\n"
-        "4. Catalitzadors Específics: Resumeix breument qualsevol notícia geopolítica "
-        "(especialment sobre l'Iran/Aranzels) o resultats corporatius que puguin moure el mercat avui.\n"
-        "5. Conclusió Tàctica: Una frase sobre si avui convé ser agressiu o defensiu "
-        "segons el context tècnic/macro.\n"
-        "Nota: Utilitza un to directe, professional i analític. Evita generalitats."
+        f"Actúa como analista senior de mercados financieros. Hoy es {today_str}. "
+        "Genera un briefing conciso (máximo 300 palabras) en ESPAÑOL para un trader profesional "
+        "que acaba de abrir la terminal.\n"
+        "Estructura obligatoria:\n"
+        "1. Sentimiento del Mercado: Define si estamos en modo \'Risk-on\', \'Risk-off\' o "
+        "\'Neutral\' basándote en la acción del precio de las últimas 24 horas (S&P 500, Nasdaq, VIX).\n"
+        "2. Acción del Precio y Niveles: Identifica 2 niveles clave para el S&P 500 (soporte y resistencia).\n"
+        "3. Calendario Macro de Hoy: Lista los 2 o 3 datos macroeconómicos de impacto (USA) "
+        "que se publican hoy, incluyendo hora (hora española) y previsión del consenso.\n"
+        "4. Catalizadores Específicos: Resume brevemente cualquier noticia geopolítica "
+        "(especialmente sobre aranceles/Trump) o resultados corporativos que puedan mover el mercado hoy.\n"
+        "5. Conclusión Táctica: Una frase sobre si hoy conviene ser agresivo o defensivo "
+        "según el contexto técnico/macro.\n"
+        "IMPORTANTE: Responde SIEMPRE en español. Tono directo, profesional y analítico. Evita generalidades."
     )
 
     if "briefing_text" not in st.session_state:
@@ -2924,7 +2923,7 @@ def render():
         label_visibility="collapsed",
         key="sector_tf"
     )
-    st.session_state["sector_tf"] = current_tf
+    # sector_tf gestionado automáticamente por st.radio con key="sector_tf"
 
     with c2:
         sectors = get_sector_performance(current_tf)
@@ -4060,7 +4059,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

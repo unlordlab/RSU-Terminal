@@ -2281,109 +2281,148 @@ def render():
     health_html += '</div>'
     st.markdown(health_html, unsafe_allow_html=True)
 
-    # ── BOTÓN ACTUALIZAR — CSS puro (más fiable que JS en mobile) ────────────
-    # Todos los botones secondary están ocultos por defecto excepto el de Actualizar
+    # ── BOTÓN ACTUALIZAR — primary verde, CSS universal para todos los primary ──
     st.markdown("""
     <style>
-    /* Ocultar TODOS los botones secondary por defecto */
+    /* PRIMARY buttons → verde terminal (Actualizar, Generar Briefing) */
+    .stButton > button[kind="primary"],
+    .stButton > button[data-testid="baseButton-primary"],
+    button[data-testid="baseButton-primary"] {
+        background: transparent !important;
+        border: 1px solid #00ffad99 !important;
+        color: #00ffad !important;
+        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        letter-spacing: 1.5px !important;
+        border-radius: 5px !important;
+        box-shadow: 0 0 8px #00ffad22 !important;
+        padding: 0 12px !important;
+        height: 32px !important;
+        min-height: 0 !important;
+        line-height: 32px !important;
+    }
+    .stButton > button[kind="primary"]:hover,
+    button[data-testid="baseButton-primary"]:hover {
+        background: #00ffad11 !important;
+        border-color: #00ffad !important;
+        box-shadow: 0 0 16px #00ffad44 !important;
+        color: #00ffad !important;
+    }
+    /* SECONDARY buttons → completamente eliminados del layout */
+    .stButton > button[kind="secondary"],
+    .stButton > button[data-testid="baseButton-secondary"],
     button[data-testid="baseButton-secondary"] {
         display: none !important;
     }
-    /* Mostrar y estilizar SOLO el botón Actualizar (global_refresh) */
-    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][id*="global_refresh"]) button,
-    div[data-testid="stButton"] button[data-testid="baseButton-secondary"] {
-        display: inline-flex !important;
-        background: transparent !important;
-        border: 1px solid #00ffad88 !important;
-        color: #00ffad !important;
-        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-        letter-spacing: 1.5px !important;
-        padding: 2px 14px !important;
-        height: 28px !important;
-        min-height: 0 !important;
-        border-radius: 5px !important;
-        box-shadow: 0 0 8px #00ffad22 !important;
-        cursor: pointer !important;
-    }
-    div[data-testid="stButton"] button[data-testid="baseButton-secondary"]:hover {
-        background: #00ffad11 !important;
-        border-color: #00ffad !important;
-        box-shadow: 0 0 14px #00ffad44 !important;
-    }
-    /* Botones primary (GENERAR BRIEFING) */
-    button[data-testid="baseButton-primary"] {
-        background: transparent !important;
-        border: 1px solid #00ffad88 !important;
-        color: #00ffad !important;
-        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
-        font-size: 15px !important;
-        font-weight: 800 !important;
-        letter-spacing: 2px !important;
-        border-radius: 6px !important;
-        box-shadow: 0 0 10px #00ffad22 !important;
-    }
-    button[data-testid="baseButton-primary"]:hover {
-        background: #00ffad11 !important;
-        box-shadow: 0 0 18px #00ffad44 !important;
+    /* Contenedor de botones secondary → sin altura */
+    .stButton:has(button[data-testid="baseButton-secondary"]) {
+        display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
+    # Inyección CSS via components.html (mayor prioridad que st.markdown en Streamlit Cloud)
+    components.html("""
+    <style id="global-btn-style">
+    /* Este style llega al documento padre via postMessage interno de Streamlit */
+    </style>
+    <script>
+    (function() {
+        var css = `
+            .stButton > button { 
+                transition: all 0.2s ease !important;
+            }
+            .stButton > button[kind="primary"],
+            .stButton > button[data-testid="baseButton-primary"] {
+                background: transparent !important;
+                border: 1px solid #00ffad99 !important;
+                color: #00ffad !important;
+                font-family: VT323, monospace !important;
+                font-size: 14px !important;
+                font-weight: 700 !important;
+                letter-spacing: 1.5px !important;
+                border-radius: 5px !important;
+                box-shadow: 0 0 8px rgba(0,255,173,0.13) !important;
+                padding: 0 12px !important;
+                height: 32px !important;
+                min-height: 0 !important;
+            }
+            .stButton > button[kind="secondary"],
+            .stButton > button[data-testid="baseButton-secondary"] {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                overflow: hidden !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+        `;
+        function applyCSS() {
+            try {
+                var doc = window.parent.document;
+                var existing = doc.getElementById('rsu-global-style');
+                if (!existing) {
+                    var styleEl = doc.createElement('style');
+                    styleEl.id = 'rsu-global-style';
+                    styleEl.textContent = css;
+                    doc.head.appendChild(styleEl);
+                } else {
+                    existing.textContent = css;
+                }
+            } catch(e) {}
+        }
+        applyCSS();
+        setTimeout(applyCSS, 200);
+        setTimeout(applyCSS, 600);
+        setTimeout(applyCSS, 1500);
+        setTimeout(applyCSS, 3000);
+    })();
+    </script>
+    """, height=0, scrolling=False)
+
     col_r1, col_r2 = st.columns([1, 9])
     with col_r1:
-        if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
+        if st.button("↻ Actualizar", key="global_refresh", type="primary"):
             st.cache_data.clear()
             st.rerun()
 
 
 
     # ── RESUMEN DIARIO DE MERCADO ─────────────────────────────────────────────
-    # Llamada 100% backend: evita CORS que bloquea fetch() desde iframes de Streamlit
     today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
 
-    @st.cache_data(ttl=21600, show_spinner=False)  # Cache 6h — 1 llamada cada 6h para toda la comunidad
-    def _cached_briefing(prompt_key: str, prompt: str) -> str:
-        """Llama a Gemini — cacheado 6h para minimizar rate limits en comunidades."""
+    @st.cache_data(ttl=21600, show_spinner=False)
+    def _cached_briefing(day_key: str, prompt: str) -> str:
         try:
             api_key = st.secrets.get("GEMINI_API_KEY", None)
             if not api_key:
-                return "⚠ Configura GEMINI_API_KEY en st.secrets para activar este módulo."
+                return "⚠ Configura GEMINI_API_KEY en st.secrets."
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            # Intentar con grounding (SDK >= 0.8)
             try:
                 from google.generativeai.types import Tool, GenerateContentConfig
                 model = genai.GenerativeModel("gemini-2.0-flash")
-                google_search_tool = Tool(google_search=genai.protos.GoogleSearch())
-                response = model.generate_content(
-                    prompt,
-                    tools=[google_search_tool],
-                    generation_config=GenerateContentConfig(temperature=0.3),
-                )
-                return response.text.strip() or "Sin respuesta del modelo."
+                tool  = Tool(google_search=genai.protos.GoogleSearch())
+                resp  = model.generate_content(prompt, tools=[tool],
+                            generation_config=GenerateContentConfig(temperature=0.3))
+                return resp.text.strip() or "Sin respuesta."
             except Exception:
-                # Fallback: gemini-1.5-flash tiene mayor cuota gratuita
                 model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(prompt)
-                return (response.text.strip() or "Sin respuesta.") + "\n\n_(Gemini 1.5 Flash — sin Google Search)_"
+                resp  = model.generate_content(prompt)
+                return (resp.text.strip() or "Sin respuesta.") + "\n\n_(sin Google Search)_"
         except Exception as e:
             err = str(e)
-            if "429" in err or "quota" in err.lower() or "rate" in err.lower():
+            if "429" in err or "quota" in err.lower():
                 import re as _re
-                retry = _re.search(r'retry.*?(\d+)', err, _re.IGNORECASE)
-                secs = retry.group(1) if retry else "60"
-                return (f"⏳ Límite de cuota alcanzado. Reintenta en ~{secs}s.\n\n"
-                        f"Para comunidades grandes (>10 usuarios) usa una API key de pago "
-                        f"(Google AI Studio → Billing). El plan Pay-as-you-go tiene cuotas "
-                        f"mucho más altas y coste ~0.075$/M tokens con gemini-1.5-flash.")
-            return f"⚠ Error Gemini: {err[:200]}"
+                m = _re.search(r'retry.*?(\d+)', err, _re.I)
+                secs = m.group(1) if m else "60"
+                return f"⏳ Cuota alcanzada. Reintenta en ~{secs}s.\n\nActiva billing en Google AI Studio para eliminar este límite."
+            return f"⚠ Error: {err[:300]}"
 
     def _call_gemini_briefing(prompt: str) -> str:
-        # Usar cache con clave = fecha de hoy (mismo briefing para todos el mismo día)
-        today_key = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
-        return _cached_briefing(today_key, prompt)
+        day_key = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+        return _cached_briefing(day_key, prompt)
 
     resumen_prompt = (
         f"Actua com un analista sènior de mercats financers. Avui és {today_str}. "
@@ -2402,14 +2441,33 @@ def render():
         "Nota: Utilitza un to directe, professional i analític. Evita generalitats."
     )
 
-    # Briefing: todo en components.html + botón oculto Streamlit
     if "briefing_text" not in st.session_state:
         st.session_state["briefing_text"] = ""
-        st.session_state["briefing_ts"] = ""
+        st.session_state["briefing_ts"]   = ""
 
     briefing_text = st.session_state.get("briefing_text", "")
-    briefing_ts   = st.session_state.get("briefing_ts", "")
+    briefing_ts   = st.session_state.get("briefing_ts",   "")
 
+    # Cabecera del módulo
+    st.markdown(f"""
+    <div style="border:1px solid #00ffad33;border-radius:10px 10px 0 0;background:#0c0e12;
+                padding:10px 18px;display:flex;justify-content:space-between;align-items:center;
+                box-shadow:0 0 20px #00ffad08;">
+        <div>
+            <div style="font-family:VT323,'Share Tech Mono','Courier New',monospace;font-size:22px;
+                        color:#00ffad;text-transform:uppercase;letter-spacing:3px;
+                        text-shadow:0 0 15px #00ffad55;">📊 Resumen Diario de Mercado</div>
+            <div style="font-size:9px;color:#555;margin-top:2px;font-family:'Courier New',monospace;">
+                {today_str} // BRIEFING MATINAL // GEMINI + GOOGLE SEARCH
+            </div>
+        </div>
+        <div style="background:#00ffad22;color:#00ffad;border:1px solid #00ffad44;
+                    padding:3px 10px;border-radius:4px;font-size:9px;font-weight:bold;
+                    letter-spacing:1px;font-family:'Courier New',monospace;">AI POWERED</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Cuerpo del módulo
     if briefing_text:
         import html as _html, re as _re
         safe = _html.escape(briefing_text)
@@ -2417,72 +2475,46 @@ def render():
         safe = _re.sub(r'^(\d+\..+)$', r'<span style="color:#00d9ff;font-weight:bold;">\1</span>', safe, flags=_re.MULTILINE)
         safe = _re.sub(r'(?i)(Risk-on)', r'<span style="color:#00ffad;font-weight:bold;">\1</span>', safe)
         safe = _re.sub(r'(?i)(Risk-off)', r'<span style="color:#f23645;font-weight:bold;">\1</span>', safe)
-        body_inner = f'''
-        <div style="flex:1;overflow-y:auto;padding:14px 18px;scrollbar-width:thin;scrollbar-color:#1a1e26 transparent;">
-            <div style="color:#ccc;font-family:Courier New,monospace;font-size:12px;line-height:1.8;white-space:pre-wrap;">{safe}</div>
+        st.markdown(f"""
+        <div style="border-left:1px solid #00ffad33;border-right:1px solid #00ffad33;
+                    background:#11141a;padding:14px 18px;">
+            <div style="color:#ccc;font-family:'Courier New',monospace;font-size:12px;
+                        line-height:1.8;white-space:pre-wrap;">{safe}</div>
         </div>
-        <div style="background:#0c0e12;border-top:1px solid #1a1e26;padding:6px 18px;flex-shrink:0;">
-            <span style="color:#555;font-size:10px;font-family:Courier New,monospace;">
-                Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
-            </span>
-        </div>'''
-        briefing_h = 310
+        <div style="border:1px solid #00ffad33;border-top:1px solid #1a1e26;
+                    border-radius:0 0 10px 10px;background:#0c0e12;padding:6px 18px 8px;
+                    color:#555;font-size:10px;font-family:'Courier New',monospace;text-align:center;
+                    margin-bottom:6px;">
+            Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
+        </div>
+        """, unsafe_allow_html=True)
+        btn_label = "↻ ACTUALIZAR BRIEFING"
     else:
-        body_inner = '''
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+        st.markdown("""
+        <div style="border-left:1px solid #00ffad33;border-right:1px solid #00ffad33;
+                    border-bottom:1px solid #00ffad33;border-radius:0 0 10px 10px;
+                    background:#11141a;padding:28px 18px;text-align:center;margin-bottom:6px;">
             <div style="font-size:26px;margin-bottom:10px;">📡</div>
-            <div style="color:#2a4a3a;font-family:Courier New,monospace;font-size:11px;text-align:center;line-height:1.6;">
-                Pulsa <strong style="color:#00ffad;">▶ GENERAR BRIEFING</strong><br>
+            <div style="color:#2a4a3a;font-family:'Courier New',monospace;font-size:11px;line-height:1.6;">
+                Pulsa <strong style="color:#00ffad;">▶ GENERAR BRIEFING</strong>
                 para el análisis diario del mercado
             </div>
-            <div style="margin-top:6px;color:#1a2e1a;font-size:10px;font-family:Courier New,monospace;">
+            <div style="margin-top:6px;color:#1a2e1a;font-size:10px;font-family:'Courier New',monospace;">
                 [GEMINI 2.0 FLASH // GOOGLE SEARCH // TIEMPO REAL]
             </div>
-        </div>'''
-        briefing_h = 160
-
-    briefing_module_html = f'''<!DOCTYPE html><html><head>
-    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <style>
-    *{{margin:0;padding:0;box-sizing:border-box;}}
-    body{{background:#0c0e12;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;}}
-    .wrap{{border:1px solid #00ffad33;border-radius:10px;overflow:hidden;background:#11141a;
-           width:100%;height:{briefing_h}px;display:flex;flex-direction:column;box-shadow:0 0 30px #00ffad0d;}}
-    .hdr{{background:#0c0e12;padding:10px 18px;border-bottom:2px solid #00ffad22;
-          display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
-    .ttl{{color:#00ffad;font-size:22px;text-transform:uppercase;letter-spacing:3px;
-          font-family:VT323,Share Tech Mono,Courier New,monospace;text-shadow:0 0 15px #00ffad55;}}
-    button:hover{{filter:brightness(1.3);}}
-    </style></head><body>
-    <div class="wrap">
-        <div class="hdr">
-            <div>
-                <div class="ttl">📊 Resumen Diario de Mercado</div>
-                <div style="font-size:9px;color:#555;margin-top:2px;font-family:Courier New,monospace;">
-                    {today_str} // BRIEFING MATINAL // GEMINI + GOOGLE SEARCH
-                </div>
-            </div>
-            <div style="background:#00ffad22;color:#00ffad;border:1px solid #00ffad44;
-                        padding:3px 10px;border-radius:4px;font-size:9px;font-weight:bold;
-                        letter-spacing:1px;font-family:Courier New,monospace;">AI POWERED</div>
         </div>
-        {body_inner}
-    </div>
+        """, unsafe_allow_html=True)
+        btn_label = "▶ GENERAR BRIEFING"
 
-    </body></html>'''
-
-    components.html(briefing_module_html, height=briefing_h + 2, scrolling=False)
-
-    # Botón nativo Streamlit para el briefing — se muestra como primary (verde terminal)
-    # Pegado visualmente al módulo con margin negativo
-    st.markdown('<div style="margin-top:-2px; display:flex; justify-content:flex-end; padding-right:4px;">', unsafe_allow_html=True)
-    if st.button("▶ GENERAR BRIEFING", key="briefing_go", type="primary"):
+    # Botón debajo del módulo — type=primary ya está estilizado verde
+    if st.button(btn_label, key="briefing_go", type="primary"):
         with st.spinner("Analizando con Gemini + Google Search…"):
             result = _call_gemini_briefing(resumen_prompt)
         st.session_state["briefing_text"] = result
-        st.session_state["briefing_ts"] = get_timestamp()
+        st.session_state["briefing_ts"]   = get_timestamp()
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.write("")
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -2862,32 +2894,15 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — 4 botones Streamlit INVISIBLES por CSS específico
-    # El JS del iframe clickea el botón correcto por su data-key
-    if 'sector_tf' not in st.session_state:
-        st.session_state['sector_tf'] = '1D'
-    current_tf = st.session_state['sector_tf']
-
-    # Ocultar SOLO los botones sector con CSS — identificados por texto 1D/3D/1W/1M
-    st.markdown("""<style>
-    /* Contenedor de los botones de temporalidad del sector — invisible */
-    div[data-testid="stHorizontalBlock"]:has(button[key*="tf_hidden"]) {
-        height: 0 !important; overflow: hidden !important;
-        margin: 0 !important; padding: 0 !important;
-        position: absolute !important; opacity: 0 !important;
-    }
-    </style>""", unsafe_allow_html=True)
-
-    # 4 botones invisibles — el JS del iframe hace click en el correcto
-    _tf_cols = st.columns(4)
-    for _i, _tf in enumerate(["1D","3D","1W","1M"]):
-        with _tf_cols[_i]:
-            if st.button(_tf, key=f"tf_hidden_{_tf}", type="secondary"):
-                st.session_state['sector_tf'] = _tf
-                st.rerun()
+    # SECTOR ROTATION — TF via query_params URL (sin botones Streamlit, funciona en mobile)
+    _qp = st.query_params
+    current_tf = _qp.get("tf", st.session_state.get("sector_tf", "1W"))
+    if current_tf not in ["1D","3D","1W","1M"]:
+        current_tf = "1W"
+    st.session_state["sector_tf"] = current_tf
 
     with c2:
-        current_tf = st.session_state.get('sector_tf', '1D')
+        current_tf = st.session_state.get('sector_tf', '1W')
         sectors = get_sector_performance(current_tf)
         sectors_html = ""
         for sector in sectors:
@@ -2969,17 +2984,14 @@ def render():
         <script>
         function setTF(tf) {{
             try {{
-                var doc = window.parent.document;
-                // Buscar el botón Streamlit oculto con el texto exacto de la temporalidad
-                var allBtns = doc.querySelectorAll('button');
-                for (var i = 0; i < allBtns.length; i++) {{
-                    var txt = allBtns[i].innerText ? allBtns[i].innerText.trim() : '';
-                    if (txt === tf) {{
-                        allBtns[i].click();
-                        return;
-                    }}
-                }}
-            }} catch(e) {{ console.warn('setTF error:', e); }}
+                // Cambiar query param en la URL padre → Streamlit recarga con nuevo TF
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set('tf', tf);
+                window.parent.location.href = url.toString();
+            }} catch(e) {{
+                // Fallback: intentar postMessage
+                window.parent.postMessage({{type:'streamlit:setComponentValue', value:tf}}, '*');
+            }}
         }}
         </script>
         </body></html>'''

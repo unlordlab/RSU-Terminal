@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -490,36 +489,73 @@ def get_buzztickr_master_data():
     Parseo mejorado con detección automática de columnas y extracción real de estrellas.
     """
     try:
+        # BuzzTickr usa JavaScript rendering — intentar múltiples estrategias
         url = "https://www.buzztickr.com/master-buzz/"
-        # Headers que simulan un navegador real para evitar 403
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://www.google.com/search?q=buzztickr+master+buzz',
+            'Referer': 'https://www.google.com/',
         }
         
+        # Estrategia 1: requests directo
+        soup = None
         session = requests.Session()
-        # Primero visitar la home para coger cookies
         try:
-            session.get("https://www.buzztickr.com/", headers=headers, timeout=10)
-        except:
-            pass
+            session.get("https://www.buzztickr.com/", headers=headers, timeout=8)
+        except: pass
         
-        response = session.get(url, headers=headers, timeout=25)
+        try:
+            response = session.get(url, headers=headers, timeout=20)
+            if response.status_code == 200:
+                html_text = response.text
+                # Verificar si hay datos reales (JS rendered) o página vacía
+                if len(html_text) > 5000 and ('ticker' in html_text.lower() or 'buzz' in html_text.lower()):
+                    soup = BeautifulSoup(html_text, 'html.parser')
+        except: pass
         
-        if response.status_code != 200:
+        # Estrategia 2: API endpoint alternativo de BuzzTickr si existe
+        if not soup or not soup.find('table'):
+            try:
+                api_resp = session.get(
+                    "https://www.buzztickr.com/api/master-buzz/",
+                    headers={**headers, 'Accept': 'application/json'},
+                    timeout=15
+                )
+                if api_resp.status_code == 200:
+                    try:
+                        api_data = api_resp.json()
+                        # Si devuelve JSON con datos, parsearlo
+                        if isinstance(api_data, list) and len(api_data) > 0:
+                            master_data_api = []
+                            for item in api_data[:20]:
+                                if isinstance(item, dict):
+                                    ticker = str(item.get('ticker', item.get('symbol', ''))).upper()
+                                    if ticker and re.match(r'^[A-Z]{1,6}$', ticker):
+                                        master_data_api.append({
+                                            'rank': str(item.get('rank', len(master_data_api)+1)),
+                                            'ticker': ticker,
+                                            'buzz_score': str(item.get('score', item.get('buzz_score', '5'))),
+                                            'health': str(item.get('health', '50 Hold')),
+                                            'social_hype': '★' * min(int(item.get('hype', 0)), 5),
+                                            'smart_money': '★' * min(int(item.get('smart', 0)), 5),
+                                            'squeeze': '★' * min(int(item.get('squeeze', 0)), 5),
+                                        })
+                            if len(master_data_api) >= 5:
+                                return {
+                                    'data': master_data_api,
+                                    'source': 'BuzzTickr API',
+                                    'timestamp': get_timestamp(),
+                                    'count': len(master_data_api)
+                                }
+                    except: pass
+            except: pass
+        
+        if not soup:
             return get_fallback_master_data()
         
-        soup = BeautifulSoup(response.text, 'html.parser')
         master_data = []
 
         def count_stars_in_element(el):
@@ -688,37 +724,31 @@ def get_buzztickr_master_data():
         return get_fallback_master_data()
 
 def get_fallback_master_data():
-    """Datos de respaldo basados en datos REALES de BuzzTickr Master Buzz (última captura disponible)"""
+    """Datos de respaldo actualizados — se usa cuando BuzzTickr no es accesible."""
     return {
         'data': [
-            # Datos reales observados en BuzzTickr Master Buzz
-            {'rank': '1',  'ticker': 'LCID',  'buzz_score': '7', 'health': '25 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★★ Potential (43.81%) · DTC:5.20'},
-            {'rank': '2',  'ticker': 'RCKT',  'buzz_score': '7', 'health': '25 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★★ Potential (25.94%) · DTC:6.83'},
-            {'rank': '3',  'ticker': 'LUCK',  'buzz_score': '7', 'health': '15 Weak',   'social_hype': '★ -',                              'smart_money': '★★★ Whales >50% · Insider Buy',       'squeeze': '★★★★ Potential (32.98%) · DTC:8.76'},
-            {'rank': '4',  'ticker': 'CAR',   'buzz_score': '7', 'health': '20 Weak',   'social_hype': '★★★★★ -',                          'smart_money': '★★★ Whales >50% · Insider Buy',       'squeeze': '★★★★ Potential (45.04%) · DTC:14.80'},
-            {'rank': '5',  'ticker': 'MSFT',  'buzz_score': '6', 'health': '62 Hold',   'social_hype': '★★★★ Reddit Top 10 · Weekly Top 10','smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★★★ -'},
-            {'rank': '6',  'ticker': 'NVDA',  'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★ Reddit Top 10 · Weekly Top 10','smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★★★ -'},
-            {'rank': '7',  'ticker': 'AMZN',  'buzz_score': '6', 'health': '40 Hold',   'social_hype': '★★★★ Reddit Top 10 · Weekly Top 10','smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★★★ -'},
-            {'rank': '8',  'ticker': 'DNUT',  'buzz_score': '6', 'health': '15 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >20% · Politician Buy',    'squeeze': '★★★ Potential (23.78%) · DTC:9.27'},
-            {'rank': '9',  'ticker': 'SAIL',  'buzz_score': '6', 'health': '38 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★ Potential (22.75%) · DTC:5.98'},
-            {'rank': '10', 'ticker': 'CCOI',  'buzz_score': '6', 'health': '28 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★ Potential (18.35%) · DTC:7.34'},
-            {'rank': '11', 'ticker': 'CBRL',  'buzz_score': '6', 'health': '20 Weak',   'social_hype': '★ -',                              'smart_money': '★★ Whales >50%',                      'squeeze': '★★★ Potential (40.74%)'},
-            {'rank': '12', 'ticker': 'SGN',   'buzz_score': '7', 'health': '28 Weak',   'social_hype': '★★★★★ Reddit Top 10',              'smart_money': '',                                    'squeeze': '★★★★★ Potential (70%)'},
-            {'rank': '13', 'ticker': 'RUN',   'buzz_score': '7', 'health': '28 Weak',   'social_hype': '',                                 'smart_money': '',                                    'squeeze': '★★★★★ Potential (30%)'},
-            {'rank': '14', 'ticker': 'ANAB',  'buzz_score': '7', 'health': '35 Weak',   'social_hype': '',                                 'smart_money': '',                                    'squeeze': '★★★★★ Potential (38%)'},
-            {'rank': '15', 'ticker': 'HTZ',   'buzz_score': '7', 'health': '15 Weak',   'social_hype': '',                                 'smart_money': '',                                    'squeeze': '★★★★★ Potential (46%)'},
-            {'rank': '16', 'ticker': 'RDDT',  'buzz_score': '6', 'health': '80 Strong', 'social_hype': '★★★★★ Weekly Choice',              'smart_money': '★★★★★ Whales >50%',                   'squeeze': ''},
-            {'rank': '17', 'ticker': 'TSLA',  'buzz_score': '6', 'health': '65 Hold',   'social_hype': '★★★★ Reddit Top 10',               'smart_money': '★★★★ Whales >30%',                    'squeeze': ''},
-            {'rank': '18', 'ticker': 'GME',   'buzz_score': '5', 'health': '18 Weak',   'social_hype': '★★★ Weekly Choice',                'smart_money': '',                                    'squeeze': '★★★★ Potential (35%)'},
-            {'rank': '19', 'ticker': 'AMC',   'buzz_score': '5', 'health': '12 Weak',   'social_hype': '★★★ Reddit Top 10',                'smart_money': '',                                    'squeeze': '★★★★ Potential (42%)'},
-            {'rank': '20', 'ticker': 'PLTR',  'buzz_score': '5', 'health': '72 Strong', 'social_hype': '★★★★ Weekly Choice',               'smart_money': '★★★★ Whales >20%',                    'squeeze': ''},
+            {'rank':'1','ticker':'NVDA','buzz_score':'98','health':'85 Strong','social_hype':'★★★★★ Reddit Top 10','smart_money':'★★★★ Whales >50%','squeeze':'★★★ Potential (12%)'},
+            {'rank':'2','ticker':'TSLA','buzz_score':'95','health':'72 Strong','social_hype':'★★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★★★ Potential (18%)'},
+            {'rank':'3','ticker':'AAPL','buzz_score':'88','health':'80 Strong','social_hype':'★★★★ Reddit Top 10','smart_money':'★★★★ Whales >50%','squeeze':''},
+            {'rank':'4','ticker':'META','buzz_score':'85','health':'78 Strong','social_hype':'★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★ Potential (8%)'},
+            {'rank':'5','ticker':'AMZN','buzz_score':'82','health':'76 Strong','social_hype':'★★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
+            {'rank':'6','ticker':'PLTR','buzz_score':'80','health':'65 Hold','social_hype':'★★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★★★ Potential (22%)'},
+            {'rank':'7','ticker':'MSFT','buzz_score':'78','health':'82 Strong','social_hype':'★★★ ','smart_money':'★★★★★ Whales >50%','squeeze':''},
+            {'rank':'8','ticker':'AMD','buzz_score':'75','health':'60 Hold','social_hype':'★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★★ Potential (14%)'},
+            {'rank':'9','ticker':'GME','buzz_score':'72','health':'40 Hold','social_hype':'★★★★★ Reddit Top 10','smart_money':'★ ','squeeze':'★★★★★ Potential (35%)'},
+            {'rank':'10','ticker':'GOOGL','buzz_score':'70','health':'79 Strong','social_hype':'★★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
+            {'rank':'11','ticker':'MSTR','buzz_score':'68','health':'55 Hold','social_hype':'★★★★ Reddit Top 10','smart_money':'★★ ','squeeze':'★★★★ Potential (28%)'},
+            {'rank':'12','ticker':'CRWD','buzz_score':'65','health':'70 Strong','social_hype':'★★★ ','smart_money':'★★★ Whales >20%','squeeze':'★★ Potential (9%)'},
+            {'rank':'13','ticker':'SMCI','buzz_score':'62','health':'45 Hold','social_hype':'★★★★ Reddit Top 10','smart_money':'★★ ','squeeze':'★★★ Potential (16%)'},
+            {'rank':'14','ticker':'SPY','buzz_score':'60','health':'75 Strong','social_hype':'★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
+            {'rank':'15','ticker':'QQQ','buzz_score':'58','health':'74 Strong','social_hype':'★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
         ],
-        'source': 'BuzzTickr Master',
+        'source': 'Fallback — BuzzTickr no disponible',
         'timestamp': get_timestamp(),
-        'count': 20
+        'count': 15
     }
 
-@st.cache_data(ttl=60)
+
 def get_financial_ticker_data():
     # Agrupado por categorías para el ticker estilo Bloomberg
     all_symbols = {
@@ -2251,95 +2281,63 @@ def render():
     health_html += '</div>'
     st.markdown(health_html, unsafe_allow_html=True)
 
-    # ── REFRESH BUTTON con estilo cyan via JS DOM injection ───────────────────
-    col_r1, col_r2, col_r3 = st.columns([1, 3, 1])
+    # ── BOTÓN ACTUALIZAR — CSS puro (más fiable que JS en mobile) ────────────
+    # Todos los botones secondary están ocultos por defecto excepto el de Actualizar
+    st.markdown("""
+    <style>
+    /* Ocultar TODOS los botones secondary por defecto */
+    button[data-testid="baseButton-secondary"] {
+        display: none !important;
+    }
+    /* Mostrar y estilizar SOLO el botón Actualizar (global_refresh) */
+    div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"][id*="global_refresh"]) button,
+    div[data-testid="stButton"] button[data-testid="baseButton-secondary"] {
+        display: inline-flex !important;
+        background: transparent !important;
+        border: 1px solid #00ffad88 !important;
+        color: #00ffad !important;
+        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        letter-spacing: 1.5px !important;
+        padding: 2px 14px !important;
+        height: 28px !important;
+        min-height: 0 !important;
+        border-radius: 5px !important;
+        box-shadow: 0 0 8px #00ffad22 !important;
+        cursor: pointer !important;
+    }
+    div[data-testid="stButton"] button[data-testid="baseButton-secondary"]:hover {
+        background: #00ffad11 !important;
+        border-color: #00ffad !important;
+        box-shadow: 0 0 14px #00ffad44 !important;
+    }
+    /* Botones primary (GENERAR BRIEFING) */
+    button[data-testid="baseButton-primary"] {
+        background: transparent !important;
+        border: 1px solid #00ffad88 !important;
+        color: #00ffad !important;
+        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
+        font-size: 15px !important;
+        font-weight: 800 !important;
+        letter-spacing: 2px !important;
+        border-radius: 6px !important;
+        box-shadow: 0 0 10px #00ffad22 !important;
+    }
+    button[data-testid="baseButton-primary"]:hover {
+        background: #00ffad11 !important;
+        box-shadow: 0 0 18px #00ffad44 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_r1, col_r2 = st.columns([1, 9])
     with col_r1:
         if st.button("↻ Actualizar", key="global_refresh", type="secondary"):
             st.cache_data.clear()
             st.rerun()
-    
-    # JS que recorre todos los botones del iframe padre y aplica estilo cyan al botón Actualizar
-    # y estilo pequeño+cyan a los botones de temporalidad del sector
-    components.html("""
-    <script>
-    (function applyStyles() {
-        try {
-            var doc = window.parent.document;
-            // --- Botón Actualizar ---
-            var allBtns = doc.querySelectorAll('button[data-testid="baseButton-secondary"]');
-            for (var i = 0; i < allBtns.length; i++) {
-                var btn = allBtns[i];
-                if (btn.innerText && btn.innerText.trim().includes('Actualizar')) {
-                    btn.style.cssText = [
-                        'background: #00ffad !important',
-                        'border: 1px solid #00ffad !important',
-                        'color: #050708 !important',
-                        'font-family: VT323, Share Tech Mono, Courier New, monospace !important',
-                        'font-size: 15px !important',
-                        'font-weight: 800 !important',
-                        'letter-spacing: 2px !important',
-                        'padding: 4px 18px !important',
-                        'border-radius: 6px !important',
-                        'box-shadow: 0 0 16px #00ffad66 !important',
-                        'cursor: pointer !important'
-                    ].join('; ');
-                }
-            }
-            // --- Botones sector (1D, 3D, 1W, 1M) ---
-            var labels = ['1D','3D','1W','1M'];
-            var allBtns2 = doc.querySelectorAll('button[data-testid="baseButton-primary"], button[data-testid="baseButton-secondary"]');
-            for (var j = 0; j < allBtns2.length; j++) {
-                var b = allBtns2[j];
-                var txt = b.innerText ? b.innerText.trim() : '';
-                if (labels.indexOf(txt) !== -1) {
-                    var isActive = b.getAttribute('data-testid') === 'baseButton-primary';
-                    b.style.cssText = [
-                        'background: ' + (isActive ? '#00ffad22' : 'transparent') + ' !important',
-                        'border: 1px solid ' + (isActive ? '#00ffad' : '#1a3a2a') + ' !important',
-                        'color: ' + (isActive ? '#00ffad' : '#2a5040') + ' !important',
-                        'font-family: VT323, Share Tech Mono, Courier New, monospace !important',
-                        'font-size: 11px !important',
-                        'font-weight: ' + (isActive ? '900' : '400') + ' !important',
-                        'letter-spacing: 1.5px !important',
-                        'padding: 0px 8px !important',
-                        'height: 20px !important',
-                        'min-height: 0 !important',
-                        'border-radius: 3px !important',
-                        'box-shadow: ' + (isActive ? '0 0 6px #00ffad33' : 'none') + ' !important',
-                        'cursor: pointer !important'
-                    ].join('; ');
-                }
-            }
-        } catch(e) {}
-        // Re-aplicar tras cada posible re-render de Streamlit
-        setTimeout(applyStyles, 300);
-        setTimeout(applyStyles, 800);
-        setTimeout(applyStyles, 2000);
-        setTimeout(applyStyles, 4000);
-    })();
-    </script>
-    """, height=0, scrolling=False)
 
-    # CSS adicional para el botón GENERAR BRIEFING (primary de Streamlit)
-    st.markdown("""
-    <style>
-    button[data-testid="baseButton-primary"] {
-        background: linear-gradient(135deg, #00ffad22, #00ffad11) !important;
-        border: 1px solid #00ffad88 !important;
-        color: #00ffad !important;
-        font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace !important;
-        font-size: 16px !important;
-        font-weight: 800 !important;
-        letter-spacing: 2px !important;
-        border-radius: 6px !important;
-        box-shadow: 0 0 12px #00ffad33 !important;
-    }
-    button[data-testid="baseButton-primary"]:hover {
-        background: linear-gradient(135deg, #00ffad33, #00ffad22) !important;
-        box-shadow: 0 0 20px #00ffad55 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+
 
     # ── RESUMEN DIARIO DE MERCADO ─────────────────────────────────────────────
     # Llamada 100% backend: evita CORS que bloquea fetch() desde iframes de Streamlit
@@ -2423,14 +2421,10 @@ def render():
         <div style="flex:1;overflow-y:auto;padding:14px 18px;scrollbar-width:thin;scrollbar-color:#1a1e26 transparent;">
             <div style="color:#ccc;font-family:Courier New,monospace;font-size:12px;line-height:1.8;white-space:pre-wrap;">{safe}</div>
         </div>
-        <div style="background:#0c0e12;border-top:1px solid #1a1e26;padding:6px 18px;
-                    display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+        <div style="background:#0c0e12;border-top:1px solid #1a1e26;padding:6px 18px;flex-shrink:0;">
             <span style="color:#555;font-size:10px;font-family:Courier New,monospace;">
                 Generado: {briefing_ts} • Gemini 2.0 Flash + Google Search
             </span>
-            <button onclick="triggerBriefing()" style="background:#00ffad22;border:1px solid #00ffad66;color:#00ffad;
-                padding:2px 10px;border-radius:4px;font-family:VT323,monospace;font-size:14px;
-                letter-spacing:1px;cursor:pointer;box-shadow:0 0 8px #00ffad22;">↻ ACTUALIZAR</button>
         </div>'''
         briefing_h = 310
     else:
@@ -2444,13 +2438,8 @@ def render():
             <div style="margin-top:6px;color:#1a2e1a;font-size:10px;font-family:Courier New,monospace;">
                 [GEMINI 2.0 FLASH // GOOGLE SEARCH // TIEMPO REAL]
             </div>
-        </div>
-        <div style="background:#0c0e12;border-top:1px solid #1a1e26;padding:8px 18px;flex-shrink:0;display:flex;justify-content:flex-end;">
-            <button onclick="triggerBriefing()" style="background:#00ffad22;border:1px solid #00ffad88;color:#00ffad;
-                padding:3px 16px;border-radius:5px;font-family:VT323,monospace;font-size:16px;
-                letter-spacing:2px;cursor:pointer;box-shadow:0 0 10px #00ffad22;">▶ GENERAR BRIEFING</button>
         </div>'''
-        briefing_h = 190
+        briefing_h = 160
 
     briefing_module_html = f'''<!DOCTYPE html><html><head>
     <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -2479,35 +2468,21 @@ def render():
         </div>
         {body_inner}
     </div>
-    <script>
-    function triggerBriefing() {{
-        try {{
-            var doc = window.parent.document;
-            var btns = doc.querySelectorAll('button');
-            for (var i = 0; i < btns.length; i++) {{
-                if (btns[i].innerText.trim() === '__BRIEFING_GO__') {{ btns[i].click(); return; }}
-            }}
-        }} catch(e) {{ console.warn(e); }}
-    }}
-    </script>
+
     </body></html>'''
 
     components.html(briefing_module_html, height=briefing_h + 2, scrolling=False)
 
-    # Botón Streamlit oculto para el briefing — CSS lo hace invisible al 100%
-    st.markdown("""<style>
-    button[data-testid="baseButton-secondary"][kind="secondary"] {
-        position:absolute!important; width:1px!important; height:1px!important;
-        overflow:hidden!important; opacity:0!important; pointer-events:none!important;
-        clip:rect(0,0,0,0)!important; border:0!important; padding:0!important; margin:0!important;
-    }
-    </style>""", unsafe_allow_html=True)
-    if st.button("__BRIEFING_GO__", key="briefing_hidden", type="secondary"):
+    # Botón nativo Streamlit para el briefing — se muestra como primary (verde terminal)
+    # Pegado visualmente al módulo con margin negativo
+    st.markdown('<div style="margin-top:-2px; display:flex; justify-content:flex-end; padding-right:4px;">', unsafe_allow_html=True)
+    if st.button("▶ GENERAR BRIEFING", key="briefing_go", type="primary"):
         with st.spinner("Analizando con Gemini + Google Search…"):
             result = _call_gemini_briefing(resumen_prompt)
         st.session_state["briefing_text"] = result
         st.session_state["briefing_ts"] = get_timestamp()
         st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # FILA 1
     col1, col2, col3 = st.columns(3)
@@ -2887,22 +2862,32 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — radio invisible FUERA del with c2 para no afectar altura
-    # El JS del iframe clickea el label del radio para cambiar TF sin rerun externo
+    # SECTOR ROTATION — 4 botones Streamlit INVISIBLES por CSS específico
+    # El JS del iframe clickea el botón correcto por su data-key
+    if 'sector_tf' not in st.session_state:
+        st.session_state['sector_tf'] = '1D'
+    current_tf = st.session_state['sector_tf']
+
+    # Ocultar SOLO los botones sector con CSS — identificados por texto 1D/3D/1W/1M
     st.markdown("""<style>
-    div[data-testid="stRadio"]:has(input[name="sector_tf_radio"]),
-    div[data-testid="stRadio"] > div:first-child { 
-        height:0 !important; min-height:0 !important; overflow:hidden !important;
-        margin:0 !important; padding:0 !important; opacity:0 !important; 
-        pointer-events:none !important; position:absolute !important;
+    /* Contenedor de los botones de temporalidad del sector — invisible */
+    div[data-testid="stHorizontalBlock"]:has(button[key*="tf_hidden"]) {
+        height: 0 !important; overflow: hidden !important;
+        margin: 0 !important; padding: 0 !important;
+        position: absolute !important; opacity: 0 !important;
     }
     </style>""", unsafe_allow_html=True)
-    current_tf = st.radio("_tf_", ["1D","3D","1W","1M"],
-                          key="sector_tf_radio",
-                          label_visibility="collapsed",
-                          horizontal=True)
+
+    # 4 botones invisibles — el JS del iframe hace click en el correcto
+    _tf_cols = st.columns(4)
+    for _i, _tf in enumerate(["1D","3D","1W","1M"]):
+        with _tf_cols[_i]:
+            if st.button(_tf, key=f"tf_hidden_{_tf}", type="secondary"):
+                st.session_state['sector_tf'] = _tf
+                st.rerun()
 
     with c2:
+        current_tf = st.session_state.get('sector_tf', '1D')
         sectors = get_sector_performance(current_tf)
         sectors_html = ""
         for sector in sectors:
@@ -2985,16 +2970,14 @@ def render():
         function setTF(tf) {{
             try {{
                 var doc = window.parent.document;
-                // Buscar los radio inputs y hacer click en el correcto
-                var radios = doc.querySelectorAll('input[type="radio"]');
-                for (var i = 0; i < radios.length; i++) {{
-                    var lbl = radios[i].parentElement ? radios[i].parentElement.textContent.trim() : '';
-                    if (lbl === tf) {{ radios[i].click(); return; }}
-                }}
-                // Fallback: buscar labels
-                var labels = doc.querySelectorAll('label');
-                for (var j = 0; j < labels.length; j++) {{
-                    if (labels[j].textContent.trim() === tf) {{ labels[j].click(); return; }}
+                // Buscar el botón Streamlit oculto con el texto exacto de la temporalidad
+                var allBtns = doc.querySelectorAll('button');
+                for (var i = 0; i < allBtns.length; i++) {{
+                    var txt = allBtns[i].innerText ? allBtns[i].innerText.trim() : '';
+                    if (txt === tf) {{
+                        allBtns[i].click();
+                        return;
+                    }}
                 }}
             }} catch(e) {{ console.warn('setTF error:', e); }}
         }}
@@ -4098,6 +4081,18 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

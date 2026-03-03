@@ -435,317 +435,261 @@ def get_fallback_crypto_prices():
     ]
 
 @st.cache_data(ttl=300)
+
+# ─── Reddit JSON API + StockTwits: fuentes de datos reales sin autenticación ──
+
+def _extract_tickers_from_text(text: str, top_n: int = 30):
+    """Extrae tickers válidos mencionados en texto de Reddit/StockTwits."""
+    import re as _re
+    # Blacklist: palabras comunes que no son tickers
+    blacklist = {
+        'A','I','IT','IS','AT','BE','BY','DO','FOR','GO','HE','IF','IN','ME',
+        'MY','NO','OF','ON','OR','SO','TO','UP','US','WE','AND','ARE','BUT',
+        'CAN','DID','GET','GOT','HAS','HAD','HER','HIM','HIS','HOW','ITS',
+        'LET','MAY','NEW','NOT','NOW','OFF','OUR','OUT','OWN','PUT','RUN',
+        'SAY','SHE','THE','TOO','TWO','USE','WAS','WAY','WHO','WHY','WITH',
+        'YOU','YOLO','LMAO','FOMO','EPS','CEO','IPO','ETF','GDP','FED','ALL',
+        'GOOD','BEST','NEXT','LAST','HIGH','LOW','MORE','MUCH','JUST','LIKE',
+        'MAKE','MANY','MOST','MOVE','NEED','OVER','SOME','SUCH','THAN','THAT',
+        'THEM','THEN','THEY','THIS','WHAT','WHEN','WILL','YEAR','HOLD','SELL',
+        'BUY','LONG','SHORT','PUMP','DUMP','MOON','BEAR','BULL','CALLS','PUTS',
+        'DD','TA','OTM','ITM','ATM','WSB','RH','TD','WS','AI','ML','API','SaaS',
+        'LOL','WTF','OMG','GG','GE','F','T','X','V','D','C','K','M','R','S',
+        'PRE','POST','AH','PM','AM','EST','PST','UTC','USD','EUR','CAD','CAT',
+        'WELL','WORK','TAKE','GIVE','BACK','COME','WANT','SHOW','ONLY','VERY',
+    }
+    found = {}
+    # Patrón: $TICKER o ticker en contexto bursátil
+    for m in _re.finditer(r'\$([A-Z]{1,6})\b|\b([A-Z]{2,5})\b', text):
+        t = (m.group(1) or m.group(2) or '').strip()
+        if t and t not in blacklist and 2 <= len(t) <= 6:
+            found[t] = found.get(t, 0) + (2 if m.group(1) else 1)
+    return sorted(found.items(), key=lambda x: -x[1])[:top_n]
+
+
+@st.cache_data(ttl=900, show_spinner=False)  # 15 min cache
 def get_reddit_buzz():
+    """Extrae tickers más mencionados en r/wallstreetbets, r/stocks, r/investing via Reddit JSON API."""
+    subreddits = ['wallstreetbets', 'stocks', 'investing', 'options', 'StockMarket']
+    ticker_counts = {}
+    session = get_http_session()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (compatible; MarketBot/1.0; +https://streamlit.app)',
+        'Accept': 'application/json',
+    }
     try:
-        url = "https://www.buzztickr.com/reddit-buzz/"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        }
-        response = requests.get(url, headers=headers, timeout=15)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        top_10_tickers = []
-        headers_elements = soup.find_all(['h2', 'h3', 'h4', 'div', 'span'])
-        for header in headers_elements:
-            header_text = header.get_text(strip=True).lower()
-            if 'overall' in header_text and 'top' in header_text:
-                parent = header.find_parent()
-                if parent:
-                    links = parent.find_all('a', href=re.compile(r'/reddit-buzz/\?ticker='))
-                    for link in links[:10]:
-                        ticker = link.get_text(strip=True).upper()
-                        if ticker and ticker not in top_10_tickers and len(ticker) <= 5:
-                            top_10_tickers.append(ticker)
-        if not top_10_tickers:
-            all_links = soup.find_all('a', href=re.compile(r'/reddit-buzz/\?ticker=[A-Z]+'))
-            seen = set()
-            for link in all_links:
-                ticker = link.get_text(strip=True).upper()
-                if ticker and ticker not in seen and len(ticker) <= 5 and ticker.isalpha():
-                    top_10_tickers.append(ticker)
-                    seen.add(ticker)
-                    if len(top_10_tickers) >= 10:
-                        break
-        if not top_10_tickers:
-            return get_fallback_reddit_tickers()
-        return {
-            'tickers': top_10_tickers[:10], 'source': 'BuzzTickr',
-            'timestamp': get_timestamp()
-        }
-    except:
-        return get_fallback_reddit_tickers()
+        for sub in subreddits[:3]:
+            try:
+                url = f'https://www.reddit.com/r/{sub}/hot.json?limit=25&t=day'
+                r = session.get(url, headers=headers, timeout=10)
+                set_api_health('Reddit', r.status_code == 200)
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                posts = data.get('data', {}).get('children', [])
+                for post in posts:
+                    p = post.get('data', {})
+                    text = f"{p.get('title','')} {p.get('selftext','')}"
+                    for ticker, count in _extract_tickers_from_text(text.upper()):
+                        ticker_counts[ticker] = ticker_counts.get(ticker, 0) + count
+            except Exception:
+                continue
+
+        if len(ticker_counts) >= 5:
+            top = sorted(ticker_counts.items(), key=lambda x: -x[1])[:15]
+            return {
+                'tickers': [t for t, _ in top],
+                'counts': dict(top),
+                'source': 'Reddit Live',
+                'timestamp': get_timestamp()
+            }
+    except Exception:
+        pass
+    return get_fallback_reddit_tickers()
+
 
 def get_fallback_reddit_tickers():
     return {
-        'tickers': ["MSFT", "NVDA", "TSLA", "AAPL", "AMZN", "GOOGL", "META", "AMD", "PLTR", "GME"],
-        'source': 'Fallback', 'timestamp': get_timestamp()
+        'tickers': ['NVDA','TSLA','AAPL','META','AMZN','PLTR','MSFT','AMD','GME','GOOGL'],
+        'counts': {},
+        'source': 'Fallback',
+        'timestamp': get_timestamp()
     }
 
-@st.cache_data(ttl=3600)  # Cache de 1 hora para no sobrecargar BuzzTickr
+
+@st.cache_data(ttl=900, show_spinner=False)  # 15 min cache
 def get_buzztickr_master_data():
     """
-    Obtiene datos del Master Buzz de BuzzTickr:
-    Rank, Ticker, Buzz Score, Health, Social Hype (★ Reddit), Smart Money (★ Ballenas), Squeeze Potential (★)
-    Parseo mejorado con detección automática de columnas y extracción real de estrellas.
+    Datos reales combinando:
+    1. Reddit JSON API → tickers más mencionados (hot posts)
+    2. StockTwits API → sentimiento y trending
+    3. yfinance → precio, cambio, volumen para cada ticker
+    Genera score de Hype, Smart Money (basado en volumen institucional proxy) y Squeeze.
     """
-    try:
-        # BuzzTickr usa JavaScript rendering — intentar múltiples estrategias
-        url = "https://www.buzztickr.com/master-buzz/"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'no-cache',
-            'Referer': 'https://www.google.com/',
-        }
-        
-        # Estrategia 1: requests directo
-        soup = None
-        session = requests.Session()
+    import re as _re
+
+    session = get_http_session()
+    headers_reddit = {
+        'User-Agent': 'Mozilla/5.0 (compatible; MarketDashboard/1.0)',
+        'Accept': 'application/json',
+    }
+
+    # ── PASO 1: Tickers de Reddit ────────────────────────────────────────────
+    ticker_mentions = {}
+    ticker_sentiment = {}  # positive mentions ratio
+
+    subreddits = ['wallstreetbets', 'stocks', 'investing', 'options', 'StockMarket']
+    for sub in subreddits:
         try:
-            session.get("https://www.buzztickr.com/", headers=headers, timeout=8)
-        except: pass
-        
-        try:
-            response = session.get(url, headers=headers, timeout=20)
-            if response.status_code == 200:
-                html_text = response.text
-                # Verificar si hay datos reales (JS rendered) o página vacía
-                if len(html_text) > 5000 and ('ticker' in html_text.lower() or 'buzz' in html_text.lower()):
-                    soup = BeautifulSoup(html_text, 'html.parser')
-        except: pass
-        
-        # Estrategia 2: API endpoint alternativo de BuzzTickr si existe
-        if not soup or not soup.find('table'):
-            try:
-                api_resp = session.get(
-                    "https://www.buzztickr.com/api/master-buzz/",
-                    headers={**headers, 'Accept': 'application/json'},
-                    timeout=15
-                )
-                if api_resp.status_code == 200:
-                    try:
-                        api_data = api_resp.json()
-                        # Si devuelve JSON con datos, parsearlo
-                        if isinstance(api_data, list) and len(api_data) > 0:
-                            master_data_api = []
-                            for item in api_data[:20]:
-                                if isinstance(item, dict):
-                                    ticker = str(item.get('ticker', item.get('symbol', ''))).upper()
-                                    if ticker and re.match(r'^[A-Z]{1,6}$', ticker):
-                                        master_data_api.append({
-                                            'rank': str(item.get('rank', len(master_data_api)+1)),
-                                            'ticker': ticker,
-                                            'buzz_score': str(item.get('score', item.get('buzz_score', '5'))),
-                                            'health': str(item.get('health', '50 Hold')),
-                                            'social_hype': '★' * min(int(item.get('hype', 0)), 5),
-                                            'smart_money': '★' * min(int(item.get('smart', 0)), 5),
-                                            'squeeze': '★' * min(int(item.get('squeeze', 0)), 5),
-                                        })
-                            if len(master_data_api) >= 5:
-                                return {
-                                    'data': master_data_api,
-                                    'source': 'BuzzTickr API',
-                                    'timestamp': get_timestamp(),
-                                    'count': len(master_data_api)
-                                }
-                    except: pass
-            except: pass
-        
-        if not soup:
-            return get_fallback_master_data()
-        
-        master_data = []
-
-        def count_stars_in_element(el):
-            """Cuenta estrellas ★ en un elemento HTML incluyendo sub-elementos."""
-            if el is None:
-                return 0
-            # Contar ★ en texto completo del elemento
-            full_text = el.get_text()
-            count = full_text.count('★')
-            if count > 0:
-                return min(count, 5)
-            # También buscar imágenes/iconos de estrellas por class
-            star_imgs = el.find_all(['img', 'i', 'span'], class_=re.compile(r'star|rating', re.I))
-            if star_imgs:
-                return min(len(star_imgs), 5)
-            # Buscar caracteres alternativos
-            count = full_text.count('⭐') + full_text.count('*') 
-            return min(count, 5)
-
-        def parse_health(text):
-            """Extrae número y label de salud del texto."""
-            text = text.strip()
-            num_match = re.search(r'(\d+)', text)
-            num = num_match.group(1) if num_match else ''
-            text_lower = text.lower()
-            if 'strong' in text_lower:
-                label = 'Strong'
-            elif 'hold' in text_lower:
-                label = 'Hold'
-            elif 'weak' in text_lower:
-                label = 'Weak'
-            else:
-                label = text.replace(num, '').strip() or 'N/D'
-            return f"{num} {label}".strip()
-
-        # ── Buscar tabla principal ──────────────────────────────────────────
-        for table in soup.find_all('table'):
-            rows = table.find_all('tr')
-            if len(rows) < 3:
+            url = f'https://www.reddit.com/r/{sub}/hot.json?limit=30&t=day'
+            r   = session.get(url, headers=headers_reddit, timeout=10)
+            if r.status_code != 200:
                 continue
-            
-            # Detectar columnas desde el header
-            header = rows[0]
-            headers_text = [th.get_text(strip=True).lower() for th in header.find_all(['th', 'td'])]
-            
-            col_rank = col_ticker = col_score = col_health = col_hype = col_smart = col_squeeze = None
-            for i, h in enumerate(headers_text):
-                if 'rank' in h or h == '#':
-                    col_rank = i
-                elif 'ticker' in h or 'symbol' in h:
-                    col_ticker = i
-                elif 'score' in h or 'buzz' in h:
-                    col_score = i
-                elif 'health' in h or 'fundamental' in h:
-                    col_health = i
-                elif 'hype' in h or 'social' in h or 'reddit' in h:
-                    col_hype = i
-                elif 'smart' in h or 'money' in h or 'whale' in h:
-                    col_smart = i
-                elif 'squeeze' in h or 'short' in h:
-                    col_squeeze = i
-            
-            # Defaults si no se detectaron
-            if col_rank is None: col_rank = 0
-            if col_ticker is None: col_ticker = 1
-            if col_score is None: col_score = 2
-            if col_health is None: col_health = 3
-            if col_hype is None: col_hype = 4
-            if col_smart is None: col_smart = 5
-            if col_squeeze is None: col_squeeze = 6
+            posts = r.json().get('data', {}).get('children', [])
+            for post in posts:
+                p    = post.get('data', {})
+                text = f"{p.get('title','')} {p.get('selftext','')}".upper()
+                upvote_ratio = p.get('upvote_ratio', 0.5)
+                score        = p.get('score', 0)
+                for ticker, count in _extract_tickers_from_text(text):
+                    ticker_mentions[ticker] = ticker_mentions.get(ticker, 0) + count
+                    # Sentimiento proxy: si el post tiene buen ratio de upvotes y score
+                    if score > 100 and upvote_ratio > 0.7:
+                        ticker_sentiment[ticker] = ticker_sentiment.get(ticker, 0) + 1
+        except Exception:
+            continue
 
-            for row in rows[1:]:
-                try:
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) < 4:
-                        continue
-                    
-                    def safe_text(idx):
-                        return cells[idx].get_text(strip=True) if idx is not None and idx < len(cells) else ''
-                    
-                    def safe_cell(idx):
-                        return cells[idx] if idx is not None and idx < len(cells) else None
+    # ── PASO 2: StockTwits trending (sin auth, endpoint público) ────────────
+    st_tickers = []
+    try:
+        st_url = 'https://api.stocktwits.com/api/2/trending/symbols.json'
+        st_r   = session.get(st_url, headers={'Accept': 'application/json'}, timeout=8)
+        if st_r.status_code == 200:
+            st_data = st_r.json().get('symbols', [])
+            for item in st_data[:20]:
+                t = item.get('symbol', '').upper()
+                if t and 2 <= len(t) <= 6:
+                    st_tickers.append(t)
+                    ticker_mentions[t] = ticker_mentions.get(t, 0) + 3  # bonus
+    except Exception:
+        pass
 
-                    ticker = safe_text(col_ticker).upper().replace('$','')
-                    if not ticker or len(ticker) > 6 or not re.match(r'^[A-Z.]{1,6}$', ticker):
-                        continue
-                    
-                    rank = safe_text(col_rank).replace('#','').strip() or str(len(master_data)+1)
-                    buzz_score = safe_text(col_score)
-                    health_raw = safe_text(col_health)
-                    health = parse_health(health_raw)
-                    
-                    # Estrellas - contar en el elemento HTML completo
-                    hype_stars = count_stars_in_element(safe_cell(col_hype))
-                    smart_stars = count_stars_in_element(safe_cell(col_smart))
-                    squeeze_stars = count_stars_in_element(safe_cell(col_squeeze))
-                    
-                    hype_text = safe_text(col_hype)
-                    smart_text = safe_text(col_smart)
-                    squeeze_text = safe_text(col_squeeze)
-                    
-                    # Construir strings con estrellas reales
-                    hype_str = '★' * hype_stars + (' Reddit Top 10' if 'reddit' in hype_text.lower() or 'top' in hype_text.lower() else (' Weekly Choice' if 'week' in hype_text.lower() else ''))
-                    smart_str = '★' * smart_stars + (' Whales >50%' if '50' in smart_text else (' Whales >20%' if 'whale' in smart_text.lower() or 'smart' in smart_text.lower() else ''))
-                    
-                    sqz_pct = re.search(r'(\d+)%', squeeze_text)
-                    sqz_dtc = re.search(r'(\d+\.?\d*)', squeeze_text.replace('%',''))
-                    if sqz_pct:
-                        squeeze_str = '★' * squeeze_stars + f' Potential ({sqz_pct.group(1)}%)'
-                    elif squeeze_stars > 0:
-                        squeeze_str = '★' * squeeze_stars + ' Potential'
-                    else:
-                        squeeze_str = ''
-                    
-                    master_data.append({
-                        'rank': rank,
-                        'ticker': ticker,
-                        'buzz_score': buzz_score,
-                        'health': health,
-                        'social_hype': hype_str,
-                        'smart_money': smart_str,
-                        'squeeze': squeeze_str
-                    })
-                except:
-                    continue
-            
-            if len(master_data) >= 5:
-                break
-
-        # ── Si no hubo tabla, buscar divs estructurados ─────────────────────
-        if not master_data:
-            # Buscar en cualquier estructura de lista/grid
-            rows_divs = soup.find_all(attrs={'class': re.compile(r'row|item|stock|ticker|buzz', re.I)})
-            seen = set()
-            for div in rows_divs[:40]:
-                text = div.get_text()
-                ticker_m = re.search(r'\$?([A-Z]{2,5})\b', text)
-                if ticker_m:
-                    ticker = ticker_m.group(1)
-                    if ticker not in seen and ticker not in ['THE','FOR','AND','NOT','ARE','ALL']:
-                        stars = count_stars_in_element(div)
-                        master_data.append({
-                            'rank': str(len(master_data)+1),
-                            'ticker': ticker,
-                            'buzz_score': '6',
-                            'health': '50 Hold',
-                            'social_hype': '★★★★★' if stars >= 3 else '',
-                            'smart_money': '',
-                            'squeeze': ''
-                        })
-                        seen.add(ticker)
-                        if len(master_data) >= 20:
-                            break
-
-        if master_data:
-            return {
-                'data': master_data[:20],
-                'source': 'BuzzTickr Master',
-                'timestamp': get_timestamp(),
-                'count': len(master_data)
-            }
-        
+    # ── PASO 3: Combinar y seleccionar top 20 ────────────────────────────────
+    if not ticker_mentions:
         return get_fallback_master_data()
-        
-    except Exception as e:
-        return get_fallback_master_data()
+
+    top_tickers = [t for t, _ in sorted(ticker_mentions.items(), key=lambda x: -x[1])[:20]]
+
+    # ── PASO 4: Obtener datos de mercado via yfinance para cada ticker ────────
+    master_data = []
+    for rank, ticker in enumerate(top_tickers, 1):
+        try:
+            tk   = yf.Ticker(ticker)
+            info = tk.fast_info
+
+            # Precio y cambio
+            price  = getattr(info, 'last_price', None)
+            prev   = getattr(info, 'previous_close', None)
+            change = ((price - prev) / prev * 100) if price and prev and prev > 0 else 0.0
+
+            # Volumen relativo (proxy de smart money)
+            hist = tk.history(period='10d')
+            vol_today = float(hist['Volume'].iloc[-1]) if len(hist) > 0 else 0
+            vol_avg   = float(hist['Volume'].mean()) if len(hist) > 0 else 1
+            vol_ratio = vol_today / vol_avg if vol_avg > 0 else 1.0
+
+            # Short interest proxy: float + short ratio si disponible
+            try:
+                short_ratio = float(tk.info.get('shortRatio', 0) or 0)
+                short_pct   = float(tk.info.get('shortPercentOfFloat', 0) or 0) * 100
+            except Exception:
+                short_ratio = 0
+                short_pct   = 0
+
+            # Scores
+            mention_count = ticker_mentions.get(ticker, 0)
+            max_mentions  = max(ticker_mentions.values()) if ticker_mentions else 1
+            hype_raw      = mention_count / max_mentions  # 0-1
+
+            hype_stars  = max(1, min(5, round(hype_raw * 5)))
+            smart_stars = max(1, min(5, round(min(vol_ratio / 2, 1) * 5)))
+            squeeze_stars = max(0, min(5, round(min(short_pct / 10, 1) * 5)))
+
+            # Health score (combinación de momentum + volumen)
+            if change > 2:      health_num, health_lbl = 85, "Fuerte"
+            elif change > 0:    health_num, health_lbl = 65, "Hold"
+            elif change > -2:   health_num, health_lbl = 45, "Hold"
+            else:               health_num, health_lbl = 30, "Débil"
+
+            in_st   = ticker in st_tickers
+            sent_ok = ticker_sentiment.get(ticker, 0) > 0
+
+            hype_label   = "★" * hype_stars  + ("☆" * (5 - hype_stars))
+            smart_label  = "★" * smart_stars + ("☆" * (5 - smart_stars))
+            squeeze_label= "★" * squeeze_stars + ("☆" * (5 - squeeze_stars))
+
+            hype_suffix  = " Reddit Top" if hype_raw > 0.5 else (" StockTwits" if in_st else "")
+            smart_suffix = f" Vol ×{vol_ratio:.1f}" if vol_ratio > 1.5 else ""
+            squeeze_suffix = f" Short {short_pct:.0f}%" if short_pct > 5 else ""
+
+            master_data.append({
+                'rank':        str(rank),
+                'ticker':      ticker,
+                'buzz_score':  str(round(hype_raw * 100)),
+                'health':      f"{health_num} {health_lbl}",
+                'social_hype': hype_label + hype_suffix,
+                'smart_money': smart_label + smart_suffix,
+                'squeeze':     squeeze_label + squeeze_suffix if squeeze_stars > 0 else "",
+                'change':      round(change, 2),
+                'price':       round(price, 2) if price else None,
+            })
+        except Exception:
+            master_data.append({
+                'rank': str(rank), 'ticker': ticker,
+                'buzz_score': str(ticker_mentions.get(ticker, 1)),
+                'health': '50 Hold',
+                'social_hype': '★★★☆☆',
+                'smart_money': '★★☆☆☆',
+                'squeeze': '',
+                'change': 0.0, 'price': None,
+            })
+
+    if master_data:
+        # Determinar fuente
+        sources = []
+        if any(ticker_mentions):
+            sources.append('Reddit')
+        if st_tickers:
+            sources.append('StockTwits')
+        src_str = ' + '.join(sources) if sources else 'Reddit'
+        return {
+            'data':      master_data[:20],
+            'source':    src_str,
+            'timestamp': get_timestamp(),
+            'count':     len(master_data)
+        }
+
+    return get_fallback_master_data()
+
 
 def get_fallback_master_data():
-    """Datos de respaldo actualizados — se usa cuando BuzzTickr no es accesible."""
+    """Datos de respaldo estáticos cuando Reddit y StockTwits no están disponibles."""
     return {
         'data': [
-            {'rank':'1','ticker':'NVDA','buzz_score':'98','health':'85 Strong','social_hype':'★★★★★ Reddit Top 10','smart_money':'★★★★ Whales >50%','squeeze':'★★★ Potential (12%)'},
-            {'rank':'2','ticker':'TSLA','buzz_score':'95','health':'72 Strong','social_hype':'★★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★★★ Potential (18%)'},
-            {'rank':'3','ticker':'AAPL','buzz_score':'88','health':'80 Strong','social_hype':'★★★★ Reddit Top 10','smart_money':'★★★★ Whales >50%','squeeze':''},
-            {'rank':'4','ticker':'META','buzz_score':'85','health':'78 Strong','social_hype':'★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★ Potential (8%)'},
-            {'rank':'5','ticker':'AMZN','buzz_score':'82','health':'76 Strong','social_hype':'★★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
-            {'rank':'6','ticker':'PLTR','buzz_score':'80','health':'65 Hold','social_hype':'★★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★★★ Potential (22%)'},
-            {'rank':'7','ticker':'MSFT','buzz_score':'78','health':'82 Strong','social_hype':'★★★ ','smart_money':'★★★★★ Whales >50%','squeeze':''},
-            {'rank':'8','ticker':'AMD','buzz_score':'75','health':'60 Hold','social_hype':'★★★★ Reddit Top 10','smart_money':'★★★ Whales >20%','squeeze':'★★★ Potential (14%)'},
-            {'rank':'9','ticker':'GME','buzz_score':'72','health':'40 Hold','social_hype':'★★★★★ Reddit Top 10','smart_money':'★ ','squeeze':'★★★★★ Potential (35%)'},
-            {'rank':'10','ticker':'GOOGL','buzz_score':'70','health':'79 Strong','social_hype':'★★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
-            {'rank':'11','ticker':'MSTR','buzz_score':'68','health':'55 Hold','social_hype':'★★★★ Reddit Top 10','smart_money':'★★ ','squeeze':'★★★★ Potential (28%)'},
-            {'rank':'12','ticker':'CRWD','buzz_score':'65','health':'70 Strong','social_hype':'★★★ ','smart_money':'★★★ Whales >20%','squeeze':'★★ Potential (9%)'},
-            {'rank':'13','ticker':'SMCI','buzz_score':'62','health':'45 Hold','social_hype':'★★★★ Reddit Top 10','smart_money':'★★ ','squeeze':'★★★ Potential (16%)'},
-            {'rank':'14','ticker':'SPY','buzz_score':'60','health':'75 Strong','social_hype':'★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
-            {'rank':'15','ticker':'QQQ','buzz_score':'58','health':'74 Strong','social_hype':'★★ ','smart_money':'★★★★ Whales >50%','squeeze':''},
+            {'rank':'1','ticker':'NVDA','buzz_score':'98','health':'85 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','change':0.8,'price':None},
+            {'rank':'2','ticker':'TSLA','buzz_score':'95','health':'72 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','change':-0.4,'price':None},
+            {'rank':'3','ticker':'AAPL','buzz_score':'88','health':'80 Fuerte','social_hype':'★★★★☆','smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆','change':0.2,'price':None},
+            {'rank':'4','ticker':'META','buzz_score':'85','health':'78 Fuerte','social_hype':'★★★★☆','smart_money':'★★★☆☆','squeeze':'★★☆☆☆ Short 8%','change':1.1,'price':None},
+            {'rank':'5','ticker':'PLTR','buzz_score':'80','health':'65 Hold','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆','squeeze':'★★★★☆ Short 22%','change':2.3,'price':None},
+            {'rank':'6','ticker':'AMZN','buzz_score':'78','health':'76 Fuerte','social_hype':'★★★☆☆','smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆','change':0.6,'price':None},
+            {'rank':'7','ticker':'AMD','buzz_score':'75','health':'60 Hold','social_hype':'★★★★☆ Reddit Top','smart_money':'★★★☆☆','squeeze':'★★★☆☆ Short 14%','change':-0.9,'price':None},
+            {'rank':'8','ticker':'GME','buzz_score':'72','health':'40 Hold','social_hype':'★★★★★ Reddit Top','smart_money':'★☆☆☆☆','squeeze':'★★★★★ Short 35%','change':3.2,'price':None},
+            {'rank':'9','ticker':'MSFT','buzz_score':'70','health':'82 Fuerte','social_hype':'★★★☆☆','smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆','change':0.1,'price':None},
+            {'rank':'10','ticker':'MSTR','buzz_score':'68','health':'55 Hold','social_hype':'★★★★☆ Reddit Top','smart_money':'★★☆☆☆','squeeze':'★★★★☆ Short 28%','change':4.5,'price':None},
         ],
-        'source': 'Fallback — BuzzTickr no disponible',
+        'source': 'Fallback',
         'timestamp': get_timestamp(),
-        'count': 15
+        'count': 10
     }
 
 
@@ -2746,27 +2690,31 @@ def render():
                 return result
             
             hype_label = ""
-            if "Reddit Top 10" in social_hype:
+            if "Reddit" in social_hype:
                 hype_label = "Reddit"
-            elif "Weekly Choice" in social_hype:
-                hype_label = "Semanal"
+            elif "StockTwits" in social_hype:
+                hype_label = "StockTwits"
             elif hype_stars > 0:
-                hype_label = "Reddit"
-            
+                hype_label = "Social"
+
             smart_label = ""
-            if "Whales" in smart_money:
-                pct_m = re.search(r'>(\d+)%', smart_money)
-                smart_label = f"Ballenas >{pct_m.group(1)}%" if pct_m else "Ballenas"
+            vol_m = re.search(r'Vol [x×](\d+\.?\d*)', smart_money)
+            whale_m = re.search(r'>(\d+)%', smart_money)
+            if vol_m:
+                smart_label = f"Vol ×{vol_m.group(1)}"
+            elif "Whales" in smart_money or "Ballenas" in smart_money:
+                smart_label = f"Ballenas >{whale_m.group(1)}%" if whale_m else "Ballenas"
             elif smart_stars > 0:
-                smart_label = "Ballenas"
-            
+                smart_label = "Institucional"
+
             squeeze_label = ""
-            sqz_pct = re.search(r'\((\d+)%\)', squeeze)
-            if sqz_pct:
-                squeeze_label = f"Potential ({sqz_pct.group(1)}%)"
-            elif "Potential" in squeeze:
-                squeeze_label = "Potential"
-            elif squeeze_stars > 0:
+            short_m = re.search(r'Short (\d+\.?\d*)%', squeeze)
+            pct_m   = re.search(r'\((\d+)%\)', squeeze)
+            if short_m:
+                squeeze_label = f"Short {short_m.group(1)}%"
+            elif pct_m:
+                squeeze_label = f"Potential ({pct_m.group(1)}%)"
+            elif "Potential" in squeeze or squeeze_stars > 0:
                 squeeze_label = "Potential"
 
             cards_html += f'''
@@ -2853,7 +2801,7 @@ def render():
                 <span style="font-size:9px; color:#555;">
                     <span style="color:#00ffad; font-weight:bold;">{count_str}</span> activos monitorizados
                 </span>
-                <span style="font-size:8px; color:#333;">BuzzTickr</span>
+                <span style="font-size:8px; color:#333;">{source_str}</span>
             </div>
             <div class="update-timestamp">Actualizado: {timestamp_str} • {source_str}</div>
         </div>
@@ -4071,7 +4019,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
 
 
 

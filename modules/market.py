@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -2328,7 +2329,13 @@ def render():
     col_r1, col_r2 = st.columns([1, 9])
     with col_r1:
         if st.button("↻ Actualizar", key="global_refresh", type="primary"):
+            # Preservar el briefing — solo borrar datos de mercado
+            _saved_briefing = st.session_state.get("briefing_text", "")
+            _saved_briefing_ts = st.session_state.get("briefing_ts", "")
             st.cache_data.clear()
+            # Restaurar briefing tras limpiar caché
+            st.session_state["briefing_text"] = _saved_briefing
+            st.session_state["briefing_ts"]   = _saved_briefing_ts
             st.rerun()
 
 
@@ -2344,23 +2351,23 @@ def render():
                 return "⚠ Configura GEMINI_API_KEY en st.secrets."
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            for _att in range(3):
+            # Orden de preferencia: 2.5-flash > 2.0-flash > 2.0-flash-lite
+            for _att, (_model_name, _use_grounding) in enumerate([
+                ("gemini-2.5-flash", True),
+                ("gemini-2.5-flash", False),
+                ("gemini-2.0-flash", False),
+            ]):
                 try:
-                    if _att == 0:
+                    _m = genai.GenerativeModel(_model_name)
+                    if _use_grounding:
                         from google.generativeai.types import Tool, GenerateContentConfig
-                        _m = genai.GenerativeModel("gemini-2.0-flash")
                         _t = Tool(google_search=genai.protos.GoogleSearch())
                         _r = _m.generate_content(prompt, tools=[_t],
                                 generation_config=GenerateContentConfig(temperature=0.3))
                         _sfx = ""
-                    elif _att == 1:
-                        _m = genai.GenerativeModel("gemini-2.0-flash")
-                        _r = _m.generate_content(prompt)
-                        _sfx = "\n\n_(sin Google Search grounding)_"
                     else:
-                        _m = genai.GenerativeModel("gemini-2.0-flash-lite")
                         _r = _m.generate_content(prompt)
-                        _sfx = "\n\n_(gemini-2.0-flash-lite)_"
+                        _sfx = "" if _model_name == "gemini-2.5-flash" else "\n\n_(gemini-2.0-flash)_"
                     _txt = (_r.text or "").strip()
                     if _txt:
                         return _txt + _sfx
@@ -2855,13 +2862,72 @@ def render():
         ''', unsafe_allow_html=True)
 
     # SECTOR ROTATION — 100% nativo Streamlit
-    if 'sector_tf' not in st.session_state:
-        st.session_state['sector_tf'] = '1W'
+    # ── SECTOR ROTATION ──────────────────────────────────────────────────────
+    # Radio FUERA de with c2: para no crear columnas anidadas
+    # CSS lo convierte en botones visualmente integrados en el módulo
+    st.markdown("""<style>
+    /* Convertir radio en fila de botones compactos estilo terminal */
+    div[data-testid="stRadio"][data-st-key="sector_tf"] > div:first-child {
+        display: none !important;
+    }
+    div[data-testid="stRadio"][data-st-key="sector_tf"] > div:last-child {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 4px !important;
+        background: #0c0e12 !important;
+        padding: 3px 8px !important;
+        border-left: 1px solid #00ffad22 !important;
+        border-right: 1px solid #00ffad22 !important;
+        margin: 0 !important;
+    }
+    div[data-testid="stRadio"][data-st-key="sector_tf"] label {
+        background: transparent !important;
+        border: 1px solid #1a3a2a !important;
+        color: #2a5a3a !important;
+        font-family: 'VT323','Share Tech Mono','Courier New',monospace !important;
+        font-size: 13px !important;
+        letter-spacing: 1.5px !important;
+        padding: 1px 10px !important;
+        border-radius: 3px !important;
+        cursor: pointer !important;
+        margin: 0 !important;
+        min-height: 0 !important;
+        line-height: 20px !important;
+        display: inline-block !important;
+    }
+    div[data-testid="stRadio"][data-st-key="sector_tf"] label:has(input:checked) {
+        background: #00ffad18 !important;
+        border-color: #00ffad !important;
+        color: #00ffad !important;
+        box-shadow: 0 0 6px #00ffad33 !important;
+    }
+    div[data-testid="stRadio"][data-st-key="sector_tf"] label span[data-testid="stMarkdownContainer"] p {
+        font-size: 13px !important;
+        font-family: 'VT323','Share Tech Mono','Courier New',monospace !important;
+        letter-spacing: 1.5px !important;
+    }
+    div[data-testid="stRadio"][data-st-key="sector_tf"] input[type="radio"] {
+        display: none !important;
+    }
+    /* Ocultar el padding que Streamlit añade al contenedor del radio */
+    div[data-testid="stRadio"][data-st-key="sector_tf"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    </style>""", unsafe_allow_html=True)
+
+    current_tf = st.radio(
+        label="TF",
+        options=["1D", "3D", "1W", "1M"],
+        index=["1D", "3D", "1W", "1M"].index(st.session_state.get("sector_tf", "1W")),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="sector_tf"
+    )
+    st.session_state["sector_tf"] = current_tf
 
     with c2:
-        current_tf = st.session_state['sector_tf']
         sectors = get_sector_performance(current_tf)
-
         sectors_html = ""
         for sector in sectors:
             code, name, change = sector["code"], sector["name"], sector["change"]
@@ -2879,49 +2945,24 @@ def render():
                 '<div style="font-size:11px;font-weight:bold;color:' + tc + ';">' + f'{change:+.2f}%' + '</div>'
                 '</div>'
             )
-
         ts = get_timestamp()
-        st.markdown(
-            '<div style="border:1px solid #00ffad22;border-radius:10px 10px 0 0;'
-            'background:#0c0e12;padding:8px 12px;">'
+        sec_full_html = (
+            '<div style="border:1px solid #00ffad22;border-radius:10px;'
+            'background:#11141a;overflow:hidden;">'
+            '<div style="background:#0c0e12;padding:8px 12px;border-bottom:1px solid #00ffad22;">'
             '<span style="color:#00ffad;font-size:18px;text-transform:uppercase;letter-spacing:2px;'
-            "font-family:'VT323','Share Tech Mono','Courier New',monospace;"
-            'text-shadow:0 0 10px #00ffad44;">Rotación Sectorial</span>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-        st.markdown(
-            '<div style="border-left:1px solid #00ffad22;border-right:1px solid #00ffad22;'
-            'background:#0c0e12;padding:2px 6px 4px 6px;">',
-            unsafe_allow_html=True
-        )
-        _ca, _cb, _cc, _cd, _cx = st.columns([1, 1, 1, 1, 6])
-        with _ca:
-            if st.button("1D", key="tf_1D", type="primary" if current_tf == "1D" else "secondary"):
-                st.session_state['sector_tf'] = "1D"; st.rerun()
-        with _cb:
-            if st.button("3D", key="tf_3D", type="primary" if current_tf == "3D" else "secondary"):
-                st.session_state['sector_tf'] = "3D"; st.rerun()
-        with _cc:
-            if st.button("1W", key="tf_1W", type="primary" if current_tf == "1W" else "secondary"):
-                st.session_state['sector_tf'] = "1W"; st.rerun()
-        with _cd:
-            if st.button("1M", key="tf_1M", type="primary" if current_tf == "1M" else "secondary"):
-                st.session_state['sector_tf'] = "1M"; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown(
-            '<div style="border:1px solid #00ffad22;border-top:0;border-radius:0 0 10px 10px;'
-            'background:#11141a;padding:8px;">'
+            'font-family:VT323,monospace;text-shadow:0 0 10px #00ffad44;">Rotación Sectorial</span>'
+            '</div>'
+            '<div style="padding:8px;">'
             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
             + sectors_html +
-            '</div>'
-            '</div>'
-            '<div style="text-align:center;color:#555;font-size:10px;padding:6px 0 0;font-family:Courier New,monospace;">'
+            '</div></div>'
+            '<div style="text-align:right;color:#555;font-size:9px;padding:4px 10px;'
+            'font-family:Courier New,monospace;border-top:1px solid #1a1e26;">'
             'Actualizado: ' + ts + ' · ' + current_tf +
-            '</div></div>',
-            unsafe_allow_html=True
+            '</div></div>'
         )
+        st.markdown(sec_full_html, unsafe_allow_html=True)
 
     with c3:
         crypto_fg = get_crypto_fear_greed()
@@ -4019,9 +4060,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
-
 
 
 

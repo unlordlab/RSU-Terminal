@@ -16,6 +16,7 @@ from plotly.subplots import make_subplots
 import requests
 import warnings
 import os
+import json
 import re as re_module
 import time
 import random
@@ -85,62 +86,141 @@ def hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
 # UNIVERSO S&P 500 (vía Wikipedia + fallback hardcoded)
 # ==============================================================================
 
-SP500_FALLBACK = [
-    "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","TSLA","AVGO","BRK-B",
-    "JPM","LLY","V","MA","UNH","XOM","JNJ","COST","PG","ORCL","HD","WMT",
-    "NFLX","BAC","ABBV","CRM","CVX","MRK","KO","AMD","ADBE","PEP","ACN",
-    "TMO","MCD","LIN","CSCO","ABT","WFC","TXN","PM","NOW","GE","IBM","INTU",
-    "ISRG","AMGN","GS","RTX","SPGI","HON","CAT","UNP","BKNG","VRTX","DE",
-    "AXP","GILD","MS","C","ELV","PLD","LRCX","REGN","SYK","BLK","ADI","MMC",
-    "MO","TJX","CB","MDT","SCHW","MDLZ","AMT","CI","ZTS","BA","BMY","AMAT",
-    "DUK","EOG","ETN","ICE","CME","AON","SO","D","PGR","CL","HUM","SHW",
-    "ITW","MCO","NOC","EMR","ROP","NSC","FDX","APH","ADP","GD","PCAR","CEG",
-    "MCK","USB","TRV","EW","FTNT","PH","KLAC","SNPS","CDNS","OKE","CTAS",
-    "PSA","EXC","WELL","AIG","O","PCG","KMB","DG","DOW","LMT","SLB","F",
-    "GM","CARR","OTIS","ABNB","DXCM","HCA","IQV","VRSK","CPRT","FAST","IDXX",
-    "ROST","PAYX","CTVA","BDX","PPG","HSY","ECL","MTD","DLTR","GWW","KEYS",
-    "CDW","TROW","MKC","LHX","WM","AVB","EQR","SBAC","MAA","REG","PEAK",
-    "WST","TECH","ALGN","DPZ","PODD","TDY","ZBRA","MPWR","ENPH","SEDG",
-    "GNRC","PAYC","POOL","EPAM","FICO","MTCH","ETSY","PENN","NCLH","CCL",
-    "RCL","AAL","DAL","UAL","LUV","ALK","JBLU","MGM","WYNN","LVS","CZR",
-    "MAR","HLT","H","CHH","IHG","NDAQ","ICE","CME","CBOE","MKTX","MO",
-    "PM","BTI","RAI","LO","VZ","T","TMUS","AMX","LUMN","CTL","WBA","CVS",
-    "CI","HUM","CNC","MOH","HIG","MET","PRU","AFL","ALL","AIG","CINF",
-    "GL","L","PFG","RLI","THG","UNM","WRB","SFG","CNO","FG","NWLI","SPB",
+# Lista completa S&P 500 hardcoded (actualizada 2025) como fuente primaria confiable.
+# Wikipedia se usa como fuente secundaria para actualizaciones. 
+SP500_TICKERS = [
+    "MMM","AOS","ABT","ABBV","ACN","ADBE","AMD","AES","AFL","A","APD","ABNB",
+    "AKAM","ALB","ARE","ALGN","ALLE","LNT","ALL","GOOGL","GOOG","MO","AMZN",
+    "AMCR","AEE","AAL","AEP","AXP","AIG","AMT","AWK","AMP","AME","AMGN",
+    "APH","ADI","ANSS","AON","APA","AAPL","AMAT","APTV","ACGL","ADM","ANET",
+    "AJG","AIZ","T","ATO","ADSK","ADP","AZO","AVB","AVY","AXON","BKR","BALL",
+    "BAC","BK","BBWI","BAX","BDX","BRK-B","BBY","TECH","BIIB","BLK","BX",
+    "BA","BKNG","BWA","BSX","BMY","AVGO","BR","BRO","BF-B","BLDR","BG","CDNS",
+    "CZR","CPT","CPB","COF","CAH","KMX","CCL","CARR","CTLT","CAT","CBOE","CBRE",
+    "CDW","CE","COR","CNC","CNX","CDAY","CF","CRL","SCHW","CHTR","CVX","CMG",
+    "CB","CHD","CI","CINF","CTAS","CSCO","C","CFG","CLX","CME","CMS","KO",
+    "CTSH","CL","CMCSA","CAG","COP","ED","STZ","CEG","COO","CPRT","GLW","CPAY",
+    "CTVA","CSGP","COST","CTRA","CRWD","CCI","CSX","CMI","CVS","DHR","DRI",
+    "DVA","DAY","DE","DAL","XRAY","DVN","DXCM","FANG","DLR","DFS","DG","DLTR",
+    "D","DPZ","DOV","DOW","DHI","DTE","DUK","DD","EMN","ETN","EBAY","ECL",
+    "EIX","EW","EA","ELV","LLY","EMR","ENPH","ETR","EOG","EPAM","EQT","EFX",
+    "EQIX","EQR","ESS","EL","ETSY","EG","EVRST","EXAS","EXPD","EXPE","EXR",
+    "XOM","FFIV","FDS","FICO","FAST","FRT","FDX","FIS","FITB","FSLR","FE",
+    "FI","FMC","F","FTIV","FOXA","FOX","BEN","FCX","GRMN","IT","GE","GEHC",
+    "GEV","GEN","GNRC","GD","GIS","GM","GPC","GILD","GS","HAL","HIG","HAS",
+    "HCA","DOC","HSIC","HSY","HES","HPE","HLT","HOLX","HD","HON","HRL","HST",
+    "HWM","HPQ","HUBB","HUM","HBAN","HII","IBM","IEX","IDXX","ITW","INCY",
+    "IR","PODD","INTC","ICE","IFF","IP","IPG","INTU","ISRG","IVZ","INVH",
+    "IQV","IRM","JBHT","JBL","JKHY","J","JNJ","JCI","JPM","JNPR","K","KVUE",
+    "KDP","KEY","KEYS","KMB","KIM","KMI","KLAC","KHC","KR","LHX","LH","LRCX",
+    "LW","LVS","LDOS","LEN","LIN","LYV","LKQ","LMT","L","LOW","LULU","LYB",
+    "MTB","MRO","MPC","MKTX","MAR","MMC","MLM","MAS","MA","MTCH","MKC","MCD",
+    "MCK","MDT","MRK","META","MET","MTD","MGM","MCHP","MU","MSFT","MAA","MRNA",
+    "MHK","MOH","TAP","MDLZ","MPWR","MNST","MCO","MS","MOS","MSI","MSCI",
+    "NDAQ","NTAP","NFLX","NEM","NWSA","NWS","NEE","NKE","NI","NDSN","NSC",
+    "NTRS","NOC","NCLH","NRG","NUE","NVDA","NVR","NXPI","ORLY","OXY","ODFL",
+    "OMC","ON","OKE","ORCL","OTIS","PCAR","PKG","PANW","PH","PAYX","PAYC",
+    "PYPL","PNR","PEP","PFE","PCG","PM","PSX","PNW","PNC","POOL","PPG","PPL",
+    "PFG","PG","PGR","PLD","PRU","PEG","PTC","PSA","PHM","QRVO","PWR","QCOM",
+    "DGX","RL","RJF","RTX","O","REG","REGN","RF","RSG","RMD","RVTY","ROK",
+    "ROL","ROP","ROST","RCL","SPGI","CRM","SBAC","SLB","STX","SRE","NOW",
+    "SHW","SPG","SWKS","SJM","SNA","SOLV","SO","LUV","SWK","SBUX","STT","STLD",
+    "STE","SYK","SMCI","SYF","SNPS","SYY","TMUS","TROW","TTWO","TPR","TRGP",
+    "TGT","TEL","TDY","TFX","TER","TSLA","TXN","TXT","TMO","TJX","TSCO","TT",
+    "TDG","TRV","TRMB","TFC","TYL","TSN","USB","UBER","UDR","ULTA","UNP","UAL",
+    "UPS","URI","UNH","UHS","VLO","VTR","VLTO","VRSN","VRSK","VZ","VRTX","VTRS",
+    "VICI","V","VST","VMC","WRB","GWW","WAB","WBA","WMT","DIS","WBD","WM",
+    "WAT","WEC","WFC","WELL","WST","WDC","WY","WHR","WMB","WTW","WYNN","XEL",
+    "XYL","YUM","ZBRA","ZBH","ZTS",
 ]
 
-@st.cache_data(ttl=86400)   # caché 24h: lista no cambia a diario
+@st.cache_data(ttl=86400)
 def get_sp500_tickers() -> list[str]:
-    """Obtiene los tickers del S&P 500 desde Wikipedia con fallback."""
+    """
+    Devuelve la lista S&P 500 completa (~503 tickers).
+    Fuente primaria: lista hardcoded actualizada (siempre disponible, sin red).
+    Fuente secundaria: Wikipedia (para incorporar cambios recientes al índice).
+    Fusiona ambas y devuelve el conjunto más completo.
+    """
+    # Base siempre disponible
+    base = list(dict.fromkeys(SP500_TICKERS))   # deduplicar preservando orden
+
+    # Intentar enriquecer desde Wikipedia
     try:
         tables = pd.read_html(
             "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", header=0
         )
-        df = tables[0]
-        # El símbolo puede estar en columna 'Symbol' o 'Ticker symbol'
+        df  = tables[0]
         col = "Symbol" if "Symbol" in df.columns else df.columns[0]
-        tickers = df[col].str.replace(".", "-", regex=False).tolist()
-        # Deduplicar y validar formato básico
-        seen, result = set(), []
-        for t in tickers:
+        wiki_raw = df[col].str.replace(".", "-", regex=False).tolist()
+
+        seen = set(base)
+        for t in wiki_raw:
             t = str(t).strip().upper()
+            # Regex permisiva: letras, números, guion — hasta 6 chars
             if t and t not in seen and re_module.match(r'^[A-Z][A-Z0-9\-]{0,5}$', t):
                 seen.add(t)
-                result.append(t)
-        logger.info(f"SP500 cargado desde Wikipedia: {len(result)} tickers")
-        return result
+                base.append(t)
+        logger.info(f"SP500: {len(base)} tickers (hardcoded + Wikipedia)")
     except Exception as e:
-        logger.warning(f"Wikipedia SP500 falló ({e}), usando fallback hardcoded")
-        seen, result = set(), []
-        for t in SP500_FALLBACK:
-            if t not in seen:
-                seen.add(t)
-                result.append(t)
-        return result
+        logger.warning(f"Wikipedia SP500 no disponible ({e}), usando sólo lista hardcoded")
+
+    return base
 
 # ==============================================================================
-# INICIALIZACIÓN SESSION STATE
+# SISTEMA DE CACHÉ JSON (resultados pre-calculados por job nocturno)
 # ==============================================================================
+
+CACHE_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "scan_cache.json")
+CACHE_MAX_AGE_H = 20   # horas máximas de validez del caché (el job corre cada 24h)
+
+def load_cached_scan() -> dict | None:
+    """
+    Carga los resultados del job nocturno si existen y son frescos.
+    Retorna None si no hay caché o está obsoleto.
+    """
+    try:
+        if not os.path.exists(CACHE_JSON_PATH):
+            return None
+        with open(CACHE_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        generated_at = datetime.fromisoformat(data.get("generated_at", "2000-01-01"))
+        age_hours = (datetime.utcnow() - generated_at).total_seconds() / 3600
+        if age_hours > CACHE_MAX_AGE_H:
+            logger.info(f"Caché JSON obsoleto ({age_hours:.1f}h > {CACHE_MAX_AGE_H}h)")
+            return None
+        logger.info(f"Caché JSON válido ({age_hours:.1f}h de antigüedad)")
+        return data
+    except Exception as e:
+        logger.warning(f"Error leyendo caché JSON: {e}")
+        return None
+
+
+def save_scan_to_cache(candidates: list, market_status: dict, sp500_count: int):
+    """
+    Guarda los resultados del scan en JSON para ser leídos por la app.
+    Llamado por el job nocturno (nightly_scan.py).
+    """
+    try:
+        os.makedirs(os.path.dirname(CACHE_JSON_PATH), exist_ok=True)
+        payload = {
+            "generated_at" : datetime.utcnow().isoformat(),
+            "sp500_count"  : sp500_count,
+            "candidates"   : candidates,
+            "market_status": {
+                "score" : market_status.get("score", 50),
+                "phase" : market_status.get("phase", "N/A"),
+                "color" : market_status.get("color", "#888888"),
+                "signals": market_status.get("signals", []),
+            },
+        }
+        with open(CACHE_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        logger.info(f"Caché JSON guardado: {len(candidates)} candidatos → {CACHE_JSON_PATH}")
+    except Exception as e:
+        logger.error(f"Error guardando caché JSON: {e}")
+
+
 
 def init_session_state():
     defaults = {
@@ -1478,17 +1558,47 @@ def render():
     with tab1:
         sp500_list = get_sp500_tickers()
 
-        st.markdown(f"""
-        <div class="terminal-box">
-            <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.3rem;">
-                ▸ UNIVERSO: S&P 500 COMPLETO — {len(sp500_list)} ACCIONES
-            </div>
-            <div style="font-family:'Courier New',monospace;color:#888;font-size:.85rem;margin-top:8px;">
-                Descarga batch optimizada • Pre-filtros automáticos • RS percentil real • Sin rate limits
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # ── Detectar caché nocturno ───────────────────────────────────────────
+        cached = load_cached_scan()
 
+        if cached:
+            gen_at    = datetime.fromisoformat(cached["generated_at"])
+            age_min   = int((datetime.utcnow() - gen_at).total_seconds() / 60)
+            age_str   = f"{age_min // 60}h {age_min % 60}m" if age_min >= 60 else f"{age_min}m"
+            cache_n   = len(cached.get("candidates", []))
+            cache_sp  = cached.get("sp500_count", len(sp500_list))
+            st.markdown(f"""
+            <div class="terminal-box" style="border-color:{hex_to_rgba(COLORS['primary'],.5)};">
+                <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.2rem;">
+                    ✅ JOB NOCTURNO DISPONIBLE — DATOS PRE-CALCULADOS
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#888;font-size:.85rem;margin-top:8px;">
+                    Generado: {gen_at.strftime('%Y-%m-%d %H:%M')} UTC &nbsp;|&nbsp;
+                    Antigüedad: {age_str} &nbsp;|&nbsp;
+                    Candidatos: <strong style="color:{COLORS['primary']};">{cache_n}</strong> &nbsp;|&nbsp;
+                    Universo escaneado: <strong style="color:{COLORS['primary']};">{cache_sp}</strong> acciones
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#666;font-size:.8rem;margin-top:6px;">
+                    Carga instantánea · Sin llamadas a Yahoo Finance · Job vía GitHub Actions (03:00 UTC)
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="terminal-box">
+                <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.3rem;">
+                    ▸ UNIVERSO: S&P 500 COMPLETO — {len(sp500_list)} ACCIONES
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#888;font-size:.85rem;margin-top:8px;">
+                    Descarga batch optimizada • Pre-filtros automáticos • RS percentil real • Sin rate limits
+                </div>
+                <div style="font-family:'Courier New',monospace;color:{COLORS['warning']};font-size:.8rem;margin-top:6px;">
+                    ⚠️ Job nocturno no disponible — el scan en vivo puede tardar 5-10 minutos
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Controles de filtro ───────────────────────────────────────────────
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         with col1:
             min_score = st.slider("Score Mínimo CAN SLIM", 0, 100, 60,
@@ -1502,8 +1612,26 @@ def render():
             require_stage2 = st.checkbox("Solo Stage 2 (8/8)", value=False,
                                           help="Solo acciones con Trend Template completo")
 
-        scan_button = st.button("🔍 ESCANEAR S&P 500 COMPLETO", use_container_width=True, type="primary")
+        # ── Botones de acción ─────────────────────────────────────────────────
+        btn_col1, btn_col2 = st.columns([3, 1])
+        with btn_col1:
+            if cached:
+                load_cache_btn = st.button(
+                    "⚡ CARGAR RESULTADOS DEL JOB NOCTURNO",
+                    use_container_width=True, type="primary"
+                )
+                scan_live_btn = False
+            else:
+                load_cache_btn = False
+                scan_live_btn = st.button(
+                    "🔍 ESCANEAR S&P 500 EN VIVO",
+                    use_container_width=True, type="primary"
+                )
+        with btn_col2:
+            force_live = st.button("🔄 Forzar Scan en Vivo", use_container_width=True,
+                                   help="Ignora el caché y escanea en tiempo real")
 
+        # ── Expanders informativos ────────────────────────────────────────────
         with st.expander("📊 VER CONDICIONES DE MERCADO"):
             st.plotly_chart(create_market_dashboard(market_status), use_container_width=True)
             st.markdown('<div class="phase-box"><strong>SEÑALES TÉCNICAS:</strong></div>',
@@ -1511,29 +1639,53 @@ def render():
             for sig in market_status['signals']:
                 st.markdown(f"- {sig}")
 
-        with st.expander("⚙️ CONFIGURACIÓN DE PRE-FILTROS"):
+        with st.expander("⚙️ CONFIGURACIÓN DE PRE-FILTROS (scan en vivo)"):
             c1, c2, c3 = st.columns(3)
-            with c1:
-                new_min_price = st.number_input("Precio mínimo ($)", 0.0, 500.0, float(MIN_PRICE))
-            with c2:
-                new_min_vol   = st.number_input("Volumen mín. (miles)", 100, 10000, int(MIN_AVG_VOLUME/1000))
-            with c3:
-                new_min_cap   = st.number_input("Market Cap mín. ($B)", 0.0, 50.0, float(MIN_MARKET_CAP_B))
-            st.markdown(f"""
-            <div class="phase-box" style="font-family:'Courier New',monospace;font-size:.85rem;color:#888;">
-                Los pre-filtros reducen el universo antes del análisis pesado,
-                acelerando el scan y evitando acciones de baja liquidez.
-            </div>""", unsafe_allow_html=True)
+            with c1: st.number_input("Precio mínimo ($)",     0.0,  500.0, float(MIN_PRICE))
+            with c2: st.number_input("Volumen mín. (miles)", 100,  10000, int(MIN_AVG_VOLUME/1000))
+            with c3: st.number_input("Market Cap mín. ($B)", 0.0,  50.0,  float(MIN_MARKET_CAP_B))
 
+        # ── Mostrar resultados guardados en session_state ─────────────────────
         display_saved_results()
 
-        if scan_button:
-            st.session_state.scan_candidates  = []
-            st.session_state.scan_timestamp   = None
+        # ── Acción: cargar caché nocturno ─────────────────────────────────────
+        if load_cache_btn and cached:
+            raw = cached.get("candidates", [])
+            # Aplicar filtros locales al caché (instantáneo, sin red)
+            filtered_cache = [
+                c for c in raw
+                if c.get("score", 0) >= min_score
+                and c.get("ibd_ratings", {}).get("composite", 0) >= min_composite
+                and (not require_stage2 or c.get("trend_template", {}).get("all_pass", False))
+            ][:max_results]
+
+            if filtered_cache:
+                st.session_state.scan_candidates  = filtered_cache
+                ts = datetime.fromisoformat(cached["generated_at"])
+                st.session_state.scan_timestamp   = f"{ts.strftime('%H:%M')} UTC (job nocturno)"
+                st.session_state.last_scan_params = {
+                    "min_score": min_score, "max_results": max_results,
+                    "min_composite": min_composite, "require_stage2": require_stage2,
+                }
+                st.rerun()
+            else:
+                st.markdown(f"""
+                <div class="risk-box">
+                    <div style="font-family:'VT323',monospace;color:{COLORS['warning']};font-size:1.2rem;">
+                        ⚠️ SIN CANDIDATOS CON ESTOS FILTROS
+                    </div>
+                    <p>El caché tiene {len(raw)} candidatos pero ninguno cumple los filtros actuales.
+                    Prueba reduciendo Score Mínimo o IBD Composite.</p>
+                </div>""", unsafe_allow_html=True)
+
+        # ── Acción: scan en vivo (botón principal o forzado) ──────────────────
+        if scan_live_btn or force_live:
+            st.session_state.scan_candidates = []
+            st.session_state.scan_timestamp  = None
 
             st.markdown(f"""
             <div class="highlight-quote">
-                INICIANDO SCAN — S&P 500 ({len(sp500_list)} ACCIONES)<br>
+                INICIANDO SCAN EN VIVO — S&P 500 ({len(sp500_list)} ACCIONES)<br>
                 <span style="font-size:.9rem;color:#888;">
                 Arquitectura batch: ~{len(sp500_list)//BATCH_SIZE + 1} lotes de {BATCH_SIZE} acciones
                 </span>
@@ -1548,10 +1700,10 @@ def render():
 
             if candidates:
                 st.session_state.scan_candidates  = candidates
-                st.session_state.scan_timestamp   = datetime.now().strftime('%H:%M:%S')
+                st.session_state.scan_timestamp   = datetime.now().strftime('%H:%M:%S') + " (en vivo)"
                 st.session_state.last_scan_params = {
-                    'min_score': min_score, 'max_results': max_results,
-                    'min_composite': min_composite, 'require_stage2': require_stage2,
+                    "min_score": min_score, "max_results": max_results,
+                    "min_composite": min_composite, "require_stage2": require_stage2,
                 }
                 st.rerun()
             else:

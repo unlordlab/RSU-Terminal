@@ -1,0 +1,44 @@
+2026-03-03 18:00:10,713 [INFO] ============================================================
+2026-03-03 18:00:10,713 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-03 18:00 UTC
+2026-03-03 18:00:10,843 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-03 18:00:10,844 [INFO] Universo: 480 tickers
+2026-03-03 18:00:10,844 [INFO] PASO 1/4 — Historico batch...
+2026-03-03 18:00:10,846 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-03-03 18:00:13,888 [INFO]   Batch 1 — 50 descargados
+2026-03-03 18:00:16,391 [INFO]   Batch 2 — 100 descargados
+2026-03-03 18:00:19,203 [INFO]   Batch 3 — 150 descargados
+2026-03-03 18:00:22,480 [INFO]   Batch 4 — 200 descargados
+2026-03-03 18:00:27,270 [INFO]   Batch 5 — 250 descargados
+2026-03-03 18:00:29,971 [INFO]   Batch 6 — 300 descargados
+2026-03-03 18:00:33,225 [INFO]   Batch 7 — 350 descargados
+2026-03-03 18:00:37,762 [INFO]   Batch 8 — 400 descargados
+2026-03-03 18:00:41,342 [INFO]   Batch 9 — 450 descargados
+2026-03-03 18:00:42,967 [INFO]   Batch 10 — 480 descargados
+2026-03-03 18:00:42,968 [INFO] PASO 2/4 — Info fundamental...
+2026-03-03 18:01:11,847 [INFO]   Info: 50/480
+2026-03-03 18:01:43,896 [INFO]   Info: 100/480
+2026-03-03 18:02:14,624 [INFO]   Info: 150/480
+2026-03-03 18:02:46,369 [INFO]   Info: 200/480
+2026-03-03 18:03:16,601 [INFO]   Info: 250/480
+2026-03-03 18:03:48,134 [INFO]   Info: 300/480
+2026-03-03 18:04:19,302 [INFO]   Info: 350/480
+2026-03-03 18:04:51,009 [INFO]   Info: 400/480
+2026-03-03 18:05:22,122 [INFO]   Info: 450/480
+2026-03-03 18:05:42,027 [INFO]   480 tickers
+2026-03-03 18:05:42,027 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-03 18:05:42,139 [INFO]   468 tickers
+2026-03-03 18:05:42,139 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-03 18:05:42,850 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-03-03 18:05:42,850 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-03 18:05:43,012 [INFO]   50/468 — candidatos: 8
+2026-03-03 18:05:43,170 [INFO]   100/468 — candidatos: 12
+2026-03-03 18:05:43,329 [INFO]   150/468 — candidatos: 19
+2026-03-03 18:05:43,489 [INFO]   200/468 — candidatos: 26
+2026-03-03 18:05:43,649 [INFO]   250/468 — candidatos: 36
+2026-03-03 18:05:43,809 [INFO]   300/468 — candidatos: 45
+2026-03-03 18:05:43,969 [INFO]   350/468 — candidatos: 53
+2026-03-03 18:05:44,128 [INFO]   400/468 — candidatos: 60
+2026-03-03 18:05:44,288 [INFO]   450/468 — candidatos: 66
+2026-03-03 18:05:44,346 [INFO] Completo: 67 candidatos
+2026-03-03 18:05:44,381 [INFO] Guardado: data/scan_cache.json
+2026-03-03 18:05:44,381 [INFO] Tiempo: 5.6 min — OK

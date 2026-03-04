@@ -293,10 +293,14 @@ def download_batch_history(tickers_tuple: tuple, period: str = "1y") -> dict[str
             t = tickers[0]
             if not raw.empty:
                 # yfinance ≥0.2.x devuelve MultiIndex columns incluso con 1 ticker
-                # Ej: ('Close', 'META'), ('Open', 'META') → aplanar a columnas simples
+                # Ej: ('Close', 'VLO'), ('Open', 'VLO') → aplanar a columnas simples
                 if isinstance(raw.columns, pd.MultiIndex):
-                    raw.columns = raw.columns.get_level_values(0)
-                result[t] = raw.dropna(how='all').copy()
+                    # Usar nivel 0 (OHLCV) y descartar nivel 1 (ticker)
+                    raw = raw.copy()
+                    raw.columns = [col[0] for col in raw.columns]
+                df = raw.dropna(how='all').copy()
+                if len(df) > 30:   # mínimo de filas — igual que el path multi-ticker
+                    result[t] = df
         else:
             for t in tickers:
                 try:
@@ -782,7 +786,11 @@ def calculate_can_slim_metrics(
         # Seguridad: aplanar MultiIndex si llegara hasta aquí (yfinance ≥0.2)
         if isinstance(hist.columns, pd.MultiIndex):
             hist = hist.copy()
-            hist.columns = hist.columns.get_level_values(0)
+            hist.columns = [col[0] for col in hist.columns]
+
+        # Seguridad: eliminar columnas duplicadas (puede ocurrir tras flatten)
+        if hist.columns.duplicated().any():
+            hist = hist.loc[:, ~hist.columns.duplicated()]
 
         # Extrae escalar seguro — evita que .iloc[-1] devuelva Series
         def _s(val):
@@ -814,9 +822,12 @@ def calculate_can_slim_metrics(
 
         # IBD Ratings
         eps_rating = ibd_calc.calculate_eps_rating(eps_g)
-        perf_12m   = (_s(hist['Close'].iloc[-252]) and (price / _s(hist['Close'].iloc[-252]) - 1) * 100) \
-                     if len(hist) >= 252 else \
-                     (price / _s(hist['Close'].iloc[0]) - 1) * 100
+        if len(hist) >= 252:
+            price_252 = _s(hist['Close'].iloc[-252])
+            perf_12m  = (price / price_252 - 1) * 100 if price_252 > 0 else 0.0
+        else:
+            price_0  = _s(hist['Close'].iloc[0])
+            perf_12m = (price / price_0 - 1) * 100 if price_0 > 0 else 0.0
         composite  = ibd_calc.calculate_composite_rating(rs_rating, eps_rating, rev_g, roe, perf_12m)
         smr        = ibd_calc.calculate_smr_rating(rev_g, roe, margins)
         acc_dis    = ibd_calc.calculate_acc_dis_rating(hist)
@@ -862,6 +873,13 @@ def calculate_can_slim_metrics(
                          ('D', 0)   # <60 = UPTREND UNDER PRESSURE o peor → 0 pts
         score += m_sc
 
+        # Normalizar score a escala 0-100 real según máximo posible con mercado actual
+        # Max absoluto = 100 (20+15+15+10+15+10+15). Sin M = 85.
+        # Escalar para que el gauge siempre refleje la calidad relativa al mercado:
+        # score_display = round(score / 85 * 100) si m_sc==0, sino score (ya es /100)
+        max_possible = 85 + m_sc  # 85 sin M, 90/95/100 con M parcial/total
+        score_display = round(min(100, score / max_possible * 100)) if max_possible > 0 else score
+
         # ML
         volatility    = hist['Close'].pct_change().std() * np.sqrt(252) * 100
         if isinstance(volatility, pd.Series): volatility = float(volatility.iloc[0])
@@ -880,7 +898,7 @@ def calculate_can_slim_metrics(
             'industry'    : info.get('industry', 'N/A'),
             'market_cap'  : market_cap,
             'price'       : price,
-            'score'       : score,
+            'score'       : score_display,
             'ml_probability': ml_prob,
             'grades'      : {'C': c_grade, 'A': a_grade, 'N': n_grade,
                              'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade},
@@ -1342,7 +1360,7 @@ def display_saved_results():
             'ML Prob'   : f"{c['ml_probability']:.0%}",
             'C':c['grades']['C'],'A':c['grades']['A'],'N':c['grades']['N'],
             'S':c['grades']['S'],'L':c['grades']['L'],'I':c['grades']['I'],'M':c['grades']['M'],
-            'EPS G%'    : f"{c['metrics']['earnings_growth']:.1f}%",
+            'EPS G%'    : f"{min(999.0, c['metrics']['earnings_growth']):.1f}%",
             'Del High'  : f"{c['metrics']['pct_from_high']:.1f}%",
             'VolRatio'  : f"{c['metrics']['volume_ratio']:.2f}x",
             'MktCap$B'  : f"${c['market_cap']:.1f}B",
@@ -1860,11 +1878,42 @@ def render():
 
                     # RS aproximado vs SPY para análisis individual
                     if hist_single is not None and not spy_hist.empty:
-                        rs_univ = compute_rs_scores_universe(
-                            [ticker_input],
-                            {ticker_input: hist_single},
-                            spy_hist
-                        )
+                        # RS individual: calcular retorno relativo vs SPY y mapear a escala 1-99
+                        # No usar compute_rs_scores_universe con 1 ticker (daría percentil trivial)
+                        try:
+                            close = hist_single['Close'].copy()
+                            if hasattr(close.index, 'tz') and close.index.tz is not None:
+                                close.index = close.index.tz_localize(None)
+                            spy_close = spy_hist['Close'].copy()
+                            if hasattr(spy_close.index, 'tz') and spy_close.index.tz is not None:
+                                spy_close.index = spy_close.index.tz_localize(None)
+                            merged = pd.merge(close.rename('stock'), spy_close.rename('spy'),
+                                              left_index=True, right_index=True, how='inner')
+                            if len(merged) >= 100:
+                                days_per_q = 63
+                                weights = [0.40, 0.20, 0.20, 0.20]
+                                period_scores = []
+                                for i in range(4):
+                                    end   = len(merged) - 1 if i == 0 else len(merged) - 1 - i * days_per_q
+                                    start = end - days_per_q
+                                    if start < 0:
+                                        period_scores.append(0.0)
+                                        continue
+                                    s_ret = merged['stock'].iloc[end] / merged['stock'].iloc[start] - 1
+                                    m_ret = merged['spy'].iloc[end]   / merged['spy'].iloc[start]   - 1
+                                    rel   = (1 + s_ret) / (1 + m_ret) - 1 if abs(m_ret) > 0.001 else s_ret
+                                    period_scores.append(rel)
+                                weighted = sum(w * s for w, s in zip(weights, period_scores))
+                                # Mapear retorno relativo a escala 1-99 usando curva sigmoidea simple
+                                # weighted > 0.30 → ~99, 0 → ~50, < -0.30 → ~1
+                                import math
+                                rs_val = round(50 + weighted * 100)
+                                rs_val = max(1, min(99, rs_val))
+                                rs_univ = {ticker_input: rs_val}
+                            else:
+                                rs_univ = {ticker_input: 50}
+                        except Exception:
+                            rs_univ = {ticker_input: 50}
 
                     result = calculate_can_slim_metrics(
                         ticker=ticker_input,
@@ -2101,7 +2150,10 @@ def render():
                     else:
                         st.error(f"No se pudo analizar {pred_ticker}")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    import traceback
+                    st.error(f"Error inesperado analizando {ticker_input}: {e}")
+                    with st.expander("🔍 Detalle del error (para debug)"):
+                        st.code(traceback.format_exc())
 
     # TAB 5 — BACKTESTING
     # ══════════════════════════════════════════════════════════════════════════

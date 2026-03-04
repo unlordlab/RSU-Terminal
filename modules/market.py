@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -1214,7 +1215,7 @@ def get_earnings_calendar():
                         continue
                 earnings_list.sort(key=lambda x: x['full_date'])
                 if len(earnings_list) >= 3:
-                    return earnings_list[:10]
+                    return earnings_list[:20]
         except Exception as e:
             set_api_health('AlphaVantage', False)
 
@@ -1257,7 +1258,7 @@ def get_earnings_calendar():
         
         earnings_list.sort(key=lambda x: x['full_date'])
         if earnings_list:
-            return earnings_list[:10]
+            return earnings_list[:20]
     except:
         pass
 
@@ -2913,32 +2914,33 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — selectbox nativo Streamlit dentro de with c2:
+    # SECTOR ROTATION — module-container identico a los demas modulos
     with c2:
         _tf_opts   = ['1D', '3D', '1W', '1M']
-        _tf_labels = {'1D': '1 Día', '3D': '3 Días', '1W': '1 Semana', '1M': '1 Mes'}
+        _tf_labels = {'1D': '1D', '3D': '3D', '1W': '1W', '1M': '1M'}
         _cur_tf    = st.session_state.get('sector_tf', '1W')
         _tf_idx    = _tf_opts.index(_cur_tf) if _cur_tf in _tf_opts else 2
 
-        st.markdown(
-            '<div style="border:1px solid #00ffad22;border-radius:10px 10px 0 0;'
-            'background:#0c0e12;padding:8px 14px;">'
-            '<span style="color:#00ffad;font-size:19px;text-transform:uppercase;'
-            'letter-spacing:2px;font-family:VT323,monospace;'
-            'text-shadow:0 0 10px #00ffad44;">Rotación Sectorial</span>'
-            '</div>',
-            unsafe_allow_html=True
-        )
+        # CSS: selectbox minimalista en el header, identico a los otros modulos
         st.markdown("""<style>
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']{margin:0!important;padding:0!important;}
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']{
+            position:absolute;top:6px;right:10px;width:70px;
+            margin:0!important;padding:0!important;z-index:10;
+        }
         div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>label{display:none!important;}
         div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>div>div{
-            background:#0c0e12!important;border:none!important;
-            border-bottom:1px solid #00ffad22!important;border-radius:0!important;
-            color:#00ffad!important;font-family:VT323,monospace!important;
-            font-size:14px!important;letter-spacing:1px!important;
-            padding:4px 14px!important;min-height:0!important;}
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel'] svg{fill:#00ffad88!important;}
+            background:#1a1e26!important;border:1px solid #00ffad33!important;
+            border-radius:4px!important;color:#00ffad!important;
+            font-family:VT323,monospace!important;font-size:13px!important;
+            letter-spacing:1px!important;padding:1px 6px!important;
+            min-height:0!important;height:24px!important;line-height:22px!important;
+        }
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>div>div>div{
+            padding:0!important;min-height:0!important;
+        }
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel'] svg{
+            fill:#00ffad66!important;width:12px!important;height:12px!important;
+        }
         </style>""", unsafe_allow_html=True)
 
         sel_tf = st.selectbox(
@@ -2959,24 +2961,23 @@ def render():
             elif _ch >= -0.5: _bg, _tc = '#f2364510', '#f23645'
             elif _ch >= -2.0: _bg, _tc = '#f2364518', '#f23645'
             else:             _bg, _tc = '#f2364522', '#f23645'
-            _s_html += ('<div style="background:' + _bg + ';border:1px solid #1a1e26;'
-                'border-radius:6px;padding:10px 4px;text-align:center;">'
-                '<div style="color:#555;font-size:9px;font-weight:bold;margin-bottom:3px;">' + _c + '</div>'
-                '<div style="color:white;font-size:11px;font-weight:600;margin-bottom:5px;line-height:1.2;">' + _n + '</div>'
+            _s_html += ('<div class="sector-item" style="background:' + _bg + ';">'
+                '<div class="sector-code">' + _c + '</div>'
+                '<div style="color:white;font-size:11px;font-weight:600;margin-bottom:4px;line-height:1.2;">' + _n + '</div>'
                 '<div style="font-size:12px;font-weight:bold;color:' + _tc + ';">' + f'{_ch:+.2f}%' + '</div>'
                 '</div>')
 
-        _ts = get_timestamp()
         st.markdown(
-            '<div style="border:1px solid #00ffad22;border-top:0;border-radius:0 0 10px 10px;'
-            'background:#11141a;padding:8px;">'
-            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
-            + _s_html +
-            '</div>'
-            '<div style="text-align:right;color:#444;font-size:9px;padding:6px 4px 4px;'
-            'font-family:Courier New,monospace;">'
-            'Actualizado: ' + _ts + ' · ' + current_tf + '</div>'
-            '</div>',
+            f'<div class="module-container" style="position:relative;">'
+            f'<div class="module-header">'
+            f'<div class="module-title">Rotación Sectorial</div>'
+            f'<div style="width:75px;"></div>'
+            f'</div>'
+            f'<div class="module-content">'
+            f'<div class="sector-grid">' + _s_html + '</div>'
+            f'</div>'
+            f'<div class="update-timestamp">Actualizado: {get_timestamp()} · {current_tf}</div>'
+            f'</div>',
             unsafe_allow_html=True
         )
 
@@ -4074,13 +4075,31 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         </body></html>'''
         components.html(cs_full_html, height=420, scrolling=False)
 
+    # ── FILA 7 — Módulos en construcción ──────────────────────────────────────
+    st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+    f7c1, f7c2, f7c3 = st.columns(3)
+
+    _placeholder_html = (
+        '<div class="module-container" style="display:flex;flex-direction:column;'
+        'align-items:center;justify-content:center;opacity:0.35;">'
+        '<div style="color:#00ffad;font-size:32px;margin-bottom:8px;">&#9866;</div>'
+        '<div style="color:#00ffad;font-family:VT323,monospace;font-size:16px;'
+        'letter-spacing:2px;text-transform:uppercase;">Próximamente</div>'
+        '<div style="color:#444;font-size:10px;margin-top:6px;font-family:Courier New,monospace;">'
+        'Módulo en construcción</div>'
+        '</div>'
+    )
+
+    with f7c1:
+        st.markdown(_placeholder_html, unsafe_allow_html=True)
+    with f7c2:
+        st.markdown(_placeholder_html, unsafe_allow_html=True)
+    with f7c3:
+        st.markdown(_placeholder_html, unsafe_allow_html=True)
+
+
 if __name__ == "__main__":
     render()
-
-
-
-
-
 
 
 

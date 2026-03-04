@@ -171,25 +171,52 @@ def get_sp500_tickers() -> list[str]:
 # SISTEMA DE CACHÉ JSON (resultados pre-calculados por job nocturno)
 # ==============================================================================
 
-CACHE_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "scan_cache.json")
-CACHE_MAX_AGE_H = 20   # horas máximas de validez del caché (el job corre cada 24h)
+# FIX RUTAS: Streamlit Cloud usa CWD = raíz del repo (diferente a __file__).
+# Buscamos en todas las ubicaciones posibles en orden de probabilidad.
+# NO usar constante global — recalcular en cada llamada para mayor robustez.
+
+CACHE_MAX_AGE_H = 20   # horas máximas de validez del caché
+
+def _find_cache_path() -> str:
+    """
+    Busca scan_cache.json en múltiples rutas posibles.
+    Streamlit Cloud pone CWD = raíz del repo; __file__ puede apuntar a otra parte.
+    """
+    candidates = [
+        os.path.join(os.getcwd(), "data", "scan_cache.json"),                          # CWD/data/ — Streamlit Cloud
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "scan_cache.json"),  # junto al .py
+        "data/scan_cache.json",                                                          # relativa directa
+        os.path.join(os.path.expanduser("~"), "data", "scan_cache.json"),               # home dir
+        "scan_cache.json",                                                               # raíz sin carpeta
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            logger.info(f"scan_cache.json encontrado en: {p}")
+            return p
+    # Si no existe en ningún lado, devolver la preferida (CWD) para que save funcione
+    preferred = os.path.join(os.getcwd(), "data", "scan_cache.json")
+    logger.warning(f"scan_cache.json no encontrado. Rutas buscadas: {candidates}")
+    return preferred
+
 
 def load_cached_scan() -> dict | None:
     """
     Carga los resultados del job nocturno si existen y son frescos.
     Retorna None si no hay caché o está obsoleto.
+    FIX v4.0.2: recalcula la ruta en cada llamada para Streamlit Cloud.
     """
     try:
-        if not os.path.exists(CACHE_JSON_PATH):
+        path = _find_cache_path()
+        if not os.path.exists(path):
             return None
-        with open(CACHE_JSON_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         generated_at = datetime.fromisoformat(data.get("generated_at", "2000-01-01"))
         age_hours = (datetime.utcnow() - generated_at).total_seconds() / 3600
         if age_hours > CACHE_MAX_AGE_H:
             logger.info(f"Caché JSON obsoleto ({age_hours:.1f}h > {CACHE_MAX_AGE_H}h)")
             return None
-        logger.info(f"Caché JSON válido ({age_hours:.1f}h de antigüedad)")
+        logger.info(f"Caché JSON válido ({age_hours:.1f}h de antigüedad) — {path}")
         return data
     except Exception as e:
         logger.warning(f"Error leyendo caché JSON: {e}")
@@ -202,7 +229,8 @@ def save_scan_to_cache(candidates: list, market_status: dict, sp500_count: int):
     Llamado por el job nocturno (nightly_scan.py).
     """
     try:
-        os.makedirs(os.path.dirname(CACHE_JSON_PATH), exist_ok=True)
+        save_path = _find_cache_path()
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         payload = {
             "generated_at" : datetime.utcnow().isoformat(),
             "sp500_count"  : sp500_count,
@@ -214,9 +242,9 @@ def save_scan_to_cache(candidates: list, market_status: dict, sp500_count: int):
                 "signals": market_status.get("signals", []),
             },
         }
-        with open(CACHE_JSON_PATH, "w", encoding="utf-8") as f:
+        with open(save_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-        logger.info(f"Caché JSON guardado: {len(candidates)} candidatos → {CACHE_JSON_PATH}")
+        logger.info(f"Caché JSON guardado: {len(candidates)} candidatos → {save_path}")
     except Exception as e:
         logger.error(f"Error guardando caché JSON: {e}")
 

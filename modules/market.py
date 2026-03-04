@@ -2354,56 +2354,47 @@ def render():
 
     @st.cache_data(ttl=21600, show_spinner=False)
     @st.cache_data(ttl=21600, show_spinner=False)
-    @st.cache_data(ttl=21600, show_spinner=False)
     def _cached_briefing(day_key: str, prompt: str) -> str:
-        """
-        Gemini 2.5-flash con Google Search grounding OBLIGATORIO.
-        Grounding = busqueda web real en cada llamada → sin alucinaciones.
-        Fallback si falla grounding: 2.5-flash sin grounding + aviso.
-        """
-        api_key = st.secrets.get('GEMINI_API_KEY', None)
+        api_key = st.secrets.get("GEMINI_API_KEY", None)
         if not api_key:
-            return '⚠ Configura GEMINI_API_KEY en st.secrets.'
+            return "Configura GEMINI_API_KEY en st.secrets."
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            from google.generativeai.types import Tool, GenerateContentConfig
-            # Intento 1: grounding obligatorio con Google Search
-            try:
-                _m  = genai.GenerativeModel('gemini-2.5-flash')
-                _t  = Tool(google_search=genai.protos.GoogleSearch())
-                _r  = _m.generate_content(
-                    prompt,
-                    tools=[_t],
-                    generation_config=GenerateContentConfig(temperature=0.1),
-                )
-                _txt = (_r.text or '').strip()
-                if _txt:
-                    return _txt
-            except Exception:
-                pass
-            # Intento 2: 2.5-flash sin grounding (con aviso)
-            try:
-                _m  = genai.GenerativeModel('gemini-2.5-flash')
-                _r  = _m.generate_content(
-                    prompt,
-                    generation_config=GenerateContentConfig(temperature=0.1),
-                )
-                _txt = (_r.text or '').strip()
-                if _txt:
-                    return _txt + '\n\n⚠ _Sin Google Search grounding — verifica los datos._'
-            except Exception:
-                pass
-            # Intento 3: 2.0-flash como ultimo recurso
-            _m  = genai.GenerativeModel('gemini-2.0-flash')
-            _r  = _m.generate_content(prompt)
-            _txt = (_r.text or '').strip()
-            return (_txt + '\n\n_(gemini-2.0-flash · sin grounding)_') if _txt else '⚠ Sin respuesta.'
+            from google import genai as _genai
+            from google.genai import types as _gtypes
+            _client = _genai.Client(api_key=api_key)
+            _attempts = [
+                ("gemini-2.5-flash-preview-04-17", True),
+                ("gemini-2.5-flash-preview-04-17", False),
+                ("gemini-2.0-flash", False),
+            ]
+            for _mid, _gr in _attempts:
+                try:
+                    if _gr:
+                        _cfg = _gtypes.GenerateContentConfig(
+                            temperature=0.1, max_output_tokens=1000,
+                            tools=[_gtypes.Tool(google_search=_gtypes.GoogleSearch())],
+                        )
+                    else:
+                        _cfg = _gtypes.GenerateContentConfig(
+                            temperature=0.1, max_output_tokens=1000,
+                        )
+                    _r = _client.models.generate_content(
+                        model=_mid, contents=prompt, config=_cfg
+                    )
+                    _txt = (_r.text or "").strip()
+                    if _txt:
+                        if not _gr:
+                            _txt = _txt + chr(10) + chr(10) + "_(sin grounding)_"
+                        return _txt
+                except Exception:
+                    continue
         except Exception as e:
             err = str(e)
-            if '429' in err or 'quota' in err.lower():
-                return '⏳ Cuota de API alcanzada. Reintenta en ~60s.'
-            return f'⚠ Error: {err[:300]}'
+            if "429" in err or "quota" in err.lower():
+                return "Cuota de API alcanzada. Reintenta en ~60s."
+            return "Error: " + err[:300]
+
+            return "Error: " + err[:300]
 
     def _load_supabase_briefing() -> str:
         """
@@ -4085,6 +4076,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
+
 
 
 

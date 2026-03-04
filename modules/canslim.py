@@ -338,6 +338,29 @@ def download_batch_info(tickers_tuple: tuple) -> dict[str, dict]:
 
 
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def get_single_ticker_info(ticker: str) -> dict:
+    """
+    Obtiene el .info de un ticker individual con retry + backoff.
+    Cacheado 1h — si el usuario vuelve a analizar el mismo ticker no hace nueva llamada HTTP.
+    """
+    last_err = None
+    for attempt in range(3):
+        try:
+            if attempt > 0:
+                wait = 15 * attempt + random.uniform(1, 5)
+                logger.info(f"Retry {attempt}/2 para {ticker} — esperando {wait:.1f}s")
+                time.sleep(wait)
+            info = yf.Ticker(ticker).info
+            if info and len(info) > 5:
+                return info
+        except Exception as e:
+            last_err = e
+            logger.warning(f"get_single_ticker_info {ticker} intento {attempt+1}: {e}")
+    logger.error(f"No se pudo obtener info de {ticker} tras 3 intentos: {last_err}")
+    return {}  # dict vacío — calculate_can_slim_metrics maneja fundamentales en 0
+
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
 def get_spy_history() -> pd.DataFrame:
     """SPY histórico con caché de 1h."""
     try:
@@ -1816,9 +1839,9 @@ def render():
         if st.button("ANALIZAR", type="primary"):
             with st.spinner(f"Descargando datos de {ticker_input}..."):
                 try:
-                    # Descarga individual para análisis bajo demanda
                     hist_single = download_batch_history((ticker_input,), period="1y").get(ticker_input)
-                    info_single = yf.Ticker(ticker_input).info
+                    # CACHE + RETRY: evita YFRateLimitError en análisis individual
+                    info_single = get_single_ticker_info(ticker_input)
                     spy_hist    = get_spy_history()
                     rs_univ     = {ticker_input: 50}  # RS puntual (no universo completo)
 
@@ -2041,7 +2064,7 @@ def render():
             with st.spinner(f"Analizando {pred_ticker}..."):
                 try:
                     h = download_batch_history((pred_ticker,), period="1y").get(pred_ticker)
-                    i = yf.Ticker(pred_ticker).info
+                    i = get_single_ticker_info(pred_ticker)
                     spy = get_spy_history()
                     rs  = compute_rs_scores_universe([pred_ticker], {pred_ticker: h}, spy) if h is not None else {pred_ticker: 50}
                     res = calculate_can_slim_metrics(
@@ -2176,7 +2199,7 @@ if FASTAPI_AVAILABLE:
     @app.post("/analyze")
     async def analyze(req: TickerRequest):
         h    = download_batch_history((req.ticker,), "1y").get(req.ticker)
-        info = yf.Ticker(req.ticker).info
+        info = get_single_ticker_info(req.ticker)
         spy  = get_spy_history()
         rs   = compute_rs_scores_universe([req.ticker], {req.ticker: h}, spy) if h is not None else {req.ticker: 50}
         ms   = MarketAnalyzer().calculate_market_score()

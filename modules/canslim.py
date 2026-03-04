@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - Versión con Panel de Ratings IBD + Trend Template Minervini
@@ -955,6 +956,15 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
         earnings_growth = info.get('earningsGrowth', 0) * 100 if info.get('earningsGrowth') else 0
         revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
         eps_growth = info.get('earningsQuarterlyGrowth', 0) * 100 if info.get('earningsQuarterlyGrowth') else 0
+
+        # SANITIZE: Yahoo Finance a veces devuelve valores absurdos (>10000%)
+        # cuando el año anterior tuvo pérdidas y el actual ganancias (base effect).
+        # Ej: PSX Q4 2022 tuvo pérdidas → cualquier ganancia da % infinito.
+        # Capamos en 999% para que no distorsione el score ni la visualización.
+        MAX_GROWTH = 999.0
+        earnings_growth = max(-100.0, min(MAX_GROWTH, earnings_growth))
+        revenue_growth  = max(-100.0, min(MAX_GROWTH, revenue_growth))
+        eps_growth      = max(-100.0, min(MAX_GROWTH, eps_growth))
         roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
         profit_margins = info.get('profitMargins', 0)
         inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
@@ -1219,65 +1229,58 @@ def create_score_gauge(score, title="CAN SLIM Score"):
     return fig
 
 def create_market_dashboard(market_data):
-    """Crea dashboard de condiciones de mercado"""
+    """
+    Panel simplificado: SPY con precio, SMA50, SMA200.
+    Un solo gráfico claro — lo que importa es si SPY está sobre sus medias.
+    """
     if not market_data or 'data' not in market_data:
         return go.Figure()
-    
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('S&P 500 Trend', 'NASDAQ 100', 'Russell 2000', 'VIX Volatility'),
-        vertical_spacing=0.15,
-        horizontal_spacing=0.1
-    )
-    
-    indices = ['SPY', 'QQQ', 'IWM', 'VIX']
-    colors = [COLORS['primary'], '#2962FF', '#00BCD4', COLORS['danger']]
-    
-    for idx, (ticker, color) in enumerate(zip(indices, colors)):
-        row = idx // 2 + 1
-        col = idx % 2 + 1
-        
-        if ticker in market_data['data']:
-            data = market_data['data'][ticker]['data']
-            fig.add_trace(
-                go.Scatter(
-                    x=data.index,
-                    y=data['Close'],
-                    name=ticker,
-                    line=dict(color=color, width=2),
-                    fill='tozeroy',
-                    fillcolor=hex_to_rgba(color, 0.1)
-                ),
-                row=row, col=col
-            )
-            
-            if len(data) >= 50:
-                sma50 = data['Close'].rolling(50).mean()
-                fig.add_trace(
-                    go.Scatter(
-                        x=data.index,
-                        y=sma50,
-                        name=f'{ticker} SMA50',
-                        line=dict(color=color, width=1, dash='dash')
-                    ),
-                    row=row, col=col
-                )
-    
+
+    score   = market_data.get('score', 50)
+    phase   = market_data.get('phase', 'N/A')
+    color   = market_data.get('color', '#888888')
+    signals = market_data.get('signals', [])
+    fig     = go.Figure()
+
+    if 'SPY' in market_data['data']:
+        spy = market_data['data']['SPY']['data']
+        cl  = spy['Close']
+        idx = spy.index
+        # Flatten MultiIndex if needed
+        if isinstance(cl, pd.DataFrame):
+            cl = cl.iloc[:, 0]
+
+        sma200 = cl.rolling(200).mean()
+        sma50  = cl.rolling(50).mean()
+
+        fig.add_trace(go.Scatter(x=idx, y=sma200, name='SMA 200',
+                                  line=dict(color='#f23645', width=1.5, dash='dash')))
+        fig.add_trace(go.Scatter(x=idx, y=sma50, name='SMA 50',
+                                  line=dict(color='#ff9800', width=1.5, dash='dot')))
+        fig.add_trace(go.Scatter(x=idx, y=cl, name='SPY',
+                                  line=dict(color=COLORS['primary'], width=2.5)))
+
+    signal_text = '  ·  '.join(signals[:3]) if signals else 'Sin señales'
     fig.update_layout(
-        paper_bgcolor=COLORS['bg_dark'],
-        plot_bgcolor=COLORS['bg_dark'],
-        font=dict(color='white'),
-        showlegend=False,
-        height=600,
         title=dict(
-            text=f"Market Direction Score: {market_data['score']}/100 - {market_data['phase']}",
-            font=dict(size=16, color=market_data['color'])
-        )
+            text=f"S&P 500 (SPY)  ·  Market Score: <b>{score}/100</b>  ·  {phase}",
+            font=dict(family='VT323, monospace', size=17, color=color), x=0.5
+        ),
+        paper_bgcolor=COLORS['bg_dark'], plot_bgcolor=COLORS['bg_dark'],
+        font=dict(color='#888', family='Courier New, monospace', size=11),
+        height=300, margin=dict(l=50, r=20, t=50, b=40),
+        xaxis=dict(gridcolor=COLORS['bg_card'], showgrid=True, zeroline=False, color='#666'),
+        yaxis=dict(gridcolor=COLORS['bg_card'], showgrid=True, zeroline=False,
+                   tickprefix='$', color='#666'),
+        legend=dict(orientation='h', yanchor='bottom', y=1.02,
+                    xanchor='right', x=1, bgcolor='rgba(0,0,0,0)'),
+        hovermode='x unified',
     )
-    
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor=COLORS['bg_card'], color='white')
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor=COLORS['bg_card'], color='white')
-    
+    fig.add_annotation(
+        text=f"Señales: {signal_text}",
+        xref="paper", yref="paper", x=0.01, y=0.02,
+        showarrow=False, font=dict(size=10, color='#555', family='Courier New'), align='left'
+    )
     return fig
 
 def create_grades_radar(grades_dict):
@@ -1951,127 +1954,184 @@ def display_saved_results():
 # RENDER PRINCIPAL MEJORADO (CON PERSISTENCIA Y RATINGS IBD)
 # ============================================================
 
+def get_global_css() -> str:
+    return f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        .stApp {{ background: {COLORS['bg_dark']}; }}
+
+        h1,h2,h3,h4,h5,h6 {{
+            font-family: 'VT323', monospace !important;
+            color: {COLORS['primary']} !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }}
+        h1 {{
+            font-size: 3.5rem !important;
+            text-shadow: 0 0 20px {hex_to_rgba(COLORS['primary'], 0.4)};
+            border-bottom: 2px solid {COLORS['primary']};
+            padding-bottom: 15px;
+            margin-bottom: 30px !important;
+        }}
+        h2 {{
+            font-size: 2.2rem !important;
+            color: #00d9ff !important;
+            border-left: 4px solid {COLORS['primary']};
+            padding-left: 15px;
+            margin-top: 40px !important;
+        }}
+        h3 {{
+            font-size: 1.8rem !important;
+            color: {COLORS['warning']} !important;
+            margin-top: 30px !important;
+        }}
+        h4 {{
+            font-size: 1.5rem !important;
+            color: #9c27b0 !important;
+        }}
+        p, li {{
+            font-family: 'Courier New', monospace;
+            color: #ccc !important;
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }}
+        strong {{ color: {COLORS['primary']}; font-weight: bold; }}
+        blockquote {{
+            border-left: 3px solid {COLORS['warning']};
+            margin: 20px 0; padding-left: 20px;
+            color: {COLORS['warning']}; font-style: italic;
+        }}
+        hr {{
+            border: none; height: 1px;
+            background: linear-gradient(90deg, transparent, {COLORS['primary']}, transparent);
+            margin: 40px 0;
+        }}
+        ul {{ list-style: none; padding-left: 0; }}
+        ul li::before {{ content: "▸ "; color: {COLORS['primary']}; margin-right: 8px; }}
+
+        .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
+        .stTabs [data-baseweb="tab"] {{
+            font-family: 'VT323', monospace !important;
+            font-size: 1.1rem !important; letter-spacing: 1px;
+            background: {COLORS['bg_dark']}; color: #888;
+            border: 1px solid {COLORS['bg_card']};
+            border-radius: 8px 8px 0 0;
+        }}
+        .stTabs [aria-selected="true"] {{
+            background: {COLORS['bg_card']}; color: {COLORS['primary']};
+            border-bottom: 2px solid {COLORS['primary']};
+        }}
+
+        .terminal-box {{
+            background: linear-gradient(135deg, {COLORS['bg_dark']} 0%, {COLORS['bg_card']} 100%);
+            border: 1px solid {hex_to_rgba(COLORS['primary'], 0.27)};
+            border-radius: 8px; padding: 25px; margin: 20px 0;
+            box-shadow: 0 0 15px {hex_to_rgba(COLORS['primary'], 0.07)};
+        }}
+        .phase-box {{
+            background: {COLORS['bg_dark']};
+            border-left: 3px solid {COLORS['primary']};
+            padding: 20px; margin: 15px 0; border-radius: 0 8px 8px 0;
+        }}
+        .highlight-quote {{
+            background: {hex_to_rgba(COLORS['primary'], 0.07)};
+            border: 1px solid {hex_to_rgba(COLORS['primary'], 0.2)};
+            border-radius: 8px; padding: 20px; margin: 20px 0;
+            font-family: 'VT323', monospace; font-size: 1.2rem;
+            color: {COLORS['primary']}; text-align: center;
+        }}
+        .risk-box {{
+            background: linear-gradient(135deg, #1a0f0f 0%, #261a1a 100%);
+            border: 1px solid {hex_to_rgba(COLORS['danger'], 0.27)};
+            border-radius: 8px; padding: 20px; margin: 15px 0;
+        }}
+        .strategy-grid {{
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+            gap: 15px; margin: 20px 0;
+        }}
+        .strategy-card {{
+            background: {COLORS['bg_dark']}; border: 1px solid #2a3f5f;
+            border-radius: 8px; padding: 15px;
+        }}
+        .metric-card {{
+            background: {COLORS['bg_dark']}; border: 1px solid {COLORS['bg_card']};
+            border-radius: 10px; padding: 15px; text-align: center;
+        }}
+        .grade-badge {{
+            display: inline-block; width: 30px; height: 30px;
+            border-radius: 6px; text-align: center; line-height: 30px;
+            font-weight: bold; font-size: 14px; margin: 2px;
+            font-family: 'VT323', monospace;
+        }}
+        .grade-A {{ background:rgba(0,255,173,.2); color:{COLORS['primary']}; border:1px solid {COLORS['primary']}; }}
+        .grade-B {{ background:rgba(255,152,0,.2); color:{COLORS['warning']}; border:1px solid {COLORS['warning']}; }}
+        .grade-C {{ background:rgba(242,54,69,.2);  color:{COLORS['danger']};  border:1px solid {COLORS['danger']}; }}
+        .grade-D {{ background:rgba(136,136,136,.2);color:#888; border:1px solid #888; }}
+        .market-badge {{
+            display:inline-block; padding:5px 15px; border-radius:20px;
+            font-family:'VT323',monospace; letter-spacing:1px; font-size:1rem;
+        }}
+        .saved-results-banner {{
+            background: linear-gradient(90deg, {hex_to_rgba(COLORS['primary'], 0.2)}, transparent);
+            border-left: 4px solid {COLORS['primary']};
+            padding: 10px 15px; border-radius: 0 8px 8px 0; margin: 10px 0;
+        }}
+        .methodology-section h3 {{
+            color: {COLORS['primary']} !important;
+            border-bottom: 2px solid {COLORS['bg_card']}; padding-bottom: 10px;
+        }}
+        .methodology-section h4 {{ color: {COLORS['warning']} !important; }}
+        .info-box {{
+            background: {COLORS['bg_card']};
+            border-left: 4px solid {COLORS['primary']};
+            padding: 15px; border-radius: 0 8px 8px 0; margin: 10px 0;
+        }}
+        .warning-box {{
+            background: {COLORS['bg_card']};
+            border-left: 4px solid {COLORS['warning']};
+            padding: 15px; border-radius: 0 8px 8px 0; margin: 10px 0;
+        }}
+    </style>
+    """
+
+
 def render():
     # Inicializar session state al principio
     init_session_state()
-    
-    # CSS Global mejorado
-    st.markdown(f"""
-    <style>
-    .main {{
-        background: {COLORS['bg_dark']};
-        color: white;
-    }}
-    .stApp {{
-        background: {COLORS['bg_dark']};
-    }}
-    h1, h2, h3 {{
-        color: white !important;
-    }}
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 8px;
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        background: {COLORS['bg_dark']};
-        color: #888;
-        border: 1px solid {COLORS['bg_card']};
-        border-radius: 8px 8px 0 0;
-    }}
-    .stTabs [aria-selected="true"] {{
-        background: {COLORS['bg_card']};
-        color: {COLORS['primary']};
-        border-bottom: 2px solid {COLORS['primary']};
-    }}
-    .metric-card {{
-        background: {COLORS['bg_dark']};
-        border: 1px solid {COLORS['bg_card']};
-        border-radius: 10px;
-        padding: 15px;
-        text-align: center;
-    }}
-    .grade-badge {{
-        display: inline-block;
-        width: 30px;
-        height: 30px;
-        border-radius: 6px;
-        text-align: center;
-        line-height: 30px;
-        font-weight: bold;
-        font-size: 14px;
-        margin: 2px;
-    }}
-    .grade-A {{ background: rgba(0, 255, 173, 0.2); color: {COLORS['primary']}; border: 1px solid {COLORS['primary']}; }}
-    .grade-B {{ background: rgba(255, 152, 0, 0.2); color: {COLORS['warning']}; border: 1px solid {COLORS['warning']}; }}
-    .grade-C {{ background: rgba(242, 54, 69, 0.2); color: {COLORS['danger']}; border: 1px solid {COLORS['danger']}; }}
-    .grade-D {{ background: rgba(136, 136, 136, 0.2); color: #888; border: 1px solid #888; }}
-    .market-badge {{
-        display: inline-block;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: bold;
-        font-size: 0.9rem;
-    }}
-    .info-box {{
-        background: {COLORS['bg_card']};
-        border-left: 4px solid {COLORS['primary']};
-        padding: 15px;
-        border-radius: 0 8px 8px 0;
-        margin: 10px 0;
-    }}
-    .warning-box {{
-        background: {COLORS['bg_card']};
-        border-left: 4px solid {COLORS['warning']};
-        padding: 15px;
-        border-radius: 0 8px 8px 0;
-        margin: 10px 0;
-    }}
-    .danger-box {{
-        background: {COLORS['bg_card']};
-        border-left: 4px solid {COLORS['danger']};
-        padding: 15px;
-        border-radius: 0 8px 8px 0;
-        margin: 10px 0;
-    }}
-    .saved-results-banner {{
-        background: linear-gradient(90deg, {hex_to_rgba(COLORS['primary'], 0.2)}, transparent);
-        border-left: 4px solid {COLORS['primary']};
-        padding: 10px 15px;
-        border-radius: 0 8px 8px 0;
-        margin: 10px 0;
-    }}
-    /* Estilos para expander más compactos */
-    .streamlit-expanderHeader {{
-        font-size: 0.9rem;
-        color: {COLORS['text_secondary']};
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+
+    # CSS VT323 Terminal Aesthetic
+    st.markdown(get_global_css(), unsafe_allow_html=True)
 
     # Header con Market Status
     market_analyzer = MarketAnalyzer()
     market_status = market_analyzer.calculate_market_score()
-    
+
     st.markdown(f"""
-    <div style="text-align: center; margin-bottom: 30px;">
-        <h1 style="font-size: 2.5rem; margin-bottom: 10px; color: {COLORS['primary']};">
-            🎯 CAN SLIM Scanner Pro
-        </h1>
-        <p style="color: #888; font-size: 1.1rem;">Sistema de Selección de Acciones con Ratings IBD + Trend Template Minervini</p>
-        <div style="margin-top: 15px;">
-            <span class="market-badge" style="background: {hex_to_rgba(market_status['color'], 0.2)}; color: {market_status['color']}; border: 1px solid {market_status['color']};">
-                M-MARKET: {market_status['phase']} ({market_status['score']}/100)
+    <div style="text-align:center;margin-bottom:40px;">
+        <div style="font-family:'VT323',monospace;font-size:1rem;color:#444;margin-bottom:10px;letter-spacing:2px;">
+            [SECURE CONNECTION ESTABLISHED // S&P 500 // IBD RATINGS // MINERVINI]
+        </div>
+        <h1>🎯 CAN SLIM SCANNER PRO</h1>
+        <div style="font-family:'VT323',monospace;color:#00d9ff;font-size:1.1rem;letter-spacing:3px;margin-bottom:18px;">
+            IBD RATINGS // MINERVINI TREND TEMPLATE // ML PREDICTIVO // S&P 500
+        </div>
+        <div>
+            <span class="market-badge" style="background:{hex_to_rgba(market_status['color'],.15)};
+            color:{market_status['color']};border:1px solid {market_status['color']};">
+                ▸ M-MARKET: {market_status['phase']} ({market_status['score']}/100)
             </span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Tabs expandidos
+    # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🚀 Scanner", 
-        "📊 Análisis Detallado", 
-        "📚 Metodología Completa",
-        "🤖 ML Predictivo",
-        "📈 Backtesting"
+        "🚀 SCANNER S&P 500",
+        "📊 ANÁLISIS DETALLADO",
+        "📚 METODOLOGÍA",
+        "🤖 ML PREDICTIVO",
+        "📈 BACKTESTING",
     ])
 
     # TAB 1: SCANNER MEJORADO CON PERSISTENCIA
@@ -2098,10 +2158,6 @@ def render():
             st.markdown("**Señales Técnicas Detectadas:**")
             for signal in market_status['signals']:
                 st.markdown(f"- {signal}")
-        
-        # Info del archivo de tickers
-        all_tickers = load_tickers_from_file()
-        st.info(f"📁 Total tickers disponibles: {len(all_tickers)} | Muestreo por defecto: {MAX_STOCKS_TO_SCAN} aleatorios")
         
         # MOSTRAR RESULTADOS GUARDADOS SI EXISTEN (al inicio del tab)
         has_saved_results = display_saved_results()

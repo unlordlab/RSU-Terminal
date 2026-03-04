@@ -2,9 +2,8 @@ name: Daily Market Briefing
 
 on:
   schedule:
-    # 08:00 CET = 07:00 UTC  (lunes a viernes)
-    - cron: '0 7 * * 1-5'
-  workflow_dispatch:  # lanzar manualmente desde GitHub Actions
+    - cron: '0 7 * * 1-5'   # 08:00 CET = 07:00 UTC, lunes-viernes
+  workflow_dispatch:
 
 jobs:
   generate-briefing:
@@ -21,11 +20,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests pytz google-generativeai
+        run: pip install requests pytz google-genai
 
       - name: Generate and save briefing
         env:
-          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
-          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/generate_briefing.py

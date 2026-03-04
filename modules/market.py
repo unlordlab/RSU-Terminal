@@ -1154,14 +1154,24 @@ def get_earnings_calendar():
     today = now.date()
     is_weekend = today.weekday() >= 5  # sábado=5, domingo=6
     min_days = 1 if is_weekend else 0
+    # True=After Market, False=Before Market
     mega_caps_timing = {
-        # ticker: (after_market: bool)
-        'NVDA': True, 'AAPL': True, 'AMZN': True, 'META': True, 'NFLX': True,
-        'AMD': True, 'GOOGL': False, 'MSFT': True, 'TSLA': True,
-        'BRK-B': False, 'AVGO': False, 'WMT': False, 'JPM': False,
-        'V': False, 'MA': False, 'UNH': False, 'HD': False,
-        'COST': False, 'ADBE': False, 'ACN': False, 'LIN': False,
-        'BAC': False, 'MRK': False, 'PFE': False, 'LLY': False,
+        'NVDA': True,  'AAPL': True,  'MSFT': True,  'AMZN': True,
+        'META': True,  'GOOGL': False, 'TSLA': True,  'AVGO': False,
+        'AMD': True,   'ADBE': False,  'CRM': True,   'ORCL': True,
+        'INTC': True,  'QCOM': True,   'MU': True,    'AMAT': True,
+        'JPM': False,  'BAC': False,   'GS': False,   'MS': False,
+        'WFC': False,  'C': False,     'V': False,    'MA': False,
+        'AXP': True,   'BLK': False,   'BRK-B': False,
+        'LLY': False,  'UNH': False,   'JNJ': False,  'PFE': False,
+        'MRK': False,  'ABBV': False,  'TMO': False,
+        'WMT': False,  'HD': False,    'COST': False,  'MCD': False,
+        'SBUX': True,  'NKE': True,    'TGT': False,
+        'ACN': False,  'CAT': False,   'BA': False,
+        'XOM': False,  'CVX': False,   'LIN': False,
+        'NFLX': True,  'SPOT': True,   'PLTR': True,  'SNOW': True,
+        'UBER': True,  'COIN': True,   'HOOD': True,  'RBLX': True,
+        'MSTR': True,  'SMCI': True,   'ARM': True,   'IONQ': True,
     }
     
     earnings_list = []
@@ -1204,7 +1214,7 @@ def get_earnings_calendar():
                         continue
                 earnings_list.sort(key=lambda x: x['full_date'])
                 if len(earnings_list) >= 3:
-                    return earnings_list[:6]
+                    return earnings_list[:10]
         except Exception as e:
             set_api_health('AlphaVantage', False)
 
@@ -1247,7 +1257,7 @@ def get_earnings_calendar():
         
         earnings_list.sort(key=lambda x: x['full_date'])
         if earnings_list:
-            return earnings_list[:6]
+            return earnings_list[:10]
     except:
         pass
 
@@ -2343,49 +2353,101 @@ def render():
     today_str = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
 
     @st.cache_data(ttl=21600, show_spinner=False)
+    @st.cache_data(ttl=21600, show_spinner=False)
+    @st.cache_data(ttl=21600, show_spinner=False)
     def _cached_briefing(day_key: str, prompt: str) -> str:
+        """
+        Gemini 2.5-flash con Google Search grounding OBLIGATORIO.
+        Grounding = busqueda web real en cada llamada → sin alucinaciones.
+        Fallback si falla grounding: 2.5-flash sin grounding + aviso.
+        """
+        api_key = st.secrets.get('GEMINI_API_KEY', None)
+        if not api_key:
+            return '⚠ Configura GEMINI_API_KEY en st.secrets.'
         try:
-            api_key = st.secrets.get("GEMINI_API_KEY", None)
-            if not api_key:
-                return "⚠ Configura GEMINI_API_KEY en st.secrets."
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            # Orden de preferencia: 2.5-flash > 2.0-flash > 2.0-flash-lite
-            for _att, (_model_name, _use_grounding) in enumerate([
-                ("gemini-2.5-flash", True),
-                ("gemini-2.5-flash", False),
-                ("gemini-2.0-flash", False),
-            ]):
-                try:
-                    _m = genai.GenerativeModel(_model_name)
-                    if _use_grounding:
-                        from google.generativeai.types import Tool, GenerateContentConfig
-                        _t = Tool(google_search=genai.protos.GoogleSearch())
-                        _r = _m.generate_content(prompt, tools=[_t],
-                                generation_config=GenerateContentConfig(temperature=0.3))
-                        _sfx = ""
-                    else:
-                        _r = _m.generate_content(prompt)
-                        _sfx = "" if _model_name == "gemini-2.5-flash" else "\n\n_(gemini-2.0-flash)_"
-                    _txt = (_r.text or "").strip()
-                    if _txt:
-                        return _txt + _sfx
-                except Exception as _ex:
-                    if _att == 2: raise _ex
-                    continue
+            from google.generativeai.types import Tool, GenerateContentConfig
+            # Intento 1: grounding obligatorio con Google Search
+            try:
+                _m  = genai.GenerativeModel('gemini-2.5-flash')
+                _t  = Tool(google_search=genai.protos.GoogleSearch())
+                _r  = _m.generate_content(
+                    prompt,
+                    tools=[_t],
+                    generation_config=GenerateContentConfig(temperature=0.1),
+                )
+                _txt = (_r.text or '').strip()
+                if _txt:
+                    return _txt
+            except Exception:
+                pass
+            # Intento 2: 2.5-flash sin grounding (con aviso)
+            try:
+                _m  = genai.GenerativeModel('gemini-2.5-flash')
+                _r  = _m.generate_content(
+                    prompt,
+                    generation_config=GenerateContentConfig(temperature=0.1),
+                )
+                _txt = (_r.text or '').strip()
+                if _txt:
+                    return _txt + '\n\n⚠ _Sin Google Search grounding — verifica los datos._'
+            except Exception:
+                pass
+            # Intento 3: 2.0-flash como ultimo recurso
+            _m  = genai.GenerativeModel('gemini-2.0-flash')
+            _r  = _m.generate_content(prompt)
+            _txt = (_r.text or '').strip()
+            return (_txt + '\n\n_(gemini-2.0-flash · sin grounding)_') if _txt else '⚠ Sin respuesta.'
         except Exception as e:
             err = str(e)
-            if "429" in err or "quota" in err.lower():
-                import re as _re
-                m = _re.search(r'retry.*?(\d+)', err, _re.I)
-                secs = m.group(1) if m else "60"
-                return f"⏳ Cuota alcanzada. Reintenta en ~{secs}s.\n\nActiva billing en Google AI Studio para eliminar este límite."
-            return f"⚠ Error: {err[:300]}"
+            if '429' in err or 'quota' in err.lower():
+                return '⏳ Cuota de API alcanzada. Reintenta en ~60s.'
+            return f'⚠ Error: {err[:300]}'
+
+    def _load_supabase_briefing() -> str:
+        """
+        Lee el briefing pre-generado por el job nocturno desde Supabase.
+        Tabla: market_briefings (date TEXT PK, text TEXT, generated_at TEXT, model TEXT)
+        Retorna el texto si es del dia de hoy, None si no existe o es viejo.
+        """
+        try:
+            _url = st.secrets.get('SUPABASE_URL', None)
+            _key = st.secrets.get('SUPABASE_ANON_KEY', None)
+            if not _url or not _key:
+                return None
+            _today = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+            _r = get_http_session().get(
+                f'{_url}/rest/v1/market_briefings',
+                headers={
+                    'apikey': _key,
+                    'Authorization': f'Bearer {_key}',
+                    'Accept': 'application/json',
+                },
+                params={'date': f'eq.{_today}', 'select': 'text,generated_at,model'},
+                timeout=6
+            )
+            if _r.status_code == 200:
+                _rows = _r.json()
+                if _rows:
+                    _row  = _rows[0]
+                    _txt  = _row.get('text', '').strip()
+                    _gen  = _row.get('generated_at', '')
+                    _mdl  = _row.get('model', 'Gemini')
+                    if _txt:
+                        return _txt + f'\n\n_(Pre-generado a las {_gen} CET · {_mdl} + Google Search)_'
+        except Exception:
+            pass
+        return None
 
     def _call_gemini_briefing(prompt: str) -> str:
+        # Prioridad 1: briefing pre-generado por job nocturno en Supabase
+        _pre = _load_supabase_briefing()
+        if _pre:
+            return _pre
+        # Prioridad 2: generar en tiempo real con Gemini + grounding
         day_key = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
         return _cached_briefing(day_key, prompt)
-
     resumen_prompt = (
         f"Actúa como analista senior de mercados financieros. Hoy es {today_str}. "
         "Genera un briefing conciso (máximo 300 palabras) en ESPAÑOL para un trader profesional "
@@ -2860,12 +2922,42 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — TF inside components.html, no Streamlit widgets outside
-    _tf_opts = ['1D', '3D', '1W', '1M']
-    _qp_tf = st.query_params.get('tf', '1W')
-    current_tf = _qp_tf if _qp_tf in _tf_opts else '1W'
-
+    # SECTOR ROTATION — selectbox nativo Streamlit dentro de with c2:
     with c2:
+        _tf_opts   = ['1D', '3D', '1W', '1M']
+        _tf_labels = {'1D': '1 Día', '3D': '3 Días', '1W': '1 Semana', '1M': '1 Mes'}
+        _cur_tf    = st.session_state.get('sector_tf', '1W')
+        _tf_idx    = _tf_opts.index(_cur_tf) if _cur_tf in _tf_opts else 2
+
+        st.markdown(
+            '<div style="border:1px solid #00ffad22;border-radius:10px 10px 0 0;'
+            'background:#0c0e12;padding:8px 14px;">'
+            '<span style="color:#00ffad;font-size:19px;text-transform:uppercase;'
+            'letter-spacing:2px;font-family:VT323,monospace;'
+            'text-shadow:0 0 10px #00ffad44;">Rotación Sectorial</span>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown("""<style>
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']{margin:0!important;padding:0!important;}
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>label{display:none!important;}
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>div>div{
+            background:#0c0e12!important;border:none!important;
+            border-bottom:1px solid #00ffad22!important;border-radius:0!important;
+            color:#00ffad!important;font-family:VT323,monospace!important;
+            font-size:14px!important;letter-spacing:1px!important;
+            padding:4px 14px!important;min-height:0!important;}
+        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel'] svg{fill:#00ffad88!important;}
+        </style>""", unsafe_allow_html=True)
+
+        sel_tf = st.selectbox(
+            label='TF', options=_tf_opts, index=_tf_idx,
+            format_func=lambda x: _tf_labels[x],
+            label_visibility='collapsed', key='sector_tf_sel'
+        )
+        st.session_state['sector_tf'] = sel_tf
+        current_tf = sel_tf
+
         sectors = get_sector_performance(current_tf)
         _s_html = ''
         for sector in sectors:
@@ -2876,46 +2968,26 @@ def render():
             elif _ch >= -0.5: _bg, _tc = '#f2364510', '#f23645'
             elif _ch >= -2.0: _bg, _tc = '#f2364518', '#f23645'
             else:             _bg, _tc = '#f2364522', '#f23645'
-            _s_html += ('<div style="background:' + _bg + ';border:1px solid #1a1e26;border-radius:6px;padding:10px 4px;text-align:center;">'
+            _s_html += ('<div style="background:' + _bg + ';border:1px solid #1a1e26;'
+                'border-radius:6px;padding:10px 4px;text-align:center;">'
                 '<div style="color:#555;font-size:9px;font-weight:bold;margin-bottom:3px;">' + _c + '</div>'
-                '<div style="color:white;font-size:11px;font-weight:600;margin-bottom:5px;">' + _n + '</div>'
-                '<div style="font-size:12px;font-weight:bold;color:' + _tc + ';">' + f'{_ch:+.2f}%' + '</div></div>')
+                '<div style="color:white;font-size:11px;font-weight:600;margin-bottom:5px;line-height:1.2;">' + _n + '</div>'
+                '<div style="font-size:12px;font-weight:bold;color:' + _tc + ';">' + f'{_ch:+.2f}%' + '</div>'
+                '</div>')
 
         _ts = get_timestamp()
-        _tb = ''
-        for _tf in _tf_opts:
-            _a = _tf == current_tf
-            _tb += ('<button onclick="setTF(\'' + _tf + '\')" style="'
-                'background:' + ('#00ffad18' if _a else 'transparent') + ';'
-                'border:1px solid ' + ('#00ffad' if _a else '#1a3a2a') + ';'
-                'color:' + ('#00ffad' if _a else '#2a5a3a') + ';'
-                'font-family:VT323,monospace;font-size:14px;letter-spacing:1.5px;'
-                'padding:2px 11px;border-radius:3px;cursor:pointer;'
-                'box-shadow:' + ('0 0 6px #00ffad44' if _a else 'none') + ';'
-                'line-height:22px;">' + _tf + '</button>')
-
-        _sec = ('<!DOCTYPE html><html><head><style>'
-            '* {margin:0;padding:0;box-sizing:border-box;}'
-            'body{background:#11141a;}'
-            '.mod{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;width:100%;}'
-            '.hdr{background:#0c0e12;padding:9px 12px;border-bottom:1px solid #00ffad22;display:flex;justify-content:space-between;align-items:center;}'
-            '.ttl{color:#00ffad;font-family:VT323,monospace;font-size:19px;text-transform:uppercase;letter-spacing:2px;text-shadow:0 0 10px #00ffad44;}'
-            '.tfs{display:flex;gap:4px;}'
-            '.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px;}'
-            '.ts{text-align:right;color:#444;font-size:9px;padding:4px 10px;font-family:Courier New,monospace;border-top:1px solid #1a1e26;}'
-            '</style></head><body>'
-            '<div class="mod">'
-            '<div class="hdr"><span class="ttl">Rotaci\u00f3n Sectorial</span>'
-            '<div class="tfs">' + _tb + '</div></div>'
-            '<div class="grid">' + _s_html + '</div>'
-            '<div class="ts">Actualizado: ' + _ts + ' \u00b7 ' + current_tf + '</div>'
+        st.markdown(
+            '<div style="border:1px solid #00ffad22;border-top:0;border-radius:0 0 10px 10px;'
+            'background:#11141a;padding:8px;">'
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
+            + _s_html +
             '</div>'
-            '<script>function setTF(tf){'
-            'var u=new URL(window.parent.location.href);'
-            'u.searchParams.set("tf",tf);'
-            'window.parent.location.href=u.toString();}'
-            '</script></body></html>')
-        components.html(_sec, height=440, scrolling=False)
+            '<div style="text-align:right;color:#444;font-size:9px;padding:6px 4px 4px;'
+            'font-family:Courier New,monospace;">'
+            'Actualizado: ' + _ts + ' · ' + current_tf + '</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
     with c3:
         crypto_fg = get_crypto_fear_greed()

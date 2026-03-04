@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - v4.0.0
@@ -292,7 +293,11 @@ def download_batch_history(tickers_tuple: tuple, period: str = "1y") -> dict[str
         if len(tickers) == 1:
             t = tickers[0]
             if not raw.empty:
-                result[t] = raw.copy()
+                # yfinance ≥0.2.x devuelve MultiIndex columns incluso con 1 ticker
+                # Ej: ('Close', 'META'), ('Open', 'META') → aplanar a columnas simples
+                if isinstance(raw.columns, pd.MultiIndex):
+                    raw.columns = raw.columns.get_level_values(0)
+                result[t] = raw.dropna(how='all').copy()
         else:
             for t in tickers:
                 try:
@@ -337,9 +342,10 @@ def get_spy_history() -> pd.DataFrame:
     """SPY histórico con caché de 1h."""
     try:
         data = yf.download("SPY", period="2y", auto_adjust=True, progress=False)
+        # yfinance ≥0.2 devuelve MultiIndex incluso con 1 ticker — aplanar
         if isinstance(data.columns, pd.MultiIndex):
-            data = data["SPY"] if "SPY" in data.columns.get_level_values(0) else data
-        return data
+            data.columns = data.columns.get_level_values(0)
+        return data.dropna(how='all')
     except Exception as e:
         logger.error(f"Error SPY: {e}")
         return pd.DataFrame()
@@ -363,7 +369,12 @@ def pre_filter_tickers(tickers: list, hist_data: dict, info_data: dict) -> list:
         info = info_data.get(t, {})
         if hist is None or hist.empty or len(hist) < 50:
             continue
-        price = hist['Close'].iloc[-1]
+        try:
+            price = hist['Close'].iloc[-1]
+            if isinstance(price, pd.Series): price = float(price.iloc[0])
+            else: price = float(price)
+        except Exception:
+            continue
         if price < MIN_PRICE:
             continue
         avg_vol = hist['Volume'].rolling(20).mean().iloc[-1]
@@ -746,7 +757,18 @@ def calculate_can_slim_metrics(
         if hist is None or hist.empty or len(hist) < 50:
             return None
 
-        price       = hist['Close'].iloc[-1]
+        # Seguridad: aplanar MultiIndex si llegara hasta aquí (yfinance ≥0.2)
+        if isinstance(hist.columns, pd.MultiIndex):
+            hist = hist.copy()
+            hist.columns = hist.columns.get_level_values(0)
+
+        # Extrae escalar seguro — evita que .iloc[-1] devuelva Series
+        def _s(val):
+            if isinstance(val, pd.Series): return float(val.iloc[0])
+            if hasattr(val, 'item'): return float(val.item())
+            return float(val)
+
+        price       = _s(hist['Close'].iloc[-1])
         market_cap  = info.get('marketCap', 0) / 1e9
         earn_g      = (info.get('earningsGrowth', 0) or 0) * 100
         rev_g       = (info.get('revenueGrowth', 0) or 0) * 100

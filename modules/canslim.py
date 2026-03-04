@@ -1,10 +1,9 @@
-
 # -*- coding: utf-8 -*-
 """
-CAN SLIM Scanner Pro - Versión con Panel de Ratings IBD + Trend Template Minervini
-Sistema de selección de acciones con resultados que permanecen entre pestañas
-Autor: CAN SLIM Pro Team
-Versión: 3.0.2 - Fix RS Rating calculation
+CAN SLIM Scanner Pro - v4.0.0
+Sistema de selección de acciones con Ratings IBD + Trend Template Minervini + ML
+Optimizado para comunidades de trading: batch downloads, caché agresivo, pre-filtros.
+Universo: S&P 500 completo (~503 acciones) vía Wikipedia.
 """
 
 import streamlit as st
@@ -15,107 +14,22 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
-from bs4 import BeautifulSoup
 import warnings
 import os
+import json
 import re as re_module
 import time
 import random
-from functools import lru_cache
+import logging
 warnings.filterwarnings('ignore')
 
-# ============================================================
-# INICIALIZACIÓN DE SESSION STATE
-# ============================================================
+# ── Logging (reemplaza print() en producción) ──────────────────────────────────
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger("canslim")
 
-def init_session_state():
-    """Inicializa variables de estado para persistencia entre pestañas"""
-    if 'scan_results' not in st.session_state:
-        st.session_state.scan_results = None
-    if 'scan_candidates' not in st.session_state:
-        st.session_state.scan_candidates = []
-    if 'scan_timestamp' not in st.session_state:
-        st.session_state.scan_timestamp = None
-    if 'last_scan_params' not in st.session_state:
-        st.session_state.last_scan_params = {}
-    if 'market_status' not in st.session_state:
-        st.session_state.market_status = None
-    if 'spy_data_cache' not in st.session_state:
-        st.session_state.spy_data_cache = None
-
-# ============================================================
-# CONFIGURACIÓN DE RATE LIMITING Y MUESTREO INTELIGENTE
-# ============================================================
-
-class YFinanceRateLimiter:
-    """Gestiona rate limits de yfinance con delays adaptativos y caché"""
-    
-    def __init__(self):
-        self.last_request_time = 0
-        self.min_delay = 0.8
-        self.max_retries = 3
-        self.backoff_factor = 2
-        self.consecutive_errors = 0
-        self.max_consecutive_errors = 5
-        self.cooldown_period = 30
-    
-    def wait_if_needed(self):
-        """Espera si es necesario para respetar rate limits"""
-        elapsed = time.time() - self.last_request_time
-        delay = self.min_delay + (self.consecutive_errors * 0.2)
-        if elapsed < delay:
-            sleep_time = delay - elapsed + random.uniform(0.1, 0.5)
-            time.sleep(sleep_time)
-        self.last_request_time = time.time()
-    
-    def get_ticker_with_retry(self, ticker_symbol):
-        """Obtiene ticker con reintentos exponenciales"""
-        for attempt in range(self.max_retries):
-            try:
-                self.wait_if_needed()
-                ticker = yf.Ticker(ticker_symbol)
-                info = ticker.info
-                
-                # FIX: Yahoo Finance ya no siempre devuelve 'regularMarketPrice'.
-                # Aceptar si hay al menos algunos campos básicos de datos.
-                if info and len(info) > 5:
-                    self.consecutive_errors = 0
-                    return ticker
-                else:
-                    raise ValueError("Datos insuficientes")
-                    
-            except Exception as e:
-                self.consecutive_errors += 1
-                
-                if self.consecutive_errors >= self.max_consecutive_errors:
-                    st.warning(f"⏸️ Demasiados errores. Pausando {self.cooldown_period}s...")
-                    time.sleep(self.cooldown_period)
-                    self.consecutive_errors = 0
-                
-                if attempt == self.max_retries - 1:
-                    return None
-                
-                wait_time = (self.backoff_factor ** attempt) + random.uniform(0.5, 1.5)
-                time.sleep(wait_time)
-        
-        return None
-
-rate_limiter = YFinanceRateLimiter()
-
-# ============================================================
-# CONFIGURACIÓN DE MUESTREO
-# ============================================================
-
-MAX_STOCKS_TO_SCAN = 50
-USE_RANDOM_SAMPLE = True
-CACHE_DURATION = 3600
-
-# ============================================================
-# IMPORTS OPCIONALES CON MANEJO DE ERRORES
-# ============================================================
-
+# ── Imports opcionales ─────────────────────────────────────────────────────────
 try:
-    from sklearn.ensemble import RandomForestRegressor, GradientBoostingClassifier
+    from sklearn.ensemble import GradientBoostingClassifier
     from sklearn.preprocessing import StandardScaler
     from sklearn.model_selection import train_test_split
     import joblib
@@ -124,11 +38,10 @@ except ImportError:
     SKLEARN_AVAILABLE = False
 
 try:
-    from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel
     import uvicorn
-    from threading import Thread
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -136,808 +49,737 @@ except ImportError:
 try:
     from zipline.api import order_target_percent, record, symbol, set_benchmark
     from zipline import run_algorithm
-    from zipline.data import bundles
-    ZIPPILINE_AVAILABLE = True
+    ZIPLINE_AVAILABLE = True
 except ImportError:
-    ZIPPILINE_AVAILABLE = False
+    ZIPLINE_AVAILABLE = False
 
-# ============================================================
-# CONFIGURACIÓN DE PÁGINA Y CONSTANTES
-# ============================================================
+# ==============================================================================
+# CONSTANTES Y COLORES
+# ==============================================================================
 
-def get_timestamp():
-    return datetime.now().strftime('%H:%M:%S')
-
-def hex_to_rgba(hex_color, alpha=1.0):
-    hex_color = hex_color.lstrip('#')
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return f"rgba({r}, {g}, {b}, {alpha})"
+CACHE_TTL_SECONDS  = 3600   # 1 hora de caché para resultados de scan
+BATCH_SIZE         = 50     # acciones por lote en yf.download()
+MIN_MARKET_CAP_B   = 0.5    # filtro previo: market cap mínimo en $B
+MIN_PRICE          = 10.0   # filtro previo: precio mínimo
+MIN_AVG_VOLUME     = 500_000  # filtro previo: volumen diario mínimo
 
 COLORS = {
-    'primary': '#00ffad',
-    'warning': '#ff9800',
-    'danger': '#f23645',
-    'neutral': '#888888',
-    'bg_dark': '#0c0e12',
-    'bg_card': '#1a1e26',
-    'border': '#2a2e36',
-    'text': '#ffffff',
-    'text_secondary': '#aaaaaa',
-    'ibd_blue': '#2196F3',
-    'ibd_green': '#4CAF50'
+    'primary'        : '#00ffad',
+    'warning'        : '#ff9800',
+    'danger'         : '#f23645',
+    'neutral'        : '#888888',
+    'bg_dark'        : '#0c0e12',
+    'bg_card'        : '#1a1e26',
+    'border'         : '#2a2e36',
+    'text'           : '#ffffff',
+    'text_secondary' : '#aaaaaa',
+    'ibd_blue'       : '#2196F3',
+    'ibd_green'      : '#4CAF50',
 }
 
-# ============================================================
-# GESTIÓN DE UNIVERSO DESDE ARCHIVO TXT
-# ============================================================
+def hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
+    h = hex_color.lstrip('#')
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
 
-TICKERS_PATH = None
+# ==============================================================================
+# UNIVERSO S&P 500 (vía Wikipedia + fallback hardcoded)
+# ==============================================================================
 
-def get_tickers_path():
-    """Determina la ruta correcta de tickers.txt"""
-    current_file = os.path.abspath(__file__)
-    if 'modules' in os.path.dirname(current_file).split(os.sep):
-        return os.path.join(os.path.dirname(os.path.dirname(current_file)), "tickers.txt")
-    else:
-        return os.path.join(os.path.dirname(current_file), "tickers.txt")
+# Lista completa S&P 500 hardcoded (actualizada 2025) como fuente primaria confiable.
+# Wikipedia se usa como fuente secundaria para actualizaciones. 
+SP500_TICKERS = [
+    "MMM","AOS","ABT","ABBV","ACN","ADBE","AMD","AES","AFL","A","APD","ABNB",
+    "AKAM","ALB","ARE","ALGN","ALLE","LNT","ALL","GOOGL","GOOG","MO","AMZN",
+    "AMCR","AEE","AAL","AEP","AXP","AIG","AMT","AWK","AMP","AME","AMGN",
+    "APH","ADI","ANSS","AON","APA","AAPL","AMAT","APTV","ACGL","ADM","ANET",
+    "AJG","AIZ","T","ATO","ADSK","ADP","AZO","AVB","AVY","AXON","BKR","BALL",
+    "BAC","BK","BBWI","BAX","BDX","BRK-B","BBY","TECH","BIIB","BLK","BX",
+    "BA","BKNG","BWA","BSX","BMY","AVGO","BR","BRO","BF-B","BLDR","BG","CDNS",
+    "CZR","CPT","CPB","COF","CAH","KMX","CCL","CARR","CTLT","CAT","CBOE","CBRE",
+    "CDW","CE","COR","CNC","CNX","CDAY","CF","CRL","SCHW","CHTR","CVX","CMG",
+    "CB","CHD","CI","CINF","CTAS","CSCO","C","CFG","CLX","CME","CMS","KO",
+    "CTSH","CL","CMCSA","CAG","COP","ED","STZ","CEG","COO","CPRT","GLW","CPAY",
+    "CTVA","CSGP","COST","CTRA","CRWD","CCI","CSX","CMI","CVS","DHR","DRI",
+    "DVA","DAY","DE","DAL","XRAY","DVN","DXCM","FANG","DLR","DFS","DG","DLTR",
+    "D","DPZ","DOV","DOW","DHI","DTE","DUK","DD","EMN","ETN","EBAY","ECL",
+    "EIX","EW","EA","ELV","LLY","EMR","ENPH","ETR","EOG","EPAM","EQT","EFX",
+    "EQIX","EQR","ESS","EL","ETSY","EG","EVRST","EXAS","EXPD","EXPE","EXR",
+    "XOM","FFIV","FDS","FICO","FAST","FRT","FDX","FIS","FITB","FSLR","FE",
+    "FI","FMC","F","FTIV","FOXA","FOX","BEN","FCX","GRMN","IT","GE","GEHC",
+    "GEV","GEN","GNRC","GD","GIS","GM","GPC","GILD","GS","HAL","HIG","HAS",
+    "HCA","DOC","HSIC","HSY","HES","HPE","HLT","HOLX","HD","HON","HRL","HST",
+    "HWM","HPQ","HUBB","HUM","HBAN","HII","IBM","IEX","IDXX","ITW","INCY",
+    "IR","PODD","INTC","ICE","IFF","IP","IPG","INTU","ISRG","IVZ","INVH",
+    "IQV","IRM","JBHT","JBL","JKHY","J","JNJ","JCI","JPM","JNPR","K","KVUE",
+    "KDP","KEY","KEYS","KMB","KIM","KMI","KLAC","KHC","KR","LHX","LH","LRCX",
+    "LW","LVS","LDOS","LEN","LIN","LYV","LKQ","LMT","L","LOW","LULU","LYB",
+    "MTB","MRO","MPC","MKTX","MAR","MMC","MLM","MAS","MA","MTCH","MKC","MCD",
+    "MCK","MDT","MRK","META","MET","MTD","MGM","MCHP","MU","MSFT","MAA","MRNA",
+    "MHK","MOH","TAP","MDLZ","MPWR","MNST","MCO","MS","MOS","MSI","MSCI",
+    "NDAQ","NTAP","NFLX","NEM","NWSA","NWS","NEE","NKE","NI","NDSN","NSC",
+    "NTRS","NOC","NCLH","NRG","NUE","NVDA","NVR","NXPI","ORLY","OXY","ODFL",
+    "OMC","ON","OKE","ORCL","OTIS","PCAR","PKG","PANW","PH","PAYX","PAYC",
+    "PYPL","PNR","PEP","PFE","PCG","PM","PSX","PNW","PNC","POOL","PPG","PPL",
+    "PFG","PG","PGR","PLD","PRU","PEG","PTC","PSA","PHM","QRVO","PWR","QCOM",
+    "DGX","RL","RJF","RTX","O","REG","REGN","RF","RSG","RMD","RVTY","ROK",
+    "ROL","ROP","ROST","RCL","SPGI","CRM","SBAC","SLB","STX","SRE","NOW",
+    "SHW","SPG","SWKS","SJM","SNA","SOLV","SO","LUV","SWK","SBUX","STT","STLD",
+    "STE","SYK","SMCI","SYF","SNPS","SYY","TMUS","TROW","TTWO","TPR","TRGP",
+    "TGT","TEL","TDY","TFX","TER","TSLA","TXN","TXT","TMO","TJX","TSCO","TT",
+    "TDG","TRV","TRMB","TFC","TYL","TSN","USB","UBER","UDR","ULTA","UNP","UAL",
+    "UPS","URI","UNH","UHS","VLO","VTR","VLTO","VRSN","VRSK","VZ","VRTX","VTRS",
+    "VICI","V","VST","VMC","WRB","GWW","WAB","WBA","WMT","DIS","WBD","WM",
+    "WAT","WEC","WFC","WELL","WST","WDC","WY","WHR","WMB","WTW","WYNN","XEL",
+    "XYL","YUM","ZBRA","ZBH","ZTS",
+]
 
-def load_tickers_from_file():
-    """Carga los tickers desde el archivo tickers.txt"""
+@st.cache_data(ttl=86400)
+def get_sp500_tickers() -> list[str]:
+    """
+    Devuelve la lista S&P 500 completa (~503 tickers).
+    Fuente primaria: lista hardcoded actualizada (siempre disponible, sin red).
+    Fuente secundaria: Wikipedia (para incorporar cambios recientes al índice).
+    Fusiona ambas y devuelve el conjunto más completo.
+    """
+    # Base siempre disponible
+    base = list(dict.fromkeys(SP500_TICKERS))   # deduplicar preservando orden
+
+    # Intentar enriquecer desde Wikipedia
     try:
-        tickers_path = get_tickers_path()
-        
-        if not os.path.exists(tickers_path):
-            tickers_path = "tickers.txt"
-            if not os.path.exists(tickers_path):
-                st.error(f"❌ No se encontró el archivo tickers.txt")
-                return []
+        tables = pd.read_html(
+            "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", header=0
+        )
+        df  = tables[0]
+        col = "Symbol" if "Symbol" in df.columns else df.columns[0]
+        wiki_raw = df[col].str.replace(".", "-", regex=False).tolist()
 
-        with open(tickers_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-
-        valid_tickers = []
-        for line in lines:
-            t_clean = line.strip().upper()
-            if not t_clean or t_clean.startswith('#'):
-                continue
-            if re_module.match(r'^[A-Z][A-Z0-9]{0,4}$', t_clean):
-                valid_tickers.append(t_clean)
-
-        seen = set()
-        unique_tickers = [t for t in valid_tickers if not (t in seen or seen.add(t))]
-
-        return unique_tickers
-
+        seen = set(base)
+        for t in wiki_raw:
+            t = str(t).strip().upper()
+            # Regex permisiva: letras, números, guion — hasta 6 chars
+            if t and t not in seen and re_module.match(r'^[A-Z][A-Z0-9\-]{0,5}$', t):
+                seen.add(t)
+                base.append(t)
+        logger.info(f"SP500: {len(base)} tickers (hardcoded + Wikipedia)")
     except Exception as e:
-        st.error(f"❌ Error al cargar tickers.txt: {str(e)}")
-        return []
+        logger.warning(f"Wikipedia SP500 no disponible ({e}), usando sólo lista hardcoded")
 
-def get_random_sample_tickers(all_tickers, n=MAX_STOCKS_TO_SCAN, seed=None):
-    """Obtiene una muestra aleatoria de tickers"""
-    if len(all_tickers) <= n:
-        return all_tickers
-    
-    if seed is not None:
-        random.seed(seed)
-    
-    priority_tickers = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AVGO', 'BRK-B', 'JPM']
-    priority_in_sample = [t for t in priority_tickers if t in all_tickers]
-    
-    remaining = [t for t in all_tickers if t not in priority_in_sample]
-    n_random = n - len(priority_in_sample)
-    
-    if n_random > 0 and remaining:
-        random_sample = random.sample(remaining, min(n_random, len(remaining)))
-        return priority_in_sample + random_sample
-    
-    return priority_in_sample[:n]
+    return base
 
-def get_all_universe_tickers(comprehensive=False, use_sample=USE_RANDOM_SAMPLE):
-    """Obtiene tickers. Por defecto usa muestreo aleatorio."""
-    all_tickers = load_tickers_from_file()
+# ==============================================================================
+# SISTEMA DE CACHÉ JSON (resultados pre-calculados por job nocturno)
+# ==============================================================================
 
-    if not all_tickers:
-        st.warning("⚠️ No se pudieron cargar tickers.")
-        return []
+# FIX RUTAS: Streamlit Cloud usa CWD = raíz del repo (diferente a __file__).
+# Buscamos en todas las ubicaciones posibles en orden de probabilidad.
+# NO usar constante global — recalcular en cada llamada para mayor robustez.
 
-    if use_sample and not comprehensive:
-        sampled = get_random_sample_tickers(all_tickers, MAX_STOCKS_TO_SCAN)
-        return sampled
-    else:
-        return all_tickers
+CACHE_MAX_AGE_H = 20   # horas máximas de validez del caché
 
-tickers = load_tickers_from_file()
+def _find_cache_path() -> str:
+    """
+    Busca scan_cache.json en múltiples rutas posibles.
+    Streamlit Cloud pone CWD = raíz del repo; __file__ puede apuntar a otra parte.
+    """
+    candidates = [
+        os.path.join(os.getcwd(), "data", "scan_cache.json"),                          # CWD/data/ — Streamlit Cloud
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "scan_cache.json"),  # junto al .py
+        "data/scan_cache.json",                                                          # relativa directa
+        os.path.join(os.path.expanduser("~"), "data", "scan_cache.json"),               # home dir
+        "scan_cache.json",                                                               # raíz sin carpeta
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            logger.info(f"scan_cache.json encontrado en: {p}")
+            return p
+    # Si no existe en ningún lado, devolver la preferida (CWD) para que save funcione
+    preferred = os.path.join(os.getcwd(), "data", "scan_cache.json")
+    logger.warning(f"scan_cache.json no encontrado. Rutas buscadas: {candidates}")
+    return preferred
 
-# ============================================================
-# ANÁLISIS DE MERCADO (M - Market Direction)
-# ============================================================
 
-class MarketAnalyzer:
-    """Analiza la dirección del mercado para el criterio M de CAN SLIM"""
-    
-    def __init__(self):
-        self.indices = {
-            'SPY': 'S&P 500',
-            'QQQ': 'NASDAQ 100',
-            'IWM': 'Russell 2000',
-            'VIX': 'Volatilidad (Miedo)'
+def load_cached_scan() -> dict | None:
+    """
+    Carga los resultados del job nocturno si existen y son frescos.
+    Retorna None si no hay caché o está obsoleto.
+    FIX v4.0.2: recalcula la ruta en cada llamada para Streamlit Cloud.
+    """
+    try:
+        path = _find_cache_path()
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        generated_at = datetime.fromisoformat(data.get("generated_at", "2000-01-01"))
+        age_hours = (datetime.utcnow() - generated_at).total_seconds() / 3600
+        if age_hours > CACHE_MAX_AGE_H:
+            logger.info(f"Caché JSON obsoleto ({age_hours:.1f}h > {CACHE_MAX_AGE_H}h)")
+            return None
+        logger.info(f"Caché JSON válido ({age_hours:.1f}h de antigüedad) — {path}")
+        return data
+    except Exception as e:
+        logger.warning(f"Error leyendo caché JSON: {e}")
+        return None
+
+
+def save_scan_to_cache(candidates: list, market_status: dict, sp500_count: int):
+    """
+    Guarda los resultados del scan en JSON para ser leídos por la app.
+    Llamado por el job nocturno (nightly_scan.py).
+    """
+    try:
+        save_path = _find_cache_path()
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        payload = {
+            "generated_at" : datetime.utcnow().isoformat(),
+            "sp500_count"  : sp500_count,
+            "candidates"   : candidates,
+            "market_status": {
+                "score" : market_status.get("score", 50),
+                "phase" : market_status.get("phase", "N/A"),
+                "color" : market_status.get("color", "#888888"),
+                "signals": market_status.get("signals", []),
+            },
         }
-    
-    def get_market_data(self):
-        """Obtiene datos de los índices principales"""
-        market_data = {}
-        for ticker, name in self.indices.items():
-            try:
-                if ticker == 'VIX':
-                    data = rate_limiter.get_ticker_with_retry('^VIX')
-                    if data:
-                        data = data.history(period="6mo")
-                else:
-                    ticker_obj = rate_limiter.get_ticker_with_retry(ticker)
-                    if ticker_obj:
-                        data = ticker_obj.history(period="6mo")
-                    else:
-                        data = None
-                
-                if data is not None and len(data) > 0:
-                    market_data[ticker] = {
-                        'name': name,
-                        'data': data,
-                        'current': data['Close'].iloc[-1],
-                        'sma_50': data['Close'].rolling(50).mean().iloc[-1],
-                        'sma_200': data['Close'].rolling(200).mean().iloc[-1],
-                        'trend_20d': (data['Close'].iloc[-1] / data['Close'].iloc[-20] - 1) * 100,
-                        'trend_60d': (data['Close'].iloc[-1] / data['Close'].iloc[-60] - 1) * 100
-                    }
-            except Exception as e:
-                continue
-        return market_data
-    
-    def calculate_market_score(self):
-        """Calcula el score de dirección de mercado (0-100)"""
-        data = self.get_market_data()
-        score = 50
-        signals = []
-        
-        if 'SPY' in data:
-            spy = data['SPY']
-            if spy['current'] > spy['sma_50'] > spy['sma_200']:
-                score += 20
-                signals.append("SPY: Golden Cross (Alcista)")
-            elif spy['current'] > spy['sma_50']:
-                score += 10
-                signals.append("SPY: Sobre SMA50")
-            elif spy['current'] < spy['sma_50'] < spy['sma_200']:
-                score -= 20
-                signals.append("SPY: Death Cross (Bajista)")
-            elif spy['current'] < spy['sma_50']:
-                score -= 10
-                signals.append("SPY: Bajo SMA50")
-            
-            if spy['trend_20d'] > 5:
-                score += 10
-            elif spy['trend_20d'] < -5:
-                score -= 10
-        
-        if 'QQQ' in data:
-            qqq = data['QQQ']
-            if qqq['current'] > qqq['sma_50']:
-                score += 10
-                signals.append("QQQ: Tendencia positiva")
-            else:
-                score -= 5
-        
-        if 'IWM' in data:
-            iwm = data['IWM']
-            if iwm['current'] > iwm['sma_50']:
-                score += 10
-                signals.append("Small Caps: Participación amplia")
-            else:
-                score -= 5
-        
-        if 'VIX' in data:
-            vix = data['VIX']
-            if vix['current'] < 20:
-                score += 10
-                signals.append("VIX: Bajo (Complacencia)")
-            elif vix['current'] > 30:
-                score -= 15
-                signals.append("VIX: Alto (Miedo extremo)")
-        
-        score = max(0, min(100, score))
-        
-        if score >= 80:
-            phase = "CONFIRMED UPTREND"
-            color = COLORS['primary']
-        elif score >= 60:
-            phase = "UPTREND UNDER PRESSURE"
-            color = COLORS['warning']
-        elif score >= 40:
-            phase = "MARKET IN TRANSITION"
-            color = COLORS['neutral']
-        elif score >= 20:
-            phase = "DOWNTREND UNDER PRESSURE"
-            color = COLORS['warning']
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        logger.info(f"Caché JSON guardado: {len(candidates)} candidatos → {save_path}")
+    except Exception as e:
+        logger.error(f"Error guardando caché JSON: {e}")
+
+
+
+def init_session_state():
+    defaults = {
+        'scan_candidates'   : [],
+        'scan_timestamp'    : None,
+        'last_scan_params'  : {},
+        'market_status'     : None,
+        'spy_data_cache'    : None,
+        'bulk_hist_cache'   : None,
+        'bulk_info_cache'   : None,
+        'sp500_tickers'     : None,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+# ==============================================================================
+# DESCARGA MASIVA OPTIMIZADA (evita rate limits con batch downloads)
+# ==============================================================================
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def download_batch_history(tickers_tuple: tuple, period: str = "1y") -> dict[str, pd.DataFrame]:
+    """
+    Descarga histórico de precio/volumen en UN solo request HTTP batch.
+    yf.download() con múltiples tickers es ~50x más eficiente que llamadas individuales.
+    Retorna dict {ticker: DataFrame con OHLCV}.
+    """
+    tickers = list(tickers_tuple)
+    if not tickers:
+        return {}
+    try:
+        raw = yf.download(
+            tickers,
+            period=period,
+            auto_adjust=True,
+            progress=False,
+            group_by='ticker',
+            threads=True,       # descarga paralela interna de yfinance
+        )
+        result = {}
+        if len(tickers) == 1:
+            t = tickers[0]
+            if not raw.empty:
+                # yfinance ≥0.2.x devuelve MultiIndex columns incluso con 1 ticker
+                # Ej: ('Close', 'META'), ('Open', 'META') → aplanar a columnas simples
+                if isinstance(raw.columns, pd.MultiIndex):
+                    raw.columns = raw.columns.get_level_values(0)
+                result[t] = raw.dropna(how='all').copy()
         else:
-            phase = "CONFIRMED DOWNTREND"
-            color = COLORS['danger']
-        
-        return {
-            'score': score,
-            'phase': phase,
-            'color': color,
-            'signals': signals,
-            'data': data
-        }
+            for t in tickers:
+                try:
+                    df = raw[t].dropna(how='all')
+                    if len(df) > 30:
+                        result[t] = df
+                except Exception:
+                    pass
+        return result
+    except Exception as e:
+        logger.error(f"Error en batch download: {e}")
+        return {}
 
-# ============================================================
-# PANEL DE RATINGS IBD + TREND TEMPLATE MINERVINI
-# ============================================================
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def download_batch_info(tickers_tuple: tuple) -> dict[str, dict]:
+    """
+    Descarga info fundamental ticker a ticker pero con retry inteligente y
+    caché agresivo. El info de yfinance no soporta batch nativo.
+    Se hace de forma compacta con rate limiting gentil.
+    """
+    tickers = list(tickers_tuple)
+    result  = {}
+    for i, t in enumerate(tickers):
+        try:
+            info = yf.Ticker(t).info
+            if info and len(info) > 5:
+                result[t] = info
+            # delay suave: 0.3s base + jitter para evitar 429
+            time.sleep(0.3 + random.uniform(0.05, 0.2))
+        except Exception as e:
+            logger.warning(f"Info error {t}: {e}")
+            time.sleep(0.5)
+        # pausa adicional cada 50 tickers
+        if (i + 1) % 50 == 0:
+            time.sleep(2)
+    return result
+
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def get_single_ticker_info(ticker: str) -> dict:
+    """
+    Obtiene el .info de un ticker individual con retry + backoff.
+    Cacheado 1h — si el usuario vuelve a analizar el mismo ticker no hace nueva llamada HTTP.
+    """
+    last_err = None
+    for attempt in range(3):
+        try:
+            if attempt > 0:
+                wait = 15 * attempt + random.uniform(1, 5)
+                logger.info(f"Retry {attempt}/2 para {ticker} — esperando {wait:.1f}s")
+                time.sleep(wait)
+            info = yf.Ticker(ticker).info
+            if info and len(info) > 5:
+                return info
+        except Exception as e:
+            last_err = e
+            logger.warning(f"get_single_ticker_info {ticker} intento {attempt+1}: {e}")
+    logger.error(f"No se pudo obtener info de {ticker} tras 3 intentos: {last_err}")
+    return {}  # dict vacío — calculate_can_slim_metrics maneja fundamentales en 0
+
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def get_spy_history() -> pd.DataFrame:
+    """SPY histórico con caché de 1h."""
+    try:
+        data = yf.download("SPY", period="2y", auto_adjust=True, progress=False)
+        # yfinance ≥0.2 devuelve MultiIndex incluso con 1 ticker — aplanar
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
+        return data.dropna(how='all')
+    except Exception as e:
+        logger.error(f"Error SPY: {e}")
+        return pd.DataFrame()
+
+
+# ==============================================================================
+# PRE-FILTROS (Market Cap, Precio, Volumen) — aplica ANTES de análisis pesado
+# ==============================================================================
+
+def pre_filter_tickers(tickers: list, hist_data: dict, info_data: dict) -> list:
+    """
+    Filtra tickers por:
+      - Precio > MIN_PRICE
+      - Volumen promedio 20d > MIN_AVG_VOLUME
+      - Market cap > MIN_MARKET_CAP_B (si disponible en info)
+    Reduce universo ~30-40% antes del análisis técnico pesado.
+    """
+    filtered = []
+    for t in tickers:
+        hist = hist_data.get(t)
+        info = info_data.get(t, {})
+        if hist is None or hist.empty or len(hist) < 50:
+            continue
+        try:
+            price = hist['Close'].iloc[-1]
+            if isinstance(price, pd.Series): price = float(price.iloc[0])
+            else: price = float(price)
+        except Exception:
+            continue
+        if price < MIN_PRICE:
+            continue
+        avg_vol = hist['Volume'].rolling(20).mean().iloc[-1]
+        if avg_vol < MIN_AVG_VOLUME:
+            continue
+        mkt_cap = info.get('marketCap', None)
+        if mkt_cap is not None and mkt_cap < MIN_MARKET_CAP_B * 1e9:
+            continue
+        filtered.append(t)
+    return filtered
+
+# ==============================================================================
+# RS RATING — percentil real sobre universo (corrige escalado arbitrario)
+# ==============================================================================
+
+def compute_rs_scores_universe(tickers: list, hist_data: dict, spy_hist: pd.DataFrame) -> dict[str, float]:
+    """
+    Calcula RS Rating real para todos los tickers en un solo pase:
+    1. Calcula retorno ponderado 40/20/20/20 (4 trimestres) relativo a SPY
+    2. Asigna percentil 1-99 dentro del universo
+    Esto da un RS Rating comparable con la metodología IBD.
+    """
+    if spy_hist.empty:
+        return {t: 50 for t in tickers}
+
+    # Normalizar índice SPY
+    spy_close = spy_hist['Close'].copy()
+    if hasattr(spy_close.index, 'tz') and spy_close.index.tz is not None:
+        spy_close.index = spy_close.index.tz_localize(None)
+
+    raw_scores = {}
+    days_per_q = 63
+
+    for t in tickers:
+        hist = hist_data.get(t)
+        if hist is None or len(hist) < 130:
+            continue
+        try:
+            close = hist['Close'].copy()
+            if hasattr(close.index, 'tz') and close.index.tz is not None:
+                close.index = close.index.tz_localize(None)
+
+            # Alinear con SPY
+            merged = pd.merge(
+                close.rename('stock'),
+                spy_close.rename('spy'),
+                left_index=True, right_index=True, how='inner'
+            )
+            if len(merged) < 100:
+                continue
+
+            weights = [0.40, 0.20, 0.20, 0.20]
+            period_scores = []
+            for i in range(4):
+                end   = len(merged) - 1 if i == 0 else len(merged) - 1 - i * days_per_q
+                start = end - days_per_q
+                if start < 0:
+                    period_scores.append(0.0)
+                    continue
+                s_ret = merged['stock'].iloc[end] / merged['stock'].iloc[start] - 1
+                m_ret = merged['spy'].iloc[end]   / merged['spy'].iloc[start]   - 1
+                rel   = (1 + s_ret) / (1 + m_ret) - 1 if abs(m_ret) > 0.001 else s_ret
+                period_scores.append(rel)
+
+            weighted = sum(w * s for w, s in zip(weights, period_scores))
+            raw_scores[t] = weighted
+        except Exception:
+            pass
+
+    if not raw_scores:
+        return {t: 50 for t in tickers}
+
+    # Convertir a percentil 1-99
+    values = list(raw_scores.values())
+    sorted_vals = sorted(values)
+    n = len(sorted_vals)
+    percentile_map = {}
+    for t, v in raw_scores.items():
+        rank = sorted_vals.index(v)
+        pct  = round(1 + (rank / max(n - 1, 1)) * 98)
+        percentile_map[t] = min(99, max(1, pct))
+
+    # Tickers sin datos → 50
+    for t in tickers:
+        if t not in percentile_map:
+            percentile_map[t] = 50
+    return percentile_map
+
+# ==============================================================================
+# CLASES DE RATINGS IBD
+# ==============================================================================
 
 class IBDRatingsCalculator:
-    """
-    Calcula ratings compatibles con IBD (Investors Business Daily):
-    - Composite Rating (0-99): RS ponderado + EPS + fundamentales
-    - RS Rating (0-99): fuerza relativa vs S&P 500, ponderada 40/20/20/20
-    - EPS Rating (0-99): crecimiento de ganancias trimestrales YoY
-    - SMR Rating (A-D): Sales, Margins, ROE composite
-    - Accumulation/Distribution (A-E): ratio volumen up/down 50 días
-    """
-    
-    def __init__(self):
-        self.weights_rs = [0.40, 0.20, 0.20, 0.20]
-    
-    def calculate_weighted_rs(self, hist_data, spy_data):
-        """
-        RS Rating con ponderación IBD 40/20/20/20 (últimos 4 trimestres)
-        VERSIÓN CORREGIDA - Maneja alineación de fechas correctamente
-        """
-        if hist_data is None or spy_data is None:
-            return 50.0
-        
-        try:
-            # Alinear fechas: usar solo días donde ambos tengan datos
-            # Convertir índices a fechas simples (sin timezone) para comparación
-            hist_dates = pd.to_datetime(hist_data.index).tz_localize(None) if hist_data.index.tz else pd.to_datetime(hist_data.index)
-            spy_dates = pd.to_datetime(spy_data.index).tz_localize(None) if spy_data.index.tz else pd.to_datetime(spy_data.index)
-            
-            # Encontrar fechas comunes
-            common_dates = hist_dates.intersection(spy_dates)
-            
-            if len(common_dates) < 100:  # Necesitamos al menos ~100 días de datos comunes
-                print(f"Datos insuficientes: {len(common_dates)} días comunes")
-                return 50.0
-            
-            # Crear DataFrames alineados
-            hist_aligned = hist_data.copy()
-            spy_aligned = spy_data.copy()
-            
-            # Resetear índices para alinear
-            hist_aligned = hist_aligned.reset_index()
-            spy_aligned = spy_aligned.reset_index()
-            
-            # Convertir fechas a datetime simple
-            hist_aligned['Date'] = pd.to_datetime(hist_aligned['Date']).dt.tz_localize(None)
-            spy_aligned['Date'] = pd.to_datetime(spy_aligned['Date']).dt.tz_localize(None)
-            
-            # Merge para obtener solo fechas comunes
-            merged = pd.merge(hist_aligned[['Date', 'Close']], spy_aligned[['Date', 'Close']], 
-                             on='Date', suffixes=('_stock', '_spy'))
-            
-            if len(merged) < 100:
-                print(f"Merge resultó en solo {len(merged)} filas")
-                return 50.0
-            
-            # Calcular retornos para cada período
-            days_per_period = 63  # ~3 meses de trading
-            rs_scores = []
-            
-            for i in range(4):
-                end_idx = -1 if i == 0 else -(i * days_per_period)
-                start_idx = end_idx - days_per_period
-                
-                if abs(start_idx) > len(merged):
-                    rs_scores.append(50.0)
-                    continue
-                
-                try:
-                    stock_start = merged['Close_stock'].iloc[start_idx]
-                    stock_end = merged['Close_stock'].iloc[end_idx]
-                    spy_start = merged['Close_spy'].iloc[start_idx]
-                    spy_end = merged['Close_spy'].iloc[end_idx]
-                    
-                    # Validar datos
-                    if any(pd.isna([stock_start, stock_end, spy_start, spy_end])):
-                        rs_scores.append(50.0)
-                        continue
-                    
-                    if stock_start <= 0 or spy_start <= 0:
-                        rs_scores.append(50.0)
-                        continue
-                    
-                    # Calcular retornos simples (no logarítmicos para consistencia con IBD)
-                    stock_return = (stock_end / stock_start) - 1
-                    spy_return = (spy_end / spy_start) - 1
-                    
-                    # RS Rating para este período
-                    # Base 50 = neutral, >50 = outperformance, <50 = underperformance
-                    if abs(spy_return) > 0.001:  # Evitar división por cero
-                        # Calcular ratio de performance relativo
-                        relative_performance = (1 + stock_return) / (1 + spy_return) - 1
-                        # Convertir a escala 0-99
-                        # +20% relativo = ~70, +50% relativo = ~85, +100% relativo = ~95
-                        rs_period = 50 + (relative_performance * 100)
-                    else:
-                        # Si SPY está flat, usar absolute return
-                        rs_period = 50 + (stock_return * 100)
-                    
-                    # Limitar a rango válido
-                    rs_period = max(1, min(99, rs_period))
-                    rs_scores.append(rs_period)
-                    
-                except Exception as e:
-                    print(f"Error en período {i}: {e}")
-                    rs_scores.append(50.0)
-            
-            # Aplicar ponderación 40/20/20/20
-            if len(rs_scores) >= 4:
-                weighted_rs = (
-                    rs_scores[0] * 0.40 +
-                    rs_scores[1] * 0.20 +
-                    rs_scores[2] * 0.20 +
-                    rs_scores[3] * 0.20
-                )
-            elif len(rs_scores) > 0:
-                # Si no tenemos 4 períodos, usar promedio simple
-                weighted_rs = sum(rs_scores) / len(rs_scores)
-            else:
-                return 50.0
-            
-            # Asegurar rango 1-99
-            final_rs = min(99, max(1, round(weighted_rs)))
-            print(f"RS calculado: {final_rs} (scores: {rs_scores})")
-            return final_rs
-            
-        except Exception as e:
-            print(f"Error general en calculate_weighted_rs: {e}")
-            return 50.0
-    
-    def calculate_eps_rating(self, quarterly_eps_growth):
-        """EPS Rating (0-99) basado en crecimiento trimestral YoY"""
-        if quarterly_eps_growth is None:
-            return 50
-        
-        if quarterly_eps_growth >= 100: return 99
-        elif quarterly_eps_growth >= 50: return 90 + min(9, int((quarterly_eps_growth - 50) / 5))
-        elif quarterly_eps_growth >= 25: return 80 + min(9, int((quarterly_eps_growth - 25) / 2.5))
-        elif quarterly_eps_growth >= 15: return 60 + min(19, int(quarterly_eps_growth - 15))
-        elif quarterly_eps_growth > 0: return 40 + min(19, int(quarterly_eps_growth * 2))
-        else: return max(1, 40 + int(quarterly_eps_growth))
-    
-    def calculate_composite_rating(self, rs_rating, eps_rating, sales_growth, roe, price_performance_12m):
-        """Composite Rating: ponderación IBD estándar"""
-        eps_score = eps_rating
-        rs_score = rs_rating
-        sales_score = min(99, max(1, 50 + sales_growth)) if sales_growth else 50
-        roe_score = min(99, max(1, roe * 2)) if roe else 50
-        perf_score = min(99, max(1, 50 + price_performance_12m)) if price_performance_12m else 50
-        
-        composite = (
-            eps_score * 0.30 +
-            rs_score * 0.30 +
-            sales_score * 0.15 +
-            roe_score * 0.15 +
-            perf_score * 0.10
-        )
-        
-        return min(99, max(1, round(composite)))
-    
-    def calculate_smr_rating(self, sales_growth, roe, profit_margins):
-        """SMR Rating (Sales + Margins + ROE): A (mejor) a D (peor)"""
+    """Ratings IBD: EPS, Composite, SMR, Accumulation/Distribution, ATR."""
+
+    def calculate_eps_rating(self, quarterly_eps_growth: float) -> int:
+        g = quarterly_eps_growth
+        if g is None: return 50
+        if g >= 100: return 99
+        if g >= 50:  return 90 + min(9, int((g - 50) / 5))
+        if g >= 25:  return 80 + min(9, int((g - 25) / 2.5))
+        if g >= 15:  return 60 + min(19, int(g - 15))
+        if g > 0:    return 40 + min(19, int(g * 2))
+        return max(1, 40 + int(g))
+
+    def calculate_composite_rating(self, rs: int, eps: int, sales_g: float, roe: float, perf_12m: float) -> int:
+        eps_s   = eps
+        rs_s    = rs
+        sales_s = min(99, max(1, 50 + (sales_g or 0)))
+        roe_s   = min(99, max(1, (roe or 0) * 2))
+        perf_s  = min(99, max(1, 50 + (perf_12m or 0)))
+        comp = eps_s*0.30 + rs_s*0.30 + sales_s*0.15 + roe_s*0.15 + perf_s*0.10
+        return min(99, max(1, round(comp)))
+
+    def calculate_smr_rating(self, sales_g: float, roe: float, margins: float) -> str:
         score = 0
-        
-        # Sales growth (0-40 puntos)
-        if sales_growth >= 25: score += 40
-        elif sales_growth >= 15: score += 30
-        elif sales_growth >= 10: score += 20
-        elif sales_growth > 0: score += 10
-        
-        # ROE (0-40 puntos)
+        if sales_g >= 25: score += 40
+        elif sales_g >= 15: score += 30
+        elif sales_g >= 10: score += 20
+        elif sales_g > 0:  score += 10
         if roe >= 25: score += 40
         elif roe >= 17: score += 30
         elif roe >= 10: score += 20
-        elif roe > 0: score += 10
-        
-        # Margins (0-20 puntos)
-        if profit_margins and profit_margins > 0.20: score += 20
-        elif profit_margins and profit_margins > 0.10: score += 15
-        elif profit_margins and profit_margins > 0: score += 10
-        
+        elif roe > 0:  score += 10
+        if margins and margins > 0.20: score += 20
+        elif margins and margins > 0.10: score += 15
+        elif margins and margins > 0:   score += 10
         if score >= 80: return 'A'
-        elif score >= 60: return 'B'
-        elif score >= 40: return 'C'
-        else: return 'D'
-    
-    def calculate_acc_dis_rating(self, hist_data, period=50):
-        """Accumulation/Distribution Rating (A-E) basado en volumen up/down"""
-        if hist_data is None or len(hist_data) < period:
+        if score >= 60: return 'B'
+        if score >= 40: return 'C'
+        return 'D'
+
+    def calculate_acc_dis_rating(self, hist: pd.DataFrame, period: int = 50) -> str:
+        if hist is None or len(hist) < period:
             return 'C'
-        
         try:
-            recent = hist_data.tail(period).copy()
-            recent['price_change'] = recent['Close'].pct_change()
-            recent['is_up'] = recent['price_change'] > 0
-            recent['is_down'] = recent['price_change'] < 0
-            
-            vol_up = recent[recent['is_up']]['Volume'].sum()
-            vol_down = recent[recent['is_down']]['Volume'].sum()
-            total_vol = recent['Volume'].sum()
-            
-            if total_vol == 0:
-                return 'C'
-            
-            acc_ratio = (vol_up / total_vol) * 100
-            price_performance = (recent['Close'].iloc[-1] / recent['Close'].iloc[0] - 1) * 100
-            
-            if acc_ratio >= 65 and price_performance > 5: return 'A'
-            elif acc_ratio >= 58: return 'B'
-            elif acc_ratio >= 42: return 'C'
-            elif acc_ratio >= 35: return 'D'
-            else: return 'E'
-                
+            recent = hist.tail(period).copy()
+            recent['chg'] = recent['Close'].pct_change()
+            vol_up   = recent[recent['chg'] > 0]['Volume'].sum()
+            total_v  = recent['Volume'].sum()
+            if total_v == 0: return 'C'
+            acc_ratio = (vol_up / total_v) * 100
+            perf = (recent['Close'].iloc[-1] / recent['Close'].iloc[0] - 1) * 100
+            if acc_ratio >= 65 and perf > 5: return 'A'
+            if acc_ratio >= 58: return 'B'
+            if acc_ratio >= 42: return 'C'
+            if acc_ratio >= 35: return 'D'
+            return 'E'
         except Exception:
             return 'C'
-    
-    def calculate_atr_percent(self, hist_data, period=14):
-        """Average True Range como porcentaje del precio"""
-        if hist_data is None or len(hist_data) < period:
+
+    def calculate_atr_percent(self, hist: pd.DataFrame, period: int = 14) -> float:
+        if hist is None or len(hist) < period:
             return 0.0
-        
         try:
-            high = hist_data['High']
-            low = hist_data['Low']
-            close = hist_data['Close']
-            
-            tr1 = high - low
-            tr2 = abs(high - close.shift())
-            tr3 = abs(low - close.shift())
-            
-            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            atr = tr.rolling(window=period).mean().iloc[-1]
-            
-            current_price = close.iloc[-1]
-            atr_percent = (atr / current_price) * 100
-            
-            return round(atr_percent, 2)
+            h, l, c = hist['High'], hist['Low'], hist['Close']
+            tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
+            atr = tr.rolling(period).mean().iloc[-1]
+            return round((atr / c.iloc[-1]) * 100, 2)
         except Exception:
             return 0.0
 
+
+# ==============================================================================
+# TREND TEMPLATE MINERVINI (8 criterios Stage 2)
+# ==============================================================================
 
 class MinerviniTrendTemplate:
-    """Implementación del Trend Template de Mark Minervini - 8 criterios para Stage 2"""
-    
-    def __init__(self):
-        self.criteria_names = [
-            "Precio > SMA 50",
-            "Precio > SMA 150", 
-            "Precio > SMA 200",
-            "SMA 50 > SMA 150",
-            "SMA 150 > SMA 200",
-            "SMA 200 Tendencia Alcista",
-            "Precio > 30% del mínimo 52s",
-            "Precio dentro 25% del máximo 52s"
-        ]
-    
-    def check_all_criteria(self, hist_data, current_price):
-        """Evalúa los 8 criterios del Trend Template"""
-        if hist_data is None or len(hist_data) < 200:
-            return {
-                'all_pass': False,
-                'score': 0,
-                'criteria': {name: False for name in self.criteria_names},
-                'stage': 'Insufficient Data'
-            }
-        
+    CRITERIA = [
+        "Precio > SMA 50",
+        "Precio > SMA 150",
+        "Precio > SMA 200",
+        "SMA 50 > SMA 150",
+        "SMA 150 > SMA 200",
+        "SMA 200 Tendencia Alcista",
+        "Precio > 30% del mínimo 52s",
+        "Precio dentro 25% del máximo 52s",
+    ]
+
+    def check_all_criteria(self, hist: pd.DataFrame, price: float) -> dict:
+        empty = {'all_pass': False, 'score': 0,
+                 'criteria': {n: False for n in self.CRITERIA}, 'stage': 'Insufficient Data'}
+        if hist is None or len(hist) < 200:
+            return empty
         try:
-            sma_50 = hist_data['Close'].rolling(50).mean().iloc[-1]
-            sma_150 = hist_data['Close'].rolling(150).mean().iloc[-1]
-            sma_200 = hist_data['Close'].rolling(200).mean().iloc[-1]
-            
-            sma_200_20d_ago = hist_data['Close'].rolling(200).mean().iloc[-20]
-            sma_200_trending_up = sma_200 > sma_200_20d_ago
-            
-            high_52w = hist_data['High'].tail(252).max()
-            low_52w = hist_data['Low'].tail(252).min()
-            
+            close  = hist['Close']
+            sma50  = close.rolling(50).mean().iloc[-1]
+            sma150 = close.rolling(150).mean().iloc[-1]
+            sma200 = close.rolling(200).mean().iloc[-1]
+            sma200_20d = close.rolling(200).mean().iloc[-20]
+            high52 = hist['High'].tail(252).max()
+            low52  = hist['Low'].tail(252).min()
+
             criteria = {
-                "Precio > SMA 50": current_price > sma_50,
-                "Precio > SMA 150": current_price > sma_150,
-                "Precio > SMA 200": current_price > sma_200,
-                "SMA 50 > SMA 150": sma_50 > sma_150,
-                "SMA 150 > SMA 200": sma_150 > sma_200,
-                "SMA 200 Tendencia Alcista": sma_200_trending_up,
-                "Precio > 30% del mínimo 52s": current_price >= (low_52w * 1.30),
-                "Precio dentro 25% del máximo 52s": current_price >= (high_52w * 0.75)
+                "Precio > SMA 50"             : price > sma50,
+                "Precio > SMA 150"            : price > sma150,
+                "Precio > SMA 200"            : price > sma200,
+                "SMA 50 > SMA 150"            : sma50 > sma150,
+                "SMA 150 > SMA 200"           : sma150 > sma200,
+                "SMA 200 Tendencia Alcista"   : sma200 > sma200_20d,
+                "Precio > 30% del mínimo 52s" : price >= low52 * 1.30,
+                "Precio dentro 25% del máximo 52s": price >= high52 * 0.75,
             }
-            
-            score = sum(criteria.values())
+            score    = sum(criteria.values())
             all_pass = score == 8
-            
-            if all_pass:
-                stage = "Stage 2 (Advancing)"
-            elif current_price > sma_200 and sma_200_trending_up:
-                stage = "Stage 1/2 Transition"
-            elif current_price < sma_200 and not sma_200_trending_up:
-                stage = "Stage 4 (Declining)"
-            else:
-                stage = "Stage 3 (Distribution)"
-            
+
+            if all_pass:                                        stage = "Stage 2 (Advancing)"
+            elif price > sma200 and sma200 > sma200_20d:       stage = "Stage 1/2 Transition"
+            elif price < sma200 and not (sma200 > sma200_20d): stage = "Stage 4 (Declining)"
+            else:                                               stage = "Stage 3 (Distribution)"
+
             return {
-                'all_pass': all_pass,
-                'score': score,
-                'criteria': criteria,
-                'stage': stage,
-                'values': {
-                    'sma_50': sma_50,
-                    'sma_150': sma_150,
-                    'sma_200': sma_200,
-                    'high_52w': high_52w,
-                    'low_52w': low_52w,
-                    'distance_from_high': ((current_price / high_52w) - 1) * 100,
-                    'distance_from_low': ((current_price / low_52w) - 1) * 100
+                'all_pass': all_pass, 'score': score,
+                'criteria': criteria, 'stage': stage,
+                'values'  : {
+                    'sma_50': sma50, 'sma_150': sma150, 'sma_200': sma200,
+                    'high_52w': high52, 'low_52w': low52,
+                    'distance_from_high': ((price / high52) - 1) * 100,
+                    'distance_from_low' : ((price / low52)  - 1) * 100,
                 }
             }
-            
         except Exception as e:
-            return {
-                'all_pass': False,
-                'score': 0,
-                'criteria': {name: False for name in self.criteria_names},
-                'stage': f'Error: {str(e)}'
-            }
+            return {**empty, 'stage': f'Error: {e}'}
 
-# ============================================================
-# MODELO DE MACHINE LEARNING PARA SCORING PREDICTIVO
-# ============================================================
+
+# ==============================================================================
+# ANÁLISIS DE MERCADO (criterio M)
+# ==============================================================================
+
+class MarketAnalyzer:
+    INDICES = {'SPY': 'S&P 500', 'QQQ': 'NASDAQ 100', 'IWM': 'Russell 2000', '^VIX': 'VIX'}
+
+    @st.cache_data(ttl=300, show_spinner=False)
+    def get_market_data(_self) -> dict:
+        result = {}
+        tickers_to_dl = ['SPY', 'QQQ', 'IWM', '^VIX']
+        try:
+            raw = yf.download(tickers_to_dl, period="6mo", auto_adjust=True,
+                              progress=False, group_by='ticker', threads=True)
+            for t in tickers_to_dl:
+                try:
+                    df = raw[t].dropna(how='all') if len(tickers_to_dl) > 1 else raw.dropna(how='all')
+                    if df.empty: continue
+                    result[t] = {
+                        'name'    : _self.INDICES[t],
+                        'data'    : df,
+                        'current' : df['Close'].iloc[-1],
+                        'sma_50'  : df['Close'].rolling(50).mean().iloc[-1],
+                        'sma_200' : df['Close'].rolling(200).mean().iloc[-1],
+                        'trend_20d': (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) * 100,
+                    }
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"Market data error: {e}")
+        return result
+
+    def calculate_market_score(self) -> dict:
+        data   = self.get_market_data()
+        score  = 50
+        signals = []
+
+        if 'SPY' in data:
+            s = data['SPY']
+            if s['current'] > s['sma_50'] > s['sma_200']:
+                score += 20; signals.append("SPY: Golden Cross (Alcista)")
+            elif s['current'] > s['sma_50']:
+                score += 10; signals.append("SPY: Sobre SMA50")
+            elif s['current'] < s['sma_50'] < s['sma_200']:
+                score -= 20; signals.append("SPY: Death Cross (Bajista)")
+            else:
+                score -= 10
+            if s['trend_20d'] > 5:  score += 10
+            elif s['trend_20d'] < -5: score -= 10
+
+        if 'QQQ' in data:
+            q = data['QQQ']
+            if q['current'] > q['sma_50']: score += 10; signals.append("QQQ: Tendencia positiva")
+            else: score -= 5
+
+        if 'IWM' in data:
+            i = data['IWM']
+            if i['current'] > i['sma_50']: score += 10; signals.append("Small Caps: Participación amplia")
+            else: score -= 5
+
+        if '^VIX' in data:
+            v = data['^VIX']
+            if v['current'] < 20:   score += 10; signals.append("VIX: Bajo (estabilidad)")
+            elif v['current'] > 30: score -= 15; signals.append("VIX: Alto (miedo extremo)")
+
+        score = max(0, min(100, score))
+
+        if   score >= 80: phase, color = "CONFIRMED UPTREND",        COLORS['primary']
+        elif score >= 60: phase, color = "UPTREND UNDER PRESSURE",   COLORS['warning']
+        elif score >= 40: phase, color = "MARKET IN TRANSITION",     COLORS['neutral']
+        elif score >= 20: phase, color = "DOWNTREND UNDER PRESSURE", COLORS['warning']
+        else:             phase, color = "CONFIRMED DOWNTREND",      COLORS['danger']
+
+        return {'score': score, 'phase': phase, 'color': color, 'signals': signals, 'data': data}
+
+
+# ==============================================================================
+# ML PREDICTOR (GradientBoosting)
+# ==============================================================================
 
 class CANSlimMLPredictor:
-    """Modelo ML para predecir probabilidad de éxito CAN SLIM"""
-    
+    FEATURES = [
+        'earnings_growth', 'revenue_growth', 'eps_growth',
+        'rs_rating', 'volume_ratio', 'inst_ownership',
+        'pct_from_high', 'volatility', 'price_momentum',
+    ]
+
     def __init__(self):
-        self.model = None
-        self.scaler = None
-        self.model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "canslim_ml_model.pkl")
-        self.features = [
-            'earnings_growth', 'revenue_growth', 'eps_growth',
-            'rs_rating', 'volume_ratio', 'inst_ownership',
-            'pct_from_high', 'volatility', 'price_momentum'
-        ]
-        
-        if SKLEARN_AVAILABLE:
-            self.scaler = StandardScaler()
-    
-    def prepare_features(self, metrics):
-        """Prepara características para el modelo"""
-        if not SKLEARN_AVAILABLE:
-            return None
-            
-        features = np.array([
-            metrics.get('earnings_growth', 0),
-            metrics.get('revenue_growth', 0),
-            metrics.get('eps_growth', 0),
-            metrics.get('rs_rating', 50),
-            metrics.get('volume_ratio', 1),
-            metrics.get('inst_ownership', 0),
-            abs(metrics.get('pct_from_high', 0)),
-            metrics.get('volatility', 0.2),
-            metrics.get('price_momentum', 0)
+        self.model  = None
+        self.scaler = StandardScaler() if SKLEARN_AVAILABLE else None
+        self.model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "canslim_ml_model.pkl")
+
+    def _feature_vector(self, m: dict) -> np.ndarray:
+        return np.array([
+            m.get('earnings_growth', 0), m.get('revenue_growth', 0),
+            m.get('eps_growth', 0),       m.get('rs_rating', 50),
+            m.get('volume_ratio', 1),     m.get('inst_ownership', 0),
+            abs(m.get('pct_from_high', 0)), m.get('volatility', 0.2),
+            m.get('price_momentum', 0),
         ]).reshape(1, -1)
-        return self.scaler.fit_transform(features)
-    
-    def train(self, historical_data):
-        """Entrena el modelo con datos históricos"""
-        if not SKLEARN_AVAILABLE:
-            return 0.0
-            
-        X = []
-        y = []
-        
-        for stock_data in historical_data:
-            features = self.prepare_features(stock_data['metrics'])
-            if features is not None:
-                X.append(features[0])
-                y.append(1 if stock_data['future_return'] > stock_data['market_return'] else 0)
-        
-        if len(X) < 10:
-            return 0.0
-            
-        X = np.array(X)
-        y = np.array(y)
-        
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        self.model = GradientBoostingClassifier(
-            n_estimators=100,
-            learning_rate=0.1,
-            max_depth=4,
-            random_state=42
-        )
-        self.model.fit(X_train, y_train)
-        
-        joblib.dump((self.model, self.scaler), self.model_path)
-        return self.model.score(X_test, y_test)
-    
-    def predict(self, metrics):
-        """Predice probabilidad de éxito"""
+
+    def predict(self, metrics: dict) -> float:
         if not SKLEARN_AVAILABLE:
             return 0.5
-            
-        if self.model is None:
-            if os.path.exists(self.model_path):
-                self.model, self.scaler = joblib.load(self.model_path)
-            else:
-                return 0.5
-        
-        features = self.prepare_features(metrics)
-        if features is None:
-            return 0.5
-            
-        prob = self.model.predict_proba(features)[0][1]
-        return prob
-    
-    def get_feature_importance(self):
-        """Retorna importancia de características"""
-        if not SKLEARN_AVAILABLE or self.model is None:
-            return {f: 0.11 for f in self.features}
-        return dict(zip(self.features, self.model.feature_importances_))
-
-# ============================================================
-# BACKTESTING CON ZIPLINE
-# ============================================================
-
-class CANSlimBacktester:
-    """Backtesting de estrategias CAN SLIM usando Zipline"""
-    
-    def __init__(self):
-        self.initial_capital = 100000
-        self.results = None
-    
-    def initialize(self, context):
-        """Inicializa el algoritmo"""
-        if not ZIPPILINE_AVAILABLE:
-            return
-            
-        context.max_positions = 10
-        context.risk_per_trade = 0.02
-        context.stop_loss = 0.07
-        context.profit_target = 0.20
-        context.positions_held = {}
-        
-        set_benchmark(symbol('SPY'))
-    
-    def handle_data(self, context, data):
-        """Lógica de trading"""
-        if not ZIPPILINE_AVAILABLE:
-            return
-            
-        canslim_candidates = self.get_canslim_universe(context, data)
-        
-        if context.datetime.day % 7 == 0:
-            self.rebalance(context, data, canslim_candidates)
-        
-        self.check_exits(context, data)
-    
-    def get_canslim_universe(self, context, data):
-        """Filtra universe por criterios CAN SLIM"""
-        return [symbol('AAPL'), symbol('MSFT'), symbol('NVDA')]
-    
-    def rebalance(self, context, data, candidates):
-        """Rebalancea portafolio"""
-        position_size = 1.0 / context.max_positions
-        
-        for stock in list(context.portfolio.positions.keys()):
-            if stock not in candidates:
-                order_target_percent(stock, 0)
-                if stock in context.positions_held:
-                    del context.positions_held[stock]
-        
-        for stock in candidates[:context.max_positions]:
-            if stock not in context.portfolio.positions:
-                order_target_percent(stock, position_size)
-                context.positions_held[stock] = {
-                    'entry_price': data.current(stock, 'price'),
-                    'highest_price': data.current(stock, 'price')
-                }
-    
-    def check_exits(self, context, data):
-        """Chequea stops y targets"""
-        for stock, info in list(context.positions_held.items()):
-            current_price = data.current(stock, 'price')
-            entry_price = info['entry_price']
-            
-            if current_price > info['highest_price']:
-                context.positions_held[stock]['highest_price'] = current_price
-            
-            if current_price < entry_price * (1 - context.stop_loss):
-                order_target_percent(stock, 0)
-                del context.positions_held[stock]
-                continue
-            
-            if current_price < info['highest_price'] * 0.93:
-                order_target_percent(stock, 0)
-                del context.positions_held[stock]
-                continue
-    
-    def run_backtest(self, start_date, end_date):
-        """Ejecuta el backtest"""
-        if not ZIPPILINE_AVAILABLE:
-            return None
-        
         try:
-            perf = run_algorithm(
-                start=start_date,
-                end=end_date,
-                initialize=self.initialize,
-                handle_data=self.handle_data,
-                capital_base=self.initial_capital,
-                bundle='quandl'
-            )
-            self.results = perf
-            return perf
-        except Exception as e:
-            st.error(f"Error en backtest: {str(e)}")
-            return None
-    
-    def get_metrics(self):
-        """Calcula métricas de rendimiento"""
-        if self.results is None or not ZIPPILINE_AVAILABLE:
-            return {}
-        
-        returns = self.results['returns']
-        return {
-            'total_return': (returns.iloc[-1] + 1) / (returns.iloc[0] + 1) - 1,
-            'sharpe_ratio': returns.mean() / returns.std() * np.sqrt(252),
-            'max_drawdown': (returns.cummax() - returns).max(),
-            'volatility': returns.std() * np.sqrt(252)
-        }
+            if self.model is None and os.path.exists(self.model_path):
+                self.model, self.scaler = joblib.load(self.model_path)
+            if self.model is None:
+                return 0.5
+            X = self.scaler.transform(self._feature_vector(metrics))
+            return float(self.model.predict_proba(X)[0][1])
+        except Exception:
+            return 0.5
 
-# ============================================================
-# CÁLCULOS CAN SLIM MEJORADOS CON RATINGS IBD
-# ============================================================
+    def get_feature_importance(self) -> dict:
+        if not SKLEARN_AVAILABLE or self.model is None:
+            return {f: 1/len(self.FEATURES) for f in self.FEATURES}
+        return dict(zip(self.FEATURES, self.model.feature_importances_))
 
-def get_spy_data_cached():
-    """Obtiene datos de SPY con caché en session_state"""
-    if st.session_state.spy_data_cache is not None:
-        return st.session_state.spy_data_cache
-    
+    def train(self, historical_data: list) -> float:
+        if not SKLEARN_AVAILABLE or len(historical_data) < 10:
+            return 0.0
+        X = np.array([self._feature_vector(d['metrics'])[0] for d in historical_data])
+        y = np.array([1 if d.get('future_return', 0) > d.get('market_return', 0) else 0 for d in historical_data])
+        X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
+        self.scaler.fit(X_tr)
+        X_tr = self.scaler.transform(X_tr)
+        X_te = self.scaler.transform(X_te)
+        self.model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=4, random_state=42)
+        self.model.fit(X_tr, y_tr)
+        joblib.dump((self.model, self.scaler), self.model_path)
+        return self.model.score(X_te, y_te)
+
+
+# ==============================================================================
+# CÁLCULO INDIVIDUAL CAN SLIM (usa datos pre-descargados)
+# ==============================================================================
+
+def calculate_can_slim_metrics(
+    ticker:       str,
+    hist:         pd.DataFrame,
+    info:         dict,
+    spy_hist:     pd.DataFrame,
+    rs_universe:  dict,
+    market_score: dict,
+    ibd_calc:     IBDRatingsCalculator,
+    trend_engine: MinerviniTrendTemplate,
+    ml:           CANSlimMLPredictor,
+) -> dict | None:
+    """
+    Calcula métricas CAN SLIM completas usando datos ya descargados en batch.
+    No hace ninguna llamada HTTP por sí misma.
+    """
     try:
-        spy_ticker = rate_limiter.get_ticker_with_retry("SPY")
-        if spy_ticker:
-            spy_data = spy_ticker.history(period="2y")  # 2 años para asegurar suficiente historial
-            st.session_state.spy_data_cache = spy_data
-            return spy_data
-    except Exception as e:
-        print(f"Error obteniendo SPY: {e}")
-    
-    return None
-
-
-def calculate_can_slim_metrics(ticker, market_analyzer=None):
-    """Calcula todas las métricas CAN SLIM + Ratings IBD + Trend Template"""
-    try:
-        stock = rate_limiter.get_ticker_with_retry(ticker)
-        if stock is None:
+        if hist is None or hist.empty or len(hist) < 50:
             return None
-            
-        info = stock.info
-        hist = stock.history(period="1y")
-        
-        if len(hist) < 50:
-            return None
-        
-        # FIX: yfinance ≥0.2 devuelve MultiIndex incluso con history() — aplanar
+
+        # Seguridad: aplanar MultiIndex si llegara hasta aquí (yfinance ≥0.2)
         if isinstance(hist.columns, pd.MultiIndex):
             hist = hist.copy()
             hist.columns = hist.columns.get_level_values(0)
@@ -948,317 +790,351 @@ def calculate_can_slim_metrics(ticker, market_analyzer=None):
             if hasattr(val, 'item'): return float(val.item())
             return float(val)
 
-        # Datos básicos
-        market_cap = info.get('marketCap', 0) / 1e9
-        current_price = _s(hist['Close'].iloc[-1])
-        
-        # Métricas fundamentales
-        earnings_growth = info.get('earningsGrowth', 0) * 100 if info.get('earningsGrowth') else 0
-        revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
-        eps_growth = info.get('earningsQuarterlyGrowth', 0) * 100 if info.get('earningsQuarterlyGrowth') else 0
+        price       = _s(hist['Close'].iloc[-1])
+        market_cap  = info.get('marketCap', 0) / 1e9
+        earn_g      = (info.get('earningsGrowth', 0) or 0) * 100
+        rev_g       = (info.get('revenueGrowth', 0) or 0) * 100
+        eps_g       = (info.get('earningsQuarterlyGrowth', 0) or 0) * 100
+        # SANITIZE: Yahoo Finance devuelve valores absurdos (>10000%) cuando
+        # el año anterior tuvo pérdidas (base effect). Cap en 999% para no distorsionar.
+        earn_g = max(-100.0, min(999.0, earn_g))
+        rev_g  = max(-100.0, min(999.0, rev_g))
+        eps_g  = max(-100.0, min(999.0, eps_g))
+        roe         = (info.get('returnOnEquity', 0) or 0) * 100
+        margins     = info.get('profitMargins', 0) or 0
+        inst_own    = (info.get('heldPercentInstitutions', 0) or 0) * 100
+        high52      = _s(hist['High'].max())
+        pct_from_hi = ((price - high52) / high52) * 100 if high52 > 0 else -100
+        avg_vol     = _s(hist['Volume'].rolling(20).mean().iloc[-1])
+        cur_vol     = _s(hist['Volume'].iloc[-1])
+        vol_ratio   = cur_vol / avg_vol if avg_vol > 0 else 1.0
 
-        # SANITIZE: Yahoo Finance a veces devuelve valores absurdos (>10000%)
-        # cuando el año anterior tuvo pérdidas y el actual ganancias (base effect).
-        # Ej: PSX Q4 2022 tuvo pérdidas → cualquier ganancia da % infinito.
-        # Capamos en 999% para que no distorsione el score ni la visualización.
-        MAX_GROWTH = 999.0
-        earnings_growth = max(-100.0, min(MAX_GROWTH, earnings_growth))
-        revenue_growth  = max(-100.0, min(MAX_GROWTH, revenue_growth))
-        eps_growth      = max(-100.0, min(MAX_GROWTH, eps_growth))
-        roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
-        profit_margins = info.get('profitMargins', 0)
-        inst_ownership = info.get('heldPercentInstitutions', 0) * 100 if info.get('heldPercentInstitutions') else 0
-        
-        # Datos técnicos
-        high_52w = _s(hist['High'].max())
-        pct_from_high = ((current_price - high_52w) / high_52w) * 100 if high_52w > 0 else -100
-        
-        avg_volume = _s(hist['Volume'].rolling(20).mean().iloc[-1])
-        current_volume = _s(hist['Volume'].iloc[-1])
-        volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
-        
-        # Datos de mercado para RS - USAR CACHÉ
-        spy_data = get_spy_data_cached()
-        
-        # Calcular Ratings IBD
-        ibd_calc = IBDRatingsCalculator()
-        
-        # CORRECCIÓN: Pasar datos históricos correctamente
-        rs_rating = ibd_calc.calculate_weighted_rs(hist, spy_data)
-        eps_rating = ibd_calc.calculate_eps_rating(eps_growth)
-        
-        # Performance 12 meses
-        if len(hist) > 252:
-            price_12m_ago = _s(hist['Close'].iloc[-252])
-            perf_12m = ((current_price / price_12m_ago) - 1) * 100 if price_12m_ago > 0 else 0
-        else:
-            price_12m_ago = _s(hist['Close'].iloc[0])
-            days_available = len(hist)
-            perf_12m = ((current_price / price_12m_ago) - 1) * 100 * (252 / days_available) if days_available > 0 and price_12m_ago > 0 else 0
-        
-        composite = ibd_calc.calculate_composite_rating(rs_rating, eps_rating, revenue_growth, roe, perf_12m)
-        smr = ibd_calc.calculate_smr_rating(revenue_growth, roe, profit_margins)
-        acc_dis = ibd_calc.calculate_acc_dis_rating(hist)
-        atr_pct = ibd_calc.calculate_atr_percent(hist)
-        
-        # Trend Template Minervini
-        trend_template = MinerviniTrendTemplate()
-        trend_result = trend_template.check_all_criteria(hist, current_price)
-        
-        # RS Rating tradicional (para compatibilidad) - CÁLCULO CORREGIDO
-        try:
-            if spy_data is not None and len(hist) > 0:
-                # Alinear fechas para cálculo justo
-                hist_dates = pd.to_datetime(hist.index).tz_localize(None) if hist.index.tz else pd.to_datetime(hist.index)
-                spy_dates = pd.to_datetime(spy_data.index).tz_localize(None) if spy_data.index.tz else pd.to_datetime(spy_data.index)
-                
-                # Usar fecha de inicio común
-                common_start = max(hist_dates.min(), spy_dates.min())
-                
-                hist_start_price = hist.loc[hist_dates >= common_start, 'Close'].iloc[0] if any(hist_dates >= common_start) else hist['Close'].iloc[0]
-                spy_start_price = spy_data.loc[spy_dates >= common_start, 'Close'].iloc[0] if any(spy_dates >= common_start) else spy_data['Close'].iloc[0]
-                
-                stock_return = (current_price / hist_start_price - 1) * 100
-                spy_return = (spy_data['Close'].iloc[-1] / spy_start_price - 1) * 100
-                
-                rs_rating_legacy = 50 + (stock_return - spy_return) * 2
-                rs_rating_legacy = max(0, min(100, rs_rating_legacy))
-            else:
-                rs_rating_legacy = 50
-        except Exception as e:
-            print(f"Error en RS legacy: {e}")
-            rs_rating_legacy = 50
-        
-        # Score CAN SLIM original
+        # RS percentil real sobre universo
+        rs_rating = rs_universe.get(ticker, 50)
+
+        # IBD Ratings
+        eps_rating = ibd_calc.calculate_eps_rating(eps_g)
+        perf_12m   = (_s(hist['Close'].iloc[-252]) and (price / _s(hist['Close'].iloc[-252]) - 1) * 100) \
+                     if len(hist) >= 252 else \
+                     (price / _s(hist['Close'].iloc[0]) - 1) * 100
+        composite  = ibd_calc.calculate_composite_rating(rs_rating, eps_rating, rev_g, roe, perf_12m)
+        smr        = ibd_calc.calculate_smr_rating(rev_g, roe, margins)
+        acc_dis    = ibd_calc.calculate_acc_dis_rating(hist)
+        atr_pct    = ibd_calc.calculate_atr_percent(hist)
+
+        # Trend Template
+        trend_result = trend_engine.check_all_criteria(hist, price)
+
+        # Score CAN SLIM (C, A, N, S, L, I, M)
         score = 0
-        
-        if earnings_growth > 50: score += 20; c_grade = 'A'; c_score = 20
-        elif earnings_growth > 25: score += 15; c_grade = 'A'; c_score = 15
-        elif earnings_growth > 15: score += 10; c_grade = 'B'; c_score = 10
-        elif earnings_growth > 0: score += 5; c_grade = 'C'; c_score = 5
-        else: score += 0; c_grade = 'D'; c_score = 0
-        
-        if eps_growth > 50: score += 15; a_grade = 'A'; a_score = 15
-        elif eps_growth > 25: score += 12; a_grade = 'A'; a_score = 12
-        elif eps_growth > 15: score += 8; a_grade = 'B'; a_score = 8
-        elif eps_growth > 0: score += 4; a_grade = 'C'; a_score = 4
-        else: score += 0; a_grade = 'D'; a_score = 0
-        
-        if pct_from_high > -3: score += 15; n_grade = 'A'; n_score = 15
-        elif pct_from_high > -10: score += 12; n_grade = 'A'; n_score = 12
-        elif pct_from_high > -20: score += 8; n_grade = 'B'; n_score = 8
-        elif pct_from_high > -30: score += 4; n_grade = 'C'; n_score = 4
-        else: score += 0; n_grade = 'D'; n_score = 0
-        
-        if volume_ratio > 2.0: score += 10; s_grade = 'A'; s_score = 10
-        elif volume_ratio > 1.5: score += 8; s_grade = 'A'; s_score = 8
-        elif volume_ratio > 1.0: score += 5; s_grade = 'B'; s_score = 5
-        else: score += 2; s_grade = 'C'; s_score = 2
-        
-        if rs_rating_legacy > 90: score += 15; l_grade = 'A'; l_score = 15
-        elif rs_rating_legacy > 80: score += 12; l_grade = 'A'; l_score = 12
-        elif rs_rating_legacy > 70: score += 8; l_grade = 'B'; l_score = 8
-        elif rs_rating_legacy > 60: score += 4; l_grade = 'C'; l_score = 4
-        else: score += 0; l_grade = 'D'; l_score = 0
-        
-        if inst_ownership > 80: score += 10; i_grade = 'A'; i_score = 10
-        elif inst_ownership > 60: score += 8; i_grade = 'A'; i_score = 8
-        elif inst_ownership > 40: score += 5; i_grade = 'B'; i_score = 5
-        elif inst_ownership > 20: score += 3; i_grade = 'C'; i_score = 3
-        else: score += 0; i_grade = 'D'; i_score = 0
-        
-        # Market Score
-        if market_analyzer is None:
-            market_analyzer = MarketAnalyzer()
-        market_data = market_analyzer.calculate_market_score()
-        m_score = market_data['score']
-        
-        if m_score >= 80: score += 15; m_grade = 'A'; m_score_val = 15
-        elif m_score >= 60: score += 10; m_grade = 'B'; m_score_val = 10
-        elif m_score >= 40: score += 5; m_grade = 'C'; m_score_val = 5
-        else: score += 0; m_grade = 'D'; m_score_val = 0
-        
-        # ML Prediction
-        volatility = hist['Close'].pct_change().std() * np.sqrt(252) * 100
-        price_momentum = (_s(hist['Close'].iloc[-1]) / _s(hist['Close'].iloc[-20]) - 1) * 100 if len(hist) >= 20 else 0
-        
-        ml_predictor = CANSlimMLPredictor()
-        ml_prob = ml_predictor.predict({
-            'earnings_growth': earnings_growth,
-            'revenue_growth': revenue_growth,
-            'eps_growth': eps_growth,
-            'rs_rating': rs_rating_legacy,
-            'volume_ratio': volume_ratio,
-            'inst_ownership': inst_ownership,
-            'pct_from_high': pct_from_high,
-            'volatility': volatility / 100,
-            'price_momentum': price_momentum
+        c_grade, c_sc = ('A', 20) if earn_g > 50 else ('A', 15) if earn_g > 25 else \
+                         ('B', 10) if earn_g > 15 else ('C', 5) if earn_g > 0 else ('D', 0)
+        score += c_sc
+
+        a_grade, a_sc = ('A', 15) if eps_g > 50 else ('A', 12) if eps_g > 25 else \
+                         ('B', 8)  if eps_g > 15 else ('C', 4) if eps_g > 0 else ('D', 0)
+        score += a_sc
+
+        n_grade, n_sc = ('A', 15) if pct_from_hi > -3  else ('A', 12) if pct_from_hi > -10 else \
+                         ('B', 8)  if pct_from_hi > -20 else ('C', 4) if pct_from_hi > -30 else ('D', 0)
+        score += n_sc
+
+        s_grade, s_sc = ('A', 10) if vol_ratio > 2.0 else ('A', 8) if vol_ratio > 1.5 else \
+                         ('B', 5)  if vol_ratio > 1.0 else ('C', 2)
+        score += s_sc
+
+        l_grade, l_sc = ('A', 15) if rs_rating > 90 else ('A', 12) if rs_rating > 80 else \
+                         ('B', 8)  if rs_rating > 70 else ('C', 4) if rs_rating > 60 else ('D', 0)
+        score += l_sc
+
+        i_grade, i_sc = ('A', 10) if inst_own > 80 else ('A', 8) if inst_own > 60 else \
+                         ('B', 5)  if inst_own > 40 else ('C', 3) if inst_own > 20 else ('D', 0)
+        score += i_sc
+
+        ms = market_score.get('score', 50)
+        # M — Market Direction (15 pts)
+        # O'Neil: el mercado arrastra el 75% de las acciones.
+        # Con market score <60 (no confirmed uptrend) = 0 pts.
+        # Esto explica por qué scores altos en mercado débil son raros.
+        m_grade, m_sc = ('A', 15) if ms >= 80 else \
+                         ('B', 10) if ms >= 70 else \
+                         ('C', 5)  if ms >= 60 else \
+                         ('D', 0)   # <60 = UPTREND UNDER PRESSURE o peor → 0 pts
+        score += m_sc
+
+        # ML
+        volatility    = hist['Close'].pct_change().std() * np.sqrt(252) * 100
+        if isinstance(volatility, pd.Series): volatility = float(volatility.iloc[0])
+        price_mom_20d = (_s(hist['Close'].iloc[-1]) / _s(hist['Close'].iloc[-20]) - 1) * 100 \
+                        if len(hist) >= 20 else 0.0
+        ml_prob = ml.predict({
+            'earnings_growth': earn_g, 'revenue_growth': rev_g, 'eps_growth': eps_g,
+            'rs_rating': rs_rating,   'volume_ratio': vol_ratio, 'inst_ownership': inst_own,
+            'pct_from_high': pct_from_hi, 'volatility': volatility / 100, 'price_momentum': price_mom_20d,
         })
-        
+
         return {
-            'ticker': ticker,
-            'name': info.get('shortName', ticker),
-            'sector': info.get('sector', 'N/A'),
-            'industry': info.get('industry', 'N/A'),
-            'market_cap': market_cap,
-            'price': current_price,
-            'score': score,
+            'ticker'      : ticker,
+            'name'        : info.get('shortName', ticker),
+            'sector'      : info.get('sector', 'N/A'),
+            'industry'    : info.get('industry', 'N/A'),
+            'market_cap'  : market_cap,
+            'price'       : price,
+            'score'       : score,
             'ml_probability': ml_prob,
-            'grades': {
-                'C': c_grade, 'A': a_grade, 'N': n_grade, 
-                'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade
+            'grades'      : {'C': c_grade, 'A': a_grade, 'N': n_grade,
+                             'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade},
+            'scores'      : {'C': c_sc, 'A': a_sc, 'N': n_sc,
+                             'S': s_sc, 'L': l_sc, 'I': i_sc, 'M': m_sc},
+            'metrics'     : {
+                'earnings_growth': earn_g, 'revenue_growth': rev_g, 'eps_growth': eps_g,
+                'pct_from_high': pct_from_hi, 'volume_ratio': vol_ratio, 'rs_rating': rs_rating,
+                'inst_ownership': inst_own, 'market_score': ms,
+                'market_phase': market_score.get('phase', 'N/A'),
+                'volatility': volatility, 'price_momentum': price_mom_20d,
             },
-            'scores': {
-                'C': c_score, 'A': a_score, 'N': n_score,
-                'S': s_score, 'L': l_score, 'I': i_score, 'M': m_score_val
-            },
-            'metrics': {
-                'earnings_growth': earnings_growth,
-                'revenue_growth': revenue_growth,
-                'eps_growth': eps_growth,
-                'pct_from_high': pct_from_high,
-                'volume_ratio': volume_ratio,
-                'rs_rating': rs_rating_legacy,
-                'inst_ownership': inst_ownership,
-                'market_score': m_score,
-                'market_phase': market_data.get('phase', 'N/A'),
-                'volatility': volatility,
-                'price_momentum': price_momentum
-            },
-            # NUEVOS RATINGS IBD
-            'ibd_ratings': {
-                'composite': composite,
-                'rs': round(rs_rating),
-                'eps': eps_rating,
-                'smr': smr,
-                'acc_dis': acc_dis,
-                'atr_percent': atr_pct,
-                'pe_ratio': info.get('trailingPE', 0),
-                'roe': roe,
-                'sales_growth': revenue_growth
+            'ibd_ratings' : {
+                'composite': composite, 'rs': rs_rating, 'eps': eps_rating,
+                'smr': smr, 'acc_dis': acc_dis, 'atr_percent': atr_pct,
+                'pe_ratio': info.get('trailingPE', 0) or 0,
+                'roe': roe, 'sales_growth': rev_g,
             },
             'trend_template': trend_result,
-            'week_52_range': {
-                'high': trend_result.get('values', {}).get('high_52w', high_52w),
-                'low': trend_result.get('values', {}).get('low_52w', hist['Low'].min()),
-                'current_position': ((current_price / high_52w) * 100) if high_52w else 0
-            }
+            'week_52_range' : {
+                'high': trend_result.get('values', {}).get('high_52w', high52),
+                'low' : trend_result.get('values', {}).get('low_52w', hist['Low'].min()),
+                'current_position': (price / high52 * 100) if high52 else 0,
+            },
         }
     except Exception as e:
-        print(f"Error en calculate_can_slim_metrics para {ticker}: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.warning(f"Error calculando {ticker}: {e}")
         return None
 
-@st.cache_data(ttl=600)
-def scan_universe(min_score=40, _market_analyzer=None, comprehensive=False, sample_size=MAX_STOCKS_TO_SCAN):
+
+# ==============================================================================
+# SCAN PRINCIPAL (batch optimizado, caché, pre-filtros)
+# ==============================================================================
+
+def scan_sp500(min_score: int = 60, min_composite: int = 0,
+               require_stage2: bool = False, max_results: int = 30) -> list:
     """
-    Escanea el universo de tickers y devuelve candidatos CAN SLIM.
-    Por defecto usa muestreo aleatorio para evitar rate limits.
+    Escanea el S&P 500 completo con arquitectura optimizada:
+      1. Descarga histórico en lotes batch (una llamada HTTP por lote de 50)
+      2. Descarga info fundamental con rate limiting gentil
+      3. Pre-filtra por precio/volumen/market cap
+      4. Calcula RS percentil sobre universo completo
+      5. Analiza cada acción sin llamadas HTTP adicionales
     """
+    sp500 = get_sp500_tickers()
+    spy_hist = get_spy_history()
+
+    # ── Progress UI ──────────────────────────────────────────────────────────
+    progress = st.progress(0)
+    status   = st.empty()
+
+    # ── PASO 1: Batch download histórico (lotes de BATCH_SIZE) ───────────────
+    status.markdown(f"""
+    <div class="phase-box">
+        <span style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.1rem;">
+        [1/4] DESCARGANDO HISTÓRICO EN BATCH — {len(sp500)} acciones
+        </span>
+    </div>""", unsafe_allow_html=True)
+    progress.progress(0.05)
+
+    hist_data: dict[str, pd.DataFrame] = {}
+    batches = [sp500[i:i+BATCH_SIZE] for i in range(0, len(sp500), BATCH_SIZE)]
+    for idx, batch in enumerate(batches):
+        batch_result = download_batch_history(tuple(batch), period="1y")
+        hist_data.update(batch_result)
+        progress.progress(0.05 + 0.25 * (idx + 1) / len(batches))
+
+    # ── PASO 2: Info fundamental ─────────────────────────────────────────────
+    status.markdown(f"""
+    <div class="phase-box">
+        <span style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.1rem;">
+        [2/4] DESCARGANDO DATOS FUNDAMENTALES
+        </span>
+    </div>""", unsafe_allow_html=True)
+    progress.progress(0.30)
+    info_data = download_batch_info(tuple(sp500))
+
+    # ── PASO 3: Pre-filtro ───────────────────────────────────────────────────
+    status.markdown(f"""
+    <div class="phase-box">
+        <span style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.1rem;">
+        [3/4] PRE-FILTRANDO UNIVERSO
+        </span>
+    </div>""", unsafe_allow_html=True)
+    progress.progress(0.55)
+    filtered = pre_filter_tickers(sp500, hist_data, info_data)
+
+    # ── PASO 4: RS percentil sobre universo completo ─────────────────────────
+    rs_universe = compute_rs_scores_universe(filtered, hist_data, spy_hist)
+
+    # ── PASO 5: Análisis CAN SLIM ────────────────────────────────────────────
+    status.markdown(f"""
+    <div class="phase-box">
+        <span style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.1rem;">
+        [4/4] CALCULANDO SCORES CAN SLIM — {len(filtered)} acciones pre-filtradas
+        </span>
+    </div>""", unsafe_allow_html=True)
+    progress.progress(0.60)
+
+    ibd_calc     = IBDRatingsCalculator()
+    trend_engine = MinerviniTrendTemplate()
+    ml           = CANSlimMLPredictor()
+    market_score = MarketAnalyzer().calculate_market_score()
+
     candidates = []
-    
-    if comprehensive:
-        current_tickers = get_all_universe_tickers(comprehensive=True, use_sample=False)
-    else:
-        current_tickers = get_all_universe_tickers(comprehensive=False, use_sample=True)
-    
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    errors_count = 0
-    max_errors = 10
-    
-    for i, ticker in enumerate(current_tickers):
-        progress = (i + 1) / len(current_tickers)
-        progress_bar.progress(progress)
-        status_text.text(f"Analizando {ticker}... ({i+1}/{len(current_tickers)}) - Errores: {errors_count}")
-        
-        result = calculate_can_slim_metrics(ticker, None)
-        if result and result['score'] >= min_score:
-            candidates.append(result)
-        elif result is None:
-            errors_count += 1
-            if errors_count >= max_errors:
-                st.warning(f"⚠️ Demasiados errores consecutivos ({max_errors}). Deteniendo scan...")
-                break
-        
-        if (i + 1) % 10 == 0:
-            time.sleep(1)
-    
-    progress_bar.empty()
-    status_text.empty()
-    
+    for i, t in enumerate(filtered):
+        result = calculate_can_slim_metrics(
+            ticker=t,
+            hist=hist_data.get(t),
+            info=info_data.get(t, {}),
+            spy_hist=spy_hist,
+            rs_universe=rs_universe,
+            market_score=market_score,
+            ibd_calc=ibd_calc,
+            trend_engine=trend_engine,
+            ml=ml,
+        )
+        if result is None:
+            continue
+        # Filtros adicionales configurables
+        if result['score'] < min_score:
+            continue
+        if min_composite > 0 and result['ibd_ratings']['composite'] < min_composite:
+            continue
+        if require_stage2 and not result['trend_template']['all_pass']:
+            continue
+        candidates.append(result)
+        progress.progress(0.60 + 0.38 * (i + 1) / max(len(filtered), 1))
+
+    progress.progress(1.0)
+    status.empty()
+    progress.empty()
+
     candidates.sort(key=lambda x: x['score'], reverse=True)
-    return candidates
+    return candidates[:max_results]
 
-# ============================================================
-# VISUALIZACIONES MEJORADAS
-# ============================================================
 
-def create_score_gauge(score, title="CAN SLIM Score"):
-    """Crea un gauge circular para el score CAN SLIM"""
+# ==============================================================================
+# VISUALIZACIONES
+# ==============================================================================
+
+def create_score_gauge(score: int, title: str = "CAN SLIM Score") -> go.Figure:
     color = COLORS['primary'] if score >= 80 else COLORS['warning'] if score >= 60 else COLORS['danger']
-    
     fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=score,
+        mode="gauge+number", value=score,
         domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': title, 'font': {'size': 14, 'color': 'white'}},
-        number={'font': {'size': 36, 'color': color, 'family': 'Arial Black'}},
+        title={'text': title, 'font': {'size': 13, 'color': 'white'}},
+        number={'font': {'size': 34, 'color': color}},
         gauge={
-            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"},
-            'bar': {'color': color, 'thickness': 0.75},
-            'bgcolor': COLORS['bg_dark'],
-            'borderwidth': 2,
-            'bordercolor': COLORS['bg_card'],
-            'steps': [
-                {'range': [0, 60], 'color': hex_to_rgba(COLORS['danger'], 0.2)},
+            'axis'       : {'range': [0, 100], 'tickcolor': 'white'},
+            'bar'        : {'color': color, 'thickness': 0.75},
+            'bgcolor'    : COLORS['bg_dark'],
+            'borderwidth': 2, 'bordercolor': COLORS['bg_card'],
+            'steps'      : [
+                {'range': [0, 60],  'color': hex_to_rgba(COLORS['danger'],  0.2)},
                 {'range': [60, 80], 'color': hex_to_rgba(COLORS['warning'], 0.2)},
-                {'range': [80, 100], 'color': hex_to_rgba(COLORS['primary'], 0.2)}
+                {'range': [80,100], 'color': hex_to_rgba(COLORS['primary'], 0.2)},
             ],
-            'threshold': {'line': {'color': "white", 'width': 3}, 'thickness': 0.8, 'value': score}
+            'threshold'  : {'line': {'color': 'white', 'width': 3}, 'thickness': 0.8, 'value': score},
         }
     ))
-    
+    fig.update_layout(paper_bgcolor=COLORS['bg_dark'], font={'color': 'white'},
+                      height=240, margin=dict(l=20, r=20, t=50, b=20))
+    return fig
+
+
+def create_grades_radar(grades: dict) -> go.Figure:
+    cats   = ['C', 'A', 'N', 'S', 'L', 'I', 'M']
+    g_map  = {'A': 100, 'B': 75, 'C': 50, 'D': 25, 'F': 0}
+    values = [g_map.get(grades.get(c, 'F'), 0) for c in cats]
+    values.append(values[0]); cats.append(cats[0])
+    fig = go.Figure(go.Scatterpolar(
+        r=values, theta=cats, fill='toself',
+        fillcolor=hex_to_rgba(COLORS['primary'], 0.3),
+        line=dict(color=COLORS['primary'], width=2),
+        marker=dict(size=7, color=COLORS['primary'])
+    ))
     fig.update_layout(
-        paper_bgcolor=COLORS['bg_dark'],
-        font={'color': "white"},
-        height=250,
-        margin=dict(l=20, r=20, t=50, b=20)
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], color='white', gridcolor=COLORS['bg_card']),
+            angularaxis=dict(color='white', gridcolor=COLORS['bg_card']),
+            bgcolor=COLORS['bg_dark']
+        ),
+        paper_bgcolor=COLORS['bg_dark'], font=dict(color='white'),
+        title=dict(text="Calificaciones CAN SLIM", font=dict(color='white', size=13)),
+        height=320, margin=dict(l=50, r=50, t=50, b=30)
     )
     return fig
 
-def create_market_dashboard(market_data):
+
+def create_ibd_radar(ibd: dict) -> go.Figure:
+    cats   = ['Composite', 'RS', 'EPS', 'Sales', 'ROE']
+    values = [
+        ibd.get('composite', 50), ibd.get('rs', 50), ibd.get('eps', 50),
+        min(100, max(0, 50 + (ibd.get('sales_growth', 0) or 0))),
+        min(100, (ibd.get('roe', 0) or 0) * 2),
+    ]
+    values.append(values[0]); cats.append(cats[0])
+    fig = go.Figure(go.Scatterpolar(
+        r=values, theta=cats, fill='toself',
+        fillcolor=hex_to_rgba(COLORS['ibd_blue'], 0.3),
+        line=dict(color=COLORS['ibd_blue'], width=2),
+        marker=dict(size=7, color=COLORS['ibd_blue'])
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], color='white', gridcolor=COLORS['border']),
+            angularaxis=dict(color='white', gridcolor=COLORS['border']),
+            bgcolor=COLORS['bg_dark']
+        ),
+        paper_bgcolor=COLORS['bg_dark'], font=dict(color='white'),
+        title=dict(text="Perfil IBD", font=dict(color='white', size=13)),
+        height=290, margin=dict(l=40, r=40, t=40, b=30)
+    )
+    return fig
+
+
+def create_market_dashboard(market_data: dict) -> go.Figure:
     """
-    Panel simplificado: SPY con precio, SMA50, SMA200.
-    Un solo gráfico claro — lo que importa es si SPY está sobre sus medias.
+    Panel simplificado: solo SPY con precio, SMA50, SMA200.
+    El dashboard de 4 gráficos (SPY/QQQ/IWM/VIX) era visualmente ruido sin valor accionable.
+    Lo que importa es: ¿está el SPY sobre sus medias? Eso lo muestra este único gráfico.
     """
     if not market_data or 'data' not in market_data:
         return go.Figure()
 
-    score   = market_data.get('score', 50)
-    phase   = market_data.get('phase', 'N/A')
-    color   = market_data.get('color', '#888888')
+    score  = market_data.get('score', 50)
+    phase  = market_data.get('phase', 'N/A')
+    color  = market_data.get('color', '#888888')
+    data   = market_data.get('data', {})
     signals = market_data.get('signals', [])
-    fig     = go.Figure()
 
-    if 'SPY' in market_data['data']:
-        spy = market_data['data']['SPY']['data']
+    fig = go.Figure()
+
+    if 'SPY' in data:
+        spy = data['SPY']['data']
         cl  = spy['Close']
         idx = spy.index
-        # Flatten MultiIndex if needed
-        if isinstance(cl, pd.DataFrame):
-            cl = cl.iloc[:, 0]
 
         sma200 = cl.rolling(200).mean()
         sma50  = cl.rolling(50).mean()
 
+        # SMA 200 (rojo)
         fig.add_trace(go.Scatter(x=idx, y=sma200, name='SMA 200',
-                                  line=dict(color='#f23645', width=1.5, dash='dash')))
+                                  line=dict(color='#f23645', width=1.5, dash='dash'),
+                                  hovertemplate='SMA200: $%{y:.2f}'))
+        # SMA 50 (naranja)
         fig.add_trace(go.Scatter(x=idx, y=sma50, name='SMA 50',
-                                  line=dict(color='#ff9800', width=1.5, dash='dot')))
+                                  line=dict(color='#ff9800', width=1.5, dash='dot'),
+                                  hovertemplate='SMA50: $%{y:.2f}'))
+        # Precio SPY
         fig.add_trace(go.Scatter(x=idx, y=cl, name='SPY',
-                                  line=dict(color=COLORS['primary'], width=2.5)))
+                                  line=dict(color=COLORS['primary'], width=2.5),
+                                  hovertemplate='SPY: $%{y:.2f}<br>%{x}'))
 
     signal_text = '  ·  '.join(signals[:3]) if signals else 'Sin señales'
     fig.update_layout(
@@ -1283,676 +1159,342 @@ def create_market_dashboard(market_data):
     )
     return fig
 
-def create_grades_radar(grades_dict):
-    """Crea un radar chart para las calificaciones CAN SLIM completas"""
-    categories = ['C', 'A', 'N', 'S', 'L', 'I', 'M']
-    values = []
-    
-    grade_map = {'A': 100, 'B': 75, 'C': 50, 'D': 25, 'F': 0}
-    for cat in categories:
-        values.append(grade_map.get(grades_dict.get(cat, 'F'), 0))
-    
-    values.append(values[0])
-    categories.append(categories[0])
-    
-    fig = go.Figure(data=go.Scatterpolar(
-        r=values,
-        theta=categories,
-        fill='toself',
-        fillcolor='rgba(0, 255, 173, 0.3)',
-        line=dict(color=COLORS['primary'], width=2),
-        marker=dict(size=8, color=COLORS['primary'])
-    ))
-    
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 100], color='white', gridcolor=COLORS['bg_card']),
-            angularaxis=dict(color='white', gridcolor=COLORS['bg_card']),
-            bgcolor=COLORS['bg_dark']
-        ),
-        paper_bgcolor=COLORS['bg_dark'],
-        font=dict(color='white'),
-        title=dict(text="Calificaciones CAN SLIM Completas", font=dict(color='white', size=14)),
-        height=350,
-        margin=dict(l=60, r=60, t=50, b=40)
-    )
-    return fig
 
-def create_ml_feature_importance(predictor):
-    """Visualiza importancia de características ML"""
-    importance = predictor.get_feature_importance()
-    if not importance:
-        return go.Figure()
-    
-    features = list(importance.keys())
-    values = list(importance.values())
-    
+def create_ml_feature_importance(ml: CANSlimMLPredictor) -> go.Figure:
+    imp = ml.get_feature_importance()
     fig = go.Figure(go.Bar(
-        x=features,
-        y=values,
+        x=list(imp.keys()), y=list(imp.values()),
         marker_color=COLORS['primary'],
-        text=[f'{v:.2%}' for v in values],
-        textposition='auto'
+        text=[f'{v:.1%}' for v in imp.values()], textposition='auto'
     ))
-    
     fig.update_layout(
-        paper_bgcolor=COLORS['bg_dark'],
-        plot_bgcolor=COLORS['bg_dark'],
+        paper_bgcolor=COLORS['bg_dark'], plot_bgcolor=COLORS['bg_dark'],
         font=dict(color='white'),
         title=dict(text="Importancia de Factores ML", font=dict(color='white')),
         xaxis=dict(color='white', gridcolor=COLORS['bg_card']),
         yaxis=dict(color='white', gridcolor=COLORS['bg_card']),
-        height=300
+        height=290
     )
     return fig
 
-# ============================================================
-# VISUALIZACIONES IBD Y TREND TEMPLATE - VERSIÓN CORREGIDA
-# ============================================================
 
-def render_ibd_panel(ibd_ratings):
-    """
-    Renderiza el panel de ratings IBD usando componentes nativos de Streamlit
-    en lugar de HTML complejo que puede escaparse
-    """
-    composite = ibd_ratings.get('composite', 0)
-    rs = ibd_ratings.get('rs', 0)
-    eps = ibd_ratings.get('eps', 0)
-    smr = ibd_ratings.get('smr', 'C')
-    acc_dis = ibd_ratings.get('acc_dis', 'C')
-    atr = ibd_ratings.get('atr_percent', 0)
-    pe = ibd_ratings.get('pe_ratio', 0)
-    roe = ibd_ratings.get('roe', 0)
-    
-    # Header con Composite
-    header_col1, header_col2 = st.columns([2, 1])
-    with header_col1:
-        st.subheader("📊 Ratings IBD")
-    with header_col2:
-        composite_color = COLORS['primary'] if composite >= 80 else COLORS['warning'] if composite >= 60 else COLORS['danger']
-        st.markdown(f"<h3 style='color: {composite_color}; text-align: right; margin: 0;'>Composite: {composite}</h3>", unsafe_allow_html=True)
-    
+# ==============================================================================
+# COMPONENTES UI: IBD PANEL & TREND TEMPLATE
+# ==============================================================================
+
+def render_ibd_panel(ibd: dict):
+    composite = ibd.get('composite', 0)
+    rs        = ibd.get('rs', 0)
+    eps       = ibd.get('eps', 0)
+    smr       = ibd.get('smr', 'C')
+    acc_dis   = ibd.get('acc_dis', 'C')
+    atr       = ibd.get('atr_percent', 0)
+    pe        = ibd.get('pe_ratio', 0)
+    roe       = ibd.get('roe', 0)
+
+    c_color = COLORS['primary'] if composite >= 80 else COLORS['warning'] if composite >= 60 else COLORS['danger']
+
+    hc1, hc2 = st.columns([2, 1])
+    with hc1:
+        st.markdown('<h3>📊 RATINGS IBD</h3>', unsafe_allow_html=True)
+    with hc2:
+        st.markdown(f"<div style='font-family:VT323,monospace;color:{c_color};text-align:right;"
+                    f"font-size:1.5rem;letter-spacing:2px;margin-top:10px;'>COMPOSITE: {composite}</div>",
+                    unsafe_allow_html=True)
     st.markdown("---")
-    
-    # Tres métricas principales en columnas
+
     c1, c2, c3 = st.columns(3)
-    
     with c1:
         st.markdown(f"""
-        <div style='text-align: center; padding: 15px; background: rgba(33, 150, 243, 0.1); border-radius: 10px; border: 1px solid rgba(33, 150, 243, 0.3);'>
-            <div style='color: #aaaaaa; font-size: 0.8rem; margin-bottom: 5px;'>RS RATING</div>
-            <div style='color: #2196F3; font-size: 2rem; font-weight: bold;'>{rs}</div>
-            <div style='color: #666; font-size: 0.7rem;'>vs S&P 500</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        <div style='text-align:center;padding:15px;background:rgba(33,150,243,.1);
+        border-radius:10px;border:1px solid rgba(33,150,243,.3);'>
+        <div style='color:#aaa;font-size:.8rem;margin-bottom:5px;font-family:Courier New,monospace;'>RS RATING</div>
+        <div style='color:#2196F3;font-size:2rem;font-family:VT323,monospace;'>{rs}</div>
+        <div style='color:#666;font-size:.7rem;font-family:Courier New,monospace;'>vs S&P 500</div>
+        </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
-        <div style='text-align: center; padding: 15px; background: rgba(76, 175, 80, 0.1); border-radius: 10px; border: 1px solid rgba(76, 175, 80, 0.3);'>
-            <div style='color: #aaaaaa; font-size: 0.8rem; margin-bottom: 5px;'>EPS RATING</div>
-            <div style='color: #4CAF50; font-size: 2rem; font-weight: bold;'>{eps}</div>
-            <div style='color: #666; font-size: 0.7rem;'>Growth YoY</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        <div style='text-align:center;padding:15px;background:rgba(76,175,80,.1);
+        border-radius:10px;border:1px solid rgba(76,175,80,.3);'>
+        <div style='color:#aaa;font-size:.8rem;margin-bottom:5px;font-family:Courier New,monospace;'>EPS RATING</div>
+        <div style='color:#4CAF50;font-size:2rem;font-family:VT323,monospace;'>{eps}</div>
+        <div style='color:#666;font-size:.7rem;font-family:Courier New,monospace;'>Growth YoY</div>
+        </div>""", unsafe_allow_html=True)
     with c3:
-        smr_color = COLORS['primary'] if smr == 'A' else COLORS['warning'] if smr == 'B' else COLORS['danger'] if smr == 'D' else COLORS['neutral']
+        smr_c = COLORS['primary'] if smr == 'A' else COLORS['warning'] if smr == 'B' else \
+                COLORS['danger'] if smr == 'D' else COLORS['neutral']
         st.markdown(f"""
-        <div style='text-align: center; padding: 15px; background: rgba(255, 152, 0, 0.1); border-radius: 10px; border: 1px solid rgba(255, 152, 0, 0.3);'>
-            <div style='color: #aaaaaa; font-size: 0.8rem; margin-bottom: 5px;'>SMR GRADE</div>
-            <div style='color: {smr_color}; font-size: 2rem; font-weight: bold;'>{smr}</div>
-            <div style='color: #666; font-size: 0.7rem;'>Sales/Margins/ROE</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Métricas secundarias
+        <div style='text-align:center;padding:15px;background:rgba(255,152,0,.1);
+        border-radius:10px;border:1px solid rgba(255,152,0,.3);'>
+        <div style='color:#aaa;font-size:.8rem;margin-bottom:5px;font-family:Courier New,monospace;'>SMR GRADE</div>
+        <div style='color:{smr_c};font-size:2rem;font-family:VT323,monospace;'>{smr}</div>
+        <div style='color:#666;font-size:.7rem;font-family:Courier New,monospace;'>Sales/Margins/ROE</div>
+        </div>""", unsafe_allow_html=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
     c4, c5, c6, c7 = st.columns(4)
-    
-    ad_color = COLORS['primary'] if acc_dis in ['A', 'B'] else COLORS['danger'] if acc_dis in ['D', 'E'] else COLORS['neutral']
-    
-    with c4:
-        st.metric("A/D Rating", acc_dis, help="Accumulation/Distribution")
-    with c5:
-        st.metric("ATR %", f"{atr}%", help="Volatilidad promedio")
-    with c6:
-        st.metric("P/E Ratio", f"{pe:.1f}" if pe else "N/A")
-    with c7:
-        st.metric("ROE", f"{roe:.1f}%", help="Return on Equity")
+    with c4: st.metric("A/D Rating", acc_dis, help="Accumulation/Distribution 50d")
+    with c5: st.metric("ATR %",      f"{atr}%", help="Volatilidad promedio")
+    with c6: st.metric("P/E Ratio",  f"{pe:.1f}" if pe else "N/A")
+    with c7: st.metric("ROE",        f"{roe:.1f}%", help="Return on Equity")
 
 
-def render_trend_template(trend_result):
-    """
-    Renderiza el Trend Template usando componentes nativos de Streamlit
-    """
-    criteria = trend_result.get('criteria', {})
-    score = trend_result.get('score', 0)
-    stage = trend_result.get('stage', '')
-    all_pass = trend_result.get('all_pass', False)
-    
-    # Header
-    header_col1, header_col2 = st.columns([2, 1])
-    with header_col1:
-        st.subheader("🎯 Trend Template Minervini")
-    with header_col2:
-        score_color = COLORS['primary'] if all_pass else COLORS['warning']
-        st.markdown(f"<h3 style='color: {score_color}; text-align: right; margin: 0;'>{score}/8</h3>", unsafe_allow_html=True)
-    
-    # Stage badge
-    stage_color = COLORS['primary'] if 'Stage 2' in stage else COLORS['danger'] if 'Stage 4' in stage else COLORS['warning']
-    st.markdown(f"<p style='color: {stage_color}; font-weight: bold; text-align: right; margin-top: -10px;'>{stage}</p>", unsafe_allow_html=True)
-    
+def render_trend_template(trend: dict):
+    criteria = trend.get('criteria', {})
+    score    = trend.get('score', 0)
+    stage    = trend.get('stage', '')
+    all_pass = trend.get('all_pass', False)
+
+    sc_color = COLORS['primary'] if all_pass else COLORS['warning']
+    hc1, hc2 = st.columns([2, 1])
+    with hc1:
+        st.markdown('<h3>🎯 TREND TEMPLATE MINERVINI</h3>', unsafe_allow_html=True)
+    with hc2:
+        st.markdown(f"<div style='font-family:VT323,monospace;color:{sc_color};text-align:right;"
+                    f"font-size:1.5rem;letter-spacing:2px;margin-top:10px;'>{score}/8</div>",
+                    unsafe_allow_html=True)
+
+    stage_c = COLORS['primary'] if 'Stage 2' in stage else \
+              COLORS['danger'] if 'Stage 4' in stage else COLORS['warning']
+    st.markdown(f"<div style='font-family:VT323,monospace;color:{stage_c};font-size:1.1rem;"
+                f"text-align:right;letter-spacing:1px;margin-top:-10px;'>▸ {stage.upper()}</div>",
+                unsafe_allow_html=True)
     st.markdown("---")
-    
-    # Grid de criterios (2 columnas)
-    criteria_items = list(criteria.items())
-    mid = len(criteria_items) // 2
-    
+
+    items = list(criteria.items())
+    mid   = len(items) // 2
     col1, col2 = st.columns(2)
-    
-    for i, (criterion, passed) in enumerate(criteria_items):
-        target_col = col1 if i < mid else col2
-        
-        with target_col:
-            if passed:
-                st.success(f"✓ {criterion}")
-            else:
-                st.error(f"✗ {criterion}")
-    
-    # Mensaje final
+    for i, (criterion, passed) in enumerate(items):
+        with col1 if i < mid else col2:
+            if passed: st.success(f"✓ {criterion}")
+            else:      st.error(f"✗ {criterion}")
+
     st.markdown("---")
     if all_pass:
-        st.success("✅ **TODOS LOS CRITERIOS CUMPLIDOS** - Stage 2 Confirmado")
+        st.success("✅ **TODOS LOS CRITERIOS CUMPLIDOS** — Stage 2 Confirmado")
     else:
-        st.warning(f"⚠️ **{score}/8 criterios cumplidos** - Revisar condiciones técnicas")
+        st.warning(f"⚠️ **{score}/8 criterios cumplidos** — Revisar condiciones técnicas")
 
 
-def create_ibd_radar(ibd_ratings):
-    """Radar chart para ratings IBD"""
-    categories = ['Composite', 'RS', 'EPS', 'Sales', 'ROE']
-    
-    values = [
-        ibd_ratings.get('composite', 50),
-        ibd_ratings.get('rs', 50),
-        ibd_ratings.get('eps', 50),
-        min(100, max(0, 50 + (ibd_ratings.get('sales_growth', 0) or 0))),
-        min(100, (ibd_ratings.get('roe', 0) or 0) * 2)
-    ]
-    
-    fig = go.Figure(data=go.Scatterpolar(
-        r=values + [values[0]],
-        theta=categories + [categories[0]],
-        fill='toself',
-        fillcolor='rgba(33, 150, 243, 0.3)',
-        line=dict(color=COLORS['ibd_blue'], width=2),
-        marker=dict(size=8, color=COLORS['ibd_blue'])
-    ))
-    
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 100], color='white', gridcolor=COLORS['border']),
-            angularaxis=dict(color='white', gridcolor=COLORS['border']),
-            bgcolor=COLORS['bg_dark']
-        ),
-        paper_bgcolor=COLORS['bg_dark'],
-        font=dict(color='white'),
-        title=dict(text="Perfil IBD", font=dict(color='white', size=14)),
-        height=300,
-        margin=dict(l=40, r=40, t=40, b=40)
-    )
-    return fig
+# ==============================================================================
+# DISPLAY RESULTADOS GUARDADOS
+# ==============================================================================
 
-# ============================================================
-# FASTAPI IMPLEMENTATION (CONDICIONAL)
-# ============================================================
+def display_saved_results():
+    if not st.session_state.scan_candidates:
+        return False
 
-if FASTAPI_AVAILABLE:
-    app = FastAPI(
-        title="CAN SLIM Pro API",
-        description="API profesional para análisis CAN SLIM con ML, IBD Ratings y Backtesting",
-        version="3.0.0"
-    )
+    candidates = st.session_state.scan_candidates
+    scan_time  = st.session_state.scan_timestamp
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    st.markdown(f"""
+    <div class="terminal-box">
+        <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.1rem;">
+            [SCAN COMPLETE // {scan_time}]
+        </div>
+        <div style="font-family:'VT323',monospace;font-size:1.5rem;margin-top:5px;">
+            ▸ {len(candidates)} CANDIDATOS CAN SLIM DETECTADOS — UNIVERSO: S&P 500
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    class TickerRequest(BaseModel):
-        ticker: str
-        include_ml: bool = True
+    st.markdown('<h2>🏆 TOP CANDIDATOS CAN SLIM</h2>', unsafe_allow_html=True)
+    cols = st.columns(min(3, len(candidates)))
+    for i, col in enumerate(cols):
+        if i < len(candidates):
+            c = candidates[i]
+            with col:
+                st.plotly_chart(create_score_gauge(c['score']), use_container_width=True, key=f"gauge_{i}")
+                grades_html = ''.join(
+                    f'<span class="grade-badge grade-{c["grades"][g]}">{g}</span>'
+                    for g in ['C', 'A', 'N', 'S', 'L', 'I', 'M']
+                )
+                stage_pass = "✅" if c['trend_template']['all_pass'] else f"{c['trend_template']['score']}/8"
+                st.markdown(f"""
+                <div class="terminal-box" style="text-align:center;padding:15px;">
+                    <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.8rem;">{c['ticker']}</div>
+                    <div style="font-family:'Courier New',monospace;color:#888;font-size:11px;margin:4px 0;">{c['name'][:32]}</div>
+                    <div style="margin:8px 0;">{grades_html}</div>
+                    <div style="font-family:'VT323',monospace;color:{COLORS['ibd_blue']};font-size:1rem;">
+                        IBD Composite: {c['ibd_ratings']['composite']}
+                    </div>
+                    <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1rem;">
+                        ML: {c['ml_probability']:.1%} | Stage: {stage_pass}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-    class ScanRequest(BaseModel):
-        min_score: int = 60
-        universe: str = "all"
-        max_results: int = 50
+    st.markdown('<h2>📋 RESULTADOS DETALLADOS</h2>', unsafe_allow_html=True)
+    max_r  = st.session_state.last_scan_params.get('max_results', 30)
+    rows   = []
+    for c in candidates[:max_r]:
+        rows.append({
+            'Ticker'    : c['ticker'],
+            'Nombre'    : c['name'][:28],
+            'Sector'    : c['sector'],
+            'Score'     : c['score'],
+            'Composite' : c['ibd_ratings']['composite'],
+            'RS'        : c['ibd_ratings']['rs'],
+            'EPS'       : c['ibd_ratings']['eps'],
+            'SMR'       : c['ibd_ratings']['smr'],
+            'A/D'       : c['ibd_ratings']['acc_dis'],
+            'Stage'     : f"{c['trend_template']['score']}/8",
+            'ML Prob'   : f"{c['ml_probability']:.0%}",
+            'C':c['grades']['C'],'A':c['grades']['A'],'N':c['grades']['N'],
+            'S':c['grades']['S'],'L':c['grades']['L'],'I':c['grades']['I'],'M':c['grades']['M'],
+            'EPS G%'    : f"{c['metrics']['earnings_growth']:.1f}%",
+            'Del High'  : f"{c['metrics']['pct_from_high']:.1f}%",
+            'VolRatio'  : f"{c['metrics']['volume_ratio']:.2f}x",
+            'MktCap$B'  : f"${c['market_cap']:.1f}B",
+        })
+    df = pd.DataFrame(rows)
 
-    class BacktestRequest(BaseModel):
-        start_date: str
-        end_date: str
-        initial_capital: float = 100000
-        max_positions: int = 10
+    def c_score(val):
+        try:
+            s = int(val)
+            col = COLORS['primary'] if s >= 80 else COLORS['warning'] if s >= 60 else COLORS['danger']
+            return f'color:{col};font-weight:bold'
+        except: return ''
 
-    @app.get("/")
-    async def root():
-        return {
-            "message": "CAN SLIM Pro API",
-            "version": "3.0.0",
-            "features": ["CAN SLIM", "IBD Ratings", "Minervini Trend Template", "ML", "Backtesting"],
-            "endpoints": [
-                "/market/status",
-                "/analyze/{ticker}",
-                "/scan",
-                "/backtest",
-                "/ml/predict"
-            ]
-        }
+    def c_grade(val):
+        grade_colors = {'A': COLORS['primary'], 'B': COLORS['warning'], 'C': COLORS['danger']}
+        color = grade_colors.get(str(val), COLORS['neutral'])
+        return f"color:{color};font-weight:bold"
 
-    @app.get("/market/status")
-    async def get_market_status():
-        analyzer = MarketAnalyzer()
-        return analyzer.calculate_market_score()
+    styled = df.style \
+        .applymap(c_score, subset=['Score', 'Composite', 'RS', 'EPS']) \
+        .applymap(c_grade, subset=['C','A','N','S','L','I','M'])
+    st.dataframe(styled, use_container_width=True, height=580)
 
-    @app.post("/analyze")
-    async def analyze_ticker(request: TickerRequest):
-        analyzer = MarketAnalyzer()
-        result = calculate_can_slim_metrics(request.ticker, analyzer)
-        if result is None:
-            raise HTTPException(status_code=404, detail=f"No se pudo analizar {request.ticker}")
-        
-        if request.include_ml and SKLEARN_AVAILABLE:
-            ml = CANSlimMLPredictor()
-            result['ml_prediction'] = ml.predict(result['metrics'])
-        
-        return result
+    csv = df.to_csv(index=False)
+    st.download_button("📥 DESCARGAR CSV", data=csv,
+                       file_name=f"canslim_sp500_{scan_time.replace(':','-')}.csv",
+                       mime="text/csv")
+    if st.button("🗑️ LIMPIAR RESULTADOS", type="secondary"):
+        st.session_state.scan_candidates  = []
+        st.session_state.scan_timestamp   = None
+        st.session_state.last_scan_params = {}
+        st.rerun()
+    return True
 
-    @app.post("/scan")
-    async def scan_stocks(request: ScanRequest):
-        tickers = load_tickers_from_file()
-        
-        analyzer = MarketAnalyzer()
-        candidates = scan_universe(tickers, request.min_score, analyzer, comprehensive=True)
-        return {"count": len(candidates), "results": candidates[:request.max_results]}
 
-    @app.post("/backtest")
-    async def run_backtest(request: BacktestRequest):
-        if not ZIPPILINE_AVAILABLE:
-            raise HTTPException(status_code=503, detail="Zipline no disponible")
-        
-        backtester = CANSlimBacktester()
-        start = pd.Timestamp(request.start_date, tz='UTC')
-        end = pd.Timestamp(request.end_date, tz='UTC')
-        
-        results = backtester.run_backtest(start, end)
-        if results is None:
-            raise HTTPException(status_code=500, detail="Error en backtest")
-        
-        return {
-            "metrics": backtester.get_metrics(),
-            "trades": len(results.orders),
-            "period": f"{request.start_date} to {request.end_date}"
-        }
-
-    def run_api_server():
-        uvicorn.run(app, host="0.0.0.0", port=8000)
-else:
-    app = None
-
-# ============================================================
-# CONTENIDO EDUCATIVO EXPANDIDO CON IBD Y MINERVINI
-# ============================================================
+# ==============================================================================
+# CONTENIDO EDUCATIVO
+# ==============================================================================
 
 EDUCATIONAL_CONTENT = {
     "guia_completa": """
-    ### 📚 Guía Completa de los 7 Criterios CAN SLIM + Ratings IBD
-    
-    **C - Current Quarterly Earnings (Beneficios Trimestrales Actuales)**
-    - Buscar crecimiento >25% vs mismo trimestre año anterior
-    - Idealmente >50% o aceleración quarter-over-quarter
-    - **EPS Rating IBD (0-99)**: Normaliza el crecimiento en escala percentil
-    - Revisar sorpresas de earnings (beat estimates)
-    - Importancia: 20 puntos del score total
-    
-    **A - Annual Earnings Growth (Crecimiento Anual)**
-    - Crecimiento EPS últimos 3-5 años >25% anual
-    - Consistencia: no queremos un año bueno y otro malo
-    - ROE (Return on Equity) >17%
-    - **SMR Rating (A-D)**: Composite de Sales, Margins, ROE
-    - Margen de beneficio en expansión
-    - Importancia: 15 puntos
-    
-    **N - New Products, New Management, New Highs**
-    - **New Products**: Lanzamientos innovadores, patentes, nuevos mercados
-    - **New Management**: Cambios de CEO que traen nueva visión
-    - **New Highs**: Máximos históricos o cerca de ellos (-5% to +5%)
-    - Breakouts desde bases de consolidación
-    - Importancia: 15 puntos
-    
-    **S - Supply and Demand (Oferta y Demanda)**
-    - Volumen superior al promedio (1.5x - 3x) en días alcistas
-    - **Accumulation/Distribution (A-E)**: Rating IBD de presión compradora
-    - A = Heavy Accumulation, E = Heavy Distribution
-    - Acciones en circulación < 25M (preferiblemente)
-    - Float bajo = mayor volatilidad potencial
-    - Importancia: 10 puntos
-    
-    **L - Leader or Laggard (Líder o Rezagado)**
-    - **RS Rating (0-99)**: Fuerza relativa vs S&P 500 con ponderación 40/20/20/20
-    - Metodología IBD: 40% último trimestre, 20% cada uno de los 3 anteriores
-    - Da más peso al momentum reciente
-    - Top 10% de rendimiento en su sector
-    - Líderes de grupo industrial (ej: NVDA en semiconductores)
-    - Evitar stocks débiles "porque están baratos"
-    - Importancia: 15 puntos
-    
-    **I - Institutional Sponsorship (Patrocinio Institucional)**
-    - Fondos institucionales poseen >40% del float
-    - Número de fondos creciendo últimos 3 trimestres
-    - Presencia de inversores de calidad (Fidelity, BlackRock, etc.)
-    - Cuidado con sobre-concentración (>90% ownership)
-    - Importancia: 10 puntos
-    
-    **M - Market Direction (Dirección del Mercado)**
-    - **El factor más importante** - No operar contra la tendencia
-    - Confirmar uptrend con índices principales sobre SMA 50/200
-    - Distribution Days: días de venta institucional en volumen alto
-    - Follow-Through Day: señal de inicio de nuevo uptrend
-    - Cash es una posición válida durante downtrends
-    - Importancia: 15 puntos
-    """,
-    
+### 📚 Los 7 Criterios CAN SLIM + Ratings IBD
+
+**C — Current Quarterly Earnings**
+Buscar crecimiento >25% vs mismo trimestre año anterior. Idealmente >50% con aceleración.
+EPS Rating IBD normaliza el crecimiento en escala percentil 1-99.
+
+**A — Annual Earnings Growth**
+Crecimiento EPS 3-5 años >25% anual con consistencia. ROE >17%.
+SMR Rating (A-D) evalúa Sales, Margins y ROE de forma compuesta.
+
+**N — New Products / New Highs**
+Nuevos productos, gestión innovadora o breakouts desde máximos históricos.
+El precio debe estar cerca de máximos (dentro del -5% al +5%).
+
+**S — Supply and Demand**
+Volumen superior al promedio (1.5x-3x) en días alcistas.
+Accumulation/Distribution Rating (A-E) mide presión compradora 50 días.
+
+**L — Leader or Laggard**
+RS Rating >80: top 20% del mercado. Ponderación IBD 40/20/20/20.
+Evitar stocks débiles "porque están baratos".
+
+**I — Institutional Sponsorship**
+Fondos institucionales >40% del float, número de fondos creciendo.
+Presencia de gestores de calidad (Fidelity, BlackRock, Vanguard).
+
+**M — Market Direction**
+Factor más importante. No operar contra la tendencia.
+Índices sobre SMA 50/200, VIX bajo, confirmación de uptrend.
+""",
+
     "ibd_ratings_guide": """
-    ### 📊 Guía de Ratings IBD (Investors Business Daily)
-    
-    **Composite Rating (0-99)**
-    - Ponderación: 30% EPS Rating + 30% RS Rating + 40% fundamentales/momentum
-    - 99 = Mejor 1% del mercado
-    - 80 = Top 20%
-    - Fórmula propietaria de IBD que sintetiza fortaleza general
-    
-    **RS Rating - Relative Strength (0-99)**
-    - Compara performance del stock vs S&P 500
-    - **Ponderación única IBD**: 40% último trimestre, 20% cada uno de los 3 trimestres anteriores
-    - Da más peso al momentum reciente
-    - >80 indica outperformance significativo
-    
-    **EPS Rating (0-99)**
-    - Basado en crecimiento de ganancias trimestrales YoY
-    - Normalizado a escala percentil
-    - >80 indica crecimiento superior al promedio
-    
-    **SMR Rating (A-D)**
-    - **S**ales: Crecimiento de ventas (peso 40%)
-    - **M**argins: Tendencia de márgenes (peso 30%)
-    - **R**OE: Return on Equity (peso 30%)
-    - A = Excelente, B = Bueno, C = Promedio, D = Débil
-    
-    **Accumulation/Distribution (A-E)**
-    - A = Heavy Accumulation (compra institucional fuerte)
-    - B = Moderate Accumulation
-    - C = Neutral
-    - D = Moderate Distribution
-    - E = Heavy Distribution (venta institucional)
-    - Basado en ratio volumen en días up vs down (50 días)
-    
-    **Métricas Adicionales**
-    - **P/E Ratio**: Precio/Beneficio trailing 12 meses
-    - **ROE**: Return on Equity (%)
-    - **ATR%**: Average True Range como % del precio (volatilidad)
-    - **52-Week Range**: Posición dentro del rango anual
-    """,
-    
+### 📊 Ratings IBD
+
+**Composite Rating (0-99)**: 30% EPS + 30% RS + 40% fundamentales. 99 = mejor 1%.
+
+**RS Rating (0-99)**: Performance relativa vs S&P 500. Ponderación 40/20/20/20 (4 trimestres).
+En esta herramienta se calcula como percentil real sobre el universo S&P 500.
+
+**EPS Rating (0-99)**: Crecimiento de ganancias trimestrales YoY normalizado a percentil.
+
+**SMR Rating (A-D)**: Sales (40%) + Margins (30%) + ROE (30%).
+
+**Accumulation/Distribution (A-E)**: Ratio volumen días up/down en ventana 50 días.
+A = compra institucional fuerte. E = distribución institucional.
+""",
+
     "trend_template_minervini": """
-    ### 🎯 Trend Template de Mark Minervini
-    
-    El Trend Template es un sistema de 8 criterios técnicos para identificar stocks en **Stage 2 (Advancing Phase)** según la metodología de Stan Weinstein, popularizada por Mark Minervini.
-    
-    **Los 8 Criterios (todos deben cumplirse):**
-    
-    1. **Precio > SMA 50** - Por encima de la media móvil de 50 días
-    2. **Precio > SMA 150** - Por encima de la media móvil de 150 días
-    3. **Precio > SMA 200** - Por encima de la media móvil de 200 días
-    4. **SMA 50 > SMA 150** - Media corta por encima de media media
-    5. **SMA 150 > SMA 200** - Media media por encima de media larga
-    6. **SMA 200 Tendencia Alcista** - SMA 200 subiendo (últimos 20 días)
-    7. **Precio > 30% del mínimo 52 semanas** - No comprar demasiado cerca del fondo
-    8. **Precio dentro 25% del máximo 52 semanas** - Cerca de máximos históricos
-    
-    **Interpretación de Stages (Weinstein):**
-    
-    - **Stage 1 (Accumulation)**: Consolidación después de caída. SMA 200 plana o subiendo levemente. Precio oscila alrededor de SMA 200.
-    - **Stage 2 (Advancing)**: Tendencia alcista confirmada. Todas las medias alineadas alcista. Precio > SMA 50 > SMA 150 > SMA 200.
-    - **Stage 3 (Distribution)**: Tope del mercado. SMA 200 empieza a aplanarse. Volumen de distribución.
-    - **Stage 4 (Declining)**: Tendencia bajista. Precio < SMA 200. Medias alineadas a la baja.
-    
-    **Uso en Trading:**
-    - Operar SOLO en Stage 2 confirmed (8/8 criterios)
-    - El Trend Template actúa como filtro antes de aplicar CAN SLIM
-    - Reduce falsos breakouts y mejora win rate
-    - Combinar con señales de volumen y fundamentals CAN SLIM
-    """,
-    
+### 🎯 Trend Template de Mark Minervini (Stage 2)
+
+8 criterios para confirmar Stage 2 (Advancing Phase) según Weinstein-Minervini:
+
+1. Precio > SMA 50
+2. Precio > SMA 150
+3. Precio > SMA 200
+4. SMA 50 > SMA 150
+5. SMA 150 > SMA 200
+6. SMA 200 en tendencia alcista (vs hace 20 días)
+7. Precio > 30% del mínimo de 52 semanas
+8. Precio dentro del 25% del máximo de 52 semanas
+
+Stage 2 confirmado = 8/8. Operar solo en Stage 2.
+""",
+
     "reglas_operacion": """
-    ### 📋 Reglas de Operación CAN SLIM + IBD
-    
-    **Entradas:**
-    1. **Punto de Compra Ideal**: Breakout desde base de consolidación + volumen
-    2. **Add-on Points**: Añadir en puntos de apoyo técnicos válidos (pullbacks controlados)
-    3. **Piramidación**: Aumentar posición solo cuando la primera sube 2-3%
-    4. **Tamaño de Posición**: Máximo 10-12% por posición inicial
-    5. **Número de Posiciones**: 5-10 stocks diversificados por sector
-    
-    **Filtros IBD Adicionales:**
-    - Composite Rating > 80 (preferiblemente > 90)
-    - RS Rating > 80 (top 20% del mercado)
-    - EPS Rating > 80 (crecimiento sólido)
-    - SMR Rating A o B (fundamentales sanos)
-    - A/D Rating A o B (acumulación institucional)
-    - Trend Template: 7/8 o 8/8 criterios cumplidos
-    
-    **Gestión de Riesgo:**
-    - **Stop Loss**: 7-8% máximo desde punto de compra
-    - **Trailing Stop**: Mover stop a breakeven cuando suba 8-10%
-    - **Profit Taking**: Vender 1/3 cuando ganes 20-25%
-    - **Cut Losses Short**: "Los pequeños daños se reparan, los grandes no"
-    
-    **Timing:**
-    - Operar solo en mercado alcista confirmado (M)
-    - Evitar compras 2 semanas antes de earnings (riesgo de gap)
-    - Mejor momento: primeras 2 horas del mercado (mayor volumen)
-    - Revisar calendario de earnings antes de comprar
-    
-    **Gestión de Portafolio:**
-    - Máximo 50% invertido en cualquier momento (dejar cash para oportunidades)
-    - Rebalance semanal: revisar si todos los criterios siguen cumpliéndose
-    - Rotar de leaders débiles a leaders fuertes
-    - No promediar a la baja (nunca añadir a perdedores)
-    """,
-    
+### 📋 Reglas de Operación
+
+**Entradas**: Breakout desde base de consolidación con volumen superior al promedio.
+Piramidación solo cuando la primera posición sube 2-3%.
+Máximo 10-12% del portafolio por posición. 5-10 stocks diversificados.
+
+**Filtros IBD recomendados**: Composite >80, RS >80, EPS >80, SMR A/B, A/D A/B, Stage 2 (8/8).
+
+**Gestión de Riesgo**: Stop loss 7-8% desde compra. Trailing stop a breakeven en +8-10%.
+Tomar ganancias parciales en +20-25%. Cash es posición válida en downtrend.
+""",
+
     "senales_venta": """
-    ### 🚨 Señales de Venta (Sell Rules)
-    
-    **Señales Técnicas:**
-    1. **Climax Top**: Subida parabólica de 3-5 días con volumen extremo (+500%)
-    2. **Heavy Volume Without Progress**: Volumen alto pero precio no sube (distribución)
-    3. **Breakdown Below 50-day MA**: Pérdida de media móvil 50 días con volumen
-    4. **Largest Daily Loss**: El día de mayor pérdida desde el breakout
-    5. **Outside Reversal**: Key reversal day (nuevo máximo + cierre bajo día anterior)
-    
-    **Señales de Ratings IBD:**
-    6. **Composite Rating cae < 60**: Deterioro relativo general
-    7. **RS Rating cae < 70**: Perdiendo fuerza vs mercado
-    8. **A/D Rating cambia a D o E**: Distribución institucional
-    9. **Trend Template falla**: Menos de 6/8 criterios cumplidos
-    
-    **Señales Fundamentales:**
-    10. **Slowing Earnings Growth**: 2 trimestres consecutivos de desaceleración
-    11. **Earnings Estimate Cuts**: Reducción de estimaciones por analistas
-    12. **Sector Rotation**: Fuga de capital del sector (outflow)
-    13. **Increased Competition**: Pérdida de market share visible
-    14. **Insider Selling**: Ventas masivas de insiders (no ejercicio de opciones)
-    
-    **Reglas de Gestión:**
-    15. **7-8% Stop Loss**: Vender inmediatamente si cae 7-8% desde entrada
-    16. **20-25% Profit Taking**: Tomar ganancias parciales en +20-25%
-    17. **Break Even Rule**: Poner stop en entrada cuando suba 8-10%
-    18. **50-day MA Violation**: Vender si pierde SMA50 con volumen alto
-    19. **Market Direction Change**: Vender todo si el mercado entra en downtrend
-    
-    **Señales de Agotamiento:**
-    - Cover stories en revistas financieras (señal contraria)
-    - Euphoria en redes sociales/extensión del rally
-    - Múltiples splits de acciones en poco tiempo
-    - Adquisiciones agresivas con stock sobrevaluado
-    """,
-    
+### 🚨 Señales de Venta
+
+**Técnicas**: Climax top (parabólico + volumen extremo), pérdida de SMA 50 con volumen,
+key reversal day, volumen alto sin progreso de precio.
+
+**Ratings IBD**: Composite <60, RS <70, A/D cambia a D/E, Trend Template <6/8.
+
+**Fundamentales**: 2 trimestres consecutivos de desaceleración de earnings,
+recorte de estimaciones, rotación sectorial visible.
+
+**Reglas fijas**: Stop 7-8%, trailing stop, profit taking en +20-25%.
+""",
+
     "errores_comunes": """
-    ### ⚠️ Errores Comunes a Evitar
-    
-    **Errores Psicológicos:**
-    1. **Negar las pérdidas**: "Volverá, es un buen company" - Vende cuando el mercado te dice que estás equivocado
-    2. **Promediar a la baja**: Añadir a perdedores empeora el daño. Un 50% de caída requiere 100% de subida para recuperar
-    3. **Miedo a comprar en máximos**: Los stocks que hacen nuevos máximos suelen seguir subiendo
-    4. **Overtrading**: Operar por aburrimiento o necesidad de acción
-    
-    **Errores de Análisis:**
-    5. **Ignorar el M (Market)**: Operar en downtrend es nadar contra la corriente
-    6. **Foco en precio bajo**: "Barato" ≠ buen valor. Un stock a $5 puede ir a $2
-    7. **Descuidar el volumen**: Confirmación esencial de movimientos
-    8. **Comprar en consolidación**: Esperar al breakout, no anticipar
-    9. **Ignorar los Ratings IBD**: Son herramientas validadas históricamente
-    
-    **Errores de Ejecución:**
-    10. **Órdenes de mercado en apertura**: Usar limit orders para evitar slippage
-    11. **Posiciones muy grandes**: >20% en una sola acción es apostar, no invertir
-    12. **No tener plan de salida**: Definir stop antes de entrar, no después
-    13. **Revisar portafolio cada minuto**: Timeframe diario es suficiente
-    
-    **Errores de Timing:**
-    14. **Comprar antes de earnings**: Riesgo de gap del 20-30% si fallan
-    15. **Ignorar seasonality**: "Sell in May" tiene fundamentos estadísticos
-    16. **Forzar operaciones**: No hay setup válido = no operar
-    
-    **Errores de Disciplina:**
-    17. **Cambiar reglas mid-game**: El sistema funciona, los emociones no
-    18. **Resultado reciente sesga juicio**: Un trade no define el sistema
-    19. **Buscar confirmación externa**: Tu análisis debe ser independiente
-    """
+### ⚠️ Errores Comunes
+
+**Psicológicos**: Negar pérdidas, promediar a la baja, miedo a comprar en máximos, overtrading.
+
+**Análisis**: Ignorar el M (mercado), focalizarse en precio bajo, descuidar el volumen,
+comprar antes del breakout, ignorar ratings IBD.
+
+**Ejecución**: Órdenes de mercado en apertura, posiciones >20%, no definir stop antes de entrar.
+
+**Timing**: Comprar antes de earnings (riesgo de gap -20/-30%), forzar operaciones sin setup válido.
+
+**Disciplina**: Cambiar reglas a mitad de la operación, dejar que resultados recientes sesguen el juicio.
+"""
 }
 
-# ============================================================
-# FUNCIONES PARA MOSTRAR RESULTADOS GUARDADOS
-# ============================================================
 
-def display_saved_results():
-    """Muestra los resultados guardados en session_state si existen"""
-    if st.session_state.scan_candidates and len(st.session_state.scan_candidates) > 0:
-        candidates = st.session_state.scan_candidates
-        scan_time = st.session_state.scan_timestamp
-        
-        st.success(f"📊 Resultados del último scan ({scan_time}): {len(candidates)} candidatos encontrados")
-        
-        # Mostrar top 3
-        st.subheader("🏆 Top Candidatos CAN SLIM")
-        cols = st.columns(min(3, len(candidates)))
-        for i, col in enumerate(cols):
-            if i < len(candidates):
-                c = candidates[i]
-                with col:
-                    st.plotly_chart(create_score_gauge(c['score']), use_container_width=True, key=f"saved_gauge_{i}")
-                    st.markdown(f"""
-                    <div style="text-align: center;">
-                        <h3 style="color: {COLORS['primary']}; margin: 0;">{c['ticker']}</h3>
-                        <p style="color: #888; font-size: 12px; margin: 5px 0;">{c['name'][:30]}</p>
-                        <div style="margin: 10px 0;">
-                            <span class="grade-badge grade-{c['grades']['C']}">C</span>
-                            <span class="grade-badge grade-{c['grades']['A']}">A</span>
-                            <span class="grade-badge grade-{c['grades']['N']}">N</span>
-                            <span class="grade-badge grade-{c['grades']['S']}">S</span>
-                            <span class="grade-badge grade-{c['grades']['L']}">L</span>
-                            <span class="grade-badge grade-{c['grades']['I']}">I</span>
-                            <span class="grade-badge grade-{c['grades']['M']}">M</span>
-                        </div>
-                        <p style="color: {COLORS['primary']}; font-size: 0.9rem; margin-top: 5px;">
-                            ML Prob: {c['ml_probability']:.1%}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        # Tabla completa
-        st.subheader("📋 Resultados Detallados")
-        
-        table_data = []
-        max_results = st.session_state.last_scan_params.get('max_results', 20)
-        for c in candidates[:max_results]:
-            table_data.append({
-                'Ticker': c['ticker'],
-                'Nombre': c['name'][:25],
-                'Score': c['score'],
-                'ML Prob': f"{c['ml_probability']:.0%}",
-                'C': c['grades']['C'],
-                'A': c['grades']['A'],
-                'N': c['grades']['N'],
-                'S': c['grades']['S'],
-                'L': c['grades']['L'],
-                'I': c['grades']['I'],
-                'M': c['grades']['M'],
-                'EPS Growth': f"{c['metrics']['earnings_growth']:.1f}%",
-                'RS Rating': f"{c['metrics']['rs_rating']:.0f}",
-                'From High': f"{c['metrics']['pct_from_high']:.1f}%",
-                'Sector': c['sector']
-            })
-        
-        df = pd.DataFrame(table_data)
-        
-        def color_score(val):
-            try:
-                score = int(val)
-                color = COLORS['primary'] if score >= 80 else COLORS['warning'] if score >= 60 else COLORS['danger']
-                return f'color: {color}; font-weight: bold'
-            except:
-                return ''
-        
-        def color_grade(val):
-            color_map = {
-                'A': COLORS['primary'],
-                'B': COLORS['warning'], 
-                'C': COLORS['danger'],
-                'D': '#888888'
-            }
-            return f'color: {color_map.get(val, "white")}; font-weight: bold'
-        
-        styled_df = df.style\
-            .applymap(color_score, subset=['Score'])\
-            .applymap(color_grade, subset=['C', 'A', 'N', 'S', 'L', 'I', 'M'])
-        
-        st.dataframe(styled_df, use_container_width=True, height=600)
-        
-        # Exportar
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="📥 Descargar CSV",
-            data=csv,
-            file_name=f"canslim_scan_{st.session_state.scan_timestamp.replace(':', '-')}.csv",
-            mime="text/csv"
-        )
-        
-        # Botón para limpiar resultados
-        if st.button("🗑️ Limpiar Resultados", type="secondary"):
-            st.session_state.scan_candidates = []
-            st.session_state.scan_timestamp = None
-            st.session_state.last_scan_params = {}
-            st.rerun()
-        
-        return True
-    return False
-
-# ============================================================
-# RENDER PRINCIPAL MEJORADO (CON PERSISTENCIA Y RATINGS IBD)
-# ============================================================
+# ==============================================================================
+# CSS GLOBAL (terminal aesthetic)
+# ==============================================================================
 
 def get_global_css() -> str:
     return f"""
@@ -2054,6 +1596,8 @@ def get_global_css() -> str:
             background: {COLORS['bg_dark']}; border: 1px solid #2a3f5f;
             border-radius: 8px; padding: 15px;
         }}
+        .strategy-card h4 {{ color: {COLORS['primary']} !important; font-size: 1.1rem !important; }}
+
         .metric-card {{
             background: {COLORS['bg_dark']}; border: 1px solid {COLORS['bg_card']};
             border-radius: 10px; padding: 15px; text-align: center;
@@ -2067,7 +1611,8 @@ def get_global_css() -> str:
         .grade-A {{ background:rgba(0,255,173,.2); color:{COLORS['primary']}; border:1px solid {COLORS['primary']}; }}
         .grade-B {{ background:rgba(255,152,0,.2); color:{COLORS['warning']}; border:1px solid {COLORS['warning']}; }}
         .grade-C {{ background:rgba(242,54,69,.2);  color:{COLORS['danger']};  border:1px solid {COLORS['danger']}; }}
-        .grade-D {{ background:rgba(136,136,136,.2);color:#888; border:1px solid #888; }}
+        .grade-D {{ background:rgba(136,136,136,.2);color:#888;               border:1px solid #888; }}
+
         .market-badge {{
             display:inline-block; padding:5px 15px; border-radius:20px;
             font-family:'VT323',monospace; letter-spacing:1px; font-size:1rem;
@@ -2082,42 +1627,33 @@ def get_global_css() -> str:
             border-bottom: 2px solid {COLORS['bg_card']}; padding-bottom: 10px;
         }}
         .methodology-section h4 {{ color: {COLORS['warning']} !important; }}
-        .info-box {{
-            background: {COLORS['bg_card']};
-            border-left: 4px solid {COLORS['primary']};
-            padding: 15px; border-radius: 0 8px 8px 0; margin: 10px 0;
-        }}
-        .warning-box {{
-            background: {COLORS['bg_card']};
-            border-left: 4px solid {COLORS['warning']};
-            padding: 15px; border-radius: 0 8px 8px 0; margin: 10px 0;
-        }}
     </style>
     """
 
 
-def render():
-    # Inicializar session state al principio
-    init_session_state()
+# ==============================================================================
+# RENDER PRINCIPAL
+# ==============================================================================
 
-    # CSS VT323 Terminal Aesthetic
+def render():
+    init_session_state()
     st.markdown(get_global_css(), unsafe_allow_html=True)
 
-    # Header con Market Status
+    # ── Header ────────────────────────────────────────────────────────────────
     market_analyzer = MarketAnalyzer()
-    market_status = market_analyzer.calculate_market_score()
+    market_status   = market_analyzer.calculate_market_score()
 
     st.markdown(f"""
     <div style="text-align:center;margin-bottom:40px;">
-        <div style="font-family:'VT323',monospace;font-size:1rem;color:#444;margin-bottom:10px;letter-spacing:2px;">
-            [SECURE CONNECTION ESTABLISHED // S&P 500 // IBD RATINGS // MINERVINI]
+        <div style="font-family:'VT323',monospace;font-size:1rem;color:#666;margin-bottom:10px;">
+            [SECURE CONNECTION ESTABLISHED // ENCRYPTION: AES-256]
         </div>
         <h1>🎯 CAN SLIM SCANNER PRO</h1>
-        <div style="font-family:'VT323',monospace;color:#00d9ff;font-size:1.1rem;letter-spacing:3px;margin-bottom:18px;">
+        <div style="font-family:'VT323',monospace;color:#00d9ff;font-size:1.2rem;letter-spacing:3px;margin-bottom:15px;">
             IBD RATINGS // MINERVINI TREND TEMPLATE // ML PREDICTIVO // S&P 500
         </div>
         <div>
-            <span class="market-badge" style="background:{hex_to_rgba(market_status['color'],.15)};
+            <span class="market-badge" style="background:{hex_to_rgba(market_status['color'],.2)};
             color:{market_status['color']};border:1px solid {market_status['color']};">
                 ▸ M-MARKET: {market_status['phase']} ({market_status['score']}/100)
             </span>
@@ -2125,7 +1661,6 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🚀 SCANNER S&P 500",
         "📊 ANÁLISIS DETALLADO",
@@ -2134,225 +1669,305 @@ def render():
         "📈 BACKTESTING",
     ])
 
-    # TAB 1: SCANNER MEJORADO CON PERSISTENCIA
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 1 — SCANNER S&P 500
+    # ══════════════════════════════════════════════════════════════════════════
     with tab1:
+        sp500_list = get_sp500_tickers()
+
+        # ── Detectar caché nocturno ───────────────────────────────────────────
+        cached = load_cached_scan()
+
+        if cached:
+            gen_at    = datetime.fromisoformat(cached["generated_at"])
+            age_min   = int((datetime.utcnow() - gen_at).total_seconds() / 60)
+            age_str   = f"{age_min // 60}h {age_min % 60}m" if age_min >= 60 else f"{age_min}m"
+            cache_n   = len(cached.get("candidates", []))
+            cache_sp  = cached.get("sp500_count", len(sp500_list))
+            st.markdown(f"""
+            <div class="terminal-box" style="border-color:{hex_to_rgba(COLORS['primary'],.5)};">
+                <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.5rem;letter-spacing:2px;">
+                    ✅ SCANNER DISPONIBLE — S&P 500 ANALIZADO HOY
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#aaa;font-size:.88rem;margin-top:10px;line-height:2;">
+                    🕐 &nbsp;Última actualización: <strong style="color:{COLORS['primary']};">{gen_at.strftime('%d/%m/%Y a las %H:%M')}</strong>
+                    &nbsp;(hace {age_str})
+                    <br>
+                    📊 &nbsp;Activos analizados: <strong style="color:{COLORS['primary']};">{cache_sp} acciones</strong>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    🏆 &nbsp;Candidatos encontrados: <strong style="color:{COLORS['primary']};">{cache_n}</strong>
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#555;font-size:.78rem;margin-top:6px;">
+                    Análisis completo · Pre-filtros aplicados · RS percentil real · IBD Ratings · Trend Template · Actualización diaria automática
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="terminal-box" style="border-color:{hex_to_rgba(COLORS['warning'],.4)};">
+                <div style="font-family:'VT323',monospace;color:{COLORS['warning']};font-size:1.5rem;letter-spacing:2px;">
+                    🔄 SCANNER ACTUALIZÁNDOSE — USA EL SCAN EN VIVO
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#aaa;font-size:.88rem;margin-top:10px;line-height:2;">
+                    El análisis diario automático estará disponible a partir de las <strong>05:00 hora española</strong>.<br>
+                    Puedes lanzar un análisis en vivo ahora — tardará unos <strong>5-10 minutos</strong>.
+                </div>
+                <div style="font-family:'Courier New',monospace;color:#555;font-size:.78rem;margin-top:6px;">
+                    Análisis diario · S&P 500 completo · Pre-filtros automáticos · IBD Ratings · Trend Template
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Controles de filtro ───────────────────────────────────────────────
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-        
         with col1:
-            min_score = st.slider("Score Mínimo CAN SLIM", 0, 100, 60, 
-                                help="Filtrar acciones con score igual o mayor")
+            min_score = st.slider("Score Mínimo CAN SLIM", 0, 100, 60,
+                                  help="Filtrar acciones con score igual o mayor")
         with col2:
-            max_results = st.number_input("Máx Resultados", 5, 100, 20)
+            min_composite = st.number_input("IBD Composite Mín.", 0, 99, 70,
+                                            help="Composite Rating IBD mínimo")
         with col3:
-            comprehensive = st.checkbox("Modo Completo (⚠️ Rate Limit)", value=False,
-                                     help="Escanea TODOS los tickers (lento, puede fallar por rate limits)")
+            max_results   = st.number_input("Máx Resultados", 5, 100, 30)
         with col4:
-            st.markdown("<br>", unsafe_allow_html=True)
-            scan_button = st.button("🔍 ESCANEAR MERCADO", use_container_width=True, type="primary")
-        
-        # Mostrar condiciones de mercado expandibles
-        with st.expander("📊 Ver Condiciones de Mercado Detalladas"):
-            market_fig = create_market_dashboard(market_status)
-            st.plotly_chart(market_fig, use_container_width=True)
-            
-            st.markdown("**Señales Técnicas Detectadas:**")
-            for signal in market_status['signals']:
-                st.markdown(f"- {signal}")
-        
-        # MOSTRAR RESULTADOS GUARDADOS SI EXISTEN (al inicio del tab)
-        has_saved_results = display_saved_results()
-        
-        # Realizar nuevo scan si se presiona el botón
-        if scan_button:
-            # Limpiar resultados anteriores
-            st.session_state.scan_candidates = []
-            st.session_state.scan_timestamp = None
-            
-            use_sample = not comprehensive
-            
-            if use_sample:
-                current_tickers = get_all_universe_tickers(comprehensive=False, use_sample=True)
-                st.success(f"🎲 Modo Muestreo Aleatorio: Analizando {len(current_tickers)} stocks seleccionados aleatoriamente")
+            require_stage2 = st.checkbox("Solo Stage 2 (8/8)", value=False,
+                                          help="Solo acciones con Trend Template completo")
+
+        # ── Botones de acción ─────────────────────────────────────────────────
+        btn_col1, btn_col2 = st.columns([3, 1])
+        with btn_col1:
+            if cached:
+                load_cache_btn = st.button(
+                    f"⚡ CARGAR ANÁLISIS DE HOY — {cache_n} CANDIDATOS",
+                    use_container_width=True, type="primary"
+                )
+                scan_live_btn = False
             else:
-                current_tickers = get_all_universe_tickers(comprehensive=True, use_sample=False)
-                st.warning(f"⚠️ Modo Completo: Analizando {len(current_tickers)} stocks (puede causar rate limits)")
-            
-            candidates = scan_universe(min_score, None, comprehensive=not use_sample)
-            
-            if candidates:
-                # GUARDAR RESULTADOS EN SESSION STATE
-                st.session_state.scan_candidates = candidates
-                st.session_state.scan_timestamp = datetime.now().strftime('%H:%M:%S')
+                load_cache_btn = False
+                scan_live_btn = st.button(
+                    "🔍 ESCANEAR S&P 500 EN VIVO",
+                    use_container_width=True, type="primary"
+                )
+        with btn_col2:
+            force_live = st.button("🔄 Forzar Scan en Vivo", use_container_width=True,
+                                   help="Ignora el caché y escanea en tiempo real")
+
+        # ── Expanders informativos ────────────────────────────────────────────
+        with st.expander("📊 VER CONDICIONES DE MERCADO"):
+            st.plotly_chart(create_market_dashboard(market_status), use_container_width=True)
+            st.markdown('<div class="phase-box"><strong>SEÑALES TÉCNICAS:</strong></div>',
+                        unsafe_allow_html=True)
+            for sig in market_status['signals']:
+                st.markdown(f"- {sig}")
+
+        with st.expander("⚙️ CONFIGURACIÓN DE PRE-FILTROS (scan en vivo)"):
+            c1, c2, c3 = st.columns(3)
+            with c1: st.number_input("Precio mínimo ($)",     0.0,  500.0, float(MIN_PRICE))
+            with c2: st.number_input("Volumen mín. (miles)", 100,  10000, int(MIN_AVG_VOLUME/1000))
+            with c3: st.number_input("Market Cap mín. ($B)", 0.0,  50.0,  float(MIN_MARKET_CAP_B))
+
+        # ── Mostrar resultados guardados en session_state ─────────────────────
+        display_saved_results()
+
+        # ── Acción: cargar caché nocturno ─────────────────────────────────────
+        if load_cache_btn and cached:
+            raw = cached.get("candidates", [])
+            # Aplicar filtros locales al caché (instantáneo, sin red)
+            filtered_cache = [
+                c for c in raw
+                if c.get("score", 0) >= min_score
+                and c.get("ibd_ratings", {}).get("composite", 0) >= min_composite
+                and (not require_stage2 or c.get("trend_template", {}).get("all_pass", False))
+            ][:max_results]
+
+            if filtered_cache:
+                st.session_state.scan_candidates  = filtered_cache
+                ts = datetime.fromisoformat(cached["generated_at"])
+                st.session_state.scan_timestamp   = f"análisis del {ts.strftime('%d/%m/%Y %H:%M')}"
                 st.session_state.last_scan_params = {
-                    'min_score': min_score,
-                    'max_results': max_results,
-                    'comprehensive': comprehensive
+                    "min_score": min_score, "max_results": max_results,
+                    "min_composite": min_composite, "require_stage2": require_stage2,
                 }
-                
-                st.success(f"✅ Scan completado: {len(candidates)} candidatos guardados")
-                st.info("💡 Los resultados permanecerán visibles al cambiar de pestaña. Usa el botón '🗑️ Limpiar Resultados' cuando quieras hacer un nuevo scan.")
-                
-                # Forzar rerun para mostrar los resultados guardados
                 st.rerun()
             else:
-                st.warning("⚠️ No se encontraron candidatos con los criterios seleccionados")
+                st.markdown(f"""
+                <div class="risk-box">
+                    <div style="font-family:'VT323',monospace;color:{COLORS['warning']};font-size:1.2rem;">
+                        ⚠️ SIN CANDIDATOS CON ESTOS FILTROS
+                    </div>
+                    <p>El caché tiene {len(raw)} candidatos pero ninguno cumple los filtros actuales.
+                    Prueba reduciendo Score Mínimo o IBD Composite.</p>
+                </div>""", unsafe_allow_html=True)
 
-    # TAB 2: ANÁLISIS DETALLADO CON RATINGS IBD - VERSIÓN CORREGIDA
+        # ── Acción: scan en vivo (botón principal o forzado) ──────────────────
+        if scan_live_btn or force_live:
+            st.session_state.scan_candidates = []
+            st.session_state.scan_timestamp  = None
+
+            st.markdown(f"""
+            <div class="highlight-quote">
+                INICIANDO SCAN EN VIVO — S&P 500 ({len(sp500_list)} ACCIONES)<br>
+                <span style="font-size:.9rem;color:#888;">
+                Arquitectura batch: ~{len(sp500_list)//BATCH_SIZE + 1} lotes de {BATCH_SIZE} acciones
+                </span>
+            </div>""", unsafe_allow_html=True)
+
+            candidates = scan_sp500(
+                min_score=min_score,
+                min_composite=min_composite,
+                require_stage2=require_stage2,
+                max_results=max_results,
+            )
+
+            if candidates:
+                st.session_state.scan_candidates  = candidates
+                st.session_state.scan_timestamp   = datetime.now().strftime('%H:%M:%S') + " (en vivo)"
+                st.session_state.last_scan_params = {
+                    "min_score": min_score, "max_results": max_results,
+                    "min_composite": min_composite, "require_stage2": require_stage2,
+                }
+                st.rerun()
+            else:
+                st.markdown(f"""
+                <div class="risk-box">
+                    <div style="font-family:'VT323',monospace;color:{COLORS['warning']};font-size:1.2rem;">
+                        ⚠️ SIN CANDIDATOS
+                    </div>
+                    <p>No se encontraron acciones con los criterios seleccionados.
+                    Considera reducir el Score Mínimo o el IBD Composite.</p>
+                </div>""", unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 2 — ANÁLISIS DETALLADO
+    # ══════════════════════════════════════════════════════════════════════════
     with tab2:
-        # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
             st.markdown(f"""
             <div class="saved-results-banner">
-                📊 <strong>Resultados guardados del último scan:</strong> {len(st.session_state.scan_candidates)} candidatos | 
-                <a href="#" style="color: {COLORS['primary']};">Volver a Scanner para ver detalles</a>
-            </div>
-            """, unsafe_allow_html=True)
-        
+                📊 <strong>{len(st.session_state.scan_candidates)} candidatos guardados</strong>
+                del scan de las {st.session_state.scan_timestamp}
+            </div>""", unsafe_allow_html=True)
+
         ticker_input = st.text_input("Ingresar Ticker para Análisis Detallado", "AAPL").upper()
-        
-        if st.button("Analizar", type="primary"):
-            with st.spinner(f"Analizando {ticker_input}..."):
+
+        if st.button("ANALIZAR", type="primary"):
+            with st.spinner(f"Descargando datos de {ticker_input}..."):
                 try:
-                    result = calculate_can_slim_metrics(ticker_input, market_analyzer)
-                    
+                    hist_single = download_batch_history((ticker_input,), period="1y").get(ticker_input)
+                    # CACHE + RETRY: evita YFRateLimitError en análisis individual
+                    info_single = get_single_ticker_info(ticker_input)
+                    spy_hist    = get_spy_history()
+                    rs_univ     = {ticker_input: 50}  # RS puntual (no universo completo)
+
+                    # RS aproximado vs SPY para análisis individual
+                    if hist_single is not None and not spy_hist.empty:
+                        rs_univ = compute_rs_scores_universe(
+                            [ticker_input],
+                            {ticker_input: hist_single},
+                            spy_hist
+                        )
+
+                    result = calculate_can_slim_metrics(
+                        ticker=ticker_input,
+                        hist=hist_single,
+                        info=info_single,
+                        spy_hist=spy_hist,
+                        rs_universe=rs_univ,
+                        market_score=market_status,
+                        ibd_calc=IBDRatingsCalculator(),
+                        trend_engine=MinerviniTrendTemplate(),
+                        ml=CANSlimMLPredictor(),
+                    )
+
                     if result is None:
-                        st.error(f"❌ No se pudieron obtener datos válidos para {ticker_input}")
-                        st.info("💡 Posibles causas:\n- Ticker no válido o delistado\n- Problemas de conexión con Yahoo Finance\n- Rate limit alcanzado (espera unos segundos e intenta de nuevo)")
+                        st.markdown(f"""
+                        <div class="risk-box">
+                            <div style="font-family:'VT323',monospace;color:{COLORS['danger']};font-size:1.2rem;">
+                                ❌ NO SE PUDO OBTENER DATOS — {ticker_input}
+                            </div>
+                            <p>Verifica que el ticker sea válido y esté disponible en Yahoo Finance.</p>
+                        </div>""", unsafe_allow_html=True)
                     else:
-                        # Debug: mostrar valores de RS calculados
-                        with st.expander("🔍 Debug Info (valores calculados)"):
-                            st.write(f"RS Rating (IBD ponderado): {result['ibd_ratings']['rs']}")
-                            st.write(f"RS Rating (Legacy simple): {result['metrics']['rs_rating']:.0f}")
+                        with st.expander("🔍 Debug Info"):
+                            st.write(f"RS Rating (percentil): {result['ibd_ratings']['rs']}")
                             st.write(f"EPS Rating: {result['ibd_ratings']['eps']}")
                             st.write(f"Composite: {result['ibd_ratings']['composite']}")
-                        
-                        # Layout de 3 columnas: CAN SLIM | IBD Ratings | Trend Template
+                            st.write(f"ML Prob: {result['ml_probability']:.1%}")
+
                         col1, col2, col3 = st.columns([1, 1.2, 1])
-                        
                         with col1:
-                            st.subheader("CAN SLIM Score")
-                            st.plotly_chart(create_score_gauge(result['score']), use_container_width=True, key=f"cs_{ticker_input}")
-                            st.plotly_chart(create_grades_radar(result['grades']), use_container_width=True, key=f"radar_{ticker_input}")
-                            
+                            st.markdown('<h3>CAN SLIM SCORE</h3>', unsafe_allow_html=True)
+                            st.plotly_chart(create_score_gauge(result['score']),
+                                            use_container_width=True, key=f"cs_{ticker_input}")
+                            st.plotly_chart(create_grades_radar(result['grades']),
+                                            use_container_width=True, key=f"radar_{ticker_input}")
+                            rs = result['ibd_ratings']['rs']
+                            rs_c = COLORS['primary'] if rs > 80 else COLORS['warning'] if rs > 60 else COLORS['danger']
+                            ml_p = result['ml_probability']
+                            ml_c = COLORS['primary'] if ml_p > 0.7 else COLORS['warning'] if ml_p > 0.5 else COLORS['danger']
                             st.markdown(f"""
-                            <div class="metric-card">
-                                <h4>RS Rating (Legacy)</h4>
-                                <h2 style="color: {COLORS['primary'] if result['metrics']['rs_rating'] > 80 else COLORS['warning'] if result['metrics']['rs_rating'] > 60 else COLORS['danger']};">
-                                    {result['metrics']['rs_rating']:.0f}
-                                </h2>
+                            <div class="metric-card" style="margin-top:10px;">
+                                <div style="font-family:'VT323',monospace;color:#888;font-size:.9rem;">RS RATING</div>
+                                <div style="font-family:'VT323',monospace;color:{rs_c};font-size:2.5rem;">{rs}</div>
                             </div>
-                            """, unsafe_allow_html=True)
-                            
-                            st.markdown(f"""
-                            <div class="metric-card" style="margin-top: 10px;">
-                                <h4>ML Probability</h4>
-                                <h2 style="color: {COLORS['primary'] if result['ml_probability'] > 0.7 else COLORS['warning'] if result['ml_probability'] > 0.5 else COLORS['danger']};">
-                                    {result['ml_probability']:.1%}
-                                </h2>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
+                            <div class="metric-card" style="margin-top:8px;">
+                                <div style="font-family:'VT323',monospace;color:#888;font-size:.9rem;">ML PROBABILITY</div>
+                                <div style="font-family:'VT323',monospace;color:{ml_c};font-size:2.5rem;">{ml_p:.1%}</div>
+                            </div>""", unsafe_allow_html=True)
                         with col2:
-                            # NUEVO: Panel de Ratings IBD usando componentes nativos
                             render_ibd_panel(result['ibd_ratings'])
-                            
-                            # Radar IBD
-                            st.plotly_chart(create_ibd_radar(result['ibd_ratings']), use_container_width=True, key=f"ibd_radar_{ticker_input}")
-                        
+                            st.plotly_chart(create_ibd_radar(result['ibd_ratings']),
+                                            use_container_width=True, key=f"ibd_{ticker_input}")
                         with col3:
-                            # NUEVO: Trend Template Minervini usando componentes nativos
                             render_trend_template(result['trend_template'])
-                            
-                            # Métricas adicionales del Trend Template
                             with st.expander("📐 Niveles Técnicos"):
-                                trend_vals = result['trend_template'].get('values', {})
-                                if trend_vals:
-                                    tech_data = {
-                                        'Métrica': ['SMA 50', 'SMA 150', 'SMA 200', '52W High', '52W Low', 'Dist. del High', 'Dist. del Low'],
-                                        'Valor': [
-                                            f"${trend_vals.get('sma_50', 0):.2f}",
-                                            f"${trend_vals.get('sma_150', 0):.2f}",
-                                            f"${trend_vals.get('sma_200', 0):.2f}",
-                                            f"${trend_vals.get('high_52w', 0):.2f}",
-                                            f"${trend_vals.get('low_52w', 0):.2f}",
-                                            f"{trend_vals.get('distance_from_high', 0):.1f}%",
-                                            f"{trend_vals.get('distance_from_low', 0):.1f}%"
+                                tv = result['trend_template'].get('values', {})
+                                if tv:
+                                    st.dataframe(pd.DataFrame({
+                                        'Métrica': ['SMA 50','SMA 150','SMA 200','52W High','52W Low','Dist. High','Dist. Low'],
+                                        'Valor'  : [
+                                            f"${tv.get('sma_50',0):.2f}",    f"${tv.get('sma_150',0):.2f}",
+                                            f"${tv.get('sma_200',0):.2f}",   f"${tv.get('high_52w',0):.2f}",
+                                            f"${tv.get('low_52w',0):.2f}",   f"{tv.get('distance_from_high',0):.1f}%",
+                                            f"{tv.get('distance_from_low',0):.1f}%",
                                         ]
-                                    }
-                                    st.dataframe(pd.DataFrame(tech_data), use_container_width=True, hide_index=True)
-                        
-                        # Gráfico de precios debajo
+                                    }), use_container_width=True, hide_index=True)
+
+                        # Gráfico de precios
                         st.markdown("---")
-                        try:
-                            stock = rate_limiter.get_ticker_with_retry(ticker_input)
-                            if stock:
-                                hist = stock.history(period="1y")
-                                
-                                if len(hist) == 0:
-                                    st.warning("No hay datos históricos disponibles")
-                                else:
-                                    fig = go.Figure()
-                                    fig.add_trace(go.Candlestick(
-                                        x=hist.index,
-                                        open=hist['Open'],
-                                        high=hist['High'],
-                                        low=hist['Low'],
-                                        close=hist['Close'],
-                                        name='Price'
+                        if hist_single is not None and len(hist_single) > 0:
+                            fig = go.Figure()
+                            fig.add_trace(go.Candlestick(
+                                x=hist_single.index,
+                                open=hist_single['Open'], high=hist_single['High'],
+                                low=hist_single['Low'],   close=hist_single['Close'], name='Price'
+                            ))
+                            for period, color, dash in [(50, COLORS['warning'], 'solid'),
+                                                         (150, '#FF9800', 'dash'),
+                                                         (200, COLORS['primary'], 'solid')]:
+                                if len(hist_single) >= period:
+                                    fig.add_trace(go.Scatter(
+                                        x=hist_single.index,
+                                        y=hist_single['Close'].rolling(period).mean(),
+                                        name=f'SMA {period}',
+                                        line=dict(color=color, width=1+(period==200), dash=dash)
                                     ))
-                                    
-                                    # Añadir SMAs del Trend Template
-                                    if len(hist) >= 50:
-                                        fig.add_trace(go.Scatter(
-                                            x=hist.index,
-                                            y=hist['Close'].rolling(50).mean(),
-                                            name='SMA 50',
-                                            line=dict(color=COLORS['warning'], width=1)
-                                        ))
-                                    if len(hist) >= 150:
-                                        fig.add_trace(go.Scatter(
-                                            x=hist.index,
-                                            y=hist['Close'].rolling(150).mean(),
-                                            name='SMA 150',
-                                            line=dict(color='#FF9800', width=1, dash='dash')
-                                        ))
-                                    if len(hist) >= 200:
-                                        fig.add_trace(go.Scatter(
-                                            x=hist.index,
-                                            y=hist['Close'].rolling(200).mean(),
-                                            name='SMA 200',
-                                            line=dict(color=COLORS['primary'], width=2)
-                                        ))
-                                    
-                                    fig.update_layout(
-                                        title=f"{result['name']} ({ticker_input}) - ${result['price']:.2f}",
-                                        paper_bgcolor=COLORS['bg_dark'],
-                                        plot_bgcolor=COLORS['bg_dark'],
-                                        font=dict(color='white'),
-                                        xaxis=dict(gridcolor=COLORS['bg_card']),
-                                        yaxis=dict(gridcolor=COLORS['bg_card']),
-                                        height=500,
-                                        showlegend=True,
-                                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                                    )
-                                    
-                                    st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.error("No se pudo obtener el ticker para el gráfico")
-                        except Exception as e:
-                            st.error(f"Error cargando gráfico: {str(e)}")
-                        
-                        # Tabla de métricas completas
-                        with st.expander("📋 Ver Métricas Completas"):
-                            metrics_df = pd.DataFrame({
-                                'Métrica': [
-                                    'Market Cap', 'EPS Growth', 'Revenue Growth',
-                                    'Inst. Ownership', 'Volume Ratio', 'From 52W High',
-                                    'Volatility', 'Price Momentum', 'Market Score',
-                                    'IBD Composite', 'IBD RS', 'IBD EPS', 'IBD SMR',
-                                    'A/D Rating', 'ATR%', 'P/E Ratio', 'ROE'
-                                ],
-                                'Valor': [
+                            fig.update_layout(
+                                title=f"{result['name']} ({ticker_input}) — ${result['price']:.2f}",
+                                paper_bgcolor=COLORS['bg_dark'], plot_bgcolor=COLORS['bg_dark'],
+                                font=dict(color='white'),
+                                xaxis=dict(gridcolor=COLORS['bg_card']),
+                                yaxis=dict(gridcolor=COLORS['bg_card']),
+                                height=500, showlegend=True,
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                        with st.expander("📋 Métricas Completas"):
+                            st.table(pd.DataFrame({
+                                'Métrica': ['Market Cap','EPS Growth','Rev Growth','Inst. Own','Vol Ratio',
+                                            'From High','Volatility','Price Mom','Market Score',
+                                            'IBD Composite','IBD RS','IBD EPS','IBD SMR','A/D','ATR%','P/E','ROE'],
+                                'Valor'  : [
                                     f"${result['market_cap']:.1f}B",
                                     f"{result['metrics']['earnings_growth']:.1f}%",
                                     f"{result['metrics']['revenue_growth']:.1f}%",
@@ -2369,157 +1984,251 @@ def render():
                                     result['ibd_ratings']['acc_dis'],
                                     f"{result['ibd_ratings']['atr_percent']:.2f}%",
                                     f"{result['ibd_ratings']['pe_ratio']:.1f}",
-                                    f"{result['ibd_ratings']['roe']:.1f}%"
+                                    f"{result['ibd_ratings']['roe']:.1f}%",
                                 ]
-                            })
-                            st.table(metrics_df)
+                            }))
                 except Exception as e:
-                    st.error(f"❌ Error inesperado: {str(e)}")
-                    import traceback
-                    st.code(traceback.format_exc())
-                    st.info("Por favor, verifica que el ticker sea válido e intenta de nuevo.")
+                    st.error(f"❌ Error inesperado: {e}")
+                    import traceback; st.code(traceback.format_exc())
 
-    # TAB 3: METODOLOGÍA COMPLETA ACTUALIZADA
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 3 — METODOLOGÍA
+    # ══════════════════════════════════════════════════════════════════════════
     with tab3:
-        # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
             st.markdown(f"""
             <div class="saved-results-banner">
-                📊 <strong>Hay {len(st.session_state.scan_candidates)} candidatos guardados</strong> del scan de las {st.session_state.scan_timestamp}
+                📊 <strong>{len(st.session_state.scan_candidates)} candidatos guardados</strong>
+                del scan de las {st.session_state.scan_timestamp}
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="text-align:center;margin-bottom:30px;">
+            <div style="font-family:'VT323',monospace;font-size:1rem;color:#666;margin-bottom:5px;">
+                [KNOWLEDGE BASE // LOADED]
             </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <style>
-        .methodology-section h3 {
-            color: #00ffad !important;
-            margin-top: 30px;
-            border-bottom: 2px solid #1a1e26;
-            padding-bottom: 10px;
-        }
-        .methodology-section h4 {
-            color: #ff9800 !important;
-            margin-top: 20px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
+            <h2 style="border-left:none;padding-left:0;text-align:center;">📚 METODOLOGÍA COMPLETA</h2>
+        </div>""", unsafe_allow_html=True)
+
         st.markdown('<div class="methodology-section">', unsafe_allow_html=True)
-        
-        st.markdown(EDUCATIONAL_CONTENT["guia_completa"])
-        st.markdown(EDUCATIONAL_CONTENT["ibd_ratings_guide"])
-        st.markdown(EDUCATIONAL_CONTENT["trend_template_minervini"])
-        st.markdown(EDUCATIONAL_CONTENT["reglas_operacion"])
-        st.markdown(EDUCATIONAL_CONTENT["senales_venta"])
-        st.markdown(EDUCATIONAL_CONTENT["errores_comunes"])
-        
+        for key in ['guia_completa','ibd_ratings_guide','trend_template_minervini',
+                    'reglas_operacion','senales_venta','errores_comunes']:
+            st.markdown(EDUCATIONAL_CONTENT[key])
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # TAB 4: ML PREDICTIVO
+    # ══════════════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 4 — ML PREDICTIVO
+    # ══════════════════════════════════════════════════════════════════════════
     with tab4:
-        # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
             st.markdown(f"""
             <div class="saved-results-banner">
-                📊 <strong>Hay {len(st.session_state.scan_candidates)} candidatos guardados</strong> del scan de las {st.session_state.scan_timestamp}
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.header("🤖 Machine Learning para CAN SLIM")
-        
-        if not SKLEARN_AVAILABLE:
-            st.warning("""
-            ⚠️ scikit-learn no está instalado. Para usar ML predictivo:
-            ```bash
-            pip install scikit-learn joblib
-            ```
-            """)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Entrenamiento del Modelo")
-            st.info("""
-            El modelo ML analiza patrones históricos de éxito CAN SLIM:
-            - Random Forest + Gradient Boosting
-            - Features: Crecimiento, momentum, volumen, institucional
-            - Target: Outperformance vs S&P 500 (3 meses)
-            """)
-            
-            if st.button("🚀 Entrenar Modelo", type="primary", disabled=not SKLEARN_AVAILABLE):
-                with st.spinner("Entrenando modelo con datos históricos..."):
-                    ml = CANSlimMLPredictor()
-                    st.success("✅ Modelo entrenado con 85.3% accuracy")
-        
-        with col2:
-            st.subheader("Importancia de Factores")
-            ml = CANSlimMLPredictor()
-            st.plotly_chart(create_ml_feature_importance(ml), use_container_width=True)
-        
-        st.subheader("Predicción Individual")
-        pred_ticker = st.text_input("Ticker para Predicción ML", "NVDA").upper()
-        if st.button("Predecir", disabled=not SKLEARN_AVAILABLE):
-            try:
-                result = calculate_can_slim_metrics(pred_ticker, market_analyzer)
-                if result:
-                    prob = result['ml_probability']
-                    color = COLORS['primary'] if prob > 0.7 else COLORS['warning'] if prob > 0.5 else COLORS['danger']
-                    st.markdown(f"""
-                    <div style="background: {COLORS['bg_card']}; padding: 20px; border-radius: 10px; text-align: center;">
-                        <h3>Probabilidad de Outperformance</h3>
-                        <h1 style="color: {color}; font-size: 4rem; margin: 10px 0;">{prob:.1%}</h1>
-                        <p>Basado en características CAN SLIM históricas</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.error(f"No se pudo analizar {pred_ticker}")
-            except Exception as e:
-                st.error(f"Error en predicción: {str(e)}")
+                📊 <strong>{len(st.session_state.scan_candidates)} candidatos guardados</strong>
+                del {st.session_state.scan_timestamp}
+            </div>""", unsafe_allow_html=True)
 
-    # TAB 5: BACKTESTING
+        st.markdown('<h2>🤖 ML PREDICTIVO — ESTADO ACTUAL</h2>', unsafe_allow_html=True)
+
+        # Estado honesto del ML
+        ml_model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "canslim_ml_model.pkl")
+        ml_trained = os.path.exists(ml_model_path)
+
+        st.markdown(f"""
+        <div class="terminal-box" style="border-color:{'rgba(0,255,173,.4)' if ml_trained else 'rgba(255,152,0,.4)'};">
+            <div style="font-family:'VT323',monospace;color:{'#00ffad' if ml_trained else '#ff9800'};font-size:1.3rem;">
+                {'✅ MODELO ENTRENADO — ACTIVO' if ml_trained else '⏳ MODELO EN FORMACIÓN — SIN DATOS HISTÓRICOS AÚN'}
+            </div>
+            <div style="font-family:'Courier New',monospace;color:#aaa;font-size:.85rem;margin-top:10px;line-height:1.8;">
+                {'El archivo <code>canslim_ml_model.pkl</code> existe. El modelo usará predicciones reales cuando tenga suficientes datos.' if ml_trained else
+                'El modelo está implementado (GradientBoostingClassifier) pero devuelve 50% porque aún no tiene datos históricos reales.<br>'
+                'Las predicciones se activarán automáticamente cuando tengamos suficientes scans acumulados (~6 meses).'}
+            </div>
+            <div style="font-family:'Courier New',monospace;color:#555;font-size:.78rem;margin-top:8px;">
+                Modelo guardado en: canslim_ml_model.pkl (mismo directorio que la app)
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<h3>HOJA DE RUTA</h3>', unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="terminal-box">
+                <div style="font-family:'Courier New',monospace;color:#ccc;font-size:.85rem;line-height:1.9;">
+                    <strong style="color:#00ffad;">Ahora:</strong> Cada análisis diario guarda métricas en histórico<br>
+                    <strong style="color:#ff9800;">Mes 3:</strong> Calcular retorno real de candidatos del mes 1 vs SPY<br>
+                    <strong style="color:#ff9800;">Mes 4-6:</strong> ~200 samples → primer entrenamiento real<br>
+                    <strong style="color:#2196F3;">Mes 6-12:</strong> ~500 samples → validación temporal y despliegue<br>
+                    <strong style="color:#4CAF50;">Mes 6+:</strong> Probabilidades reales en el scanner
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown('<h3>IMPORTANCIA DE FACTORES</h3>', unsafe_allow_html=True)
+            ml_viz = CANSlimMLPredictor()
+            st.plotly_chart(create_ml_feature_importance(ml_viz), use_container_width=True)
+
+        st.markdown('<h3>PREDICCIÓN INDIVIDUAL</h3>', unsafe_allow_html=True)
+        st.info("⚠️ Probabilidades actuales = 50% placeholder hasta tener datos históricos acumulados.")
+        pred_ticker = st.text_input("Ticker para análisis ML", "NVDA").upper()
+        if st.button("ANALIZAR", disabled=not SKLEARN_AVAILABLE):
+            with st.spinner(f"Analizando {pred_ticker}..."):
+                try:
+                    h = download_batch_history((pred_ticker,), period="1y").get(pred_ticker)
+                    i = get_single_ticker_info(pred_ticker)
+                    spy = get_spy_history()
+                    rs  = compute_rs_scores_universe([pred_ticker], {pred_ticker: h}, spy) if h is not None else {pred_ticker: 50}
+                    res = calculate_can_slim_metrics(
+                        pred_ticker, h, i, spy, rs, market_status,
+                        IBDRatingsCalculator(), MinerviniTrendTemplate(), CANSlimMLPredictor()
+                    )
+                    if res:
+                        prob  = res['ml_probability']
+                        color = COLORS['primary'] if prob > 0.7 else COLORS['warning'] if prob > 0.5 else COLORS['danger']
+                        st.markdown(f"""
+                        <div class="terminal-box" style="text-align:center;">
+                            <div style="font-family:'VT323',monospace;color:#888;font-size:1rem;letter-spacing:2px;">
+                                PROBABILIDAD DE OUTPERFORMANCE vs SPY (3 meses)
+                            </div>
+                            <div style="font-family:'VT323',monospace;color:{color};font-size:5rem;
+                            margin:10px 0;text-shadow:0 0 20px {color}66;">{prob:.1%}</div>
+                            <div style="font-family:'Courier New',monospace;color:#555;font-size:.82rem;">
+                                {'⚠️ Valor placeholder — modelo en formación' if not ml_trained else '✅ Predicción del modelo entrenado'}
+                            </div>
+                        </div>""", unsafe_allow_html=True)
+                    else:
+                        st.error(f"No se pudo analizar {pred_ticker}")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    # TAB 5 — BACKTESTING
+    # ══════════════════════════════════════════════════════════════════════════
     with tab5:
-        # Mostrar banner si hay resultados guardados
         if st.session_state.scan_candidates:
             st.markdown(f"""
             <div class="saved-results-banner">
-                📊 <strong>Hay {len(st.session_state.scan_candidates)} candidatos guardados</strong> del scan de las {st.session_state.scan_timestamp}
+                📊 <strong>{len(st.session_state.scan_candidates)} candidatos guardados</strong>
+                del {st.session_state.scan_timestamp}
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown('<h2>📈 BACKTESTING — ESTADO Y HOJA DE RUTA</h2>', unsafe_allow_html=True)
+
+        # Honest state
+        st.markdown(f"""
+        <div class="risk-box">
+            <div style="font-family:'VT323',monospace;color:{COLORS['warning']};font-size:1.3rem;">
+                ⚠️ LOS RESULTADOS NUMÉRICOS ACTUALES SON DEMO — NO REALES
+            </div>
+            <div style="font-family:'Courier New',monospace;color:#ccc;font-size:.85rem;margin-top:10px;line-height:1.8;">
+                Los datos que aparecen (+145.3%, Sharpe 1.85...) son <strong>valores hardcodeados de demostración</strong>.<br>
+                Zipline es excesivamente complejo para Streamlit Cloud.<br>
+                <strong style="color:#ff9800;">Recomendado: implementar con pandas (2-3 días) — funciona en cloud.</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<h3>ESTRATEGIA PROPUESTA (PANDAS)</h3>', unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="terminal-box">
+                <div style="font-family:'Courier New',monospace;color:#ccc;font-size:.85rem;line-height:1.9;">
+                    <strong style="color:#00ffad;">Entrada:</strong> Score &gt;80 AND Composite &gt;90 AND Stage2 AND Market &gt;70<br>
+                    <strong style="color:#f23645;">Stop loss:</strong> -7% desde entrada<br>
+                    <strong style="color:#00ffad;">Take profit:</strong> +20-25%<br>
+                    <strong style="color:#ff9800;">Posición:</strong> Equal-weight, max 10% cartera<br>
+                    <strong style="color:#2196F3;">Universo:</strong> S&P 500, 5 años histórico<br>
+                    <strong style="color:#2196F3;">Benchmark:</strong> Buy&Hold SPY mismo período
+                </div>
             </div>
             """, unsafe_allow_html=True)
-        
-        st.header("📈 Backtesting con Zipline")
-        
-        if not ZIPPILINE_AVAILABLE:
-            st.warning("""
-            ⚠️ Zipline no está instalado. Para backtesting completo:
-            ```bash
-            pip install zipline-reloaded
-            ```
-            """)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            start_date = st.date_input("Fecha Inicio", datetime(2020, 1, 1))
+
         with col2:
-            end_date = st.date_input("Fecha Fin", datetime(2023, 12, 31))
-        with col3:
-            initial_capital = st.number_input("Capital Inicial ($)", 10000, 1000000, 100000)
-        
-        strategy_params = st.expander("Parámetros de Estrategia")
-        with strategy_params:
-            max_pos = st.slider("Máximo Posiciones", 5, 20, 10)
-            stop_loss = st.slider("Stop Loss %", 3, 15, 7)
-            profit_target = st.slider("Profit Target %", 10, 50, 20)
-        
-        if st.button("▶️ Ejecutar Backtest", type="primary", disabled=not ZIPPILINE_AVAILABLE):
-            with st.spinner("Ejecutando simulación histórica..."):
-                backtester = CANSlimBacktester()
-                st.success("Backtest completado")
-                
-                metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
-                metrics_col1.metric("Total Return", "+145.3%", "+45.2% vs SPY")
-                metrics_col2.metric("Sharpe Ratio", "1.85", "vs 1.2 SPY")
-                metrics_col3.metric("Max Drawdown", "-12.4%", "vs -20.1% SPY")
-                metrics_col4.metric("Win Rate", "68%", "de operaciones")
+            st.markdown('<h3>OPCIONES DE IMPLEMENTACIÓN</h3>', unsafe_allow_html=True)
+            st.markdown("""
+            | Librería | Tiempo | Cloud | Recomendación |
+            |----------|--------|-------|---------------|
+            | **pandas** | 2-3 días | ✅ | ⭐ Empezar aquí |
+            | vectorbt | 1 semana | ✅ | Opción 2 |
+            | backtrader | 1 semana | ✅ | Opción 3 |
+            | zipline (actual) | 1-2 meses | ❌ | Descartar |
+            """)
+
+        st.markdown('<h3>DEMO (VALORES NO REALES)</h3>', unsafe_allow_html=True)
+
+        col1, col2, col3 = st.columns(3)
+        with col1: start_date = st.date_input("Fecha Inicio", datetime(2020, 1, 1))
+        with col2: end_date   = st.date_input("Fecha Fin",    datetime(2023, 12, 31))
+        with col3: capital    = st.number_input("Capital ($)", 10_000, 1_000_000, 100_000)
+
+        with st.expander("⚙️ Parámetros de Estrategia"):
+            max_pos  = st.slider("Máximo Posiciones", 5, 20, 10)
+            stop_l   = st.slider("Stop Loss %",       3, 15, 7)
+            profit_t = st.slider("Profit Target %",  10, 50, 20)
+
+        if st.button("▶️ VER DEMO (VALORES NO REALES)", type="secondary"):
+            st.warning("⚠️ Recuerda: estos números son placeholders de demostración, no resultados reales.")
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc1.metric("TOTAL RETURN", "+145.3%", "+45.2% vs SPY")
+            mc2.metric("SHARPE RATIO", "1.85",    "vs 1.2 SPY")
+            mc3.metric("MAX DRAWDOWN", "-12.4%",  "vs -20.1% SPY")
+            mc4.metric("WIN RATE",     "68%",     "de operaciones")
+
+    # ── Footer ────────────────────────────────────────────────────────────────
+    st.markdown("""
+    <hr>
+    <div style="text-align:center;padding:20px;">
+        <p style="font-family:'VT323',monospace;color:#444;font-size:.9rem;">
+            [END OF TRANSMISSION // CANSLIM_SCANNER_PRO_v4.0.0]<br>
+            [UNIVERSO: S&P 500 // IBD RATINGS // MINERVINI TREND TEMPLATE // ML]<br>
+            [STATUS: ACTIVE // OPTIMIZADO PARA COMUNIDADES DE TRADING]
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ==============================================================================
+# FASTAPI (condicional)
+# ==============================================================================
+
+if FASTAPI_AVAILABLE:
+    app = FastAPI(title="CAN SLIM Pro API", version="4.0.0")
+    app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                       allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+    class TickerRequest(BaseModel):
+        ticker: str; include_ml: bool = True
+
+    @app.get("/")
+    async def root():
+        return {"message": "CAN SLIM Pro API v4.0.0", "universe": "S&P 500"}
+
+    @app.get("/market/status")
+    async def market_status_endpoint():
+        return MarketAnalyzer().calculate_market_score()
+
+    @app.post("/analyze")
+    async def analyze(req: TickerRequest):
+        h    = download_batch_history((req.ticker,), "1y").get(req.ticker)
+        info = get_single_ticker_info(req.ticker)
+        spy  = get_spy_history()
+        rs   = compute_rs_scores_universe([req.ticker], {req.ticker: h}, spy) if h is not None else {req.ticker: 50}
+        ms   = MarketAnalyzer().calculate_market_score()
+        res  = calculate_can_slim_metrics(req.ticker, h, info, spy, rs, ms,
+                                          IBDRatingsCalculator(), MinerviniTrendTemplate(), CANSlimMLPredictor())
+        if res is None:
+            raise HTTPException(status_code=404, detail=f"No data for {req.ticker}")
+        return res
+
+    @app.get("/universe/sp500")
+    async def get_universe():
+        tickers = get_sp500_tickers()
+        return {"count": len(tickers), "tickers": tickers}
+else:
+    app = None
+
 
 if __name__ == "__main__":
     render()

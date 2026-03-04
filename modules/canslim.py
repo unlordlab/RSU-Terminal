@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - v4.0.0
@@ -799,10 +798,10 @@ def calculate_can_slim_metrics(
         roe         = (info.get('returnOnEquity', 0) or 0) * 100
         margins     = info.get('profitMargins', 0) or 0
         inst_own    = (info.get('heldPercentInstitutions', 0) or 0) * 100
-        high52      = hist['High'].max()
-        pct_from_hi = ((price - high52) / high52) * 100
-        avg_vol     = hist['Volume'].rolling(20).mean().iloc[-1]
-        cur_vol     = hist['Volume'].iloc[-1]
+        high52      = _s(hist['High'].max())
+        pct_from_hi = ((price - high52) / high52) * 100 if high52 > 0 else -100
+        avg_vol     = _s(hist['Volume'].rolling(20).mean().iloc[-1])
+        cur_vol     = _s(hist['Volume'].iloc[-1])
         vol_ratio   = cur_vol / avg_vol if avg_vol > 0 else 1.0
 
         # RS percentil real sobre universo
@@ -810,8 +809,9 @@ def calculate_can_slim_metrics(
 
         # IBD Ratings
         eps_rating = ibd_calc.calculate_eps_rating(eps_g)
-        perf_12m   = ((price / hist['Close'].iloc[-252]) - 1) * 100 if len(hist) >= 252 else \
-                     ((price / hist['Close'].iloc[0]) - 1) * 100
+        perf_12m   = (_s(hist['Close'].iloc[-252]) and (price / _s(hist['Close'].iloc[-252]) - 1) * 100) \
+                     if len(hist) >= 252 else \
+                     (price / _s(hist['Close'].iloc[0]) - 1) * 100
         composite  = ibd_calc.calculate_composite_rating(rs_rating, eps_rating, rev_g, roe, perf_12m)
         smr        = ibd_calc.calculate_smr_rating(rev_g, roe, margins)
         acc_dis    = ibd_calc.calculate_acc_dis_rating(hist)
@@ -847,13 +847,21 @@ def calculate_can_slim_metrics(
         score += i_sc
 
         ms = market_score.get('score', 50)
-        m_grade, m_sc = ('A', 15) if ms >= 80 else ('B', 10) if ms >= 60 else \
-                         ('C', 5)  if ms >= 40 else ('D', 0)
+        # M — Market Direction (15 pts)
+        # O'Neil: el mercado arrastra el 75% de las acciones.
+        # Con market score <60 (no confirmed uptrend) = 0 pts.
+        # Esto explica por qué scores altos en mercado débil son raros.
+        m_grade, m_sc = ('A', 15) if ms >= 80 else \
+                         ('B', 10) if ms >= 70 else \
+                         ('C', 5)  if ms >= 60 else \
+                         ('D', 0)   # <60 = UPTREND UNDER PRESSURE o peor → 0 pts
         score += m_sc
 
         # ML
         volatility    = hist['Close'].pct_change().std() * np.sqrt(252) * 100
-        price_mom_20d = (hist['Close'].iloc[-1] / hist['Close'].iloc[-20] - 1) * 100 if len(hist) >= 20 else 0
+        if isinstance(volatility, pd.Series): volatility = float(volatility.iloc[0])
+        price_mom_20d = (_s(hist['Close'].iloc[-1]) / _s(hist['Close'].iloc[-20]) - 1) * 100 \
+                        if len(hist) >= 20 else 0.0
         ml_prob = ml.predict({
             'earnings_growth': earn_g, 'revenue_growth': rev_g, 'eps_growth': eps_g,
             'rs_rating': rs_rating,   'volume_ratio': vol_ratio, 'inst_ownership': inst_own,

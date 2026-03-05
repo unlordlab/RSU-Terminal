@@ -275,6 +275,30 @@ def get_yfinance_full(ticker):
             'price_to_book':  _safe(info.get('priceToBook')),
         }
 
+        # ── Fallback fast_info para métricas frecuentemente N/D ──
+        # fast_info es más estable que info{} para algunos campos
+        try:
+            fi = stock.fast_info
+            if metrics['trailing_pe'] is None:
+                fi_pe = _safe(getattr(fi, 'pe_forward', None) or getattr(fi, 'price_eps_ttm', None))
+                if fi_pe: metrics['trailing_pe'] = fi_pe
+            if not info.get('marketCap'):
+                fi_mc = _safe(getattr(fi, 'market_cap', None))
+                if fi_mc: info['marketCap'] = fi_mc
+            if not info.get('fiftyTwoWeekHigh'):
+                fi_hi = _safe(getattr(fi, 'year_high', None))
+                fi_lo = _safe(getattr(fi, 'year_low', None))
+                if fi_hi: info['fiftyTwoWeekHigh'] = fi_hi
+                if fi_lo: info['fiftyTwoWeekLow']  = fi_lo
+            if not info.get('fiftyDayAverage'):
+                fi_sma = _safe(getattr(fi, 'fifty_day_average', None))
+                if fi_sma: info['fiftyDayAverage'] = fi_sma
+            if not info.get('twoHundredDayAverage'):
+                fi_sma2 = _safe(getattr(fi, 'two_hundred_day_average', None))
+                if fi_sma2: info['twoHundredDayAverage'] = fi_sma2
+        except Exception as e:
+            logger.warning("[yf.fast_info metrics] %s: %s", ticker, e)
+
         # Rentabilidad
         profitability = {
             'roe':             _safe(info.get('returnOnEquity')),
@@ -2414,18 +2438,19 @@ def render():
         if not api_keys['finnhub']:
             st.markdown("""
             <div class="mod-box"><div class="mod-body">
-                <div style="font-family:Courier New,monospace;color:#555;font-size:13px;padding:20px;text-align:center;">
+                <div style="font-family:Inter,sans-serif;color:#555;font-size:0.84rem;padding:20px;text-align:center;">
                     ⚙️ Configura <strong style="color:#00ffad;">FINNHUB_API_KEY</strong> en los secrets para activar este módulo.<br>
-                    <span style="color:#333;font-size:11px;margin-top:8px;display:block;">finnhub.io ofrece plan gratuito con 60 req/min.</span>
+                    <span style="color:#333;font-size:11px;margin-top:8px;display:block;">finnhub.io — plan gratuito con 60 req/min.</span>
                 </div>
             </div></div>
             """, unsafe_allow_html=True)
         else:
-            # ── Panel izquierdo: Gauge + KPIs sentimiento ──
             col_sent, col_news = st.columns([1, 2])
 
+            # ── Sentimiento ──
             with col_sent:
                 if sentiment:
+                    import math as _math
                     sent_val   = sentiment.get('overall_sentiment', 'neutral')
                     score      = sentiment.get('sentiment_score', 0)
                     bull_pct   = sentiment.get('bullish_pct', 0)
@@ -2436,139 +2461,142 @@ def render():
                     sent_color  = sent_colors.get(sent_val, '#888')
                     gauge_val   = round(max(-1.0, min(1.0, score)) * 100, 1)
 
-                    # Pure HTML gauge — evita el problema de st.plotly_chart fuera del módulo
-                    # Semiciírculo SVG: ángulo va de 180° (izq, -100) a 0° (der, +100)
-                    # gauge_val en [-100, 100] → angle = 180 - (gauge_val+100)/200*180
-                    import math as _math
-                    angle_deg = 180.0 - (gauge_val + 100.0) / 200.0 * 180.0
-                    angle_rad = _math.radians(angle_deg)
-                    cx, cy, r = 100, 90, 70
-                    nx = cx + r * _math.cos(angle_rad)
-                    ny = cy - r * _math.sin(angle_rad)
-                    # Arc background segments
-                    def _arc(start_val, end_val, color, cx=100, cy=90, r=70, stroke=14):
-                        sa = 180.0 - (start_val+100)/200.0*180.0
-                        ea = 180.0 - (end_val+100)/200.0*180.0
-                        x1 = cx + r*_math.cos(_math.radians(sa))
-                        y1 = cy - r*_math.sin(_math.radians(sa))
-                        x2 = cx + r*_math.cos(_math.radians(ea))
-                        y2 = cy - r*_math.sin(_math.radians(ea))
-                        laf = 1 if abs(end_val - start_val) > 100 else 0
-                        return (f'<path d="M {x1:.1f} {y1:.1f} A {r} {r} 0 {laf} 0 {x2:.1f} {y2:.1f}" '                                f'fill="none" stroke="{color}" stroke-width="{stroke}" stroke-linecap="round"/>')
+                    # Pure SVG semicircle gauge
+                    def _arc_path(v1, v2, cx=100, cy=88, r=62):
+                        """SVG arc from value v1 to v2 on a [-100,100] semicircle."""
+                        a1 = _math.radians(180.0 - (v1 + 100) / 200.0 * 180.0)
+                        a2 = _math.radians(180.0 - (v2 + 100) / 200.0 * 180.0)
+                        x1, y1 = cx + r * _math.cos(a1), cy - r * _math.sin(a1)
+                        x2, y2 = cx + r * _math.cos(a2), cy - r * _math.sin(a2)
+                        laf = 1 if abs(v2 - v1) > 100 else 0
+                        return f"M {x1:.1f} {y1:.1f} A {r} {r} 0 {laf} 0 {x2:.1f} {y2:.1f}"
 
-                    # Active arc from 0 to gauge_val
-                    arc_start = 0; arc_end = gauge_val
-                    if gauge_val >= 0:
-                        active_arc = _arc(0, gauge_val, sent_color)
-                    else:
-                        active_arc = _arc(gauge_val, 0, sent_color)
+                    def _needle(val, cx=100, cy=88, r=55):
+                        a = _math.radians(180.0 - (val + 100) / 200.0 * 180.0)
+                        nx = cx + r * _math.cos(a)
+                        ny = cy - r * _math.sin(a)
+                        return f"{cx:.1f},{cy:.1f} {nx:.1f},{ny:.1f}"
 
-                    gauge_svg = f"""
-                    <svg viewBox="0 0 200 105" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px;display:block;margin:0 auto;">
-                        <!-- Background track -->
-                        {_arc(-100, 100, '#1a1e26', stroke=14)}
-                        <!-- Colored zones -->
-                        {_arc(-100, -30, '#2d1515', stroke=12)}
-                        {_arc(-30,   30, '#1e1e10', stroke=12)}
-                        {_arc( 30,  100, '#0d2a1a', stroke=12)}
-                        <!-- Active value arc -->
-                        {active_arc}
-                        <!-- Needle -->
-                        <line x1="{cx}" y1="{cy}" x2="{nx:.1f}" y2="{ny:.1f}"
-                              stroke="{sent_color}" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
-                        <circle cx="{cx}" cy="{cy}" r="4" fill="{sent_color}"/>
-                        <!-- Tick labels -->
-                        <text x="18" y="96" fill="#444" font-size="8" font-family="monospace">-100</text>
-                        <text x="48" y="30" fill="#444" font-size="8" font-family="monospace">-50</text>
-                        <text x="95" y="18" fill="#444" font-size="8" font-family="monospace">0</text>
-                        <text x="140" y="30" fill="#444" font-size="8" font-family="monospace">50</text>
-                        <text x="162" y="96" fill="#444" font-size="8" font-family="monospace">100</text>
-                        <!-- Score value -->
-                        <text x="{cx}" y="{cy+2}" fill="{sent_color}" font-size="26"
-                              font-family="VT323,monospace" text-anchor="middle" dominant-baseline="middle">{gauge_val:.0f}</text>
+                    gauge_html = f"""
+                    <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"
+                         style="width:100%;max-width:260px;display:block;margin:8px auto 0;">
+                      <!-- bg track -->
+                      <path d="{_arc_path(-100,100)}" fill="none" stroke="#1a1e26" stroke-width="14" stroke-linecap="round"/>
+                      <!-- zone colors -->
+                      <path d="{_arc_path(-100,-30)}" fill="none" stroke="#2d1515" stroke-width="12" stroke-linecap="round"/>
+                      <path d="{_arc_path(-30,30)}"   fill="none" stroke="#1e1e10" stroke-width="12" stroke-linecap="round"/>
+                      <path d="{_arc_path(30,100)}"   fill="none" stroke="#0d2a1a" stroke-width="12" stroke-linecap="round"/>
+                      <!-- active arc -->
+                      <path d="{_arc_path(min(0,gauge_val), max(0,gauge_val))}"
+                            fill="none" stroke="{sent_color}" stroke-width="12" stroke-linecap="round" opacity="0.9"/>
+                      <!-- needle -->
+                      <line x1="100" y1="88" x2="{100 + 55*_math.cos(_math.radians(180-(gauge_val+100)/200*180)):.1f}"
+                            y2="{88  - 55*_math.sin(_math.radians(180-(gauge_val+100)/200*180)):.1f}"
+                            stroke="{sent_color}" stroke-width="2.5" stroke-linecap="round"/>
+                      <circle cx="100" cy="88" r="4" fill="{sent_color}"/>
+                      <!-- tick labels -->
+                      <text x="8"   y="95" fill="#444" font-size="7.5" font-family="monospace">-100</text>
+                      <text x="41"  y="26" fill="#444" font-size="7.5" font-family="monospace">-50</text>
+                      <text x="93"  y="13" fill="#444" font-size="7.5" font-family="monospace">0</text>
+                      <text x="141" y="26" fill="#444" font-size="7.5" font-family="monospace">50</text>
+                      <text x="163" y="95" fill="#444" font-size="7.5" font-family="monospace">100</text>
+                      <!-- score number -->
+                      <text x="100" y="72" fill="{sent_color}" font-size="22"
+                            font-family="VT323,monospace" text-anchor="middle">{gauge_val:.0f}</text>
                     </svg>"""
 
                     st.markdown(f"""
                     <div class="mod-box">
                         <div class="mod-header">
-                            <span class="mod-title">📊 Sentimiento de Noticias</span>
+                            <span class="mod-title">📊 Sentimiento</span>
                             <div class="tip-box"><div class="tip-icon">?</div>
-                                <div class="tip-text">Análisis de titulares Finnhub (30 días). Detecta negaciones para evitar falsos positivos. Úsalo como señal orientativa, no como predictor exacto.</div>
+                                <div class="tip-text">Análisis de titulares Finnhub (30 días). Detecta negaciones para evitar falsos positivos.</div>
                             </div>
                         </div>
-                        <div class="mod-body">
-                            {gauge_svg}
-                            <div style="display:flex;gap:8px;margin-top:10px;">
-                                <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SENTIMIENTO</div>
-                                    <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.4rem;">{sent_val.upper()}</div>
+                        <div class="mod-body" style="padding:12px;">
+                            {gauge_html}
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">
+                                <div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">
+                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SEÑAL</div>
+                                    <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.2rem;">{sent_val.upper()}</div>
                                 </div>
-                                <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">ALCISTAS</div>
-                                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.4rem;">{bull_pct:.0f}%</div>
+                                <div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">
+                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">ALCISTA</div>
+                                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.2rem;">{bull_pct:.0f}%</div>
                                 </div>
-                                <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">BAJISTAS</div>
-                                    <div style="font-family:VT323,monospace;color:#f23645;font-size:1.4rem;">{bear_pct:.0f}%</div>
+                                <div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">
+                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">BAJISTA</div>
+                                    <div style="font-family:VT323,monospace;color:#f23645;font-size:1.2rem;">{bear_pct:.0f}%</div>
                                 </div>
                             </div>
-                            <div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;margin-top:8px;text-align:center;">
-                                📊 {analyzed} titulares analizados de {news_count} disponibles
+                            <div style="font-family:Inter,sans-serif;color:#444;font-size:0.68rem;margin-top:8px;text-align:center;">
+                                {analyzed} titulares de {news_count} analizados
                             </div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown('<div class="mod-box"><div class="mod-body"><div style="font-family:Inter,sans-serif;color:#555;font-size:0.84rem;padding:20px;text-align:center;">Sentimiento no disponible — Finnhub sin datos para este ticker.</div></div></div>', unsafe_allow_html=True)
+                    st.markdown("""
+                    <div class="mod-box"><div class="mod-body">
+                        <div style="font-family:Inter,sans-serif;color:#555;font-size:0.84rem;padding:20px;text-align:center;">
+                            Sin datos de sentimiento para este ticker.
+                        </div>
+                    </div></div>
+                    """, unsafe_allow_html=True)
 
-            # ── Panel derecho: Feed de noticias reales ──
+            # ── Noticias ──
             with col_news:
-                articles = (sentiment or {}).get('articles', []) if sentiment else []
-                # Si no hay sentimiento pero sí finnhub_data, obtener noticias directamente
-                if not articles and finnhub_data and finnhub_data.get('news'):
+                articles = []
+                if sentiment and sentiment.get('articles'):
+                    articles = sentiment['articles']
+                elif finnhub_data and finnhub_data.get('news'):
                     articles = finnhub_data['news'][:15]
 
-                st.markdown("""
-                <div class="mod-box">
-                    <div class="mod-header"><span class="mod-title">📰 Últimas Noticias (30 días)</span>
-                        <div class="tip-box"><div class="tip-icon">?</div>
-                            <div class="tip-text">Noticias reales vía Finnhub. Haz clic en el titular para abrir la fuente original.</div>
-                        </div>
-                    </div>
-                    <div class="mod-body">
-                """, unsafe_allow_html=True)
-
                 if articles:
-                    news_html = ""
+                    news_items = ""
                     for art in articles[:12]:
-                        headline = html.escape(art.get('headline', 'Sin título')[:120])
-                        source   = art.get('source', '')
+                        headline = html.escape(art.get('headline', 'Sin título')[:110])
+                        source   = html.escape(art.get('source', ''))
                         url      = art.get('url', '#')
                         ts_raw   = art.get('datetime', 0)
                         try:
                             from datetime import datetime as _dt
                             ts_str = _dt.fromtimestamp(int(ts_raw)).strftime('%d %b')
-                        except:
+                        except Exception:
                             ts_str = ''
-                        news_html += f"""
-                        <div style="padding:10px 0;border-bottom:1px solid #0f1218;">
-                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                                <a href="{url}" target="_blank" style="font-family:Courier New,monospace;color:#ccc;font-size:12px;line-height:1.5;text-decoration:none;flex:1;"
-                                   onmouseover="this.style.color='#00ffad'" onmouseout="this.style.color='#ccc'">
-                                    {headline}
-                                </a>
-                                <div style="flex-shrink:0;text-align:right;">
-                                    <div style="font-family:VT323,monospace;color:#444;font-size:0.82rem;">{ts_str}</div>
-                                    <div style="font-family:Courier New,monospace;color:#333;font-size:10px;">{source}</div>
-                                </div>
+                        news_items += (
+                            '<div style="padding:9px 0;border-bottom:1px solid #0f1218;">'
+                            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
+                            f'<a href="{url}" target="_blank" '
+                            'style="font-family:Courier New,monospace;color:#bbb;font-size:11.5px;'
+                            'line-height:1.5;text-decoration:none;flex:1;">'
+                            f'{headline}</a>'
+                            '<div style="flex-shrink:0;text-align:right;min-width:52px;">'
+                            f'<div style="font-family:VT323,monospace;color:#444;font-size:0.8rem;">{ts_str}</div>'
+                            f'<div style="font-family:Inter,sans-serif;color:#333;font-size:9px;">{source}</div>'
+                            '</div></div></div>'
+                        )
+                    st.markdown(f"""
+                    <div class="mod-box">
+                        <div class="mod-header">
+                            <span class="mod-title">📰 Últimas Noticias (30 días)</span>
+                            <div class="tip-box"><div class="tip-icon">?</div>
+                                <div class="tip-text">Noticias vía Finnhub. Clic en el titular para abrir la fuente original.</div>
                             </div>
-                        </div>"""
-                    st.markdown(news_html, unsafe_allow_html=True)
+                        </div>
+                        <div class="mod-body" style="max-height:420px;overflow-y:auto;padding:12px 16px;">
+                            {news_items}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">No hay noticias disponibles para este ticker.</div>', unsafe_allow_html=True)
-
-                st.markdown("</div></div>", unsafe_allow_html=True)
-
+                    st.markdown("""
+                    <div class="mod-box"><div class="mod-body">
+                        <div style="font-family:Inter,sans-serif;color:#555;font-size:0.84rem;padding:20px;text-align:center;">
+                            No hay noticias disponibles para este ticker en los últimos 30 días.
+                        </div>
+                    </div></div>
+                    """, unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════
     # SUGERENCIAS AUTOMÁTICAS
@@ -2620,7 +2648,7 @@ def render():
 | País | {info.get('country', 'N/A')} |
 """
 
-    # ── IA Header (sin wrapper HTML que interfiera con botones Streamlit) ──
+    # ── IA Section ──
     st.markdown("""
     <div style="background:linear-gradient(135deg,#0a0c10,#111520);border:1px solid #00ffad33;
                 border-radius:8px;padding:18px 22px;margin:18px 0 10px 0;">
@@ -2635,11 +2663,9 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        btn_rapido = st.button("⚡ ANÁLISIS RÁPIDO", key="btn_rapido", use_container_width=True)
-    with col_btn2:
-        btn_completo = st.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo", use_container_width=True)
+    _ia_c1, _ia_c2 = st.columns(2)
+    btn_rapido   = _ia_c1.button("⚡ ANÁLISIS RÁPIDO",               key="btn_rapido",   use_container_width=True)
+    btn_completo = _ia_c2.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo", use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 
@@ -2764,5 +2790,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

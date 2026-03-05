@@ -877,8 +877,13 @@ def compute_rsu_score(info, metrics, profitability, market, recommendations, tar
     sector   = (info.get('sector') or '').lower()
     industry = (info.get('industry') or '').lower()
 
+    # Detectar empresa pre-revenue / early-stage (pérdidas > 3 años consecutivos)
+    rev_ttm = profitability.get('revenue_ttm') or 0
+    is_pre_revenue = rev_ttm < 50_000_000  # ingresos < 50M = empresa muy pequeña/pre-revenue
+
     # ── Pilar 1: Calidad (0-25) ──
-    q_score = 0
+    # Punto de partida neutral (12) para pre-revenue — no castigar por pérdidas esperadas
+    q_score = 8 if is_pre_revenue else 0
     nm = profitability.get('net_margin')
     roe = profitability.get('roe')
     fcf = profitability.get('free_cashflow')
@@ -887,22 +892,21 @@ def compute_rsu_score(info, metrics, profitability, market, recommendations, tar
     # Márgenes netos — contexto sectorial
     if nm is not None:
         if 'financial' in sector or 'bank' in industry:
-            # Bancos: margen neto distorsionado — usar ROE como proxy
             q_score += 5
         elif nm > 0.20:  q_score += 8
         elif nm > 0.10:  q_score += 6
         elif nm > 0.02:  q_score += 3
-        elif nm < 0:     q_score -= 3
+        elif nm < 0 and not is_pre_revenue:  q_score -= 3   # no penalizar si es pre-revenue
 
     if roe is not None:
         roe_hi = 0.10 if ('financial' in sector) else 0.15
         if roe > roe_hi * 2:   q_score += 8
         elif roe > roe_hi:     q_score += 5
-        elif roe < 0:          q_score -= 4
+        elif roe < 0 and not is_pre_revenue: q_score -= 4
 
     if fcf is not None:
         if fcf > 0:   q_score += 5
-        elif fcf < 0: q_score -= 2
+        elif fcf < 0 and not is_pre_revenue: q_score -= 2
 
     if op_m is not None and op_m > 0.15:
         q_score += 4
@@ -1608,20 +1612,23 @@ def render():
         # Barras de sub-score
         bars_html = ""
         for label_b, val_b, color_b in [
-            ("Calidad",    sc['calidad'],    "#00ffad"),
-            ("Valoración", sc['valoracion'], "#00d9ff"),
-            ("Momentum",   sc['momentum'],   "#ff9800"),
-            ("Consenso",   sc['consenso'],   "#9b59b6"),
+            ("CAL",  sc['calidad'],    "#00ffad"),
+            ("VAL",  sc['valoracion'], "#00d9ff"),
+            ("MOM",  sc['momentum'],   "#ff9800"),
+            ("CON",  sc['consenso'],   "#9b59b6"),
         ]:
             pct = val_b / 25 * 100
-            bars_html += f"""
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-                <div style="font-family:'Space Grotesk',sans-serif;color:#555;font-size:0.68rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;width:70px;flex-shrink:0;">{label_b}</div>
-                <div class="score-bar-track" style="flex:1;">
-                    <div class="score-bar-fill" style="width:{pct:.0f}%;background:{color_b};"></div>
-                </div>
-                <div style="font-family:'VT323',monospace;color:{color_b};font-size:0.95rem;width:28px;text-align:right;">{val_b}</div>
-            </div>"""
+            bars_html += (
+                '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
+                f'<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;'
+                f'font-weight:600;letter-spacing:1px;text-transform:uppercase;width:32px;flex-shrink:0;">{label_b}</div>'
+                '<div style="flex:1;background:#0f1218;border-radius:3px;height:5px;overflow:hidden;">'
+                f'<div style="width:{pct:.0f}%;height:100%;border-radius:3px;background:{color_b};"></div>'
+                '</div>'
+                f'<div style="font-family:VT323,monospace;color:{color_b};font-size:0.9rem;'
+                f'width:22px;text-align:right;flex-shrink:0;">{val_b}</div>'
+                '</div>'
+            )
         score_html = (
             '<div class="rsu-score-box">'
             '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">'
@@ -1768,11 +1775,29 @@ def render():
             sector_note = f'<div style="font-family:Inter,sans-serif;font-size:0.76rem;color:#444;margin-bottom:12px;border-left:3px solid #1a2e40;padding-left:10px;">Umbrales P/E ajustados para sector <strong style="color:#00d9ff;">{sector}</strong>. Los colores reflejan si la valoración es barata, razonable o cara <em>para este sector</em>, no con thresholds genéricos.</div>'
         st.markdown(sector_note, unsafe_allow_html=True)
 
+        def fmt_val_metric(val, name=""):
+            """
+            Formatea un múltiplo de valoración.
+            - P/E negativo = empresa en pérdidas (válido, mostrar en naranja con nota)
+            - EV/EBITDA negativo = EBITDA negativo (válido, mostrar en naranja)
+            - None = dato no disponible (N/D gris)
+            """
+            v = _safe(val)
+            if v is None:
+                return "N/D", "#555"
+            if v < 0:
+                if name in ("P/E", "Forward P/E"):
+                    return f"{v:.2f}×", "#ff9800"   # naranja: empresa en pérdidas
+                if name == "EV/EBITDA":
+                    return f"{v:.2f}×", "#ff9800"   # naranja: EBITDA negativo
+                return f"{v:.2f}×", "#f23645"
+            return f"{v:.2f}×", valuation_color(name, v)
+
         valuation_data = [
-            ("P/E",         metrics['trailing_pe'],    "Trailing",    "Precio / Beneficio"),
+            ("P/E",         metrics['trailing_pe'],    "Trailing",    "N/D = empresa en pérdidas (EPS negativo)"),
             ("P/S",         metrics['price_to_sales'], "TTM",         "Precio / Ventas"),
-            ("EV/EBITDA",   metrics['ev_ebitda'],      "TTM",         "Valor Empresa / EBITDA"),
-            ("Forward P/E", metrics['forward_pe'],     "Próx. 12M",   "Precio / BPA Futuro"),
+            ("EV/EBITDA",   metrics['ev_ebitda'],      "TTM",         "Negativo = EBITDA negativo"),
+            ("Forward P/E", metrics['forward_pe'],     "Próx. 12M",   "Precio / BPA estimado próximos 12M"),
             ("PEG Ratio",   metrics['peg_ratio'],      "P/E ÷ Crec.", "Valoración ajustada al crecimiento"),
             ("P/B",         metrics['price_to_book'],  "Actual",      "Precio / Valor en Libros"),
         ]
@@ -1780,19 +1805,19 @@ def render():
         rows_html = ""
         for i in range(0, len(valuation_data), 3):
             chunk = valuation_data[i:i+3]
-            cells = "".join(
-                f'<div style="flex:1;min-width:0;">'
-                f'<div class="metric-box"><span class="metric-tag">{tag}</span>'
-                f'<div class="metric-label">{label}</div>'
-                f'<div class="metric-value" style="color:{valuation_color(label, val)};">{fmt_x(val)}</div>'
-                f'<div class="metric-desc">{desc}</div>'
-                f'</div></div>'
-                for label, val, tag, desc in chunk
-            )
-            # Pad if fewer than 3
-            while len(chunk) < 3:
+            cells = ""
+            for label, val, tag, desc in chunk:
+                disp, color = fmt_val_metric(val, label)
+                cells += (
+                    '<div style="flex:1;min-width:0;">'
+                    f'<div class="metric-box"><span class="metric-tag">{tag}</span>'
+                    f'<div class="metric-label">{label}</div>'
+                    f'<div class="metric-value" style="color:{color};">{disp}</div>'
+                    f'<div class="metric-desc">{desc}</div>'
+                    '</div></div>'
+                )
+            for _ in range(3 - len(chunk)):
                 cells += '<div style="flex:1;min-width:0;"></div>'
-                chunk.append(None)
             rows_html += f'<div style="display:flex;gap:10px;margin-bottom:10px;">{cells}</div>'
 
         st.markdown(f"""
@@ -2290,21 +2315,31 @@ def render():
                             return str(val)
 
                     def _lookup_major(df, *labels):
-                        """Busca un valor en major_holders por label (columna 0) o por índice."""
+                        """
+                        yfinance major_holders: col 0 = numeric value, col 1 = label text.
+                        Searches col 1 for label keywords, returns col 0 value.
+                        Falls back to positional index if label not found.
+                        """
                         if df is None or df.empty: return None
-                        # Intentar por label en primera columna de texto
+                        # Col 1 contains the description, col 0 contains the value
+                        label_col = 1 if len(df.columns) > 1 else 0
+                        val_col   = 0
                         for lbl in labels:
                             try:
-                                matches = df[df.iloc[:,0].astype(str).str.lower().str.contains(lbl.lower())]
-                                if not matches.empty:
-                                    return matches.iloc[0, 1] if len(matches.columns) > 1 else matches.iloc[0, 0]
+                                mask = df.iloc[:, label_col].astype(str).str.lower().str.contains(lbl.lower(), na=False)
+                                if mask.any():
+                                    return df.loc[mask].iloc[0, val_col]
                             except Exception:
                                 pass
                         return None
 
-                    # Buscar % institucional y % retail por label semántico primero
-                    raw_inst   = _lookup_major(major, 'institution', 'institucional') or (major.iloc[2, 0] if len(major) > 2 else None)
-                    raw_retail = _lookup_major(major, 'float', 'retail', 'public')     or (major.iloc[3, 0] if len(major) > 3 else None)
+                    # yfinance major_holders typical rows:
+                    # 0: % insiders held, 1: % institutions held,
+                    # 2: % float held by institutions, 3: # of institutions holding shares
+                    raw_inst   = (_lookup_major(major, 'institution', 'institutions held')
+                                  or (major.iloc[1, 0] if len(major) > 1 else None))
+                    raw_retail = (_lookup_major(major, 'float', 'retail', 'insiders')
+                                  or (major.iloc[0, 0] if len(major) > 0 else None))
                     pct_inst   = _fmt_pct_major(raw_inst)
                     pct_retail = _fmt_pct_major(raw_retail)
                     st.markdown(f"""

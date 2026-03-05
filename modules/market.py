@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -1920,6 +1921,59 @@ def get_advance_decline():
     except Exception as e:
         set_api_health('AdvDecline', False)
     return {'history': [], 'current_ad': 0, 'spy_current': 0, 'spy_change': 0, 'ok': False}
+
+
+
+@st.cache_data(ttl=300)
+def get_forex():
+    """EUR/USD, GBP/USD, USD/JPY, AUD/USD via yfinance."""
+    pairs = [
+        ('EURUSD=X', 'EUR/USD', 'Euro/Dolar'),
+        ('GBPUSD=X', 'GBP/USD', 'Pound/Dolar'),
+        ('JPY=X',    'USD/JPY', 'Dolar/Yen'),
+        ('AUDUSD=X', 'AUD/USD', 'Aussie/Dolar'),
+    ]
+    result = []
+    for sym, ticker, name in pairs:
+        try:
+            h = yf.Ticker(sym).history(period='2d', interval='5m')
+            if h.empty:
+                continue
+            price = float(h['Close'].iloc[-1])
+            prev  = float(h['Close'].iloc[-289]) if len(h) >= 289 else float(h['Close'].iloc[0])
+            chg   = price - prev
+            pct   = chg / prev * 100 if prev else 0
+            result.append({'ticker': ticker, 'name': name, 'price': price, 'change': chg, 'pct': pct})
+        except Exception:
+            continue
+    return result
+
+
+@st.cache_data(ttl=300)
+def get_commodities():
+    """Gold, Silver, Oil, Natural Gas via yfinance."""
+    items = [
+        ('GC=F',  'GLD',  'Gold',        'Oro'),
+        ('SI=F',  'SLV',  'Silver',      'Plata'),
+        ('CL=F',  'USO',  'Oil',         'Petroleo WTI'),
+        ('NG=F',  'UNG',  'Natural Gas', 'Gas Natural'),
+    ]
+    result = []
+    for sym, etf, label, name_es in items:
+        for s in [sym, etf]:
+            try:
+                h = yf.Ticker(s).history(period='2d', interval='5m')
+                if h.empty:
+                    continue
+                price = float(h['Close'].iloc[-1])
+                prev  = float(h['Close'].iloc[-289]) if len(h) >= 289 else float(h['Close'].iloc[0])
+                chg   = price - prev
+                pct   = chg / prev * 100 if prev else 0
+                result.append({'ticker': label, 'name': name_es, 'price': price, 'change': chg, 'pct': pct})
+                break
+            except Exception:
+                continue
+    return result
 
 
 def render():
@@ -4100,26 +4154,87 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             unsafe_allow_html=True
         )
 
-    _placeholder_html = (
-        '<div class="module-container" style="display:flex;flex-direction:column;'
-        'align-items:center;justify-content:center;opacity:0.35;">'
-        '<div style="color:#00ffad;font-size:32px;margin-bottom:8px;">&#9866;</div>'
-        '<div style="color:#00ffad;font-family:VT323,monospace;font-size:16px;'
-        'letter-spacing:2px;text-transform:uppercase;">Próximamente</div>'
-        '<div style="color:#444;font-size:10px;margin-top:6px;font-family:Courier New,monospace;">'
-        'Módulo en construcción</div>'
-        '</div>'
-    )
+    # ── FOREX MODULE ─────────────────────────────────────────────────────────────
     with f7c2:
-        st.markdown(_placeholder_html, unsafe_allow_html=True)
+        _fx_data = get_forex()
+        _fx_rows = ''
+        for _item in _fx_data:
+            _ticker = _item['ticker']
+            _name   = _item['name']
+            _price  = _item['price']
+            _chg    = _item['change']
+            _pct    = _item['pct']
+            _color  = '#00ffad' if _pct >= 0 else '#f23645'
+            _arrow  = '&#9650;' if _pct >= 0 else '&#9660;'
+            _pstr   = f'{_price:.4f}'
+            _cstr   = f'{abs(_chg):.4f}'
+            _pctstr = f'{_pct:+.2f}%'
+            _fx_rows += (
+                '<div style="display:flex;justify-content:space-between;align-items:center;'
+                'padding:9px 14px;border-bottom:1px solid #1a1e26;">'
+                '<div>'
+                '<div style="color:white;font-size:12px;font-weight:600;">' + _ticker + '</div>'
+                '<div style="color:#555;font-size:10px;font-family:Courier New,monospace;">' + _name + '</div>'
+                '</div>'
+                '<div style="text-align:right;">'
+                '<div style="color:white;font-size:14px;font-weight:600;">' + _pstr + '</div>'
+                '<div style="color:' + _color + ';font-size:10px;">' + _arrow + ' ' + _cstr + ' (' + _pctstr + ')</div>'
+                '</div>'
+                '</div>'
+            )
+        _fx_ts = get_timestamp()
+        st.markdown(
+            '<div class="module-container">'
+            '<div class="module-header">'
+            '<div class="module-title">Forex</div>'
+            '<div style="color:#444;font-size:11px;font-family:VT323,monospace;letter-spacing:1px;">SPOT</div>'
+            '</div>'
+            '<div class="module-content" style="padding:0;overflow-y:auto;">' + _fx_rows + '</div>'
+            '<div class="update-timestamp">Actualizado: ' + _fx_ts + '</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+    # ── COMMODITIES MODULE ────────────────────────────────────────────────────────
     with f7c3:
-        st.markdown(_placeholder_html, unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    render()
-
-
-
+        _cmd_data = get_commodities()
+        _cmd_rows = ''
+        for _item in _cmd_data:
+            _ticker = _item['ticker']
+            _name   = _item['name']
+            _price  = _item['price']
+            _chg    = _item['change']
+            _pct    = _item['pct']
+            _color  = '#00ffad' if _pct >= 0 else '#f23645'
+            _arrow  = '&#9650;' if _pct >= 0 else '&#9660;'
+            _pstr   = f'${_price:,.2f}'
+            _cstr   = f'{_chg:+.2f}'
+            _pctstr = f'({_pct:+.2f}%)'
+            _cmd_rows += (
+                '<div style="display:flex;justify-content:space-between;align-items:center;'
+                'padding:9px 14px;border-bottom:1px solid #1a1e26;">'
+                '<div>'
+                '<div style="color:white;font-size:12px;font-weight:600;">' + _ticker + '</div>'
+                '<div style="color:#555;font-size:10px;font-family:Courier New,monospace;">' + _name + '</div>'
+                '</div>'
+                '<div style="text-align:right;">'
+                '<div style="color:white;font-size:14px;font-weight:600;">' + _pstr + '</div>'
+                '<div style="color:' + _color + ';font-size:10px;">' + _arrow + ' ' + _cstr + ' ' + _pctstr + '</div>'
+                '</div>'
+                '</div>'
+            )
+        _cmd_ts = get_timestamp()
+        st.markdown(
+            '<div class="module-container">'
+            '<div class="module-header">'
+            '<div class="module-title">Commodities</div>'
+            '<div style="color:#444;font-size:11px;font-family:VT323,monospace;letter-spacing:1px;">FUTUROS</div>'
+            '</div>'
+            '<div class="module-content" style="padding:0;overflow-y:auto;">' + _cmd_rows + '</div>'
+            '<div class="update-timestamp">Actualizado: ' + _cmd_ts + '</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
 
 

@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - v4.0.0
@@ -1281,51 +1282,82 @@ def render_ibd_panel(ibd: dict):
     pe        = ibd.get('pe_ratio', 0)
     roe       = ibd.get('roe', 0)
 
-    c_color = COLORS['primary'] if composite >= 80 else COLORS['warning'] if composite >= 60 else COLORS['danger']
+    def rating_color(v, thresholds=(80, 60)):
+        return COLORS['primary'] if v >= thresholds[0] else COLORS['warning'] if v >= thresholds[1] else COLORS['danger']
 
-    hc1, hc2 = st.columns([2, 1])
-    with hc1:
-        st.markdown('<h3>📊 RATINGS IBD</h3>', unsafe_allow_html=True)
-    with hc2:
-        st.markdown(f"<div style='font-family:VT323,monospace;color:{c_color};text-align:right;"
-                    f"font-size:1.5rem;letter-spacing:2px;margin-top:10px;'>COMPOSITE: {composite}</div>",
-                    unsafe_allow_html=True)
-    st.markdown("---")
+    def grade_color(g):
+        return {
+            'A': COLORS['primary'], 'B': COLORS['warning'],
+            'C': COLORS['neutral'], 'D': COLORS['danger'], 'E': COLORS['danger']
+        }.get(g, COLORS['neutral'])
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""
-        <div style='text-align:center;padding:15px;background:rgba(33,150,243,.1);
-        border-radius:10px;border:1px solid rgba(33,150,243,.3);'>
-        <div style='color:#aaa;font-size:.8rem;margin-bottom:5px;font-family:Courier New,monospace;'>RS RATING</div>
-        <div style='color:#2196F3;font-size:2rem;font-family:VT323,monospace;'>{rs}</div>
-        <div style='color:#666;font-size:.7rem;font-family:Courier New,monospace;'>vs S&P 500</div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div style='text-align:center;padding:15px;background:rgba(76,175,80,.1);
-        border-radius:10px;border:1px solid rgba(76,175,80,.3);'>
-        <div style='color:#aaa;font-size:.8rem;margin-bottom:5px;font-family:Courier New,monospace;'>EPS RATING</div>
-        <div style='color:#4CAF50;font-size:2rem;font-family:VT323,monospace;'>{eps}</div>
-        <div style='color:#666;font-size:.7rem;font-family:Courier New,monospace;'>Growth YoY</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        smr_c = COLORS['primary'] if smr == 'A' else COLORS['warning'] if smr == 'B' else \
-                COLORS['danger'] if smr == 'D' else COLORS['neutral']
-        st.markdown(f"""
-        <div style='text-align:center;padding:15px;background:rgba(255,152,0,.1);
-        border-radius:10px;border:1px solid rgba(255,152,0,.3);'>
-        <div style='color:#aaa;font-size:.8rem;margin-bottom:5px;font-family:Courier New,monospace;'>SMR GRADE</div>
-        <div style='color:{smr_c};font-size:2rem;font-family:VT323,monospace;'>{smr}</div>
-        <div style='color:#666;font-size:.7rem;font-family:Courier New,monospace;'>Sales/Margins/ROE</div>
-        </div>""", unsafe_allow_html=True)
+    comp_c = rating_color(composite)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    c4, c5, c6, c7 = st.columns(4)
-    with c4: st.metric("A/D Rating", acc_dis, help="Accumulation/Distribution 50d")
-    with c5: st.metric("ATR %",      f"{atr}%", help="Volatilidad promedio")
-    with c6: st.metric("P/E Ratio",  f"{pe:.1f}" if pe else "N/A")
-    with c7: st.metric("ROE",        f"{roe:.1f}%", help="Return on Equity")
+    st.markdown(f"""
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.4rem;letter-spacing:2px;">
+            📊 RATINGS IBD
+        </div>
+        <div style="font-family:'VT323',monospace;color:{comp_c};font-size:1.6rem;letter-spacing:3px;
+        text-shadow:0 0 12px {comp_c}88;">
+            COMPOSITE: {composite}
+        </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div style="background:linear-gradient(135deg,{COLORS['bg_dark']},{COLORS['bg_card']});
+        border:1px solid {hex_to_rgba(COLORS['ibd_blue'],.35)};border-radius:10px;
+        padding:14px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#888;font-size:.85rem;letter-spacing:1px;">RS RATING</div>
+            <div style="font-family:'VT323',monospace;color:{rating_color(rs)};font-size:2.4rem;
+            line-height:1;margin:4px 0;text-shadow:0 0 10px {rating_color(rs)}66;">{rs}</div>
+            <div style="font-family:'Courier New',monospace;color:#555;font-size:.68rem;">vs S&P 500</div>
+        </div>
+        <div style="background:linear-gradient(135deg,{COLORS['bg_dark']},{COLORS['bg_card']});
+        border:1px solid {hex_to_rgba(COLORS['primary'],.35)};border-radius:10px;
+        padding:14px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#888;font-size:.85rem;letter-spacing:1px;">EPS RATING</div>
+            <div style="font-family:'VT323',monospace;color:{rating_color(eps)};font-size:2.4rem;
+            line-height:1;margin:4px 0;text-shadow:0 0 10px {rating_color(eps)}66;">{eps}</div>
+            <div style="font-family:'Courier New',monospace;color:#555;font-size:.68rem;">Growth YoY</div>
+        </div>
+        <div style="background:linear-gradient(135deg,{COLORS['bg_dark']},{COLORS['bg_card']});
+        border:1px solid {hex_to_rgba(COLORS['warning'],.35)};border-radius:10px;
+        padding:14px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#888;font-size:.85rem;letter-spacing:1px;">SMR GRADE</div>
+            <div style="font-family:'VT323',monospace;color:{grade_color(smr)};font-size:2.4rem;
+            line-height:1;margin:4px 0;text-shadow:0 0 10px {grade_color(smr)}66;">{smr}</div>
+            <div style="font-family:'Courier New',monospace;color:#555;font-size:.68rem;">Sales/Margins/ROE</div>
+        </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+        <div style="background:{COLORS['bg_dark']};border:1px solid {COLORS['bg_card']};
+        border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#666;font-size:.8rem;">A/D RATING</div>
+            <div style="font-family:'VT323',monospace;color:{grade_color(acc_dis)};font-size:1.8rem;">{acc_dis}</div>
+            <div style="font-family:'Courier New',monospace;color:#444;font-size:.62rem;">Acc/Dis 50d</div>
+        </div>
+        <div style="background:{COLORS['bg_dark']};border:1px solid {COLORS['bg_card']};
+        border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#666;font-size:.8rem;">ATR %</div>
+            <div style="font-family:'VT323',monospace;color:{COLORS['text']};font-size:1.8rem;">{atr:.2f}%</div>
+            <div style="font-family:'Courier New',monospace;color:#444;font-size:.62rem;">Volatilidad</div>
+        </div>
+        <div style="background:{COLORS['bg_dark']};border:1px solid {COLORS['bg_card']};
+        border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#666;font-size:.8rem;">P/E RATIO</div>
+            <div style="font-family:'VT323',monospace;color:{COLORS['text']};font-size:1.8rem;">
+                {f"{pe:.1f}" if pe and pe > 0 else "N/A"}</div>
+            <div style="font-family:'Courier New',monospace;color:#444;font-size:.62rem;">Precio/Beneficio</div>
+        </div>
+        <div style="background:{COLORS['bg_dark']};border:1px solid {COLORS['bg_card']};
+        border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-family:'VT323',monospace;color:#666;font-size:.8rem;">ROE</div>
+            <div style="font-family:'VT323',monospace;color:{COLORS['primary'] if roe > 17 else COLORS['warning'] if roe > 10 else COLORS['danger']};font-size:1.8rem;">
+                {f"{roe:.1f}%" if roe else "N/A"}</div>
+            <div style="font-family:'Courier New',monospace;color:#444;font-size:.62rem;">Return on Equity</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def render_trend_template(trend: dict):
@@ -1334,35 +1366,72 @@ def render_trend_template(trend: dict):
     stage    = trend.get('stage', '')
     all_pass = trend.get('all_pass', False)
 
-    sc_color = COLORS['primary'] if all_pass else COLORS['warning']
-    hc1, hc2 = st.columns([2, 1])
-    with hc1:
-        st.markdown('<h3>🎯 TREND TEMPLATE MINERVINI</h3>', unsafe_allow_html=True)
-    with hc2:
-        st.markdown(f"<div style='font-family:VT323,monospace;color:{sc_color};text-align:right;"
-                    f"font-size:1.5rem;letter-spacing:2px;margin-top:10px;'>{score}/8</div>",
-                    unsafe_allow_html=True)
+    sc_color  = COLORS['primary'] if all_pass else COLORS['warning'] if score >= 5 else COLORS['danger']
+    stage_c   = COLORS['primary'] if 'Stage 2' in stage else \
+                COLORS['danger'] if 'Stage 4' in stage else COLORS['warning']
 
-    stage_c = COLORS['primary'] if 'Stage 2' in stage else \
-              COLORS['danger'] if 'Stage 4' in stage else COLORS['warning']
-    st.markdown(f"<div style='font-family:VT323,monospace;color:{stage_c};font-size:1.1rem;"
-                f"text-align:right;letter-spacing:1px;margin-top:-10px;'>▸ {stage.upper()}</div>",
-                unsafe_allow_html=True)
-    st.markdown("---")
+    # Header
+    st.markdown(f"""
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.4rem;letter-spacing:2px;">
+            🎯 TREND TEMPLATE
+        </div>
+        <div style="font-family:'VT323',monospace;color:{sc_color};font-size:1.6rem;letter-spacing:3px;
+        text-shadow:0 0 12px {sc_color}88;">
+            {score}/8
+        </div>
+    </div>
+    <div style="background:linear-gradient(90deg,{hex_to_rgba(stage_c,.15)},transparent);
+    border-left:3px solid {stage_c};padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:14px;">
+        <div style="font-family:'VT323',monospace;color:{stage_c};font-size:1.05rem;letter-spacing:2px;">
+            ▸ {stage.upper()}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # Criterios en grid 2 columnas
     items = list(criteria.items())
-    mid   = len(items) // 2
-    col1, col2 = st.columns(2)
-    for i, (criterion, passed) in enumerate(items):
-        with col1 if i < mid else col2:
-            if passed: st.success(f"✓ {criterion}")
-            else:      st.error(f"✗ {criterion}")
+    mid   = (len(items) + 1) // 2
+    rows_html = ""
+    for label, passed in items:
+        icon  = "✓" if passed else "✗"
+        color = COLORS['primary'] if passed else COLORS['danger']
+        bg    = hex_to_rgba(COLORS['primary'], 0.08) if passed else hex_to_rgba(COLORS['danger'], 0.06)
+        border= hex_to_rgba(COLORS['primary'], 0.25) if passed else hex_to_rgba(COLORS['danger'], 0.2)
+        rows_html += f"""
+        <div style="background:{bg};border:1px solid {border};border-radius:6px;
+        padding:7px 10px;display:flex;align-items:center;gap:8px;">
+            <span style="font-family:'VT323',monospace;color:{color};font-size:1rem;min-width:14px;">{icon}</span>
+            <span style="font-family:'Courier New',monospace;color:{'#ccc' if passed else '#888'};font-size:.72rem;">
+                {label}
+            </span>
+        </div>"""
 
-    st.markdown("---")
+    st.markdown(f"""
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+        {rows_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Banner final
     if all_pass:
-        st.success("✅ **TODOS LOS CRITERIOS CUMPLIDOS** — Stage 2 Confirmado")
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,{hex_to_rgba(COLORS['primary'],.15)},{hex_to_rgba(COLORS['primary'],.05)});
+        border:1px solid {hex_to_rgba(COLORS['primary'],.4)};border-radius:8px;
+        padding:12px;text-align:center;margin-top:4px;">
+            <div style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:1.1rem;letter-spacing:1px;">
+                ✅ TODOS LOS CRITERIOS CUMPLIDOS — Stage 2 Confirmado
+            </div>
+        </div>""", unsafe_allow_html=True)
     else:
-        st.warning(f"⚠️ **{score}/8 criterios cumplidos** — Revisar condiciones técnicas")
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,{hex_to_rgba(COLORS['warning'],.1)},transparent);
+        border:1px solid {hex_to_rgba(COLORS['warning'],.3)};border-radius:8px;
+        padding:10px;text-align:center;margin-top:4px;">
+            <div style="font-family:'VT323',monospace;color:{COLORS['warning']};font-size:1rem;">
+                ⚠️ {score}/8 CRITERIOS — Revisar condiciones técnicas
+            </div>
+        </div>""", unsafe_allow_html=True)
 
 
 # ==============================================================================
@@ -2025,106 +2094,208 @@ def render():
                             {'<p style="font-family:Courier New,monospace;font-size:.82rem;color:#888;">ℹ️ Espera 30 segundos y vuelve a intentarlo (rate limit de Yahoo Finance).</p>' if not info_ok else ''}
                         </div>""", unsafe_allow_html=True)
                     else:
-                        with st.expander("🔍 Debug Info"):
-                            st.write(f"RS Rating (percentil): {result['ibd_ratings']['rs']}")
-                            st.write(f"EPS Rating: {result['ibd_ratings']['eps']}")
-                            st.write(f"Composite: {result['ibd_ratings']['composite']}")
-                            st.write(f"ML Prob: {result['ml_probability']:.1%}")
+                        r   = result
+                        ibd = r['ibd_ratings']
+                        mtr = r['metrics']
+                        grd = r['grades']
+                        sc  = r['scores']
 
-                        col1, col2, col3 = st.columns([1, 1.2, 1])
-                        with col1:
-                            st.markdown('<h3>CAN SLIM SCORE</h3>', unsafe_allow_html=True)
-                            st.plotly_chart(create_score_gauge(result['score']),
-                                            use_container_width=True, key=f"cs_{ticker_input}")
-                            st.plotly_chart(create_grades_radar(result['grades']),
-                                            use_container_width=True, key=f"radar_{ticker_input}")
-                            rs = result['ibd_ratings']['rs']
-                            rs_c = COLORS['primary'] if rs > 80 else COLORS['warning'] if rs > 60 else COLORS['danger']
-                            ml_p = result['ml_probability']
-                            ml_c = COLORS['primary'] if ml_p > 0.7 else COLORS['warning'] if ml_p > 0.5 else COLORS['danger']
-                            st.markdown(f"""
-                            <div class="metric-card" style="margin-top:10px;">
-                                <div style="font-family:'VT323',monospace;color:#888;font-size:.9rem;">RS RATING</div>
-                                <div style="font-family:'VT323',monospace;color:{rs_c};font-size:2.5rem;">{rs}</div>
+                        # ── Header de la acción ───────────────────────────────────────
+                        score_c = COLORS['primary'] if r['score'] >= 70 else \
+                                  COLORS['warning'] if r['score'] >= 50 else COLORS['danger']
+                        comp_c  = COLORS['primary'] if ibd['composite'] >= 80 else \
+                                  COLORS['warning'] if ibd['composite'] >= 60 else COLORS['danger']
+                        stage_pass = r['trend_template']['all_pass']
+                        grades_html = ''.join(
+                            f'<span class="grade-badge grade-{grd[g]}" style="font-size:1rem;width:34px;height:34px;line-height:34px;">{g}</span>'
+                            for g in ['C','A','N','S','L','I','M']
+                        )
+                        st.markdown(f"""
+                        <div class="terminal-box" style="margin-bottom:20px;padding:20px 24px;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+                                <div>
+                                    <div style="font-family:'VT323',monospace;color:{COLORS['primary']};
+                                    font-size:2.8rem;line-height:1;letter-spacing:3px;
+                                    text-shadow:0 0 20px {COLORS['primary']}44;">{r['ticker']}</div>
+                                    <div style="font-family:'Courier New',monospace;color:#888;
+                                    font-size:.85rem;margin-top:4px;">{r['name']} · {r['sector']}</div>
+                                    <div style="margin-top:10px;">{grades_html}</div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-family:'VT323',monospace;color:{score_c};
+                                    font-size:3.5rem;line-height:1;text-shadow:0 0 20px {score_c}66;">
+                                        {r['score']}</div>
+                                    <div style="font-family:'Courier New',monospace;color:#555;font-size:.72rem;">
+                                        CAN SLIM SCORE</div>
+                                    <div style="margin-top:8px;font-family:'VT323',monospace;
+                                    color:{comp_c};font-size:1.2rem;">IBD: {ibd['composite']}</div>
+                                    <div style="font-family:'Courier New',monospace;color:#555;font-size:.7rem;">
+                                        ${r['price']:.2f} · MktCap ${r['market_cap']:.1f}B</div>
+                                </div>
                             </div>
-                            <div class="metric-card" style="margin-top:8px;">
-                                <div style="font-family:'VT323',monospace;color:#888;font-size:.9rem;">ML PROBABILITY</div>
-                                <div style="font-family:'VT323',monospace;color:{ml_c};font-size:2.5rem;">{ml_p:.1%}</div>
-                            </div>""", unsafe_allow_html=True)
-                        with col2:
-                            render_ibd_panel(result['ibd_ratings'])
-                            st.plotly_chart(create_ibd_radar(result['ibd_ratings']),
-                                            use_container_width=True, key=f"ibd_{ticker_input}")
-                        with col3:
-                            render_trend_template(result['trend_template'])
-                            with st.expander("📐 Niveles Técnicos"):
-                                tv = result['trend_template'].get('values', {})
-                                if tv:
-                                    st.dataframe(pd.DataFrame({
-                                        'Métrica': ['SMA 50','SMA 150','SMA 200','52W High','52W Low','Dist. High','Dist. Low'],
-                                        'Valor'  : [
-                                            f"${tv.get('sma_50',0):.2f}",    f"${tv.get('sma_150',0):.2f}",
-                                            f"${tv.get('sma_200',0):.2f}",   f"${tv.get('high_52w',0):.2f}",
-                                            f"${tv.get('low_52w',0):.2f}",   f"{tv.get('distance_from_high',0):.1f}%",
-                                            f"{tv.get('distance_from_low',0):.1f}%",
-                                        ]
-                                    }), use_container_width=True, hide_index=True)
+                            <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+                                <span style="font-family:'Courier New',monospace;font-size:.75rem;
+                                padding:3px 10px;border-radius:12px;
+                                background:{hex_to_rgba(COLORS['primary'],.1)};
+                                border:1px solid {hex_to_rgba(COLORS['primary'],.3)};
+                                color:{COLORS['primary']};">
+                                    RS {ibd['rs']} · EPS {ibd['eps']} · SMR {ibd['smr']} · A/D {ibd['acc_dis']}
+                                </span>
+                                <span style="font-family:'Courier New',monospace;font-size:.75rem;
+                                padding:3px 10px;border-radius:12px;
+                                background:{hex_to_rgba(COLORS['primary'] if stage_pass else COLORS['warning'],.1)};
+                                border:1px solid {hex_to_rgba(COLORS['primary'] if stage_pass else COLORS['warning'],.3)};
+                                color:{COLORS['primary'] if stage_pass else COLORS['warning']};">
+                                    {'✅ Stage 2 (8/8)' if stage_pass else f"⚠️ Stage {r['trend_template']['score']}/8"}
+                                </span>
+                                <span style="font-family:'Courier New',monospace;font-size:.75rem;
+                                padding:3px 10px;border-radius:12px;
+                                background:rgba(136,136,136,.1);border:1px solid #333;color:#888;">
+                                    ML {r['ml_probability']:.0%} · ATR {ibd['atr_percent']:.2f}%
+                                </span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                        # Gráfico de precios
-                        st.markdown("---")
+                        # ── Fila 1: Gauge + IBD Panel + Trend Template ────────────────
+                        col1, col2, col3 = st.columns([1, 1.3, 1.1])
+                        with col1:
+                            st.plotly_chart(create_score_gauge(r['score']),
+                                            use_container_width=True, key=f"cs_{ticker_input}")
+                            st.plotly_chart(create_grades_radar(r['grades']),
+                                            use_container_width=True, key=f"radar_{ticker_input}")
+
+                        with col2:
+                            render_ibd_panel(ibd)
+                            st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+                            st.plotly_chart(create_ibd_radar(ibd),
+                                            use_container_width=True, key=f"ibd_{ticker_input}")
+
+                        with col3:
+                            render_trend_template(r['trend_template'])
+                            st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+                            with st.expander("📐 Niveles Técnicos"):
+                                tv = r['trend_template'].get('values', {})
+                                if tv:
+                                    for label, val in [
+                                        ('SMA 50',  f"${tv.get('sma_50',0):.2f}"),
+                                        ('SMA 150', f"${tv.get('sma_150',0):.2f}"),
+                                        ('SMA 200', f"${tv.get('sma_200',0):.2f}"),
+                                        ('52W High',f"${tv.get('high_52w',0):.2f}"),
+                                        ('52W Low', f"${tv.get('low_52w',0):.2f}"),
+                                        ('Dist. High', f"{tv.get('distance_from_high',0):.1f}%"),
+                                        ('Dist. Low',  f"{tv.get('distance_from_low',0):.1f}%"),
+                                    ]:
+                                        st.markdown(f"""
+                                        <div style="display:flex;justify-content:space-between;
+                                        padding:5px 0;border-bottom:1px solid {COLORS['bg_card']};">
+                                            <span style="font-family:'Courier New',monospace;color:#888;font-size:.78rem;">{label}</span>
+                                            <span style="font-family:'VT323',monospace;color:{COLORS['primary']};font-size:.95rem;">{val}</span>
+                                        </div>""", unsafe_allow_html=True)
+
+                        # ── Fila 2: Métricas clave ────────────────────────────────────
+                        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                        def _metric_box(label, val, color=None):
+                            c = color or COLORS['text']
+                            return f"""<div style="background:{COLORS['bg_dark']};border:1px solid {COLORS['bg_card']};
+                            border-radius:8px;padding:10px;text-align:center;">
+                            <div style="font-family:'VT323',monospace;color:#555;font-size:.78rem;letter-spacing:1px;">{label}</div>
+                            <div style="font-family:'VT323',monospace;color:{c};font-size:1.35rem;margin-top:2px;">{val}</div>
+                            </div>"""
+
+                        eg  = mtr['earnings_growth']
+                        rg  = mtr['revenue_growth']
+                        eg_c = COLORS['primary'] if eg > 25 else COLORS['warning'] if eg > 0 else COLORS['danger']
+                        rg_c = COLORS['primary'] if rg > 15 else COLORS['warning'] if rg > 0 else COLORS['danger']
+                        hi_c = COLORS['primary'] if mtr['pct_from_high'] > -10 else \
+                               COLORS['warning'] if mtr['pct_from_high'] > -25 else COLORS['danger']
+
+                        st.markdown(f"""
+                        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px;">
+                            {_metric_box("EPS G%", f"{min(999,eg):.1f}%", eg_c)}
+                            {_metric_box("REV G%", f"{min(999,rg):.1f}%", rg_c)}
+                            {_metric_box("DEL HIGH", f"{mtr['pct_from_high']:.1f}%", hi_c)}
+                            {_metric_box("VOL RATIO", f"{mtr['volume_ratio']:.2f}x",
+                                COLORS['primary'] if mtr['volume_ratio']>1.5 else COLORS['neutral'])}
+                            {_metric_box("INST OWN", f"{mtr['inst_ownership']:.0f}%")}
+                            {_metric_box("MARKET", f"{mtr['market_score']:.0f}/100",
+                                COLORS['primary'] if mtr['market_score']>=70 else
+                                COLORS['warning'] if mtr['market_score']>=50 else COLORS['danger'])}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # ── Gráfico de precios ────────────────────────────────────────
                         if hist_single is not None and len(hist_single) > 0:
                             fig = go.Figure()
                             fig.add_trace(go.Candlestick(
                                 x=hist_single.index,
                                 open=hist_single['Open'], high=hist_single['High'],
-                                low=hist_single['Low'],   close=hist_single['Close'], name='Price'
+                                low=hist_single['Low'],   close=hist_single['Close'],
+                                name='Precio',
+                                increasing_line_color=COLORS['primary'],
+                                decreasing_line_color=COLORS['danger'],
                             ))
-                            for period, color, dash in [(50, COLORS['warning'], 'solid'),
-                                                         (150, '#FF9800', 'dash'),
-                                                         (200, COLORS['primary'], 'solid')]:
+                            sma_cfg = [(50, COLORS['warning'], 'dot'), (150, '#FF6B35', 'dash'), (200, COLORS['primary'], 'solid')]
+                            for period, color, dash in sma_cfg:
                                 if len(hist_single) >= period:
                                     fig.add_trace(go.Scatter(
                                         x=hist_single.index,
                                         y=hist_single['Close'].rolling(period).mean(),
                                         name=f'SMA {period}',
-                                        line=dict(color=color, width=1+(period==200), dash=dash)
+                                        line=dict(color=color, width=1.5, dash=dash),
+                                        opacity=0.85,
                                     ))
                             fig.update_layout(
-                                title=f"{result['name']} ({ticker_input}) — ${result['price']:.2f}",
+                                title=dict(
+                                    text=f"{r['name']} ({ticker_input})  ·  ${r['price']:.2f}",
+                                    font=dict(family='VT323, monospace', size=18, color=COLORS['primary']),
+                                    x=0.0
+                                ),
                                 paper_bgcolor=COLORS['bg_dark'], plot_bgcolor=COLORS['bg_dark'],
-                                font=dict(color='white'),
-                                xaxis=dict(gridcolor=COLORS['bg_card']),
-                                yaxis=dict(gridcolor=COLORS['bg_card']),
-                                height=500, showlegend=True,
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                                font=dict(color='#888', family='Courier New, monospace', size=11),
+                                xaxis=dict(gridcolor=COLORS['bg_card'], color='#555',
+                                           rangeslider=dict(visible=False)),
+                                yaxis=dict(gridcolor=COLORS['bg_card'], color='#555', tickprefix='$'),
+                                height=480, showlegend=True,
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                            xanchor="right", x=1, bgcolor='rgba(0,0,0,0)',
+                                            font=dict(size=11)),
+                                margin=dict(l=50, r=20, t=60, b=30),
+                                hovermode='x unified',
                             )
                             st.plotly_chart(fig, use_container_width=True)
 
-                        with st.expander("📋 Métricas Completas"):
-                            st.table(pd.DataFrame({
-                                'Métrica': ['Market Cap','EPS Growth','Rev Growth','Inst. Own','Vol Ratio',
-                                            'From High','Volatility','Price Mom','Market Score',
-                                            'IBD Composite','IBD RS','IBD EPS','IBD SMR','A/D','ATR%','P/E','ROE'],
-                                'Valor'  : [
-                                    f"${result['market_cap']:.1f}B",
-                                    f"{result['metrics']['earnings_growth']:.1f}%",
-                                    f"{result['metrics']['revenue_growth']:.1f}%",
-                                    f"{result['metrics']['inst_ownership']:.1f}%",
-                                    f"{result['metrics']['volume_ratio']:.2f}x",
-                                    f"{result['metrics']['pct_from_high']:.1f}%",
-                                    f"{result['metrics']['volatility']:.1f}%",
-                                    f"{result['metrics']['price_momentum']:.1f}%",
-                                    f"{result['metrics']['market_score']:.0f}/100",
-                                    f"{result['ibd_ratings']['composite']}/99",
-                                    f"{result['ibd_ratings']['rs']}/99",
-                                    f"{result['ibd_ratings']['eps']}/99",
-                                    result['ibd_ratings']['smr'],
-                                    result['ibd_ratings']['acc_dis'],
-                                    f"{result['ibd_ratings']['atr_percent']:.2f}%",
-                                    f"{result['ibd_ratings']['pe_ratio']:.1f}",
-                                    f"{result['ibd_ratings']['roe']:.1f}%",
-                                ]
-                            }))
+                        # ── Debug expander ───────────────────────────────────────────
+                        with st.expander("🔍 Datos completos (debug)"):
+                            dcols = st.columns(2)
+                            with dcols[0]:
+                                st.markdown("**Métricas CAN SLIM**")
+                                st.table(pd.DataFrame({
+                                    'Campo': ['EPS Growth','Rev Growth','Inst. Own','Vol Ratio',
+                                              'From High','Volatility','Price Mom','Market Score'],
+                                    'Valor': [
+                                        f"{mtr['earnings_growth']:.1f}%",
+                                        f"{mtr['revenue_growth']:.1f}%",
+                                        f"{mtr['inst_ownership']:.1f}%",
+                                        f"{mtr['volume_ratio']:.2f}x",
+                                        f"{mtr['pct_from_high']:.1f}%",
+                                        f"{mtr['volatility']:.1f}%",
+                                        f"{mtr['price_momentum']:.1f}%",
+                                        f"{mtr['market_score']:.0f}/100",
+                                    ]
+                                }))
+                            with dcols[1]:
+                                st.markdown("**Ratings IBD**")
+                                st.table(pd.DataFrame({
+                                    'Rating': ['Composite','RS','EPS','SMR','A/D','ATR%','P/E','ROE'],
+                                    'Valor': [
+                                        f"{ibd['composite']}/99", f"{ibd['rs']}/99",
+                                        f"{ibd['eps']}/99", ibd['smr'], ibd['acc_dis'],
+                                        f"{ibd['atr_percent']:.2f}%",
+                                        f"{ibd['pe_ratio']:.1f}" if ibd['pe_ratio'] else "N/A",
+                                        f"{ibd['roe']:.1f}%",
+                                    ]
+                                }))
                 except Exception as e:
                     st.error(f"❌ Error inesperado: {e}")
                     import traceback; st.code(traceback.format_exc())
@@ -2373,5 +2544,3 @@ else:
 
 if __name__ == "__main__":
     render()
-
-

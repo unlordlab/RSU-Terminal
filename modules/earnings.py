@@ -12,6 +12,9 @@ import requests
 import math
 import html
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ────────────────────────────────────────────────
 # API KEYS
@@ -389,44 +392,78 @@ def process_finnhub_segments(finnhub_data):
     return segments if segments else None
 
 def calculate_news_sentiment(finnhub_data):
+    """Análisis de sentimiento mejorado con negación y word-boundary matching."""
     if not finnhub_data or 'news' not in finnhub_data: return None
     news = finnhub_data['news']
     if not news: return None
 
-    bullish_words = ['beat','strong','growth','profit','gain','rise','surge','upgrade',
-                     'buy','outperform','exceeds','beats','record','soar','rally','deal','expansion']
-    bearish_words = ['miss','weak','loss','decline','fall','drop','downgrade','sell',
-                     'cut','underperform','misses','plunge','crash','concern','risk',
-                     'investigation','lawsuit','layoff','recession','bankruptcy','fraud']
+    # Frases/patrones positivos (completos para evitar falsos positivos)
+    bullish_phrases = [
+        'beat', 'beats', 'strong earnings', 'strong revenue', 'revenue growth',
+        'profit growth', 'record revenue', 'record earnings', 'raises guidance',
+        'raised guidance', 'upgrade', 'upgraded', 'outperform', 'buy rating',
+        'exceeds', 'exceeded', 'surges', 'soars', 'rallies', 'new high',
+        'buyback', 'share repurchase', 'dividend increase', 'expands',
+        'partnership', 'acquisition', 'market share', 'strong demand'
+    ]
+    bearish_phrases = [
+        'misses', 'missed', 'miss', 'weak earnings', 'weak revenue', 'revenue decline',
+        'lowers guidance', 'lowered guidance', 'cuts guidance', 'downgrade', 'downgraded',
+        'underperform', 'sell rating', 'below expectations', 'plunges', 'crashes',
+        'falls sharply', 'loses', 'layoffs', 'layoff', 'restructuring', 'recalls',
+        'investigation', 'lawsuit', 'sec probe', 'bankruptcy', 'default', 'fraud',
+        'data breach', 'fine', 'penalty', 'recall', 'safety concerns'
+    ]
+    # Negaciones que invierten el sentido
+    negations = ['not ', 'no ', "doesn't ", "don't ", "won't ", "isn't ", "aren't ", "wasn't "]
 
     bullish_count = bearish_count = total = 0
-    for article in news[:30]:
-        title = article.get('headline', '').lower()
-        if not title: continue
+    for article in news[:50]:
+        title = (article.get('headline', '') + ' ' + article.get('summary', '')).lower()
+        if not title.strip(): continue
         total += 1
-        if any(w in title for w in bullish_words): bullish_count += 1
-        if any(w in title for w in bearish_words): bearish_count += 1
+
+        b_hit = any(ph in title for ph in bullish_phrases)
+        bear_hit = any(ph in title for ph in bearish_phrases)
+
+        # Detectar negaciones antes de una palabra clave positiva
+        if b_hit:
+            negated = any(
+                neg + ph in title
+                for neg in negations
+                for ph in bullish_phrases
+                if neg + ph in title
+            )
+            if negated: bear_hit = True
+            else: bullish_count += 1
+
+        if bear_hit:
+            # Evitar doble conteo si ya fue contado arriba
+            if not (b_hit and not any(neg + ph in title for neg in negations for ph in bullish_phrases if neg + ph in title)):
+                bearish_count += 1
 
     ts = bullish_count + bearish_count
     if ts == 0:
         return {'overall_sentiment': 'neutral', 'sentiment_score': 0,
                 'news_count': len(news), 'bullish_pct': 0, 'bearish_pct': 0,
-                'analyzed_count': total, 'source': 'finnhub'}
+                'analyzed_count': total, 'source': 'finnhub',
+                'articles': news[:15]}
 
     bullish_pct = bullish_count / ts * 100
     bearish_pct = bearish_count / ts * 100
 
     if bullish_pct > 60:
-        sentiment, score = 'alcista', 0.5 + (bullish_pct - 60) / 80
+        sentiment, score = 'alcista', min(1.0, 0.5 + (bullish_pct - 60) / 80)
     elif bearish_pct > 60:
-        sentiment, score = 'bajista', -0.5 - (bearish_pct - 60) / 80
+        sentiment, score = 'bajista', max(-1.0, -0.5 - (bearish_pct - 60) / 80)
     else:
         sentiment, score = 'neutral', (bullish_pct - bearish_pct) / 100
 
     return {
-        'overall_sentiment': sentiment, 'sentiment_score': max(-1, min(1, score)),
+        'overall_sentiment': sentiment, 'sentiment_score': score,
         'news_count': len(news), 'bullish_pct': round(bullish_pct, 1),
-        'bearish_pct': round(bearish_pct, 1), 'analyzed_count': total, 'source': 'finnhub'
+        'bearish_pct': round(bearish_pct, 1), 'analyzed_count': total,
+        'source': 'finnhub', 'articles': news[:15]
     }
 
 # ────────────────────────────────────────────────
@@ -452,10 +489,46 @@ def get_institutional_holders(ticker):
 def get_suggestions(info, recommendations, target_data, profitability):
     suggestions = []
 
+    sector = (info.get('sector') or '').lower()
+    industry = (info.get('industry') or '').lower()
+
+    # ── Umbrales ajustados por sector ──
+    # PE razonable varía enormemente: utilities ~15, tech ~30, biotech no aplica
+    def pe_label(pe_val):
+        if not pe_val or pe_val <= 0: return None, None
+        if 'technology' in sector or 'communication' in sector:
+            lo, hi = 20, 50
+        elif 'financial' in sector or 'bank' in industry:
+            lo, hi = 8, 18
+        elif 'utilities' in sector or 'real estate' in sector:
+            lo, hi = 12, 22
+        elif 'health' in sector or 'biotech' in industry:
+            lo, hi = 15, 60  # biotech puede tener PE muy alto o N/A
+        else:
+            lo, hi = 15, 30
+        if pe_val < lo:    return "barato vs sector", "#00ffad"
+        elif pe_val > hi:  return "caro vs sector", "#f23645"
+        else:              return "valoración razonable vs sector", "#ff9800"
+
+    def roe_thresholds():
+        """ROE esperado varía por sector."""
+        if 'financial' in sector or 'bank' in industry:
+            return 0.10, 0.05   # bancos con ROE >10% = bueno
+        elif 'real estate' in sector:
+            return 0.08, 0.03
+        else:
+            return 0.20, 0.05   # tech/consumer: >20% = bueno
+
     pe         = _safe(info.get('trailingPE'))
     forward_pe = _safe(info.get('forwardPE'))
     cp         = target_data.get('current', 0) or 0
     n_analysts = _safe(info.get('numberOfAnalystOpinions')) or 0
+
+    # PE con contexto sectorial
+    if pe and pe > 0:
+        pe_desc, _ = pe_label(pe)
+        if pe_desc:
+            suggestions.append(f"📊 P/E Trailing {pe:.1f}× — {pe_desc} ({info.get('sector','sector desconocido')}).")
 
     if pe and forward_pe and pe > 0 and forward_pe > 0:
         if forward_pe < pe * 0.85:
@@ -500,9 +573,10 @@ def get_suggestions(info, recommendations, target_data, profitability):
 
     roe = profitability.get('roe')
     if roe is not None:
-        if roe > 0.30:  suggestions.append(f"💎 ROE excepcional ({roe*100:.1f}%) — empresa muy eficiente en generar beneficios con el capital.")
-        elif roe > 0.15: suggestions.append(f"💚 ROE sólido ({roe*100:.1f}%) — buena rentabilidad sobre fondos propios.")
-        elif roe < 0:   suggestions.append(f"🔴 ROE negativo ({roe*100:.1f}%) — empresa destruyendo valor actualmente.")
+        roe_hi, roe_lo = roe_thresholds()
+        if roe > roe_hi * 1.5:  suggestions.append(f"💎 ROE excepcional ({roe*100:.1f}%) para el sector {info.get('sector','N/A')} — empresa muy eficiente.")
+        elif roe > roe_hi:       suggestions.append(f"💚 ROE sólido ({roe*100:.1f}%) — buena rentabilidad sobre fondos propios.")
+        elif roe < 0:            suggestions.append(f"🔴 ROE negativo ({roe*100:.1f}%) — empresa destruyendo valor actualmente.")
 
     nm = profitability.get('net_margin')
     if nm is not None:
@@ -1005,7 +1079,7 @@ def render():
         "🎯 Earnings Surprises",
         "📅 Eventos & Calendario",
         "🏦 Fondos Institucionales",
-        "📰 Segmentos & Sentimiento",
+        "📰 Noticias & Sentimiento",
     ])
 
     # ══ TAB 1: VALORACIÓN ══
@@ -1527,10 +1601,24 @@ def render():
 
             if major is not None and not major.empty:
                 try:
-                    pct_inst   = major.iloc[2, 0] if len(major) > 2 else "N/D"
-                    pct_retail = major.iloc[3, 0] if len(major) > 3 else "N/D"
-                    if isinstance(pct_inst,   float): pct_inst   = f"{pct_inst*100:.1f}%"
-                    if isinstance(pct_retail, float): pct_retail = f"{pct_retail*100:.1f}%"
+                    def _fmt_pct_major(val):
+                        """Yahoo devuelve el valor a veces ya en %, a veces en decimal."""
+                        if val is None: return "N/D"
+                        try:
+                            v = float(val)
+                            # Si el valor ya es un porcentaje razonable (0-100) está en decimal
+                            if 0 <= v <= 1.5:
+                                return f"{v*100:.1f}%"
+                            # Si viene directamente como porcentaje (ej: 78.6)
+                            elif 0 < v <= 100:
+                                return f"{v:.1f}%"
+                            # Valor absurdo — omitir
+                            return "N/D"
+                        except:
+                            return str(val)
+
+                    pct_inst   = _fmt_pct_major(major.iloc[2, 0] if len(major) > 2 else None)
+                    pct_retail = _fmt_pct_major(major.iloc[3, 0] if len(major) > 3 else None)
                     st.markdown(f"""
                     <div style="display:flex;gap:12px;margin-bottom:18px;">
                         <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
@@ -1597,107 +1685,135 @@ def render():
         """, unsafe_allow_html=True)
         st.markdown("</div></div>", unsafe_allow_html=True)
 
-    # ══ TAB 8: SEGMENTOS & SENTIMIENTO ══
+    # ══ TAB 8: NOTICIAS & SENTIMIENTO ══
     with tabs[7]:
-        col_seg, col_sent = st.columns(2)
-
-        with col_seg:
+        if not api_keys['finnhub']:
             st.markdown("""
-            <div class="mod-box">
-                <div class="mod-header"><span class="mod-title">🍕 Ingresos por Segmento</span></div>
-                <div class="mod-body">
-            """, unsafe_allow_html=True)
-
-            if segments:
-                labels = list(segments.keys())
-                values = list(segments.values())
-                colors = ['#5b8ff9', '#00ffad', '#f5a623', '#f23645', '#9b59b6', '#1abc9c']
-
-                fig_seg = go.Figure(data=[go.Pie(
-                    labels=labels, values=values, hole=0.4,
-                    marker_colors=colors[:len(labels)],
-                    textinfo='label+percent', textfont=dict(size=12, color='white')
-                )])
-                fig_seg.update_layout(
-                    template="plotly_dark", plot_bgcolor='#0c0e12', paper_bgcolor='#0c0e12',
-                    font=dict(color='white'), height=320,
-                    margin=dict(l=20, r=20, t=20, b=20), showlegend=False
-                )
-                st.plotly_chart(fig_seg, use_container_width=True)
-                st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:11px;">✅ Datos reales de Finnhub</div>', unsafe_allow_html=True)
-            else:
-                if not api_keys['finnhub']:
-                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Configura FINNHUB_API_KEY para ver datos de segmentos reales.</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Datos de segmentos no disponibles para este ticker.</div>', unsafe_allow_html=True)
-
-            st.markdown("</div></div>", unsafe_allow_html=True)
-
-        with col_sent:
-            st.markdown("""
-            <div class="mod-box">
-                <div class="mod-header"><span class="mod-title">📰 Sentimiento de Noticias</span></div>
-                <div class="mod-body">
-            """, unsafe_allow_html=True)
-
-            if sentiment:
-                sent_val   = sentiment.get('overall_sentiment', 'neutral')
-                score      = sentiment.get('sentiment_score', 0)
-                bull_pct   = sentiment.get('bullish_pct', 0)
-                bear_pct   = sentiment.get('bearish_pct', 0)
-                news_count = sentiment.get('news_count', 0)
-                analyzed   = sentiment.get('analyzed_count', 0)
-
-                sent_colors = {'alcista': '#00ffad', 'bajista': '#f23645', 'neutral': '#ff9800'}
-                sent_color  = sent_colors.get(sent_val, '#888')
-
-                fig_gauge2 = go.Figure(go.Indicator(
-                    mode="gauge+number",
-                    value=score * 100,
-                    domain={'x': [0, 1], 'y': [0, 1]},
-                    title={'text': "Score de Sentimiento", 'font': {'color': 'white', 'size': 13}},
-                    gauge={
-                        'axis': {'range': [-100, 100], 'tickcolor': 'white'},
-                        'bar': {'color': sent_color, 'thickness': 0.75},
-                        'bgcolor': '#1a1e26',
-                        'steps': [
-                            {'range': [-100, -33], 'color': '#3d1f1f'},
-                            {'range': [-33, 33],   'color': '#3d3520'},
-                            {'range': [33, 100],   'color': '#1f3d2e'},
-                        ],
-                    }
-                ))
-                fig_gauge2.update_layout(template="plotly_dark", paper_bgcolor='#0c0e12',
-                                         font=dict(color='white'), height=220,
-                                         margin=dict(l=20, r=20, t=40, b=10))
-                st.plotly_chart(fig_gauge2, use_container_width=True)
-
-                st.markdown(f"""
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                        <div style="font-family:VT323,monospace;color:#777;font-size:0.8rem;">SENTIMIENTO</div>
-                        <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.3rem;">{sent_val.upper()}</div>
-                    </div>
-                    <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                        <div style="font-family:VT323,monospace;color:#777;font-size:0.8rem;">ALCISTAS</div>
-                        <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.3rem;">{bull_pct:.0f}%</div>
-                    </div>
-                    <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                        <div style="font-family:VT323,monospace;color:#777;font-size:0.8rem;">BAJISTAS</div>
-                        <div style="font-family:VT323,monospace;color:#f23645;font-size:1.3rem;">{bear_pct:.0f}%</div>
-                    </div>
+            <div class="mod-box"><div class="mod-body">
+                <div style="font-family:Courier New,monospace;color:#555;font-size:13px;padding:20px;text-align:center;">
+                    ⚙️ Configura <strong style="color:#00ffad;">FINNHUB_API_KEY</strong> en los secrets para activar este módulo.<br>
+                    <span style="color:#333;font-size:11px;margin-top:8px;display:block;">finnhub.io ofrece plan gratuito con 60 req/min.</span>
                 </div>
-                <div style="font-family:Courier New,monospace;color:#444;font-size:11px;margin-top:8px;">
-                    📊 {analyzed} noticias analizadas de {news_count} disponibles (últimos 30 días)
-                </div>
+            </div></div>
+            """, unsafe_allow_html=True)
+        else:
+            # ── Panel izquierdo: Gauge + KPIs sentimiento ──
+            col_sent, col_news = st.columns([1, 2])
+
+            with col_sent:
+                st.markdown("""
+                <div class="mod-box">
+                    <div class="mod-header"><span class="mod-title">📊 Sentimiento de Noticias</span>
+                        <div class="tip-box"><div class="tip-icon">?</div>
+                            <div class="tip-text">Análisis de titulares vía Finnhub (últimos 30 días). Detecta frases con negación para evitar falsos positivos. No es NLP avanzado — úsalo como señal orientativa.</div>
+                        </div>
+                    </div>
+                    <div class="mod-body">
                 """, unsafe_allow_html=True)
-            else:
-                if not api_keys['finnhub']:
-                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Configura FINNHUB_API_KEY para ver el análisis de sentimiento de noticias reales.</div>', unsafe_allow_html=True)
+
+                if sentiment:
+                    sent_val   = sentiment.get('overall_sentiment', 'neutral')
+                    score      = sentiment.get('sentiment_score', 0)
+                    bull_pct   = sentiment.get('bullish_pct', 0)
+                    bear_pct   = sentiment.get('bearish_pct', 0)
+                    news_count = sentiment.get('news_count', 0)
+                    analyzed   = sentiment.get('analyzed_count', 0)
+                    sent_colors = {'alcista': '#00ffad', 'bajista': '#f23645', 'neutral': '#ff9800'}
+                    sent_color  = sent_colors.get(sent_val, '#888')
+
+                    fig_gauge2 = go.Figure(go.Indicator(
+                        mode="gauge+number",
+                        value=round(score * 100, 1),
+                        domain={'x': [0, 1], 'y': [0, 1]},
+                        title={'text': "Score de Sentimiento", 'font': {'color': 'white', 'size': 13}},
+                        gauge={
+                            'axis': {'range': [-100, 100], 'tickcolor': 'white'},
+                            'bar': {'color': sent_color, 'thickness': 0.75},
+                            'bgcolor': '#1a1e26',
+                            'steps': [
+                                {'range': [-100, -33], 'color': '#3d1f1f'},
+                                {'range': [-33, 33],   'color': '#3d3520'},
+                                {'range': [33, 100],   'color': '#1f3d2e'},
+                            ],
+                        }
+                    ))
+                    fig_gauge2.update_layout(template="plotly_dark", paper_bgcolor='#0c0e12',
+                                             font=dict(color='white'), height=220,
+                                             margin=dict(l=20, r=20, t=40, b=10))
+                    st.plotly_chart(fig_gauge2, use_container_width=True)
+
+                    st.markdown(f"""
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                            <div style="font-family:VT323,monospace;color:#777;font-size:0.75rem;">SENTIMIENTO</div>
+                            <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.2rem;">{sent_val.upper()}</div>
+                        </div>
+                        <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                            <div style="font-family:VT323,monospace;color:#777;font-size:0.75rem;">ALCISTAS</div>
+                            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.2rem;">{bull_pct:.0f}%</div>
+                        </div>
+                        <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                            <div style="font-family:VT323,monospace;color:#777;font-size:0.75rem;">BAJISTAS</div>
+                            <div style="font-family:VT323,monospace;color:#f23645;font-size:1.2rem;">{bear_pct:.0f}%</div>
+                        </div>
+                    </div>
+                    <div style="font-family:Courier New,monospace;color:#444;font-size:10px;margin-top:8px;">
+                        📊 {analyzed} titulares analizados de {news_count} disponibles
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Sentimiento no disponible para este ticker.</div>', unsafe_allow_html=True)
 
-            st.markdown("</div></div>", unsafe_allow_html=True)
+                st.markdown("</div></div>", unsafe_allow_html=True)
+
+            # ── Panel derecho: Feed de noticias reales ──
+            with col_news:
+                articles = (sentiment or {}).get('articles', []) if sentiment else []
+                # Si no hay sentimiento pero sí finnhub_data, obtener noticias directamente
+                if not articles and finnhub_data and finnhub_data.get('news'):
+                    articles = finnhub_data['news'][:15]
+
+                st.markdown("""
+                <div class="mod-box">
+                    <div class="mod-header"><span class="mod-title">📰 Últimas Noticias (30 días)</span>
+                        <div class="tip-box"><div class="tip-icon">?</div>
+                            <div class="tip-text">Noticias reales vía Finnhub. Haz clic en el titular para abrir la fuente original.</div>
+                        </div>
+                    </div>
+                    <div class="mod-body">
+                """, unsafe_allow_html=True)
+
+                if articles:
+                    news_html = ""
+                    for art in articles[:12]:
+                        headline = html.escape(art.get('headline', 'Sin título')[:120])
+                        source   = art.get('source', '')
+                        url      = art.get('url', '#')
+                        ts_raw   = art.get('datetime', 0)
+                        try:
+                            from datetime import datetime as _dt
+                            ts_str = _dt.fromtimestamp(int(ts_raw)).strftime('%d %b')
+                        except:
+                            ts_str = ''
+                        news_html += f"""
+                        <div style="padding:10px 0;border-bottom:1px solid #0f1218;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                                <a href="{url}" target="_blank" style="font-family:Courier New,monospace;color:#ccc;font-size:12px;line-height:1.5;text-decoration:none;flex:1;"
+                                   onmouseover="this.style.color='#00ffad'" onmouseout="this.style.color='#ccc'">
+                                    {headline}
+                                </a>
+                                <div style="flex-shrink:0;text-align:right;">
+                                    <div style="font-family:VT323,monospace;color:#444;font-size:0.82rem;">{ts_str}</div>
+                                    <div style="font-family:Courier New,monospace;color:#333;font-size:10px;">{source}</div>
+                                </div>
+                            </div>
+                        </div>"""
+                    st.markdown(news_html, unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">No hay noticias disponibles para este ticker.</div>', unsafe_allow_html=True)
+
+                st.markdown("</div></div>", unsafe_allow_html=True)
+
 
     # ══════════════════════════════════════════════
     # SUGERENCIAS AUTOMÁTICAS
@@ -1752,19 +1868,18 @@ def render():
     st.markdown("""
     <div class="rsu-box">
         <div class="rsu-title">🤖 RSU Artificial Intelligence</div>
-        <p style="font-family:'Courier New',monospace;color:#666;font-size:13px;line-height:1.6;margin-bottom:16px;">
+        <p style="font-family:'Courier New',monospace;color:#666;font-size:13px;line-height:1.6;margin-bottom:4px;">
             Dos modos de análisis: <strong style="color:#00ffad;">Rápido</strong> (snapshot ejecutivo en segundos) 
             o <strong style="color:#00d9ff;">Completo</strong> (informe de 11 secciones con técnico, smart money y catalizadores).
         </p>
+    </div>
     """, unsafe_allow_html=True)
 
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        btn_rapido = st.button("⚡ ANÁLISIS RÁPIDO", key="btn_rapido")
+        btn_rapido = st.button("⚡ ANÁLISIS RÁPIDO", key="btn_rapido", use_container_width=True)
     with col_btn2:
-        btn_completo = st.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo")
-
-    st.markdown("</div>", unsafe_allow_html=True)
+        btn_completo = st.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo", use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 

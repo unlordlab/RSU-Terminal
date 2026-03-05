@@ -179,16 +179,57 @@ def translate_text_cached(text, ticker):
 def get_yfinance_full(ticker):
     try:
         stock = yf.Ticker(ticker, session=_HTTP)
-        info  = stock.info
+        info  = stock.info or {}
+
+        # ── Precio robusto: funciona para micro-caps, SPACs, tickers ilíquidos (ej: AMPX) ──
         cp_check = (
             _safe(info.get('currentPrice')) or
             _safe(info.get('regularMarketPrice')) or
             _safe(info.get('regularMarketOpen')) or
             _safe(info.get('ask')) or
             _safe(info.get('bid')) or
-            _safe(info.get('navPrice'))
+            _safe(info.get('navPrice')) or
+            _safe(info.get('postMarketPrice')) or
+            _safe(info.get('preMarketPrice'))
         )
-        if not info or not cp_check:
+
+        # Fallback 1: historial reciente (últimos 5 días) — cubre la mayoría de casos
+        if not cp_check:
+            try:
+                hist_short = stock.history(period="5d", interval="1d", auto_adjust=True)
+                if hist_short is not None and not hist_short.empty and 'Close' in hist_short.columns:
+                    last_close = _safe(float(hist_short['Close'].dropna().iloc[-1]))
+                    if last_close:
+                        cp_check = last_close
+                        info['currentPrice'] = last_close
+                        info['regularMarketPrice'] = last_close
+                        if len(hist_short) >= 2:
+                            prev = _safe(float(hist_short['Close'].dropna().iloc[-2]))
+                            if prev: info['previousClose'] = prev
+                        logger.info("[yf fallback hist] %s precio=%.4f", ticker, last_close)
+            except Exception as e:
+                logger.warning("[yf fallback hist] %s: %s", ticker, e)
+
+        # Fallback 2: fast_info — más ligero, menos datos, pero muy compatible
+        if not cp_check:
+            try:
+                fi = stock.fast_info
+                last = _safe(getattr(fi, 'last_price', None))
+                if last:
+                    cp_check = last
+                    info['currentPrice'] = last
+                    info['regularMarketPrice'] = last
+                    prev = _safe(getattr(fi, 'previous_close', None))
+                    if prev: info['previousClose'] = prev
+                    mc = _safe(getattr(fi, 'market_cap', None))
+                    if mc and not info.get('marketCap'): info['marketCap'] = mc
+                    logger.info("[yf fast_info] %s precio=%.4f", ticker, last)
+            except Exception as e:
+                logger.warning("[yf fast_info] %s: %s", ticker, e)
+
+        if not cp_check:
+            logger.warning("[get_yfinance_full] Sin precio para %s. Keys: %s",
+                           ticker, list(info.keys())[:15])
             return None
 
         # Recomendaciones
@@ -1470,7 +1511,32 @@ def render():
         finnhub_data = get_finnhub_data(t_in, api_keys['finnhub']) if api_keys['finnhub'] else None
 
     if not yf_data:
-        st.error(f"❌ No se encontraron datos para **'{t_in}'**. Verifica que el ticker sea válido.")
+        # Intentar diagnóstico: ¿existe el ticker pero sin precio? ¿ticker incorrecto?
+        diag_msg = ""
+        try:
+            import yfinance as _yf
+            _test = _yf.Ticker(t_in, session=_HTTP)
+            _info = _test.info or {}
+            if _info.get('longName') or _info.get('shortName'):
+                diag_msg = f" (**{_info.get('shortName', '')}** existe en Yahoo Finance pero no devolvió precio — puede ser un ticker OTC, SPAC o recién listado. Intenta de nuevo en unos segundos.)"
+            elif _info.get('symbol'):
+                diag_msg = " (El ticker existe pero no tiene datos de precio disponibles en este momento.)"
+        except Exception:
+            pass
+
+        st.error(f"❌ No se pudieron obtener datos para **'{t_in}'**.{diag_msg}")
+        st.markdown(f"""
+        <div style="background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;margin-top:8px;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:0.8rem;color:#666;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Posibles causas</div>
+            <div style="font-family:'Inter',sans-serif;font-size:0.84rem;color:#888;line-height:1.8;">
+                ▸ El ticker no existe o está mal escrito (ej: <strong style="color:#00ffad;">AAPL</strong> no <strong style="color:#f23645;">apple</strong>)<br>
+                ▸ Ticker de bolsa europea — añade el sufijo (ej: <strong style="color:#00ffad;">IBE.MC</strong> para Iberdola en BME)<br>
+                ▸ Micro-cap o SPAC con poca liquidez — Yahoo Finance puede tardar en indexarlo<br>
+                ▸ Ticker recién listado (&lt;30 días) — historial insuficiente<br>
+                ▸ Problema temporal de la API de Yahoo Finance — intenta de nuevo en 30 segundos
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         return
 
     # Aplicar overrides FMP sobre datos yfinance (FMP más fiable para ratios)
@@ -2625,7 +2691,6 @@ def render():
 
 if __name__ == "__main__":
     render()
-
 
 
 

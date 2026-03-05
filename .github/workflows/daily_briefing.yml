@@ -26,8 +26,8 @@ jobs:
 
       - name: Generate and save briefing
         env:
-          GROQ_API_KEY:         ${{ secrets.GROQ_API_KEY }}
-          NEWS_API_KEY:         ${{ secrets.NEWS_API_KEY }}
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  GROQ_API_KEY:         ${{ secrets.GROQ_API_KEY }}
+  NEWS_API_KEY:         ${{ secrets.NEWS_API_KEY }}
+  BRIEFING_GIST_ID:     ${{ secrets.BRIEFING_GIST_ID }}
+  GH_GIST_TOKEN:        ${{ secrets.GH_GIST_TOKEN }}
         run: python scripts/generate_briefing.py

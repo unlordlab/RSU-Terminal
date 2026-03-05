@@ -102,7 +102,7 @@ def build_sparkline_svg(prices, width=240, height=48):
 # TRADUCCIÓN AUTOMÁTICA (castellano)
 # ────────────────────────────────────────────────
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)  # 24h — la descripción no cambia a diario
 def translate_text_cached(text, ticker):
     if not text: return 'Descripción no disponible.'
     try:
@@ -132,7 +132,15 @@ def get_yfinance_full(ticker):
     try:
         stock = yf.Ticker(ticker)
         info  = stock.info
-        if not info or not (_safe(info.get('currentPrice')) or _safe(info.get('regularMarketPrice'))):
+        cp_check = (
+            _safe(info.get('currentPrice')) or
+            _safe(info.get('regularMarketPrice')) or
+            _safe(info.get('regularMarketOpen')) or
+            _safe(info.get('ask')) or
+            _safe(info.get('bid')) or
+            _safe(info.get('navPrice'))
+        )
+        if not info or not cp_check:
             return None
 
         # Recomendaciones
@@ -220,35 +228,37 @@ def get_yfinance_full(ticker):
             'employees':       _safe(info.get('fullTimeEmployees')),
         }
 
-        # Eventos calendario
+        # Eventos calendario + estimaciones — una sola llamada
         events = {}
+        analyst_estimates = {}
         try:
             cal = stock.calendar
             if cal is not None:
                 raw = cal if isinstance(cal, dict) else cal.to_dict()
+                useful_events = {'Earnings Date', 'Ex-Dividend Date', 'Dividend Date'}
+                estimate_keys = {'Earnings High', 'Earnings Low', 'Earnings Average',
+                                 'Revenue High',  'Revenue Low',  'Revenue Average'}
                 for k, v in raw.items():
-                    if k in {'Earnings Date', 'Ex-Dividend Date', 'Dividend Date'}:
-                        events[k] = v
+                    if v is None: continue
+                    if k in useful_events:   events[k]            = v
+                    elif k in estimate_keys: analyst_estimates[k] = v
         except: pass
 
-        analyst_estimates = {}
-        try:
-            cal_raw = stock.calendar
-            if cal_raw is not None:
-                raw = cal_raw if isinstance(cal_raw, dict) else cal_raw.to_dict()
-                for k in ['Earnings High', 'Earnings Low', 'Earnings Average',
-                          'Revenue High', 'Revenue Low', 'Revenue Average']:
-                    if k in raw and raw[k] is not None:
-                        analyst_estimates[k] = raw[k]
-        except: pass
+        # Complementar fechas dividendo desde info si calendar no las devuelve
+        for k_info, label in [
+            ('exDividendDate', 'Fecha Ex-Dividendo'),
+            ('dividendDate',   'Fecha Pago Dividendo')
+        ]:
+            if label not in events and 'Ex-Dividend Date' not in events:
+                v = _safe(info.get(k_info))
+                if v: events[label] = v
 
-        # Sparkline 3 meses
+        # Sparkline 3 meses — reutiliza la sesión stock, sin llamada extra
         sparkline = None
         try:
-            hist = yf.download(ticker, period="3mo", interval="1d", progress=False, auto_adjust=True)
-            if not hist.empty:
-                close_col = ('Close', ticker) if isinstance(hist.columns, pd.MultiIndex) else 'Close'
-                sparkline = [p for p in [_safe(x) for x in hist[close_col].dropna().tolist()] if p is not None]
+            hist = stock.history(period="3mo", interval="1d", auto_adjust=True)
+            if hist is not None and not hist.empty and 'Close' in hist.columns:
+                sparkline = [p for p in [_safe(x) for x in hist['Close'].dropna().tolist()] if p is not None]
         except: pass
 
         # Histórico 1 año para gráfico
@@ -281,12 +291,21 @@ def get_yfinance_full(ticker):
                     })
         except: pass
 
+        # Institutional holders — same session, no extra call
+        inst_data = {}
+        try:
+            inst_data['institutional'] = stock.institutional_holders
+            inst_data['major']         = stock.major_holders
+            inst_data['mutual_funds']  = stock.mutualfund_holders
+        except: pass
+
         return {
             'info': info, 'recommendations': recommendations, 'rec_summary': rec_summary,
             'target_data': target_data, 'metrics': metrics, 'profitability': profitability,
             'market': market, 'events': events, 'analyst_estimates': analyst_estimates,
             'sparkline': sparkline, 'hist_1y': hist_1y,
             'earnings_surprises': earnings_surprises,
+            'inst_data': inst_data,
         }
     except Exception as e:
         return None
@@ -518,46 +537,151 @@ def get_suggestions(info, recommendations, target_data, profitability):
 # PROMPT IA
 # ────────────────────────────────────────────────
 
-PROMPT_RSU_COMPLETO = """Analiza {t} en profundidad y responde en castellano con el siguiente formato markdown estructurado:
+PROMPT_RSU_COMPLETO = """Por favor, analiza {t} para mí y proporciona lo siguiente, de forma concisa, estructurada y claramente organizada en **formato markdown**:
 
-## 1. ¿A qué se dedica la empresa?
-- Tres puntos breves con lenguaje sencillo y analogías.
+---
 
-## 2. Resumen Profesional (máx. 10 frases)
-Sector, productos, competidores (tickers), ventaja competitiva (moat), unicidad en su industria.
+## 1. Explica a qué se dedica la empresa como si tuviera 12 años
 
-## 3. Narrativa y Catalizadores
-Tabla con: Tema actual | Catalizadores recientes/potenciales | Datos fundamentales significativos
+* Tres puntos breves sobre lo que hace.
+* Incluye ejemplos o analogías sencillas con las que pueda identificarme.
 
-## 4. Noticias/Eventos Últimos 3 Meses
-Tabla: Fecha | Tipo | Resumen | Impacto en precio
+---
 
-## 5. Fundamentales Último Trimestre
-Ingresos vs expectativas, EPS vs expectativas, márgenes, guidance, reacción del mercado.
+## 2. Resumen profesional (máximo 10 frases)
+
+Incluye:
+
+* Sector.
+* Productos/servicios principales.
+* Competidores primarios (lista los tickers).
+* Métricas o hitos destacables.
+* Ventaja competitiva/foso (moat).
+* Por qué es única dentro de su industria.
+* Si es biotecnológica, especifica si tiene producto comercial o está en fase clínica.
+
+---
+
+## 3. Tabla estratégica: Narrativa y Catalizadores
+
+Incluye en una tabla:
+
+* Temas candentes, narrativa o historia actual de la acción.
+* Catalizadores recientes o potenciales (resultados, noticias, macro, sectoriales).
+* Datos fundamentales significativos (gran crecimiento en ingresos o beneficios, moat sólido, producto diferencial, liderazgo en gestión, patentes, etc.).
+
+---
+
+## 4. Principales noticias/eventos de los últimos 3 meses
+
+Usa una tabla con:
+
+* Fecha (AAAA-MM-DD).
+* Tipo de evento (Resultados, Lanzamiento de producto, Mejora/Degradación de analistas, M&A, etc.).
+* Resumen breve (1-2 frases).
+* Enlace directo a la fuente.
+* Marca claramente cualquier evento que haya movido significativamente el precio.
+
+---
+
+## 5. Fundamentales (Último Trimestre)
+
+Resume:
+
+* Ingresos reportados vs expectativas.
+* EPS reportado vs expectativas.
+* Márgenes (bruto, operativo, neto si disponible).
+* Comentarios relevantes del guidance.
+* Reacción del mercado tras resultados.
+
+---
 
 ## 6. Análisis Técnico
-Tendencia (corto/medio/largo), soportes y resistencias clave, estructura de mercado, volumen relevante.
+
+Incluye:
+
+* Tendencia actual (corto, medio y largo plazo).
+* Ondas de Elliott si aplica.
+* Niveles clave de soporte y resistencia.
+* Zonas de acumulación/distribución si son evidentes.
+* Estructura de mercado (máximos/mínimos crecientes o decrecientes).
+* Volumen relevante en rupturas o zonas clave.
+
+---
 
 ## 7. Smart Money
-Opciones inusuales, movimientos institucionales, compras/ventas de insiders (CEO/fundador).
 
-## 8. Comparativa Sectorial (Último Mes)
-Comportamiento vs competidores, tendencia del sector, flujos hacia el sector.
+Analiza:
 
-## 9. Próximos Catalizadores (30 días)
-Resultados, lanzamientos, eventos regulatorios, conferencias, macro relevante.
+* Actividad destacada en opciones (volumen inusual, calls/puts agresivas, strikes relevantes).
+* Movimientos institucionales recientes.
+* Compras/ventas de insiders (especialmente CEO, fundador o equipo ejecutivo).
+* Presentaciones institucionales si están disponibles.
 
-## 10. Cambios en Precios Objetivo de Analistas
-Tabla: Banco | Precio anterior | Precio nuevo | Fecha | Razonamiento
+---
+
+## 8. Comparativa sectorial (Último mes)
+
+Resume:
+
+* Cómo se ha comportado la acción frente a sus principales competidores.
+* Tendencia general del sector (alcista/bajista/lateral).
+* Flujos hacia el sector si son visibles.
+
+---
+
+## 9. Próximos catalizadores (próximos 30 días)
+
+Enumera:
+
+* Próximos resultados.
+* Lanzamientos de producto.
+* Eventos regulatorios.
+* Conferencias o presentaciones relevantes.
+* Cualquier evento macro que pueda impactar directamente al negocio.
+
+---
+
+## 10. Cambios en precios objetivo de analistas
+
+Resume en formato claro:
+
+* Banco/casa de análisis.
+* Precio objetivo anterior vs nuevo.
+* Fecha.
+* Razonamiento clave del cambio.
+
+---
 
 ## 11. Perspectivas
-Sentimiento general (bullish/bearish/mixto), fase actual (acumulación/distribución/continuación), niveles técnicos clave, qué haría moverse la acción.
+
+Responde de forma clara y directa:
+
+* ¿Cuál es el sentimiento general actual (bullish, bearish, mixto)?
+* ¿Está en fase de acumulación, distribución o continuación?
+* ¿Cuáles son los próximos niveles técnicos clave a vigilar?
+* ¿Qué tendría que pasar para provocar un gran movimiento?
+
+---
+
+### Enfoque General
+
+Céntrate especialmente en las razones por las cuales la acción podría realizar un gran movimiento en el futuro:
+
+* Beneficios y ventas.
+* Cambios en guidance.
+* Lanzamientos de productos.
+* Mejoras/degradaciones de analistas.
+* Compras de insiders (especialmente CEO/Fundador).
+* Actividad relevante en opciones.
+* Asociaciones estratégicas.
+* Catalizadores sectoriales o macro.
 
 ---
 **DATOS CUANTITATIVOS ACTUALES (Yahoo Finance):**
 {datos_cuantitativos}
 
-Responde siempre en castellano. Estilo profesional, directo, orientado a decisiones de inversión."""
+Mantén el estilo claro, profesional, directo y orientado a la toma de decisiones de inversión. Responde siempre en castellano."""
 
 PROMPT_RSU_RAPIDO = """Analiza {t} y proporciona en castellano:
 
@@ -787,6 +911,7 @@ def render():
     sparkline         = yf_data['sparkline']
     hist_1y           = yf_data['hist_1y']
     yf_surprises      = yf_data['earnings_surprises']
+    inst_data_preload = yf_data.get('inst_data', {})
 
     # Usar sorpresas de AV si disponibles (más precisas), si no las de yfinance
     earnings_surprises = av_surprises if av_surprises else yf_surprises
@@ -1386,14 +1511,14 @@ def render():
             <div class="mod-header">
                 <span class="mod-title">🏦 Fondos Institucionales — Declaraciones 13F (SEC)</span>
                 <div class="tip-box"><div class="tip-icon">?</div>
-                    <div class="tip-text">Declaraciones trimestrales obligatorias a la SEC (formulario 13F). Datos reales de Yahoo Finance / SEC EDGAR.</div>
+                    <div class="tip-text">Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR.</div>
                 </div>
             </div>
             <div class="mod-body">
         """, unsafe_allow_html=True)
 
-        with st.spinner("[ CARGANDO DATOS 13F ... ]"):
-            holders_data = get_institutional_holders(t_in)
+        # Usar datos ya cargados en get_yfinance_full — sin llamada extra a Yahoo Finance
+        holders_data = inst_data_preload if inst_data_preload else get_institutional_holders(t_in)
 
         if holders_data:
             major = holders_data.get('major')
@@ -1465,7 +1590,9 @@ def render():
 
         st.markdown("""
         <div style="font-family:Courier New,monospace;color:#333;font-size:11px;margin-top:12px;padding-top:12px;border-top:1px solid #111520;">
-            ⚠️ Fuente: SEC EDGAR vía Yahoo Finance. Los datos 13F tienen rezago de hasta 45 días. No reflejan posiciones en tiempo real.
+            ⚠️ Fuente: SEC EDGAR vía Yahoo Finance. Los datos 13F son declaraciones trimestrales con rezago de hasta 45 días.
+            No reflejan posiciones actuales en tiempo real. Para pitches narrativos de hedge funds consultar plataformas
+            de pago como WhaleWisdom, Tikr o publicaciones directas de los fondos.
         </div>
         """, unsafe_allow_html=True)
         st.markdown("</div></div>", unsafe_allow_html=True)
@@ -1703,6 +1830,7 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 
 

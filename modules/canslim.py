@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - v4.0.0
@@ -1391,27 +1390,20 @@ def render_trend_template(trend: dict):
 
     # Criterios en grid 2 columnas
     items = list(criteria.items())
-    mid   = (len(items) + 1) // 2
-    rows_html = ""
-    for label, passed in items:
-        icon  = "✓" if passed else "✗"
-        color = COLORS['primary'] if passed else COLORS['danger']
-        bg    = hex_to_rgba(COLORS['primary'], 0.08) if passed else hex_to_rgba(COLORS['danger'], 0.06)
-        border= hex_to_rgba(COLORS['primary'], 0.25) if passed else hex_to_rgba(COLORS['danger'], 0.2)
-        rows_html += f"""
-        <div style="background:{bg};border:1px solid {border};border-radius:6px;
-        padding:7px 10px;display:flex;align-items:center;gap:8px;">
-            <span style="font-family:'VT323',monospace;color:{color};font-size:1rem;min-width:14px;">{icon}</span>
-            <span style="font-family:'Courier New',monospace;color:{'#ccc' if passed else '#888'};font-size:.72rem;">
-                {label}
-            </span>
-        </div>"""
-
-    st.markdown(f"""
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
-        {rows_html}
-    </div>
-    """, unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    for idx, (label, passed) in enumerate(items):
+        icon   = "✓" if passed else "✗"
+        color  = COLORS['primary'] if passed else COLORS['danger']
+        bg     = "rgba(0,255,173,0.08)" if passed else "rgba(242,54,69,0.06)"
+        border = "rgba(0,255,173,0.25)" if passed else "rgba(242,54,69,0.20)"
+        txt    = "#cccccc" if passed else "#888888"
+        with col1 if idx % 2 == 0 else col2:
+            st.markdown(f"""
+            <div style="background:{bg};border:1px solid {border};border-radius:6px;
+            padding:7px 10px;display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-family:'VT323',monospace;color:{color};font-size:1rem;min-width:14px;">{icon}</span>
+                <span style="font-family:'Courier New',monospace;color:{txt};font-size:.72rem;">{label}</span>
+            </div>""", unsafe_allow_html=True)
 
     # Banner final
     if all_pass:

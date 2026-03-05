@@ -53,32 +53,30 @@ from config import set_style
 set_style()
 
 # ============================================================
-# HELPER: Logo con glow effect en base64
+# HELPER: Logo cuadrado con glow estático multicapa
 # ============================================================
 def get_logo_html(logo_path: str) -> str:
-    """Renderiza el logo con efecto glow neon animado. Si no existe el archivo,
-    usa el fallback de texto."""
+    """Logo cuadrado con bordes redondeados y glow estático neon (sin animación de pulso).
+    Si no existe el archivo usa fallback de texto."""
     if os.path.exists(logo_path):
         with open(logo_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
         ext = logo_path.split(".")[-1].lower()
         mime = "image/png" if ext == "png" else f"image/{ext}"
         return f"""
-        <div class="logo-glow-wrapper">
-            <img src="data:{mime};base64,{b64}" class="logo-glow-img" alt="RSU Logo"/>
-            <div class="logo-glow-ring"></div>
+        <div class="logo-sq-wrapper">
+            <img src="data:{mime};base64,{b64}" class="logo-sq-img" alt="RSU Logo"/>
         </div>
         """
     else:
         return """
-        <div class="logo-glow-wrapper">
-            <div class="logo-text-fallback">RSU</div>
-            <div class="logo-glow-ring"></div>
+        <div class="logo-sq-wrapper">
+            <div class="logo-sq-fallback">RSU</div>
         </div>
         """
 
 # ============================================================
-# CSS GLOBAL — Estética terminal hacker (roadmap_2026 + sidebar)
+# CSS GLOBAL — Estética terminal hacker con scanlines, partículas y acento azul
 # ============================================================
 st.markdown("""
 <style>
@@ -90,82 +88,139 @@ st.markdown("""
         background: #0c0e12;
     }
 
-    /* ── HEADINGS GLOBALES (estética roadmap) ────────────── */
+    /* ── SCANLINES CRT — overlay en toda la app ──────────── */
+    .stApp::after {
+        content: '';
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+        z-index: 9999;
+        background: repeating-linear-gradient(
+            to bottom,
+            transparent 0px,
+            transparent 3px,
+            rgba(0, 0, 0, 0.07) 3px,
+            rgba(0, 0, 0, 0.07) 4px
+        );
+    }
+
+    /* ── HEADINGS GLOBALES ───────────────────────────────── */
     h1, h2, h3, h4, h5, h6 {
         font-family: 'VT323', monospace !important;
         text-transform: uppercase;
         letter-spacing: 2px;
     }
     h1 { font-size: 3.5rem !important; color: #00ffad !important; text-shadow: 0 0 20px #00ffad66; border-bottom: 2px solid #00ffad; padding-bottom: 15px; margin-bottom: 30px !important; }
-    h2 { font-size: 2.2rem !important; color: #00d9ff !important; border-left: 4px solid #00ffad; padding-left: 15px; margin-top: 40px !important; }
+    h2 { font-size: 2.2rem !important; color: #00d9ff !important; border-left: 4px solid #00d9ff; padding-left: 15px; margin-top: 40px !important; text-shadow: 0 0 12px #00d9ff44; }
     h3 { font-size: 1.8rem !important; color: #ff9800 !important; margin-top: 30px !important; }
     h4 { font-size: 1.5rem !important; color: #9c27b0 !important; }
 
     p, li { font-family: 'Courier New', monospace; color: #ccc !important; line-height: 1.8; font-size: 0.95rem; }
     strong { color: #00ffad; font-weight: bold; }
-    hr { border: none; height: 1px; background: linear-gradient(90deg, transparent, #00ffad, transparent); margin: 40px 0; }
+    hr { border: none; height: 1px; background: linear-gradient(90deg, transparent, #00d9ff55, #00ffad, #00d9ff55, transparent); margin: 40px 0; }
 
-    /* ── SIDEBAR BASE ────────────────────────────────────── */
+    /* ── SIDEBAR BASE + PARTÍCULAS ───────────────────────── */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a0c10 0%, #11141a 50%, #0c0e12 100%);
-        border-right: 1px solid #1a1e26;
+        border-right: 1px solid #00d9ff22;
+        position: relative;
+        overflow: hidden;
     }
     [data-testid="stSidebar"] > div:first-child {
         padding: 1rem 0.8rem;
+        position: relative;
+        z-index: 2;
     }
 
-    /* ── LOGO GLOW ───────────────────────────────────────── */
-    .logo-glow-wrapper {
-        position: relative;
+    /* Partículas: puntos verdes animados via canvas-like background */
+    [data-testid="stSidebar"]::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00d9ff 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00d9ff 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00d9ff 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00ffad 1px, transparent 1px),
+            radial-gradient(circle, #00d9ff 1px, transparent 1px);
+        background-size:
+            180px 180px, 220px 220px, 160px 200px,
+            200px 240px, 140px 180px, 260px 200px,
+            190px 210px, 230px 170px, 150px 230px,
+            210px 190px, 170px 250px, 240px 160px;
+        background-position:
+            20px 30px,   80px 120px,  140px 60px,
+            50px 200px,  110px 280px, 170px 160px,
+            30px 350px,  90px 430px,  150px 310px,
+            60px 500px,  130px 580px, 180px 460px;
+        opacity: 0.12;
+        animation: particlesDrift 20s linear infinite;
+    }
+
+    @keyframes particlesDrift {
+        0%   { background-position:
+                20px 30px,   80px 120px,  140px 60px,
+                50px 200px,  110px 280px, 170px 160px,
+                30px 350px,  90px 430px,  150px 310px,
+                60px 500px,  130px 580px, 180px 460px; }
+        50%  { opacity: 0.18; }
+        100% { background-position:
+                20px -570px,   80px -480px,  140px -540px,
+                50px -400px,  110px -320px, 170px -440px,
+                30px -250px,  90px -170px,  150px -290px,
+                60px -100px,  130px  -20px, 180px -140px; }
+    }
+
+    /* ── LOGO CUADRADO CON GLOW ESTÁTICO ─────────────────── */
+    .logo-sq-wrapper {
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 0 auto 12px auto;
-        width: 110px;
-        height: 110px;
-    }
-    .logo-glow-img {
-        width: 90px;
-        height: 90px;
-        border-radius: 50%;
-        object-fit: cover;
-        position: relative;
-        z-index: 2;
-        filter:
-            drop-shadow(0 0 8px #00ffad)
-            drop-shadow(0 0 20px #00ffad99)
-            drop-shadow(0 0 40px #00ffad44);
-        animation: logoPulse 3s ease-in-out infinite;
-    }
-    .logo-text-fallback {
-        font-family: 'VT323', monospace;
-        font-size: 2.8rem;
-        color: #00ffad;
-        position: relative;
-        z-index: 2;
-        text-shadow: 0 0 15px #00ffad, 0 0 30px #00ffad88;
-        animation: logoPulse 3s ease-in-out infinite;
-    }
-    .logo-glow-ring {
-        position: absolute;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        width: 104px; height: 104px;
-        border-radius: 50%;
-        border: 1.5px solid #00ffad66;
+        margin: 0 auto 10px auto;
+        width: 100px;
+        height: 100px;
+        border-radius: 16px;
+        /* Glow estático multicapa: verde + magenta (como en la imagen) */
         box-shadow:
-            0 0 12px #00ffad44,
-            inset 0 0 12px #00ffad22;
-        animation: ringPulse 3s ease-in-out infinite;
-        z-index: 1;
+            0 0 0 1px #00ffad55,
+            0 0 10px  #00ffadaa,
+            0 0 22px  #00ffad66,
+            0 0 40px  #00ffad33,
+            0 0 8px   #b044ff99,
+            0 0 20px  #b044ff44;
+        background: #0a0c10;
     }
-    @keyframes logoPulse {
-        0%, 100% { filter: drop-shadow(0 0 8px #00ffad) drop-shadow(0 0 20px #00ffad99) drop-shadow(0 0 40px #00ffad44); }
-        50%       { filter: drop-shadow(0 0 14px #00ffad) drop-shadow(0 0 35px #00ffadcc) drop-shadow(0 0 60px #00ffad66); }
+    .logo-sq-img {
+        width: 100px;
+        height: 100px;
+        border-radius: 16px;
+        object-fit: cover;
+        display: block;
+        /* Glow sobre la imagen también */
+        filter:
+            drop-shadow(0 0 6px #00ffad88)
+            drop-shadow(0 0 14px #b044ff55);
     }
-    @keyframes ringPulse {
-        0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
-        50%       { opacity: 1;   transform: translate(-50%, -50%) scale(1.06); }
+    .logo-sq-fallback {
+        font-family: 'VT323', monospace;
+        font-size: 3rem;
+        color: #00ffad;
+        text-shadow:
+            0 0 10px #00ffad,
+            0 0 25px #00ffad88,
+            0 0 5px  #b044ff;
+        line-height: 1;
     }
 
     /* ── BRAND NAME ──────────────────────────────────────── */
@@ -176,38 +231,38 @@ st.markdown("""
         color: #00ffad;
         letter-spacing: 4px;
         text-shadow: 0 0 10px #00ffad66;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .brand-tagline {
         text-align: center;
         font-family: 'Courier New', monospace;
-        font-size: 0.5rem;
-        color: #334;
+        font-size: 0.48rem;
+        color: #00d9ff55;
         letter-spacing: 2px;
         margin-bottom: 10px;
     }
 
     /* ── VISITOR COUNTER ─────────────────────────────────── */
     .visitor-counter {
-        background: rgba(0, 255, 173, 0.03);
-        border: 1px solid rgba(0, 255, 173, 0.15);
+        background: rgba(0, 217, 255, 0.04);
+        border: 1px solid rgba(0, 217, 255, 0.2);
         border-radius: 20px;
         padding: 3px 10px;
         margin: 8px 0 12px 0;
         text-align: center;
         font-size: 0.6rem;
-        color: #00ffad;
+        color: #00d9ff;
         font-family: 'Courier New', monospace;
         letter-spacing: 0.5px;
-        opacity: 0.8;
+        opacity: 0.85;
         transition: opacity 0.2s;
     }
-    .visitor-counter:hover { opacity: 1; border-color: rgba(0, 255, 173, 0.3); }
+    .visitor-counter:hover { opacity: 1; border-color: rgba(0, 217, 255, 0.4); }
 
     /* ── USER INFO ───────────────────────────────────────── */
     .user-info {
-        background: rgba(0, 255, 173, 0.05);
-        border: 1px solid rgba(0, 255, 173, 0.2);
+        background: rgba(0, 217, 255, 0.04);
+        border: 1px solid rgba(0, 217, 255, 0.18);
         border-radius: 8px;
         padding: 8px 12px;
         margin: 8px 0;
@@ -216,12 +271,14 @@ st.markdown("""
         color: #00ffad;
         font-size: 0.75rem;
         font-weight: 600;
+        font-family: 'VT323', monospace;
+        letter-spacing: 1px;
         display: flex;
         align-items: center;
         gap: 5px;
     }
     .session-timer {
-        color: #555;
+        color: #00d9ff88;
         font-size: 0.62rem;
         margin-top: 3px;
         font-family: 'Courier New', monospace;
@@ -229,11 +286,11 @@ st.markdown("""
 
     /* ── WORLD CLOCKS ────────────────────────────────────── */
     .clocks-container {
-        background: #0c0e12;
+        background: rgba(0, 217, 255, 0.02);
         border-radius: 8px;
         padding: 10px;
         margin: 8px 0;
-        border: 1px solid #1a1e26;
+        border: 1px solid #00d9ff1a;
     }
     .clocks-grid {
         display: grid;
@@ -248,18 +305,23 @@ st.markdown("""
         border: 1px solid transparent;
         transition: all 0.2s;
     }
-    .clock-item:hover { border-color: #2a3f5f; background: rgba(26, 30, 38, 0.8); }
-    .clock-label { color: #444; font-size: 0.52rem; font-weight: bold; letter-spacing: 1px; margin-bottom: 1px; font-family: 'VT323', monospace; }
-    .clock-time  { color: #00ffad; font-size: 0.85rem; font-family: 'Courier New', monospace; font-weight: bold; }
-    .market-status { text-align: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid #1a1e26; }
-    .market-badge  { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 10px; font-size: 0.6rem; font-weight: bold; font-family: 'VT323', monospace; letter-spacing: 1px; }
-    .market-open   { background: rgba(0, 255, 173, 0.1); color: #00ffad; border: 1px solid rgba(0, 255, 173, 0.3); }
-    .market-closed { background: rgba(242, 54, 69, 0.1);  color: #f23645; border: 1px solid rgba(242, 54, 69, 0.3); }
+    .clock-item:hover {
+        border-color: #00d9ff33;
+        background: rgba(0, 217, 255, 0.05);
+    }
+    /* NY clock highlighted in green, others in blue */
+    .clock-item:first-child .clock-time { color: #00ffad; }
+    .clock-label { color: #00d9ff66; font-size: 0.52rem; font-weight: bold; letter-spacing: 1px; margin-bottom: 1px; font-family: 'VT323', monospace; }
+    .clock-time  { color: #00d9ff; font-size: 0.85rem; font-family: 'Courier New', monospace; font-weight: bold; }
+    .market-status { text-align: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid #00d9ff1a; }
+    .market-badge  { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 10px; font-size: 0.65rem; font-weight: bold; font-family: 'VT323', monospace; letter-spacing: 2px; }
+    .market-open   { background: rgba(0, 255, 173, 0.08); color: #00ffad; border: 1px solid rgba(0, 255, 173, 0.3); box-shadow: 0 0 8px #00ffad22; }
+    .market-closed { background: rgba(242, 54, 69, 0.08);  color: #f23645; border: 1px solid rgba(242, 54, 69, 0.3); box-shadow: 0 0 8px #f2364522; }
 
-    /* ── SIDEBAR DIVIDER ─────────────────────────────────── */
+    /* ── SIDEBAR DIVIDER (acento azul) ───────────────────── */
     .sidebar-divider {
         height: 1px;
-        background: linear-gradient(90deg, transparent 0%, #1a1e26 50%, transparent 100%);
+        background: linear-gradient(90deg, transparent 0%, #00d9ff33 50%, transparent 100%);
         margin: 12px 0;
     }
 
@@ -280,8 +342,8 @@ st.markdown("""
         min-height: auto !important;
     }
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {
-        border-color: #2a3f5f;
-        background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%);
+        border-color: #00d9ff33;
+        background: linear-gradient(135deg, #0d1520 0%, #0a0f18 100%);
         transform: translateX(2px);
     }
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label > div:first-child { display: none !important; }
@@ -289,7 +351,7 @@ st.markdown("""
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label p,
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label span,
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label div[data-testid="stMarkdownContainer"] p {
-        color: #666 !important;
+        color: #555 !important;
         font-size: 1.25rem !important;
         font-weight: 400 !important;
         font-family: 'VT323', monospace !important;
@@ -298,53 +360,60 @@ st.markdown("""
         line-height: 1.2 !important;
         margin: 0 !important;
     }
+    /* Item hover: text turns blue */
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover p,
+    section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover div[data-testid="stMarkdownContainer"] p {
+        color: #00d9ff !important;
+    }
+    /* Item selected: text turns green */
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] {
-        background: linear-gradient(135deg, #1a3a2f 0%, #0f2a1f 100%);
-        border-color: #00ffad;
-        box-shadow: 0 0 12px rgba(0, 255, 173, 0.12);
+        background: linear-gradient(135deg, #112a1f 0%, #0c1e16 100%);
+        border-color: #00ffad55;
+        box-shadow: 0 0 12px rgba(0, 255, 173, 0.08), inset 0 0 20px rgba(0, 255, 173, 0.03);
     }
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] p,
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] span,
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"] div[data-testid="stMarkdownContainer"] p {
         color: #00ffad !important;
         font-family: 'VT323', monospace !important;
-        text-shadow: 0 0 6px #00ffad66;
+        text-shadow: 0 0 8px #00ffad55;
     }
     section[data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[aria-checked="true"]::before {
         content: '';
         position: absolute;
         left: 0; top: 0; bottom: 0;
         width: 2px;
-        background: #00ffad;
+        background: linear-gradient(180deg, #00d9ff, #00ffad);
         box-shadow: 0 0 6px #00ffad;
     }
 
     /* ── LOGOUT BUTTON ───────────────────────────────────── */
     .stButton > button {
         background: linear-gradient(135deg, #1a1e26 0%, #11141a 100%) !important;
-        border: 1px solid #f23645 !important;
+        border: 1px solid #f2364566 !important;
         color: #f23645 !important;
         border-radius: 6px !important;
         padding: 7px !important;
-        font-size: 0.72rem !important;
+        font-size: 0.78rem !important;
         font-family: 'VT323', monospace !important;
-        letter-spacing: 1px !important;
-        font-weight: 600 !important;
+        letter-spacing: 2px !important;
+        font-weight: 400 !important;
         transition: all 0.2s !important;
     }
     .stButton > button:hover {
-        background: rgba(242, 54, 69, 0.1) !important;
-        box-shadow: 0 0 10px rgba(242, 54, 69, 0.25) !important;
+        background: rgba(242, 54, 69, 0.08) !important;
+        border-color: #f23645 !important;
+        box-shadow: 0 0 10px rgba(242, 54, 69, 0.2) !important;
     }
 
     /* ── HIDE RADIO CIRCLE ───────────────────────────────── */
     .stRadio > div > div > div > div { display: none; }
 
-    /* ── SCROLLBAR ───────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 4px; }
+    /* ── SCROLLBAR (acento azul) ─────────────────────────── */
+    ::-webkit-scrollbar { width: 3px; }
     ::-webkit-scrollbar-track { background: #0c0e12; }
-    ::-webkit-scrollbar-thumb { background: #1a1e26; border-radius: 2px; }
-    ::-webkit-scrollbar-thumb:hover { background: #00ffad44; }
+    ::-webkit-scrollbar-thumb { background: #00d9ff22; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00d9ff66; }
 </style>
 """, unsafe_allow_html=True)
 

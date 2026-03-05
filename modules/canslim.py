@@ -1798,7 +1798,7 @@ def render():
         <div style="font-family:'VT323',monospace;font-size:1rem;color:#666;margin-bottom:10px;">
             [SECURE CONNECTION ESTABLISHED // ENCRYPTION: AES-256]
         </div>
-        <h1>🎯 CAN SLIM SCANNER PRO</h1>
+        <h1>🎯 CAN SLIM SCANNER RSU</h1>
         <div style="font-family:'VT323',monospace;color:#00d9ff;font-size:1.2rem;letter-spacing:3px;margin-bottom:15px;">
             IBD RATINGS // MINERVINI TREND TEMPLATE // ML PREDICTIVO // S&P 500
         </div>

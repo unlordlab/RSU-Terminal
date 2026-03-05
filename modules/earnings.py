@@ -9,12 +9,40 @@ from datetime import datetime, timedelta
 from config import get_ia_model
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import math
 import html
 import traceback
 import logging
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s %(name)s %(levelname)s %(message)s')
+logger = logging.getLogger("rsu_earnings")
+
+# ────────────────────────────────────────────────
+# HTTP SESSION COMPARTIDA (connection pooling)
+# ────────────────────────────────────────────────
+
+def _make_session():
+    """Sesión requests con retry automático y connection pooling."""
+    s = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.8,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(
+        pool_connections=8,
+        pool_maxsize=16,
+        max_retries=retry,
+    )
+    s.mount("https://", adapter)
+    s.mount("http://",  adapter)
+    s.headers.update({"User-Agent": "RSUEarnings/4.0"})
+    return s
+
+_HTTP = _make_session()
 
 # ────────────────────────────────────────────────
 # API KEYS
@@ -24,7 +52,24 @@ def get_api_keys():
     return {
         'alpha_vantage': st.secrets.get("ALPHA_VANTAGE_API_KEY", ""),
         'finnhub':       st.secrets.get("FINNHUB_API_KEY", ""),
+        'fmp':           st.secrets.get("FMP_API_KEY", ""),          # financialmodelingprep.com — plan free 250 req/día
     }
+
+# ────────────────────────────────────────────────
+# DECORADOR SAFE_CALL — reemplaza except: pass
+# ────────────────────────────────────────────────
+
+def safe_call(fn, *args, default=None, context="", **kwargs):
+    """
+    Ejecuta fn(*args, **kwargs). Si falla, loguea el error con contexto
+    y devuelve `default`. Reemplaza los bloques except: pass silenciosos.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        label = context or getattr(fn, "__name__", "unknown")
+        logger.warning("[safe_call] %s → %s: %s", label, type(exc).__name__, exc)
+        return default
 
 # ────────────────────────────────────────────────
 # HELPERS NUMÉRICOS
@@ -133,7 +178,7 @@ def translate_text_cached(text, ticker):
 @st.cache_data(ttl=300, show_spinner=False)
 def get_yfinance_full(ticker):
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=_HTTP)
         info  = stock.info
         cp_check = (
             _safe(info.get('currentPrice')) or
@@ -159,14 +204,16 @@ def get_yfinance_full(ticker):
                 ss = int(_safe(latest.get('strongSell')) or 0)
                 recommendations = {'strong_buy': sb, 'buy': b, 'hold': h,
                                    'sell': s, 'strong_sell': ss, 'total': sb+b+h+s+ss}
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.recommendations] %s: %s", ticker, e)
 
         rec_summary = None
         try:
             rs = stock.recommendations_summary
             if rs is not None and not rs.empty:
                 rec_summary = rs.head(6)
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.recommendations_summary] %s: %s", ticker, e)
 
         # Precio objetivo
         tm = _safe(info.get('targetMeanPrice'))
@@ -245,7 +292,8 @@ def get_yfinance_full(ticker):
                     if v is None: continue
                     if k in useful_events:   events[k]            = v
                     elif k in estimate_keys: analyst_estimates[k] = v
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.calendar] %s: %s", ticker, e)
 
         # Complementar fechas dividendo desde info si calendar no las devuelve
         for k_info, label in [
@@ -262,7 +310,8 @@ def get_yfinance_full(ticker):
             hist = stock.history(period="3mo", interval="1d", auto_adjust=True)
             if hist is not None and not hist.empty and 'Close' in hist.columns:
                 sparkline = [p for p in [_safe(x) for x in hist['Close'].dropna().tolist()] if p is not None]
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.sparkline] %s: %s", ticker, e)
 
         # Histórico 1 año para gráfico
         hist_1y = None
@@ -270,7 +319,8 @@ def get_yfinance_full(ticker):
             h = stock.history(period="1y", auto_adjust=True)
             if not h.empty:
                 hist_1y = h
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.hist_1y] %s: %s", ticker, e)
 
         # Earnings surprises
         earnings_surprises = []
@@ -292,7 +342,8 @@ def get_yfinance_full(ticker):
                         'surprise':     surprise     or 0,
                         'surprise_pct': surprise_pct or 0,
                     })
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.earnings_history] %s: %s", ticker, e)
 
         # Institutional holders — same session, no extra call
         inst_data = {}
@@ -300,7 +351,8 @@ def get_yfinance_full(ticker):
             inst_data['institutional'] = stock.institutional_holders
             inst_data['major']         = stock.major_holders
             inst_data['mutual_funds']  = stock.mutualfund_holders
-        except: pass
+        except Exception as e:
+            logger.warning("[yf.inst_data] %s: %s", ticker, e)
 
         return {
             'info': info, 'recommendations': recommendations, 'rec_summary': rec_summary,
@@ -311,6 +363,7 @@ def get_yfinance_full(ticker):
             'inst_data': inst_data,
         }
     except Exception as e:
+        logger.error("[get_yfinance_full] %s: %s\n%s", ticker, e, traceback.format_exc())
         return None
 
 # ────────────────────────────────────────────────
@@ -321,7 +374,7 @@ def get_yfinance_full(ticker):
 def get_alpha_vantage_earnings(ticker, api_key):
     if not api_key: return None
     try:
-        resp = requests.get(
+        resp = _HTTP.get(
             "https://www.alphavantage.co/query",
             params={'function': 'EARNINGS', 'symbol': ticker, 'apikey': api_key},
             timeout=20
@@ -329,6 +382,7 @@ def get_alpha_vantage_earnings(ticker, api_key):
         if resp.status_code == 200:
             data = resp.json()
             if 'Note' in data or 'Information' in data or not data.get('quarterlyEarnings'):
+                logger.warning("[AV] Rate limit or no data for %s: %s", ticker, list(data.keys()))
                 return None
             surprises = []
             for r in data['quarterlyEarnings'][:8]:
@@ -343,7 +397,8 @@ def get_alpha_vantage_earnings(ticker, api_key):
                         'surprise': sur, 'surprise_pct': pct,
                     })
             return surprises if surprises else None
-    except:
+    except Exception as e:
+        logger.warning("[get_alpha_vantage_earnings] %s: %s", ticker, e)
         return None
 
 # ────────────────────────────────────────────────
@@ -361,21 +416,32 @@ def get_finnhub_data(ticker, api_key):
             ('revenue_breakdown', {'symbol': ticker}),
             ('geographic_revenue', {'symbol': ticker, 'breakdown': 'geographic'}),
         ]:
-            r = requests.get(f"{base_url}/stock/revenue-breakdown",
-                             params=params, headers=headers, timeout=10)
-            result[key] = r.json() if r.status_code == 200 else {}
-            time.sleep(0.3)
+            try:
+                r = _HTTP.get(f"{base_url}/stock/revenue-breakdown",
+                              params=params, headers=headers, timeout=10)
+                result[key] = r.json() if r.status_code == 200 else {}
+            except Exception as e:
+                logger.warning("[finnhub.%s] %s: %s", key, ticker, e)
+                result[key] = {}
+            time.sleep(0.2)
 
-        to_date   = datetime.now().strftime('%Y-%m-%d')
-        from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-        r = requests.get(f"{base_url}/company-news",
-                         params={'symbol': ticker, 'from': from_date, 'to': to_date},
-                         headers=headers, timeout=10)
-        result['news'] = r.json() if r.status_code == 200 else []
+        try:
+            to_date   = datetime.now().strftime('%Y-%m-%d')
+            from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+            r = _HTTP.get(f"{base_url}/company-news",
+                          params={'symbol': ticker, 'from': from_date, 'to': to_date},
+                          headers=headers, timeout=10)
+            result['news'] = r.json() if r.status_code == 200 else []
+            if r.status_code == 429:
+                logger.warning("[finnhub] Rate limit hit for %s news", ticker)
+        except Exception as e:
+            logger.warning("[finnhub.news] %s: %s", ticker, e)
+            result['news'] = []
 
         result['source'] = 'finnhub'
         return result
-    except:
+    except Exception as e:
+        logger.warning("[get_finnhub_data] %s: %s", ticker, e)
         return None
 
 def process_finnhub_segments(finnhub_data):
@@ -479,8 +545,155 @@ def get_institutional_holders(ticker):
             'major':         stock.major_holders,
             'mutual_funds':  stock.mutualfund_holders,
         }
-    except:
+    except Exception as e:
+        logger.warning("[get_institutional_holders] %s: %s", ticker, e)
         return None
+
+# ────────────────────────────────────────────────
+# FMP — FINANCIAL MODELING PREP (fuente gratuita)
+# API docs: https://site.financialmodelingprep.com/developer/docs
+# Plan free: 250 req/día, sin WebSocket, datos fundamentales completos
+# ────────────────────────────────────────────────
+
+_FMP_BASE = "https://financialmodelingprep.com/api/v3"
+
+def _fmp_get(endpoint, params, api_key, timeout=12):
+    """Llamada a FMP con session compartida y logging de errores."""
+    if not api_key:
+        return None
+    try:
+        p = {"apikey": api_key, **params}
+        resp = _HTTP.get(f"{_FMP_BASE}/{endpoint}", params=p, timeout=timeout)
+        if resp.status_code == 200:
+            data = resp.json()
+            # FMP devuelve lista vacía o dict con error si el ticker no existe
+            if isinstance(data, dict) and data.get("Error Message"):
+                logger.warning("[FMP] %s → %s", endpoint, data["Error Message"])
+                return None
+            return data
+        logger.warning("[FMP] HTTP %s for %s", resp.status_code, endpoint)
+        return None
+    except Exception as e:
+        logger.warning("[FMP] %s: %s", endpoint, e)
+        return None
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_fmp_data(ticker, api_key):
+    """
+    Obtiene de FMP:
+    - Perfil completo (sector, industria, descripción, beta, empleados…)
+    - Ratios financieros (PE, P/B, P/S, EV/EBITDA, ROE, márgenes…)
+    - Income statement último trimestre (ingresos, EPS, márgenes)
+    - Earnings surprises de los últimos 8 trimestres
+    - Price target consenso de analistas
+    - Insider trades recientes
+    Devuelve dict con todas las secciones o None si FMP no está configurado.
+    """
+    if not api_key:
+        return None
+
+    result = {}
+
+    # 1. Perfil
+    profile = _fmp_get(f"profile/{ticker}", {}, api_key)
+    if profile and isinstance(profile, list) and profile:
+        result['profile'] = profile[0]
+
+    # 2. Ratios TTM
+    ratios = _fmp_get(f"ratios-ttm/{ticker}", {}, api_key)
+    if ratios and isinstance(ratios, list) and ratios:
+        result['ratios'] = ratios[0]
+
+    # 3. Key metrics TTM (incluye EV/EBITDA, FCF yield, etc.)
+    km = _fmp_get(f"key-metrics-ttm/{ticker}", {}, api_key)
+    if km and isinstance(km, list) and km:
+        result['key_metrics'] = km[0]
+
+    # 4. Earnings surprises (últimos 8 trimestres)
+    es = _fmp_get(f"earnings-surprises/{ticker}", {}, api_key)
+    if es and isinstance(es, list):
+        surprises = []
+        for r in es[:8]:
+            ea  = safe_float(r.get('actualEarningResult'))
+            ee  = safe_float(r.get('estimatedEarning'))
+            sur = ea - ee if (ea and ee) else 0
+            pct = (sur / abs(ee) * 100) if (sur and ee and ee != 0) else 0
+            surprises.append({
+                'date':         r.get('date', 'N/D'),
+                'eps_actual':   ea,
+                'eps_estimate': ee,
+                'surprise':     sur,
+                'surprise_pct': pct,
+            })
+        result['earnings_surprises'] = surprises
+
+    # 5. Analyst estimates (price target)
+    pt = _fmp_get(f"price-target-consensus/{ticker}", {}, api_key)
+    if pt and isinstance(pt, list) and pt:
+        result['price_target'] = pt[0]
+
+    # 6. Insider trades (últimos 10)
+    it = _fmp_get(f"insider-trading", {"symbol": ticker, "limit": 10}, api_key)
+    if it and isinstance(it, list):
+        result['insider_trades'] = it[:10]
+
+    # 7. Analyst recommendations
+    rec = _fmp_get(f"analyst-stock-recommendations/{ticker}", {"limit": 1}, api_key)
+    if rec and isinstance(rec, list) and rec:
+        result['analyst_rec'] = rec[0]
+
+    return result if result else None
+
+def fmp_override_metrics(yf_data, fmp_data):
+    """
+    Combina datos yfinance (base) con FMP (override cuando disponible).
+    FMP tiene endpoints estables y schema documentado — preferir sus valores.
+    """
+    if not fmp_data:
+        return yf_data
+
+    r = fmp_data.get('ratios', {})
+    km = fmp_data.get('key_metrics', {})
+    prof = fmp_data.get('profile', {})
+
+    # Override métricas de valoración
+    if r:
+        m = yf_data.get('metrics', {})
+        if r.get('peRatioTTM'):   m['trailing_pe']    = safe_float(r['peRatioTTM']) or m.get('trailing_pe')
+        if r.get('priceToSalesRatioTTM'): m['price_to_sales'] = safe_float(r['priceToSalesRatioTTM']) or m.get('price_to_sales')
+        if r.get('priceToBookRatioTTM'):  m['price_to_book']  = safe_float(r['priceToBookRatioTTM']) or m.get('price_to_book')
+        if r.get('pegRatioTTM'):  m['peg_ratio']       = safe_float(r['pegRatioTTM']) or m.get('peg_ratio')
+        if km.get('enterpriseValueOverEBITDATTM'): m['ev_ebitda'] = safe_float(km['enterpriseValueOverEBITDATTM']) or m.get('ev_ebitda')
+        yf_data['metrics'] = m
+
+    # Override rentabilidad
+    if r:
+        p = yf_data.get('profitability', {})
+        if r.get('returnOnEquityTTM'):    p['roe']         = safe_float(r['returnOnEquityTTM']) or p.get('roe')
+        if r.get('returnOnAssetsTTM'):    p['roa']         = safe_float(r['returnOnAssetsTTM']) or p.get('roa')
+        if r.get('netProfitMarginTTM'):   p['net_margin']  = safe_float(r['netProfitMarginTTM']) or p.get('net_margin')
+        if r.get('operatingProfitMarginTTM'): p['op_margin'] = safe_float(r['operatingProfitMarginTTM']) or p.get('op_margin')
+        if r.get('grossProfitMarginTTM'): p['gross_margin']= safe_float(r['grossProfitMarginTTM']) or p.get('gross_margin')
+        if r.get('debtEquityRatioTTM'):   p['debt_to_equity'] = safe_float(r['debtEquityRatioTTM']) * 100 or p.get('debt_to_equity')
+        if r.get('currentRatioTTM'):      p['current_ratio']  = safe_float(r['currentRatioTTM']) or p.get('current_ratio')
+        if km.get('freeCashFlowPerShareTTM') and yf_data['market'].get('market_cap'):
+            # No hay FCF absoluto en TTM endpoint free — mantener yfinance
+            pass
+        yf_data['profitability'] = p
+
+    # Precio objetivo desde FMP si mejor que YF
+    pt = fmp_data.get('price_target', {})
+    if pt:
+        cp = yf_data['target_data'].get('current', 0) or 0
+        mean = safe_float(pt.get('targetConsensus')) or yf_data['target_data'].get('mean')
+        if mean and mean > 0:
+            yf_data['target_data']['mean']   = mean
+            yf_data['target_data']['high']   = safe_float(pt.get('targetHigh'))   or yf_data['target_data'].get('high')
+            yf_data['target_data']['low']    = safe_float(pt.get('targetLow'))    or yf_data['target_data'].get('low')
+            yf_data['target_data']['median'] = safe_float(pt.get('targetMedian')) or yf_data['target_data'].get('median')
+            yf_data['target_data']['upside'] = ((mean - cp) / cp * 100) if (mean and cp) else yf_data['target_data'].get('upside')
+
+    return yf_data
 
 # ────────────────────────────────────────────────
 # SUGERENCIAS AUTOMÁTICAS
@@ -608,6 +821,229 @@ def get_suggestions(info, recommendations, target_data, profitability):
     return suggestions if suggestions else ["ℹ️ Datos insuficientes para generar sugerencias específicas."]
 
 # ────────────────────────────────────────────────
+# RSU SCORE — Score de salud 0-100
+# ────────────────────────────────────────────────
+
+def compute_rsu_score(info, metrics, profitability, market, recommendations, target_data):
+    """
+    Score compuesto 0-100 dividido en 4 pilares (25 pts cada uno):
+    1. Calidad del negocio (márgenes, ROE, FCF)
+    2. Valoración relativa al sector
+    3. Momentum de precio (vs SMA50/200)
+    4. Consenso analistas + upside
+    Devuelve dict con score total y sub-scores.
+    """
+    sector   = (info.get('sector') or '').lower()
+    industry = (info.get('industry') or '').lower()
+
+    # ── Pilar 1: Calidad (0-25) ──
+    q_score = 0
+    nm = profitability.get('net_margin')
+    roe = profitability.get('roe')
+    fcf = profitability.get('free_cashflow')
+    op_m = profitability.get('op_margin')
+
+    # Márgenes netos — contexto sectorial
+    if nm is not None:
+        if 'financial' in sector or 'bank' in industry:
+            # Bancos: margen neto distorsionado — usar ROE como proxy
+            q_score += 5
+        elif nm > 0.20:  q_score += 8
+        elif nm > 0.10:  q_score += 6
+        elif nm > 0.02:  q_score += 3
+        elif nm < 0:     q_score -= 3
+
+    if roe is not None:
+        roe_hi = 0.10 if ('financial' in sector) else 0.15
+        if roe > roe_hi * 2:   q_score += 8
+        elif roe > roe_hi:     q_score += 5
+        elif roe < 0:          q_score -= 4
+
+    if fcf is not None:
+        if fcf > 0:   q_score += 5
+        elif fcf < 0: q_score -= 2
+
+    if op_m is not None and op_m > 0.15:
+        q_score += 4
+
+    q_score = max(0, min(25, q_score))
+
+    # ── Pilar 2: Valoración (0-25) ──
+    v_score = 12  # Neutral por defecto
+    pe = metrics.get('trailing_pe')
+    forward_pe = metrics.get('forward_pe')
+    peg = metrics.get('peg_ratio')
+
+    if 'technology' in sector or 'communication' in sector:
+        pe_cheap, pe_fair, pe_exp = 20, 35, 55
+    elif 'financial' in sector or 'bank' in industry:
+        pe_cheap, pe_fair, pe_exp = 8, 15, 22
+    elif 'utilities' in sector or 'real estate' in sector:
+        pe_cheap, pe_fair, pe_exp = 10, 18, 28
+    elif 'health' in sector or 'biotech' in industry:
+        pe_cheap, pe_fair, pe_exp = 15, 40, 80
+    else:
+        pe_cheap, pe_fair, pe_exp = 12, 22, 35
+
+    if pe and pe > 0:
+        if pe < pe_cheap:       v_score += 8
+        elif pe < pe_fair:      v_score += 4
+        elif pe > pe_exp:       v_score -= 6
+        elif pe > pe_fair:      v_score -= 3
+
+    if peg and peg > 0:
+        if peg < 1.0:   v_score += 5
+        elif peg < 1.5: v_score += 2
+        elif peg > 3.0: v_score -= 5
+
+    if forward_pe and pe and forward_pe > 0 and pe > 0:
+        if forward_pe < pe * 0.85: v_score += 3
+        elif forward_pe > pe * 1.1: v_score -= 2
+
+    v_score = max(0, min(25, v_score))
+
+    # ── Pilar 3: Momentum (0-25) ──
+    m_score = 12
+    cp = market.get('price') or 0
+    sma50  = market.get('sma_50')
+    sma200 = market.get('sma_200')
+    hi52   = market.get('52w_high')
+    lo52   = market.get('52w_low')
+
+    if cp and sma50:
+        if cp > sma50 * 1.05:   m_score += 5
+        elif cp > sma50:        m_score += 2
+        elif cp < sma50 * 0.95: m_score -= 4
+        else:                   m_score -= 1
+
+    if cp and sma200:
+        if cp > sma200 * 1.10:  m_score += 5
+        elif cp > sma200:       m_score += 2
+        elif cp < sma200 * 0.90: m_score -= 5
+        else:                    m_score -= 1
+
+    if cp and hi52 and lo52 and hi52 > lo52:
+        pct_range = (cp - lo52) / (hi52 - lo52)
+        if pct_range > 0.80:   m_score += 3   # cerca de máximos — momentum fuerte
+        elif pct_range < 0.20: m_score -= 4   # cerca de mínimos
+
+    m_score = max(0, min(25, m_score))
+
+    # ── Pilar 4: Consenso (0-25) ──
+    c_score = 12
+    upside = target_data.get('upside')
+    if recommendations and recommendations.get('total', 0) > 0:
+        tot = recommendations['total']
+        buy_pct = (recommendations.get('strong_buy', 0) + recommendations.get('buy', 0)) / tot * 100
+        if buy_pct >= 75:   c_score += 8
+        elif buy_pct >= 60: c_score += 5
+        elif buy_pct >= 50: c_score += 2
+        elif buy_pct <= 30: c_score -= 6
+        else:               c_score -= 2
+
+    if upside is not None:
+        if upside > 30:    c_score += 5
+        elif upside > 15:  c_score += 3
+        elif upside > 5:   c_score += 1
+        elif upside < -15: c_score -= 5
+        elif upside < -5:  c_score -= 2
+
+    c_score = max(0, min(25, c_score))
+
+    total = q_score + v_score + m_score + c_score
+
+    # Etiqueta y color del score total
+    if total >= 75:      label, color = "EXCELENTE", "#00ffad"
+    elif total >= 60:    label, color = "BUENO",     "#7fffad"
+    elif total >= 45:    label, color = "NEUTRAL",   "#ff9800"
+    elif total >= 30:    label, color = "DÉBIL",     "#ff5722"
+    else:                label, color = "NEGATIVO",  "#f23645"
+
+    return {
+        'total': total,
+        'calidad':    q_score,
+        'valoracion': v_score,
+        'momentum':   m_score,
+        'consenso':   c_score,
+        'label': label,
+        'color': color,
+    }
+
+# ────────────────────────────────────────────────
+# CONTEXTO SECTORIAL — colores por sector
+# ────────────────────────────────────────────────
+
+def sector_metric_color(metric_name, value, sector, industry):
+    """Devuelve color (#hex) para una métrica considerando el sector."""
+    v = _safe(value)
+    if v is None: return "#888"
+
+    s = (sector or '').lower()
+    ind = (industry or '').lower()
+
+    # Thresholds por tipo de métrica y sector
+    THRESHOLDS = {
+        'pe': {
+            'tech':    (20, 50), 'comm': (18, 45), 'fin': (8, 18),
+            'util':    (12, 22), 'real': (12, 25), 'health': (15, 60),
+            'default': (12, 28),
+        },
+        'roe': {
+            'fin':     (0.10, 0.05), 'real': (0.08, 0.03),
+            'default': (0.20, 0.08),
+        },
+        'net_margin': {
+            'fin':     (0.18, 0.08), 'real': (0.10, 0.02),
+            'util':    (0.08, 0.03), 'health': (0.12, 0.00),
+            'default': (0.15, 0.05),
+        },
+        'de': {
+            'fin':     (300, 600),   # bancos: D/E muy alto es normal
+            'util':    (100, 200),
+            'real':    (80, 200),
+            'default': (50, 150),
+        },
+    }
+
+    def _sector_key(s, ind):
+        if 'technology' in s or 'software' in ind: return 'tech'
+        if 'communication' in s: return 'comm'
+        if 'financial' in s or 'bank' in ind: return 'fin'
+        if 'utilities' in s: return 'util'
+        if 'real estate' in s: return 'real'
+        if 'health' in s or 'biotech' in ind: return 'health'
+        return 'default'
+
+    sk = _sector_key(s, ind)
+
+    if metric_name == 'pe':
+        thr = THRESHOLDS['pe'].get(sk, THRESHOLDS['pe']['default'])
+        if v < thr[0]: return "#00ffad"
+        if v > thr[1]: return "#f23645"
+        return "#ff9800"
+
+    elif metric_name == 'roe':
+        thr = THRESHOLDS['roe'].get(sk, THRESHOLDS['roe']['default'])
+        if v > thr[0]:  return "#00ffad"
+        if v < thr[1]:  return "#f23645"
+        return "#ff9800"
+
+    elif metric_name == 'net_margin':
+        thr = THRESHOLDS['net_margin'].get(sk, THRESHOLDS['net_margin']['default'])
+        if v > thr[0]:  return "#00ffad"
+        if v < thr[1]:  return "#f23645"
+        return "#ff9800"
+
+    elif metric_name == 'de':
+        thr = THRESHOLDS['de'].get(sk, THRESHOLDS['de']['default'])
+        if v < thr[0]:  return "#00ffad"
+        if v > thr[1]:  return "#f23645"
+        return "#ff9800"
+
+    # Fallback genérico
+    return "#888"
+
+# ────────────────────────────────────────────────
 # PROMPT IA
 # ────────────────────────────────────────────────
 
@@ -668,6 +1104,9 @@ Resume:
 * Comentarios relevantes del guidance.
 * Reacción del mercado tras resultados.
 
+**DATOS CUANTITATIVOS DISPONIBLES (úsalos como base, no los ignores):**
+{datos_cuantitativos}
+
 ---
 
 ## 6. Análisis Técnico
@@ -701,6 +1140,7 @@ Resume:
 * Cómo se ha comportado la acción frente a sus principales competidores.
 * Tendencia general del sector (alcista/bajista/lateral).
 * Flujos hacia el sector si son visibles.
+* Contextualiza los ratios de valoración vs la mediana del sector (no uses thresholds genéricos — P/E 15 "barato" no aplica igual a tech que a utilities).
 
 ---
 
@@ -752,23 +1192,22 @@ Céntrate especialmente en las razones por las cuales la acción podría realiza
 * Catalizadores sectoriales o macro.
 
 ---
-**DATOS CUANTITATIVOS ACTUALES (Yahoo Finance):**
-{datos_cuantitativos}
-
 Mantén el estilo claro, profesional, directo y orientado a la toma de decisiones de inversión. Responde siempre en castellano."""
 
-PROMPT_RSU_RAPIDO = """Analiza {t} y proporciona en castellano:
+PROMPT_RSU_RAPIDO = """Analiza {t} en castellano. Sé directo y breve.
 
-1. **SNAPSHOT**: Qué hace, precio actual, capitalización
-2. **VALORACIÓN**: P/E, PEG, P/S — ¿cara o barata?
-3. **CALIDAD**: Márgenes, ROE, FCF — ¿negocio de calidad?
-4. **CATALIZADORES**: 3 razones para subir, 3 riesgos
-5. **VEREDICTO**: Score /10, recomendación (comprar/mantener/vender), target price
-
-**DATOS:**
+**DATOS ACTUALES (Yahoo Finance / FMP):**
 {datos_cuantitativos}
 
-Responde en castellano. Breve y directo."""
+Proporciona exactamente esto, usando los datos anteriores como base:
+
+1. **SNAPSHOT** — Qué hace en 2 frases. Precio actual, capitalización, sector.
+2. **VALORACIÓN** — P/E, PEG, P/S vs sector (no uses thresholds genéricos — contextualiza al sector). ¿Cara, barata o razonable?
+3. **CALIDAD** — Márgenes, ROE, FCF. ¿Negocio de calidad?
+4. **CATALIZADORES** — 3 razones para subir / 3 riesgos clave.
+5. **VEREDICTO** — Score /10, recomendación (comprar/mantener/vender con convicción), target price razonado.
+
+Responde en castellano. Sin preámbulos."""
 
 # ────────────────────────────────────────────────
 # CSS GLOBAL
@@ -777,12 +1216,13 @@ Responde en castellano. Breve y directo."""
 def inject_css():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap');
 
-        .stApp { background: #0c0e12; }
-        .main .block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 100%; }
+        /* ── BASE ── */
+        .stApp { background: #0c0e12 !important; }
+        .main .block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 100% !important; }
 
-        /* VT323 headings */
+        /* ── TIPOGRAFÍA — VT323 solo para labels/KPIs, Inter para texto largo ── */
         h1, h2, h3, h4, h5, h6 {
             font-family: 'VT323', monospace !important;
             color: #00ffad !important;
@@ -793,68 +1233,95 @@ def inject_css():
         h2 { font-size: 2.2rem !important; color: #00d9ff !important; border-left: 4px solid #00ffad; padding-left: 15px; margin-top: 30px !important; }
         h3 { font-size: 1.8rem !important; color: #ff9800 !important; }
 
-        /* Body */
-        p, li { font-family: 'Courier New', monospace; color: #ccc !important; line-height: 1.8; font-size: 0.92rem; }
-        strong { color: #00ffad; }
+        /* Párrafos con Inter para legibilidad en texto largo */
+        p, li { font-family: 'Inter', -apple-system, sans-serif !important; color: #bbb !important; line-height: 1.7; font-size: 0.9rem; }
+        strong { color: #00ffad !important; }
 
-        /* VT labels */
+        /* ── VT labels ── */
         .vt-label { font-family: 'VT323', monospace; color: #666; font-size: 0.9rem; letter-spacing: 2px; }
         .landing-title { font-family: 'VT323', monospace; font-size: 5rem; color: #00ffad; text-shadow: 0 0 30px #00ffad55; border-bottom: 2px solid #00ffad33; padding-bottom: 10px; letter-spacing: 4px; }
-        .landing-desc  { font-family: 'VT323', monospace; font-size: 1.2rem; color: #00d9ff; letter-spacing: 3px; }
+        .landing-desc  { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; color: #00d9ff; letter-spacing: 3px; text-transform: uppercase; }
 
-        /* INPUT */
+        /* ── INPUT ── */
         .stTextInput > div > div > input {
             background: #0c0e12 !important; border: 1px solid #00ffad33 !important;
             border-radius: 6px !important; color: #00ffad !important;
             font-family: 'VT323', monospace !important; font-size: 1.6rem !important;
             text-align: center; letter-spacing: 4px; padding: 12px !important;
+            transition: border-color 0.2s, box-shadow 0.2s !important;
         }
-        .stTextInput > div > div > input:focus { border-color: #00ffad !important; box-shadow: 0 0 10px #00ffad22 !important; }
+        .stTextInput > div > div > input:focus { border-color: #00ffad !important; box-shadow: 0 0 12px #00ffad22 !important; }
         .stTextInput label { font-family: 'VT323', monospace !important; color: #888 !important; font-size: 1rem !important; letter-spacing: 2px; }
 
-        /* BOTONES */
+        /* ── BOTONES ── */
         .stButton > button {
             background: linear-gradient(90deg, #00ffad, #00cc8a) !important;
             color: #000 !important; border: none !important; border-radius: 6px !important;
-            font-family: 'VT323', monospace !important; font-size: 1.4rem !important;
-            letter-spacing: 3px !important; padding: 12px 28px !important;
+            font-family: 'Space Grotesk', sans-serif !important; font-size: 0.88rem !important;
+            font-weight: 700 !important; letter-spacing: 2px !important; padding: 12px 28px !important;
             text-transform: uppercase !important; width: 100% !important;
+            transition: box-shadow 0.2s, transform 0.1s !important;
         }
-        .stButton > button:hover { box-shadow: 0 0 20px #00ffad44 !important; }
+        .stButton > button:hover { box-shadow: 0 0 20px #00ffad44 !important; transform: translateY(-1px) !important; }
+        .stButton > button:active { transform: translateY(0) !important; }
         .stDownloadButton > button {
             background: #0c0e12 !important; color: #00ffad !important;
             border: 1px solid #00ffad33 !important; border-radius: 6px !important;
-            font-family: 'VT323', monospace !important; font-size: 1rem !important;
+            font-family: 'Space Grotesk', sans-serif !important; font-size: 0.82rem !important;
             letter-spacing: 2px !important; padding: 8px 20px !important;
             text-transform: uppercase !important; width: auto !important;
         }
 
-        /* MÓDULOS */
+        /* ── ANIMACIÓN FADEUP — módulos de entrada ── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .mod-box, .ticker-box, .rsu-box {
+            animation: fadeUp 0.25s ease-out both;
+        }
+        /* Escalonar animación en hijos directos para efecto cascada */
+        .mod-box:nth-child(1) { animation-delay: 0.00s; }
+        .mod-box:nth-child(2) { animation-delay: 0.04s; }
+        .mod-box:nth-child(3) { animation-delay: 0.08s; }
+        .mod-box:nth-child(4) { animation-delay: 0.12s; }
+
+        /* ── MÓDULOS ── */
         .mod-box     { background: linear-gradient(135deg, #0c0e12 0%, #111520 100%); border: 1px solid #00ffad1a; border-radius: 8px; overflow: hidden; margin-bottom: 18px; box-shadow: 0 2px 20px #00000040; }
         .mod-header  { background: #0a0c10; padding: 12px 18px; border-bottom: 1px solid #00ffad1a; display: flex; justify-content: space-between; align-items: center; }
         .mod-title   { font-family: 'VT323', monospace; color: #00ffad; font-size: 1.2rem; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
         .mod-body    { padding: 18px; }
 
-        /* TICKER HEADER */
-        .ticker-box    { background: linear-gradient(135deg, #0a0c10 0%, #111520 100%); border: 1px solid #00ffad22; border-radius: 8px; padding: 18px 24px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 30px #00ffad08; }
+        /* ── TICKER HEADER ── */
+        .ticker-box    { background: linear-gradient(135deg, #0a0c10 0%, #111520 100%); border: 1px solid #00ffad22; border-radius: 8px; padding: 18px 24px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 30px #00ffad08; flex-wrap: wrap; gap: 12px; }
         .ticker-name   { font-family: 'VT323', monospace; font-size: 2.4rem; color: #00ffad; letter-spacing: 3px; text-shadow: 0 0 10px #00ffad33; }
-        .ticker-meta   { font-family: 'Courier New', monospace; font-size: 11px; color: #555; margin-top: 4px; }
+        .ticker-meta   { font-family: 'Inter', sans-serif; font-size: 11px; color: #555; margin-top: 4px; }
         .ticker-price  { font-family: 'VT323', monospace; font-size: 2.6rem; color: #fff; text-align: right; }
-        .ticker-change { font-family: 'VT323', monospace; font-size: 1.2rem; text-align: right; }
+        .ticker-change { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; font-weight: 600; text-align: right; }
 
-        /* MÉTRICAS */
-        .metric-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px; position: relative; height: 120px; box-sizing: border-box; }
-        .metric-tag   { position: absolute; top: 8px; right: 8px; background: #0f1e35; color: #00d9ff; padding: 1px 6px; border-radius: 4px; font-family: 'VT323', monospace; font-size: 0.8rem; letter-spacing: 1px; }
+        /* ── SCORE RSU ── */
+        .rsu-score-box { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px; text-align: center; }
+        .rsu-score-num { font-family: 'VT323', monospace; font-size: 3.5rem; letter-spacing: 2px; line-height: 1; }
+        .rsu-score-label { font-family: 'Space Grotesk', sans-serif; font-size: 0.78rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-top: 4px; }
+        .rsu-score-sub { font-family: 'Inter', sans-serif; font-size: 0.72rem; color: #555; margin-top: 2px; }
+        .score-bar-track { background: #0a0c10; border-radius: 4px; height: 5px; margin: 4px 0; overflow: hidden; }
+        .score-bar-fill  { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+        /* ── MÉTRICAS ── */
+        .metric-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px; position: relative; min-height: 100px; box-sizing: border-box; }
+        .metric-tag   { position: absolute; top: 8px; right: 8px; background: #0f1e35; color: #00d9ff; padding: 1px 6px; border-radius: 4px; font-family: 'Space Grotesk', sans-serif; font-size: 0.7rem; font-weight: 600; letter-spacing: 1px; }
         .metric-label { font-family: 'VT323', monospace; color: #777; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
         .metric-value { font-family: 'VT323', monospace; font-size: 1.8rem; letter-spacing: 1px; }
-        .metric-desc  { font-family: 'Courier New', monospace; color: #444; font-size: 10px; margin-top: 2px; }
+        .metric-desc  { font-family: 'Inter', sans-serif; color: #444; font-size: 10px; margin-top: 3px; }
+        /* Tooltip de contexto sectorial bajo la métrica */
+        .metric-sector-note { font-family: 'Inter', sans-serif; font-size: 9px; color: #336; margin-top: 4px; font-style: italic; }
 
-        /* PROFIT BOX */
+        /* ── PROFIT BOX ── */
         .profit-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 14px 16px; }
         .profit-label { font-family: 'VT323', monospace; color: #777; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
         .profit-value { font-family: 'VT323', monospace; font-size: 1.6rem; }
 
-        /* RATINGS */
+        /* ── RATINGS ── */
         .rating-item  { margin-bottom: 14px; }
         .rating-top   { display: flex; justify-content: space-between; margin-bottom: 5px; }
         .rating-name  { font-family: 'VT323', monospace; color: #ccc; font-size: 1.05rem; letter-spacing: 1px; }
@@ -862,56 +1329,86 @@ def inject_css():
         .rating-bar   { background: #0a0c10; height: 7px; border-radius: 4px; overflow: hidden; }
         .rating-fill  { height: 100%; border-radius: 4px; }
 
-        /* PRECIO OBJETIVO */
+        /* ── PRECIO OBJETIVO ── */
         .target-box   { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 24px; text-align: center; height: 100%; }
         .target-price { font-family: 'VT323', monospace; font-size: 3.2rem; color: #00ffad; text-shadow: 0 0 12px #00ffad33; }
-        .target-label { font-family: 'VT323', monospace; color: #777; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+        .target-label { font-family: 'Space Grotesk', sans-serif; color: #777; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
 
-        /* CONSENSUS */
+        /* ── CONSENSUS ── */
         .consensus-box { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 24px; text-align: center; height: 100%; }
 
-        /* EVENTOS */
+        /* ── EVENTOS ── */
         .event-row        { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #111520; }
         .event-row:last-child { border-bottom: none; }
-        .event-label      { font-family: 'VT323', monospace; color: #888; font-size: 1rem; letter-spacing: 1px; }
+        .event-label      { font-family: 'Space Grotesk', sans-serif; color: #888; font-size: 0.8rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
         .event-value      { font-family: 'VT323', monospace; color: #00ffad; font-size: 1.05rem; }
 
-        /* FONDOS */
-        .fund-card        { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px 18px; margin-bottom: 10px; }
+        /* ── FONDOS ── */
+        .fund-card        { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px 18px; margin-bottom: 10px; transition: border-color 0.15s; }
         .fund-card:hover  { border-color: #00ffad44; }
-        .fund-name        { font-family: 'VT323', monospace; color: #fff; font-size: 1.1rem; letter-spacing: 1px; }
+        .fund-name        { font-family: 'Inter', sans-serif; color: #fff; font-size: 0.88rem; font-weight: 500; letter-spacing: 0.5px; }
 
-        /* SUGERENCIAS */
-        .suggestion-item { background: #0a0c10; border-left: 2px solid #00ffad; padding: 12px 16px; margin-bottom: 8px; border-radius: 0 6px 6px 0; font-family: 'Courier New', monospace; color: #ccc; font-size: 13px; line-height: 1.5; }
+        /* ── SUGERENCIAS ── */
+        .suggestion-item { background: #0a0c10; border-left: 2px solid #00ffad; padding: 12px 16px; margin-bottom: 8px; border-radius: 0 6px 6px 0; font-family: 'Inter', sans-serif; color: #bbb; font-size: 0.86rem; line-height: 1.6; }
 
-        /* RSU BOX */
+        /* ── RSU BOX ── */
         .rsu-box  { background: linear-gradient(135deg, #0a0c10 0%, #111520 100%); border: 1px solid #00ffad33; border-radius: 8px; padding: 24px; margin: 18px 0; }
         .rsu-title { font-family: 'VT323', monospace; color: #00ffad; font-size: 1.5rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 10px; }
 
-        /* ABOUT */
-        .about-text { font-family: 'Courier New', monospace; color: #aaa; line-height: 1.8; font-size: 0.88rem; }
+        /* ── ABOUT — Inter para texto largo ── */
+        .about-text { font-family: 'Inter', sans-serif; color: #999; line-height: 1.8; font-size: 0.88rem; }
 
-        /* HIGHLIGHT */
+        /* ── HIGHLIGHT ── */
         .highlight-quote { background: #00ffad0a; border: 1px solid #00ffad22; border-radius: 8px; padding: 16px 20px; font-family: 'VT323', monospace; font-size: 1.2rem; color: #00ffad99; text-align: center; letter-spacing: 1px; margin: 16px 0; }
 
-        /* TOOLTIP */
+        /* ── TOOLTIP ── */
         .tip-box  { position: relative; cursor: help; z-index: 10; }
         .tip-icon { width: 20px; height: 20px; border-radius: 50%; background: #1a1e26; border: 1px solid #333; display: flex; align-items: center; justify-content: center; color: #666; font-size: 11px; font-weight: bold; }
-        .tip-text { visibility: hidden; width: 260px; background: #111520; color: #bbb; text-align: left; padding: 12px; border-radius: 6px; position: fixed; z-index: 9999; opacity: 0; transition: opacity 0.2s; font-size: 11px; border: 1px solid #00ffad22; font-family: 'Courier New', monospace; box-shadow: 0 4px 24px #00000080; pointer-events: none; }
+        .tip-text { visibility: hidden; width: 260px; background: #111520; color: #bbb; text-align: left; padding: 12px; border-radius: 6px; position: fixed; z-index: 9999; opacity: 0; transition: opacity 0.2s; font-size: 11px; border: 1px solid #00ffad22; font-family: 'Inter', sans-serif; box-shadow: 0 4px 24px #00000080; pointer-events: none; }
         .tip-box:hover .tip-text { visibility: visible; opacity: 1; }
 
-        /* TABS */
-        .stTabs [data-baseweb="tab-list"]  { gap: 4px; background: #0a0c10; padding: 8px; border-radius: 8px; border: 1px solid #00ffad1a; margin-bottom: 16px; }
-        .stTabs [data-baseweb="tab"]        { background: transparent; color: #555; border-radius: 6px; padding: 8px 14px; font-family: 'VT323', monospace; font-size: 0.9rem; letter-spacing: 1px; text-transform: uppercase; }
+        /* ── TABS ── */
+        .stTabs [data-baseweb="tab-list"]  { gap: 4px; background: #0a0c10; padding: 8px; border-radius: 8px; border: 1px solid #00ffad1a; margin-bottom: 16px; flex-wrap: wrap; }
+        .stTabs [data-baseweb="tab"]        { background: transparent; color: #555; border-radius: 6px; padding: 8px 14px; font-family: 'Space Grotesk', sans-serif; font-size: 0.78rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; transition: color 0.15s; }
         .stTabs [aria-selected="true"]      { background: #00ffad !important; color: #000 !important; }
 
-        /* MISC */
+        /* ── DARK MODE — Streamlit DataFrames ── */
+        [data-testid="stDataFrame"] { border: 1px solid #1a1e26 !important; border-radius: 8px !important; overflow: hidden !important; }
+        [data-testid="stDataFrame"] table { background: #0a0c10 !important; }
+        [data-testid="stDataFrame"] th { background: #111520 !important; color: #00ffad !important; font-family: 'Space Grotesk', sans-serif !important; font-size: 0.78rem !important; font-weight: 600 !important; letter-spacing: 1px !important; text-transform: uppercase !important; border-bottom: 1px solid #1a1e26 !important; }
+        [data-testid="stDataFrame"] td { color: #bbb !important; font-family: 'Inter', sans-serif !important; font-size: 0.83rem !important; border-bottom: 1px solid #0f1218 !important; background: transparent !important; }
+        [data-testid="stDataFrame"] tr:hover td { background: #111520 !important; }
+
+        /* ── DARK MODE — Plotly charts ── */
+        .js-plotly-plot .plotly .bg { fill: #0c0e12 !important; }
+
+        /* ── MISC ── */
         hr { border: none; height: 1px; background: linear-gradient(90deg, transparent, #00ffad33, transparent); margin: 24px 0; }
         .hq { background: #00ffad0a; border: 1px solid #00ffad22; border-radius: 8px; padding: 16px 20px; font-family: 'VT323', monospace; font-size: 1.2rem; color: #00ffad99; text-align: center; letter-spacing: 1px; }
 
-        /* Streamlit cleanups */
+        /* ── STREAMLIT CLEANUPS ── */
         [data-testid="stMetricValue"] { font-family: 'VT323', monospace; color: #00ffad; }
         div[data-testid="stVerticalBlock"] > div { margin-bottom: 0 !important; }
+        .stSpinner > div { border-color: #00ffad !important; border-right-color: transparent !important; }
+        [data-testid="stExpander"] { border: 1px solid #1a1e26 !important; border-radius: 8px !important; background: #0a0c10 !important; }
+        [data-testid="stExpander"] summary { font-family: 'Space Grotesk', sans-serif !important; color: #888 !important; font-size: 0.82rem !important; font-weight: 600 !important; letter-spacing: 1px !important; }
+
+        /* ── MOBILE RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .landing-title { font-size: 3rem !important; }
+            .ticker-box { flex-direction: column; align-items: flex-start; }
+            .ticker-price { font-size: 2rem; }
+            .ticker-change { font-size: 0.85rem; }
+            .stTabs [data-baseweb="tab"] { font-size: 0.7rem !important; padding: 6px 8px !important; }
+            .metric-value { font-size: 1.5rem !important; }
+            .rsu-score-num { font-size: 2.5rem !important; }
+            .mod-body { padding: 12px !important; }
+        }
+        @media (max-width: 480px) {
+            .landing-title { font-size: 2.2rem !important; letter-spacing: 2px; }
+            .ticker-name { font-size: 1.8rem !important; }
+            .metric-box { min-height: 80px !important; }
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -967,11 +1464,18 @@ def render():
     with st.spinner(f"[ CARGANDO {t_in} ... ]"):
         yf_data      = get_yfinance_full(t_in)
         av_surprises = get_alpha_vantage_earnings(t_in, api_keys['alpha_vantage']) if api_keys['alpha_vantage'] else None
+        # FMP: fuente primaria de fundamentales/ratios cuando está configurada
+        fmp_data     = get_fmp_data(t_in, api_keys['fmp']) if api_keys['fmp'] else None
+        # Finnhub: solo si hay API key — lazy (los datos de noticias se cargan aquí pero la tab los usa)
         finnhub_data = get_finnhub_data(t_in, api_keys['finnhub']) if api_keys['finnhub'] else None
 
     if not yf_data:
         st.error(f"❌ No se encontraron datos para **'{t_in}'**. Verifica que el ticker sea válido.")
         return
+
+    # Aplicar overrides FMP sobre datos yfinance (FMP más fiable para ratios)
+    if fmp_data:
+        yf_data = fmp_override_metrics(yf_data, fmp_data)
 
     info              = yf_data['info']
     recommendations   = yf_data['recommendations']
@@ -987,8 +1491,13 @@ def render():
     yf_surprises      = yf_data['earnings_surprises']
     inst_data_preload = yf_data.get('inst_data', {})
 
-    # Usar sorpresas de AV si disponibles (más precisas), si no las de yfinance
-    earnings_surprises = av_surprises if av_surprises else yf_surprises
+    # Earnings surprises: prioridad FMP > AV > yfinance
+    fmp_surprises = (fmp_data or {}).get('earnings_surprises')
+    earnings_surprises = fmp_surprises or av_surprises or yf_surprises
+
+    # Sector/industry para contexto de colores
+    sector   = info.get('sector', '')
+    industry = info.get('industry', '')
 
     # Traduccción descripción
     translated_summary = translate_text_cached(info.get('longBusinessSummary', ''), t_in)
@@ -996,6 +1505,9 @@ def render():
     # Segmentos y sentimiento de Finnhub
     segments  = process_finnhub_segments(finnhub_data) if finnhub_data else None
     sentiment = calculate_news_sentiment(finnhub_data) if finnhub_data else None
+
+    # RSU Score
+    rsu_score = compute_rsu_score(info, metrics, profitability, market, recommendations, target_data)
 
     # Cálculos header
     cp           = market.get('price') or 0
@@ -1005,6 +1517,12 @@ def render():
     change_arrow = "▲" if price_change >= 0 else "▼"
     market_cap   = market.get('market_cap') or 0
     spark_svg    = build_sparkline_svg(sparkline)
+
+    # Fuente de datos activa (para el footer)
+    data_sources = ["Yahoo Finance"]
+    if fmp_data:    data_sources.append("FMP")
+    if av_surprises: data_sources.append("Alpha Vantage")
+    if finnhub_data: data_sources.append("Finnhub")
 
     # ── TICKER HEADER ──
     st.markdown(f"""
@@ -1017,7 +1535,7 @@ def render():
                 &nbsp;·&nbsp; {info.get('exchange', 'N/A')}
             </div>
         </div>
-        <div style="display:flex; align-items:center; gap:20px;">
+        <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
             <div>{spark_svg}</div>
             <div>
                 <div class="ticker-price">${cp:,.2f}</div>
@@ -1026,6 +1544,93 @@ def render():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── RSU SCORE + KPIs RÁPIDOS (jerarquía: información crítica arriba) ──
+    score_col, k1, k2, k3, k4 = st.columns([1.2, 1, 1, 1, 1])
+    sc = rsu_score
+    with score_col:
+        # Barras de sub-score
+        bars_html = ""
+        for label_b, val_b, color_b in [
+            ("Calidad",    sc['calidad'],    "#00ffad"),
+            ("Valoración", sc['valoracion'], "#00d9ff"),
+            ("Momentum",   sc['momentum'],   "#ff9800"),
+            ("Consenso",   sc['consenso'],   "#9b59b6"),
+        ]:
+            pct = val_b / 25 * 100
+            bars_html += f"""
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                <div style="font-family:'Space Grotesk',sans-serif;color:#555;font-size:0.68rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;width:70px;flex-shrink:0;">{label_b}</div>
+                <div class="score-bar-track" style="flex:1;">
+                    <div class="score-bar-fill" style="width:{pct:.0f}%;background:{color_b};"></div>
+                </div>
+                <div style="font-family:'VT323',monospace;color:{color_b};font-size:0.95rem;width:28px;text-align:right;">{val_b}</div>
+            </div>"""
+        st.markdown(f"""
+        <div class="rsu-score-box" style="animation:fadeUp 0.2s ease-out both;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+                <div>
+                    <div class="rsu-score-num" style="color:{sc['color']};">{sc['total']}</div>
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:0.65rem;color:#444;letter-spacing:1px;">/100</div>
+                </div>
+                <div style="flex:1;">
+                    <div class="rsu-score-label" style="color:{sc['color']};">{sc['label']}</div>
+                    <div style="font-family:'Inter',sans-serif;font-size:0.68rem;color:#444;margin-top:2px;">RSU Score</div>
+                </div>
+            </div>
+            {bars_html}
+        </div>
+        """, unsafe_allow_html=True)
+
+    # KPIs rápidos top
+    sma200 = market.get('sma_200')
+    sma50  = market.get('sma_50')
+    vs_sma200 = ((cp - sma200) / sma200 * 100) if (cp and sma200) else None
+    vs_sma50  = ((cp - sma50)  / sma50  * 100) if (cp and sma50)  else None
+
+    with k1:
+        pe_val = metrics.get('trailing_pe')
+        pe_color = sector_metric_color('pe', pe_val, sector, industry)
+        pe_note = f"Sector: {sector.split(' ')[0].title()}" if sector else ""
+        st.markdown(f"""
+        <div class="metric-box" style="animation:fadeUp 0.2s ease-out 0.05s both;">
+            <div class="metric-label">P/E Trailing</div>
+            <div class="metric-value" style="color:{pe_color};">{fmt_x(pe_val) if pe_val else 'N/D'}</div>
+            <div class="metric-sector-note">{pe_note}</div>
+        </div>""", unsafe_allow_html=True)
+
+    with k2:
+        nm = profitability.get('net_margin')
+        nm_color = sector_metric_color('net_margin', nm, sector, industry)
+        st.markdown(f"""
+        <div class="metric-box" style="animation:fadeUp 0.2s ease-out 0.08s both;">
+            <div class="metric-label">Margen Neto</div>
+            <div class="metric-value" style="color:{nm_color};">{fmt_pct(nm, 100) if nm is not None else 'N/D'}</div>
+            <div class="metric-sector-note">Sector: {sector.split(' ')[0].title() if sector else 'N/A'}</div>
+        </div>""", unsafe_allow_html=True)
+
+    with k3:
+        vs200_color = "#00ffad" if (vs_sma200 or 0) >= 0 else "#f23645"
+        vs200_str   = f"{'+' if (vs_sma200 or 0) >= 0 else ''}{vs_sma200:.1f}%" if vs_sma200 is not None else "N/D"
+        st.markdown(f"""
+        <div class="metric-box" style="animation:fadeUp 0.2s ease-out 0.11s both;">
+            <div class="metric-label">vs SMA 200</div>
+            <div class="metric-value" style="color:{vs200_color};">{vs200_str}</div>
+            <div class="metric-sector-note">Tendencia largo plazo</div>
+        </div>""", unsafe_allow_html=True)
+
+    with k4:
+        upside = target_data.get('upside')
+        up_color = "#00ffad" if (upside or 0) > 0 else "#f23645"
+        up_str   = f"{'+' if (upside or 0) >= 0 else ''}{upside:.1f}%" if upside is not None else "N/D"
+        st.markdown(f"""
+        <div class="metric-box" style="animation:fadeUp 0.2s ease-out 0.14s both;">
+            <div class="metric-label">Potencial</div>
+            <div class="metric-value" style="color:{up_color};">{up_str}</div>
+            <div class="metric-sector-note">vs. precio objetivo</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom:12px;'></div>", unsafe_allow_html=True)
 
     # ── GRÁFICO TRADINGVIEW ──
     chart_html = f"""<!DOCTYPE html><html><head>
@@ -1088,14 +1693,23 @@ def render():
             v = _safe(val)
             if v is None: return "#888"
             if v < 0: return "#f23645"
+            # P/E — sector-aware via the global function
+            if name == "P/E":        return sector_metric_color('pe', v, sector, industry)
+            if name == "Forward P/E": return sector_metric_color('pe', v, sector, industry)
+            # Other metrics: use fixed thresholds (no sectorial distortion for these)
             thresholds = {
-                "P/E": (15, 30), "P/S": (2, 8), "EV/EBITDA": (10, 20),
-                "Forward P/E": (12, 25), "PEG Ratio": (1, 2), "P/B": (1, 4),
+                "P/S": (2, 8), "EV/EBITDA": (10, 20), "PEG Ratio": (1, 2), "P/B": (1, 4),
             }
             lo, hi = thresholds.get(name, (0, 9999))
             if v <= lo: return "#00ffad"
             if v >= hi: return "#f23645"
             return "#ff9800"
+
+        # Nota de contexto sectorial bajo el tab de valoración
+        sector_note = ""
+        if sector:
+            sector_note = f'<div style="font-family:Inter,sans-serif;font-size:0.76rem;color:#444;margin-bottom:12px;border-left:3px solid #1a2e40;padding-left:10px;">Umbrales P/E ajustados para sector <strong style="color:#00d9ff;">{sector}</strong>. Los colores reflejan si la valoración es barata, razonable o cara <em>para este sector</em>, no con thresholds genéricos.</div>'
+        st.markdown(sector_note, unsafe_allow_html=True)
 
         valuation_data = [
             ("P/E",         metrics['trailing_pe'],    "Trailing",    "Precio / Beneficio"),
@@ -1221,16 +1835,21 @@ def render():
         cash= profitability.get('total_cash')
         dbt = profitability.get('total_debt')
 
+        # ROE threshold: sector-aware
+        roe_color = sector_metric_color('roe', roe, sector, industry)
+        nm_color  = sector_metric_color('net_margin', nm, sector, industry)
+        de_color  = sector_metric_color('de', de, sector, industry)
+
         profit_items = [
-            ("ROE",              fmt_pct(roe, 100),  pc(roe, 0.20, 0.05), "Rentabilidad s/ Fondos Propios"),
+            ("ROE",              fmt_pct(roe, 100),  roe_color,  "Rentabilidad s/ Fondos Propios — umbral por sector"),
             ("ROA",              fmt_pct(roa, 100),  pc(roa, 0.10, 0.02), "Rentabilidad s/ Activos"),
-            ("Margen Neto",      fmt_pct(nm, 100),   pc(nm, 0.15, 0.0),   "Beneficio Neto / Ingresos"),
+            ("Margen Neto",      fmt_pct(nm, 100),   nm_color,   "Beneficio Neto / Ingresos — umbral por sector"),
             ("Margen Operativo", fmt_pct(om, 100),   pc(om, 0.15, 0.0),   "EBIT / Ingresos"),
             ("Margen Bruto",     fmt_pct(gm, 100),   pc(gm, 0.40, 0.20),  "Beneficio Bruto / Ingresos"),
             ("Crec. Ingresos",   fmt_pct(rg, 100),   pc(rg, 0.10, 0.0),   "Crecimiento YoY"),
             ("Crec. Beneficios", fmt_pct(eg, 100),   pc(eg, 0.10, 0.0),   "Crecimiento YoY EPS"),
             ("Deuda/Capital",    f"{de:.1f}%" if de is not None else "N/D",
-                "#f23645" if de and de > 100 else ("#00ffad" if de and de < 50 else "#ff9800"), "Ratio Apalancamiento"),
+                de_color, "Ratio Apalancamiento — umbral por sector"),
             ("Ratio Corriente",  f"{cr:.2f}×" if cr is not None else "N/D",
                 "#00ffad" if cr and cr >= 1.5 else ("#f23645" if cr and cr < 1.0 else "#ff9800"), "Activo Cte / Pasivo Cte"),
             ("Free Cash Flow",   format_value(fcf, '$'), "#00ffad" if fcf and fcf > 0 else "#f23645", "Flujo de Caja Libre"),
@@ -1255,15 +1874,17 @@ def render():
             )
             rows_html += f'<div style="display:flex;gap:10px;margin-bottom:10px;">{cells}</div>'
 
+        sector_rentab_note = f'<div style="font-family:Inter,sans-serif;font-size:0.76rem;color:#444;margin-bottom:12px;border-left:3px solid #1a2e40;padding-left:10px;">ROE, Margen Neto y D/E coloreados con umbrales de sector <strong style="color:#00d9ff;">{sector or "N/A"}</strong>. Otros ratios usan thresholds fundamentales estándar.</div>' if sector else ""
+
         st.markdown(f"""
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">📈 Rentabilidad y Salud Financiera</span>
                 <div class="tip-box"><div class="tip-icon">?</div>
-                    <div class="tip-text">Verde = bueno · Naranja = neutral · Rojo = precaución. Umbrales de análisis fundamental estándar.</div>
+                    <div class="tip-text">Verde = bueno · Naranja = neutral · Rojo = precaución. ROE y Márgenes ajustados al sector: un ROE del 8% es excelente para un banco pero débil para tech.</div>
                 </div>
             </div>
-            <div class="mod-body">{rows_html}</div>
+            <div class="mod-body">{sector_rentab_note}{rows_html}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1888,38 +2509,96 @@ def render():
             st.error(f"❌ Error al conectar con el modelo IA: {error_ia}")
         else:
             prompt_template = PROMPT_RSU_RAPIDO if btn_rapido else PROMPT_RSU_COMPLETO
+
+            # Enriquecer datos cuantitativos con contexto sectorial para el prompt
+            sector_context = f"\n| Sector | {sector or 'N/A'} |\n| Industria | {industry or 'N/A'} |\n| RSU Score | {rsu_score['total']}/100 ({rsu_score['label']}) |"
+            datos_enriquecidos = datos_cuantitativos + sector_context
+
             prompt_final = (prompt_template
                             .replace("{t}", t_in)
-                            .replace("{datos_cuantitativos}", datos_cuantitativos))
+                            .replace("{datos_cuantitativos}", datos_enriquecidos))
 
-            label_spinner = "ANÁLISIS RÁPIDO" if btn_rapido else "GENERANDO INFORME COMPLETO"
-            with st.spinner(f"[ {label_spinner} {t_in} ... ]"):
+            # Truncar si el prompt es demasiado largo (previene degradación del modelo)
+            MAX_PROMPT_CHARS = 12000
+            if len(prompt_final) > MAX_PROMPT_CHARS:
+                prompt_final = prompt_final[:MAX_PROMPT_CHARS] + "\n\n[Datos truncados por longitud. Continúa el análisis con los datos disponibles.]"
+
+            is_rapido = btn_rapido
+            label_tipo = "ANÁLISIS RÁPIDO" if is_rapido else "INFORME COMPLETO"
+
+            st.markdown(f"""
+            <div style="font-family:'Space Grotesk',sans-serif;color:#00ffad;font-size:0.8rem;
+                        letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">
+                ⚡ Generando {label_tipo} para {t_in}...
+            </div>
+            """, unsafe_allow_html=True)
+
+            report_placeholder = st.empty()
+            full_text = ""
+
+            try:
+                # Streaming: muestra el informe mientras se genera token a token
+                response = model_ia.generate_content(
+                    prompt_final,
+                    generation_config={
+                        "temperature": 0.1,          # Análisis financiero: baja temperatura = más consistente
+                        "max_output_tokens": 8192,
+                    },
+                    stream=True,
+                )
+                for chunk in response:
+                    try:
+                        if chunk.text:
+                            full_text += chunk.text
+                            report_placeholder.markdown(
+                                f'<div style="border:1px solid #00ffad1a;border-radius:8px;'
+                                f'padding:24px;background:#0a0c10;margin-bottom:12px;">{full_text}</div>',
+                                unsafe_allow_html=True
+                            )
+                    except Exception as chunk_err:
+                        logger.warning("[IA stream chunk] %s: %s", t_in, chunk_err)
+
+                if full_text:
+                    st.session_state['last_report']        = full_text
+                    st.session_state['last_report_ticker'] = t_in
+                else:
+                    st.error("❌ El modelo no devolvió texto. Intenta de nuevo.")
+
+            except Exception as e:
+                logger.error("[IA generate_content] %s: %s", t_in, e)
+                # Fallback: sin streaming si el modelo no lo soporta
                 try:
                     res = model_ia.generate_content(
                         prompt_final,
-                        generation_config={"temperature": 0.2, "max_output_tokens": 8192}
+                        generation_config={"temperature": 0.1, "max_output_tokens": 8192}
                     )
-                    st.session_state['last_report']        = res.text
+                    full_text = res.text
+                    st.session_state['last_report']        = full_text
                     st.session_state['last_report_ticker'] = t_in
-                except Exception as e:
-                    st.error(f"❌ Error generando el informe: {e}")
+                    report_placeholder.markdown(full_text)
+                except Exception as e2:
+                    st.error(f"❌ Error generando el informe: {e2}")
+                    logger.error("[IA fallback] %s: %s", t_in, e2)
 
     if st.session_state.get('last_report') and st.session_state.get('last_report_ticker') == t_in:
-        st.markdown(f"""
-        <div class="mod-box">
-            <div class="mod-header">
-                <span class="mod-title">📋 Informe RSU IA — {t_in}</span>
+        if not (btn_rapido or btn_completo):
+            # Solo mostrar informe previo si no acabamos de generar uno nuevo
+            st.markdown(f"""
+            <div class="mod-box">
+                <div class="mod-header">
+                    <span class="mod-title">📋 Informe RSU IA — {t_in}</span>
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:0.7rem;color:#444;letter-spacing:1px;">CACHÉ</div>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-        with st.container():
-            st.markdown(
-                '<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;'
-                'padding:24px;background:#0a0c10;margin-bottom:18px;">',
-                unsafe_allow_html=True
-            )
-            st.markdown(st.session_state['last_report'])
-            st.markdown('</div>', unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            with st.container():
+                st.markdown(
+                    '<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;'
+                    'padding:24px;background:#0a0c10;margin-bottom:18px;">',
+                    unsafe_allow_html=True
+                )
+                st.markdown(st.session_state['last_report'])
+                st.markdown('</div>', unsafe_allow_html=True)
 
         col_dl, _ = st.columns([1, 3])
         with col_dl:
@@ -1932,15 +2611,16 @@ def render():
             )
 
     # ══ FOOTER ══
-    st.markdown("""
+    sources_str = " · ".join(s.upper() for s in data_sources)
+    st.markdown(f"""
     <div style="text-align:center;margin-top:50px;padding:20px;border-top:1px solid #0f1218;">
-        <div style="font-family:'VT323',monospace;color:#222;font-size:0.82rem;letter-spacing:2px;">
-            [END OF REPORT // RSU_EARNINGS_v4.0]<br>
-            [DATA SOURCE: YAHOO FINANCE · ALPHA VANTAGE · FINNHUB · TRADINGVIEW · GEMINI AI]<br>
-            [STATUS: ACTIVE // {year}]
+        <div style="font-family:'Space Grotesk',sans-serif;color:#222;font-size:0.72rem;letter-spacing:2px;text-transform:uppercase;">
+            [END OF REPORT // RSU_EARNINGS_v5.0]<br>
+            [DATA: {sources_str} · TRADINGVIEW · GEMINI AI]<br>
+            [STATUS: ACTIVE // {datetime.now().year}]
         </div>
     </div>
-    """.replace("{year}", str(datetime.now().year)), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -2355,47 +2354,42 @@ def render():
 
     @st.cache_data(ttl=21600, show_spinner=False)
     @st.cache_data(ttl=21600, show_spinner=False)
+    @st.cache_data(ttl=21600, show_spinner=False)
     def _cached_briefing(day_key: str, prompt: str) -> str:
-        api_key = st.secrets.get("GEMINI_API_KEY", None)
-        if not api_key:
-            return "Configura GEMINI_API_KEY en st.secrets."
+        """Genera briefing via Groq (gratuito). Usado como fallback si Supabase no tiene el del dia."""
+        groq_key = st.secrets.get('GROQ_API_KEY', None)
+        if not groq_key:
+            return '⚠ Configura GROQ_API_KEY en st.secrets (gratuito en console.groq.com).'
         try:
-            from google import genai as _genai
-            from google.genai import types as _gtypes
-            _client = _genai.Client(api_key=api_key)
-            _attempts = [
-                ("gemini-2.5-flash-preview-04-17", True),
-                ("gemini-2.5-flash-preview-04-17", False),
-                ("gemini-2.0-flash", False),
-            ]
-            for _mid, _gr in _attempts:
-                try:
-                    if _gr:
-                        _cfg = _gtypes.GenerateContentConfig(
-                            temperature=0.1, max_output_tokens=1000,
-                            tools=[_gtypes.Tool(google_search=_gtypes.GoogleSearch())],
-                        )
-                    else:
-                        _cfg = _gtypes.GenerateContentConfig(
-                            temperature=0.1, max_output_tokens=1000,
-                        )
-                    _r = _client.models.generate_content(
-                        model=_mid, contents=prompt, config=_cfg
-                    )
-                    _txt = (_r.text or "").strip()
-                    if _txt:
-                        if not _gr:
-                            _txt = _txt + chr(10) + chr(10) + "_(sin grounding)_"
-                        return _txt
-                except Exception:
-                    continue
+            _sess = get_http_session()
+            _r = _sess.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                json={
+                    'model': 'llama-3.3-70b-versatile',
+                    'messages': [
+                        {'role': 'system', 'content': (
+                            'Eres analista senior de mercados financieros. '
+                            'Respondes SIEMPRE en espanol. '
+                            'Tono directo, profesional y analitico. '
+                            'Nota importante: no tienes acceso a internet en tiempo real. '
+                            'Para datos de precio, indica que son estimados o usa el contexto del prompt. '
+                            'NUNCA inventes cifras concretas de precios o datos macro del dia.'
+                        )},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    'temperature': 0.2,
+                    'max_tokens': 900,
+                },
+                timeout=30
+            )
+            if _r.status_code == 200:
+                _txt = _r.json()['choices'][0]['message']['content'].strip()
+                if _txt:
+                    return _txt + chr(10) + chr(10) + '_(Groq llama-3.3-70b · generado en tiempo real)_'
+            return f'⚠ Error Groq {_r.status_code}: {_r.text[:200]}'
         except Exception as e:
-            err = str(e)
-            if "429" in err or "quota" in err.lower():
-                return "Cuota de API alcanzada. Reintenta en ~60s."
-            return "Error: " + err[:300]
-
-            return "Error: " + err[:300]
+            return f'⚠ Error: {str(e)[:300]}'
 
     def _load_supabase_briefing() -> str:
         """
@@ -2914,43 +2908,9 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    # SECTOR ROTATION — module-container identico a los demas modulos
+    # SECTOR ROTATION — 1M fijo, sin selectbox, modulo identico al resto
     with c2:
-        _tf_opts   = ['1D', '3D', '1W', '1M']
-        _tf_labels = {'1D': '1D', '3D': '3D', '1W': '1W', '1M': '1M'}
-        _cur_tf    = st.session_state.get('sector_tf', '1W')
-        _tf_idx    = _tf_opts.index(_cur_tf) if _cur_tf in _tf_opts else 2
-
-        # CSS: selectbox minimalista en el header, identico a los otros modulos
-        st.markdown("""<style>
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']{
-            position:absolute;top:6px;right:10px;width:70px;
-            margin:0!important;padding:0!important;z-index:10;
-        }
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>label{display:none!important;}
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>div>div{
-            background:#1a1e26!important;border:1px solid #00ffad33!important;
-            border-radius:4px!important;color:#00ffad!important;
-            font-family:VT323,monospace!important;font-size:13px!important;
-            letter-spacing:1px!important;padding:1px 6px!important;
-            min-height:0!important;height:24px!important;line-height:22px!important;
-        }
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel']>div>div>div{
-            padding:0!important;min-height:0!important;
-        }
-        div[data-testid='stSelectbox'][data-st-key='sector_tf_sel'] svg{
-            fill:#00ffad66!important;width:12px!important;height:12px!important;
-        }
-        </style>""", unsafe_allow_html=True)
-
-        sel_tf = st.selectbox(
-            label='TF', options=_tf_opts, index=_tf_idx,
-            format_func=lambda x: _tf_labels[x],
-            label_visibility='collapsed', key='sector_tf_sel'
-        )
-        st.session_state['sector_tf'] = sel_tf
-        current_tf = sel_tf
-
+        current_tf = '1M'
         sectors = get_sector_performance(current_tf)
         _s_html = ''
         for sector in sectors:
@@ -2966,18 +2926,17 @@ def render():
                 '<div style="color:white;font-size:11px;font-weight:600;margin-bottom:4px;line-height:1.2;">' + _n + '</div>'
                 '<div style="font-size:12px;font-weight:bold;color:' + _tc + ';">' + f'{_ch:+.2f}%' + '</div>'
                 '</div>')
-
         st.markdown(
-            f'<div class="module-container" style="position:relative;">'
-            f'<div class="module-header">'
-            f'<div class="module-title">Rotación Sectorial</div>'
-            f'<div style="width:75px;"></div>'
-            f'</div>'
-            f'<div class="module-content">'
-            f'<div class="sector-grid">' + _s_html + '</div>'
-            f'</div>'
-            f'<div class="update-timestamp">Actualizado: {get_timestamp()} · {current_tf}</div>'
-            f'</div>',
+            '<div class="module-container">'
+            '<div class="module-header">'
+            '<div class="module-title">Rotación Sectorial</div>'
+            '<div style="color:#444;font-size:11px;font-family:VT323,monospace;letter-spacing:1px;">MENSUAL</div>'
+            '</div>'
+            '<div class="module-content">'
+            '<div class="sector-grid">' + _s_html + '</div>'
+            '</div>'
+            f'<div class="update-timestamp">Actualizado: {get_timestamp()} · 1M</div>'
+            '</div>',
             unsafe_allow_html=True
         )
 
@@ -4100,9 +4059,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 if __name__ == "__main__":
     render()
-
-
-
 
 
 

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - v4.0.0
@@ -363,9 +362,8 @@ def download_batch_info(tickers_tuple: tuple) -> dict[str, dict]:
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
 def get_single_ticker_info(ticker: str) -> dict:
     """
-    Obtiene el .info de un ticker individual con retry + backoff.
-    Cacheado 1h — si el usuario vuelve a analizar el mismo ticker no hace nueva llamada HTTP.
-    Nota: yfinance ≥0.2.x puede devolver .info con pocas claves — se complementa con fast_info.
+    Obtiene fundamentales de un ticker usando múltiples endpoints de yfinance.
+    Estrategia por capas para máxima compatibilidad con todas las versiones.
     """
     last_err = None
     for attempt in range(3):
@@ -374,30 +372,70 @@ def get_single_ticker_info(ticker: str) -> dict:
                 wait = 15 * attempt + random.uniform(1, 5)
                 logger.info(f"Retry {attempt}/2 para {ticker} — esperando {wait:.1f}s")
                 time.sleep(wait)
-            tkr  = yf.Ticker(ticker)
-            info = tkr.info or {}
 
-            # yfinance ≥0.2.x: .info puede devolver dict mínimo sin fundamentales.
-            # Completar con fast_info si faltan campos clave.
-            if len(info) < 10:
+            tkr  = yf.Ticker(ticker)
+            info = {}
+
+            # Capa 1: .info clásico
+            try:
+                raw_info = tkr.info or {}
+                if len(raw_info) > 5:
+                    info.update(raw_info)
+            except Exception as e:
+                logger.warning(f"[{ticker}] .info falló: {e}")
+
+            # Capa 2: fast_info (siempre disponible, campos básicos)
+            try:
+                fi = tkr.fast_info
+                info.setdefault('marketCap',         getattr(fi, 'market_cap',     None))
+                info.setdefault('previousClose',     getattr(fi, 'previous_close', None))
+                info.setdefault('regularMarketPrice',getattr(fi, 'last_price',     None))
+                info.setdefault('fiftyTwoWeekHigh',  getattr(fi, 'year_high',      None))
+                info.setdefault('fiftyTwoWeekLow',   getattr(fi, 'year_low',       None))
+                info.setdefault('regularMarketVolume',getattr(fi,'last_volume',    None))
+                info.setdefault('shortName', ticker)
+            except Exception as e:
+                logger.warning(f"[{ticker}] fast_info falló: {e}")
+
+            # Capa 3: financials trimestrales para earningsQuarterlyGrowth
+            if 'earningsQuarterlyGrowth' not in info or info.get('earningsQuarterlyGrowth') is None:
                 try:
-                    fi = tkr.fast_info
-                    info.setdefault('marketCap',             getattr(fi, 'market_cap', None))
-                    info.setdefault('previousClose',         getattr(fi, 'previous_close', None))
-                    info.setdefault('fiftyTwoWeekHigh',      getattr(fi, 'year_high', None))
-                    info.setdefault('fiftyTwoWeekLow',       getattr(fi, 'year_low', None))
-                    info.setdefault('regularMarketVolume',   getattr(fi, 'last_volume', None))
-                    info.setdefault('shortName', ticker)
+                    qe = tkr.quarterly_earnings
+                    if qe is not None and len(qe) >= 2:
+                        eps_now  = qe['Earnings'].iloc[-1]
+                        eps_prev = qe['Earnings'].iloc[-2] if len(qe) >= 2 else None
+                        # Buscar mismo trimestre año anterior
+                        eps_yoy  = qe['Earnings'].iloc[-5] if len(qe) >= 5 else None
+                        if eps_yoy is not None and eps_yoy != 0:
+                            info['earningsQuarterlyGrowth'] = (eps_now - eps_yoy) / abs(eps_yoy)
                 except Exception:
                     pass
 
-            if info and len(info) > 5:
+            # Capa 4: income statement para márgenes y ROE si faltan
+            if info.get('returnOnEquity') is None or info.get('profitMargins') is None:
+                try:
+                    fin = tkr.financials
+                    bs  = tkr.balance_sheet
+                    if fin is not None and not fin.empty and bs is not None and not bs.empty:
+                        net_income = fin.loc['Net Income'].iloc[0] if 'Net Income' in fin.index else None
+                        revenue    = fin.loc['Total Revenue'].iloc[0] if 'Total Revenue' in fin.index else None
+                        equity     = bs.loc['Stockholders Equity'].iloc[0] if 'Stockholders Equity' in bs.index else None
+                        if net_income and revenue and revenue != 0:
+                            info.setdefault('profitMargins', float(net_income / revenue))
+                        if net_income and equity and equity != 0:
+                            info.setdefault('returnOnEquity', float(net_income / equity))
+                except Exception:
+                    pass
+
+            if len(info) > 5:
                 return info
+
         except Exception as e:
             last_err = e
             logger.warning(f"get_single_ticker_info {ticker} intento {attempt+1}: {e}")
+
     logger.error(f"No se pudo obtener info de {ticker} tras 3 intentos: {last_err}")
-    return {}  # dict vacío — calculate_can_slim_metrics maneja fundamentales en 0
+    return {}
     logger.error(f"No se pudo obtener info de {ticker} tras 3 intentos: {last_err}")
     return {}  # dict vacío — calculate_can_slim_metrics maneja fundamentales en 0
 
@@ -905,19 +943,12 @@ def calculate_can_slim_metrics(
         # M — Market Direction (15 pts)
         # O'Neil: el mercado arrastra el 75% de las acciones.
         # Con market score <60 (no confirmed uptrend) = 0 pts.
-        # Esto explica por qué scores altos en mercado débil son raros.
         m_grade, m_sc = ('A', 15) if ms >= 80 else \
                          ('B', 10) if ms >= 70 else \
                          ('C', 5)  if ms >= 60 else \
-                         ('D', 0)   # <60 = UPTREND UNDER PRESSURE o peor → 0 pts
+                         ('D', 0)
         score += m_sc
-
-        # Normalizar score a escala 0-100 real según máximo posible con mercado actual
-        # Max absoluto = 100 (20+15+15+10+15+10+15). Sin M = 85.
-        # Escalar para que el gauge siempre refleje la calidad relativa al mercado:
-        # score_display = round(score / 85 * 100) si m_sc==0, sino score (ya es /100)
-        max_possible = 85 + m_sc  # 85 sin M, 90/95/100 con M parcial/total
-        score_display = round(min(100, score / max_possible * 100)) if max_possible > 0 else score
+        # score es 0-100 (máx 85 sin M, 100 con M=A). No normalizar — el valor raw es más honesto.
 
         # ML
         volatility    = hist['Close'].pct_change().std() * np.sqrt(252) * 100
@@ -937,7 +968,7 @@ def calculate_can_slim_metrics(
             'industry'    : info.get('industry', 'N/A'),
             'market_cap'  : market_cap,
             'price'       : price,
-            'score'       : score_display,
+            'score'       : score,
             'ml_probability': ml_prob,
             'grades'      : {'C': c_grade, 'A': a_grade, 'N': n_grade,
                              'S': s_grade, 'L': l_grade, 'I': i_grade, 'M': m_grade},
@@ -1910,62 +1941,66 @@ def render():
         if st.button("ANALIZAR", type="primary"):
             with st.spinner(f"Descargando datos de {ticker_input}..."):
                 try:
-                    hist_single = download_batch_history((ticker_input,), period="1y").get(ticker_input)
-                    # CACHE + RETRY: evita YFRateLimitError en análisis individual
-                    info_single = get_single_ticker_info(ticker_input)
-                    spy_hist    = get_spy_history()
-                    rs_univ     = {ticker_input: 50}  # RS puntual (no universo completo)
-
-                    # RS aproximado vs SPY para análisis individual
-                    if hist_single is not None and not spy_hist.empty:
-                        # RS individual: calcular retorno relativo vs SPY y mapear a escala 1-99
-                        # No usar compute_rs_scores_universe con 1 ticker (daría percentil trivial)
-                        try:
-                            close = hist_single['Close'].copy()
-                            if hasattr(close.index, 'tz') and close.index.tz is not None:
-                                close.index = close.index.tz_localize(None)
-                            spy_close = spy_hist['Close'].copy()
-                            if hasattr(spy_close.index, 'tz') and spy_close.index.tz is not None:
-                                spy_close.index = spy_close.index.tz_localize(None)
-                            merged = pd.merge(close.rename('stock'), spy_close.rename('spy'),
-                                              left_index=True, right_index=True, how='inner')
-                            if len(merged) >= 100:
-                                days_per_q = 63
-                                weights = [0.40, 0.20, 0.20, 0.20]
-                                period_scores = []
-                                for i in range(4):
-                                    end   = len(merged) - 1 if i == 0 else len(merged) - 1 - i * days_per_q
-                                    start = end - days_per_q
-                                    if start < 0:
-                                        period_scores.append(0.0)
-                                        continue
-                                    s_ret = merged['stock'].iloc[end] / merged['stock'].iloc[start] - 1
-                                    m_ret = merged['spy'].iloc[end]   / merged['spy'].iloc[start]   - 1
-                                    rel   = (1 + s_ret) / (1 + m_ret) - 1 if abs(m_ret) > 0.001 else s_ret
-                                    period_scores.append(rel)
-                                weighted = sum(w * s for w, s in zip(weights, period_scores))
-                                # Mapear retorno relativo a escala 1-99 usando curva sigmoidea simple
-                                # weighted > 0.30 → ~99, 0 → ~50, < -0.30 → ~1
-                                import math
-                                rs_val = round(50 + weighted * 100)
-                                rs_val = max(1, min(99, rs_val))
-                                rs_univ = {ticker_input: rs_val}
-                            else:
-                                rs_univ = {ticker_input: 50}
-                        except Exception:
-                            rs_univ = {ticker_input: 50}
-
-                    result = calculate_can_slim_metrics(
-                        ticker=ticker_input,
-                        hist=hist_single,
-                        info=info_single,
-                        spy_hist=spy_hist,
-                        rs_universe=rs_univ,
-                        market_score=market_status,
-                        ibd_calc=IBDRatingsCalculator(),
-                        trend_engine=MinerviniTrendTemplate(),
-                        ml=CANSlimMLPredictor(),
+                    # ── Prioridad 1: reutilizar datos del scanner si ya existe ────────
+                    cached_result = next(
+                        (c for c in st.session_state.get('scan_candidates', [])
+                         if c['ticker'] == ticker_input),
+                        None
                     )
+                    if cached_result:
+                        result = cached_result
+                        hist_single = download_batch_history((ticker_input,), period="1y").get(ticker_input)
+                        spy_hist = get_spy_history()
+                    else:
+                        # ── Prioridad 2: descarga fresca ─────────────────────────────
+                        hist_single = download_batch_history((ticker_input,), period="1y").get(ticker_input)
+                        info_single = get_single_ticker_info(ticker_input)
+                        spy_hist    = get_spy_history()
+
+                        # RS: calcular retorno ponderado relativo a SPY (misma fórmula que scanner)
+                        rs_val = 50
+                        if hist_single is not None and not spy_hist.empty:
+                            try:
+                                close = hist_single['Close'].copy()
+                                if hasattr(close.index, 'tz') and close.index.tz is not None:
+                                    close.index = close.index.tz_localize(None)
+                                spy_close = spy_hist['Close'].copy()
+                                if hasattr(spy_close.index, 'tz') and spy_close.index.tz is not None:
+                                    spy_close.index = spy_close.index.tz_localize(None)
+                                merged = pd.merge(close.rename('stock'), spy_close.rename('spy'),
+                                                  left_index=True, right_index=True, how='inner')
+                                if len(merged) >= 100:
+                                    days_per_q, weights = 63, [0.40, 0.20, 0.20, 0.20]
+                                    period_scores = []
+                                    for qi in range(4):
+                                        end   = len(merged) - 1 if qi == 0 else len(merged) - 1 - qi * days_per_q
+                                        start = max(0, end - days_per_q)
+                                        if start >= end:
+                                            period_scores.append(0.0); continue
+                                        s_ret = merged['stock'].iloc[end] / merged['stock'].iloc[start] - 1
+                                        m_ret = merged['spy'].iloc[end]   / merged['spy'].iloc[start]   - 1
+                                        rel   = (1 + s_ret) / (1 + m_ret) - 1 if abs(m_ret) > 0.001 else s_ret
+                                        period_scores.append(rel)
+                                    weighted = sum(w * s for w, s in zip(weights, period_scores))
+                                    # Mapear a 1-99: +30% sobre SPY → ~99, 0% → ~50, -30% → ~1
+                                    rs_val = round(50 + weighted * 163)  # 163 = 49/0.30
+                                    rs_val = max(1, min(99, rs_val))
+                            except Exception:
+                                pass
+
+                        rs_univ = {ticker_input: rs_val}
+
+                        result = calculate_can_slim_metrics(
+                            ticker=ticker_input,
+                            hist=hist_single,
+                            info=info_single,
+                            spy_hist=spy_hist,
+                            rs_universe=rs_univ,
+                            market_score=market_status,
+                            ibd_calc=IBDRatingsCalculator(),
+                            trend_engine=MinerviniTrendTemplate(),
+                            ml=CANSlimMLPredictor(),
+                        )
 
                     if result is None:
                         # Diagnóstico detallado para depuración
@@ -2338,3 +2373,5 @@ else:
 
 if __name__ == "__main__":
     render()
+
+

@@ -4029,9 +4029,76 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         </body></html>'''
         components.html(cs_full_html, height=420, scrolling=False)
 
-    # ── FILA 7 — Módulos en construcción ──────────────────────────────────────
+    # ── FILA 7 ──────────────────────────────────────────────────────────────
     st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
     f7c1, f7c2, f7c3 = st.columns(3)
+
+    # RSU Portfolio Allocation
+    with f7c1:
+        _portfolio_data = [
+            {'label': 'SPXL Strategy', 'pct': 40, 'color': '#00ffad'},
+            {'label': 'RSU Stocks',    'pct': 30, 'color': '#00c4ff'},
+            {'label': 'Cryptos',       'pct': 20, 'color': '#00e5ff'},
+            {'label': 'Beta Stocks',   'pct': 10, 'color': '#7fffff'},
+        ]
+        # Build SVG donut chart
+        import math
+        _cx, _cy, _r_out, _r_in = 110, 110, 85, 50
+        _slices = ''
+        _angle = -90.0
+        for _seg in _portfolio_data:
+            _deg   = _seg['pct'] * 3.6
+            _a1    = math.radians(_angle)
+            _a2    = math.radians(_angle + _deg)
+            _lf    = 1 if _deg > 180 else 0
+            _x1o   = _cx + _r_out * math.cos(_a1)
+            _y1o   = _cy + _r_out * math.sin(_a1)
+            _x2o   = _cx + _r_out * math.cos(_a2)
+            _y2o   = _cy + _r_out * math.sin(_a2)
+            _x1i   = _cx + _r_in  * math.cos(_a2)
+            _y1i   = _cy + _r_in  * math.sin(_a2)
+            _x2i   = _cx + _r_in  * math.cos(_a1)
+            _y2i   = _cy + _r_in  * math.sin(_a1)
+            _d     = (f'M {_x1o:.1f} {_y1o:.1f} '
+                      f'A {_r_out} {_r_out} 0 {_lf} 1 {_x2o:.1f} {_y2o:.1f} '
+                      f'L {_x1i:.1f} {_y1i:.1f} '
+                      f'A {_r_in} {_r_in} 0 {_lf} 0 {_x2i:.1f} {_y2i:.1f} Z')
+            # Label at midpoint
+            _am    = math.radians(_angle + _deg / 2)
+            _rm    = (_r_out + _r_in) / 2
+            _lx    = _cx + _rm * math.cos(_am)
+            _ly    = _cy + _rm * math.sin(_am)
+            _slices += f'<path d="{_d}" fill="{_seg[chr(99)+chr(111)+chr(108)+chr(111)+chr(114)]}" stroke="#11141a" stroke-width="2"/>'
+            _slices += f'<text x="{_lx:.1f}" y="{_ly:.1f}" text-anchor="middle" dominant-baseline="middle" fill="#0c0e12" font-size="11" font-weight="bold" font-family="VT323,monospace">{_seg[chr(112)+chr(99)+chr(116)]}%</text>'
+            _angle += _deg
+        # Legend
+        _legend = ''
+        for _i, _seg in enumerate(_portfolio_data):
+            _ly2 = 30 + _i * 28
+            _legend += (f'<rect x="230" y="{_ly2}" width="12" height="12" fill="{_seg[chr(99)+chr(111)+chr(108)+chr(111)+chr(114)]}" rx="2"/>'
+                        f'<text x="248" y="{_ly2+10}" fill="#ccc" font-size="11" font-family="VT323,monospace" letter-spacing="0.5">{_seg[chr(108)+chr(97)+chr(98)+chr(101)+chr(108)]}</text>'
+                        f'<text x="348" y="{_ly2+10}" fill="{_seg[chr(99)+chr(111)+chr(108)+chr(111)+chr(114)]}" font-size="12" font-family="VT323,monospace" font-weight="bold" text-anchor="end">{_seg[chr(112)+chr(99)+chr(116)]}%</text>')
+        _svg = (
+            f'<svg viewBox="0 0 380 220" xmlns="http://www.w3.org/2000/svg">'
+            f'{_slices}'
+            f'<text x="{_cx}" y="{_cy-8}" text-anchor="middle" fill="#00ffad" font-size="13" font-family="VT323,monospace" letter-spacing="1">RSU</text>'
+            f'<text x="{_cx}" y="{_cy+10}" text-anchor="middle" fill="#00ffad" font-size="13" font-family="VT323,monospace" letter-spacing="1">PORTFOLIO</text>'
+            f'{_legend}'
+            f'</svg>'
+        )
+        st.markdown(
+            '<div class="module-container">'
+            '<div class="module-header">'
+            '<div class="module-title">RSU Portfolio</div>'
+            '<div style="color:#444;font-size:11px;font-family:VT323,monospace;letter-spacing:1px;">ASIGNACIÓN</div>'
+            '</div>'
+            '<div class="module-content" style="display:flex;align-items:center;justify-content:center;padding:10px 4px;">'
+            + _svg +
+            '</div>'
+            '<div class="update-timestamp">Estrategia RSU · Asignación objetivo</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
     _placeholder_html = (
         '<div class="module-container" style="display:flex;flex-direction:column;'
@@ -4043,17 +4110,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         'Módulo en construcción</div>'
         '</div>'
     )
-
-    with f7c1:
-        st.markdown(_placeholder_html, unsafe_allow_html=True)
     with f7c2:
         st.markdown(_placeholder_html, unsafe_allow_html=True)
     with f7c3:
         st.markdown(_placeholder_html, unsafe_allow_html=True)
 
-
 if __name__ == "__main__":
     render()
+
 
 
 

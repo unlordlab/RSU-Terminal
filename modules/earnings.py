@@ -1611,17 +1611,18 @@ def render():
     with score_col:
         # Barras de sub-score
         bars_html = ""
-        for label_b, val_b, color_b in [
-            ("CAL",  sc['calidad'],    "#00ffad"),
-            ("VAL",  sc['valoracion'], "#00d9ff"),
-            ("MOM",  sc['momentum'],   "#ff9800"),
-            ("CON",  sc['consenso'],   "#9b59b6"),
+        for label_b, val_b, color_b, tooltip_b in [
+            ("CAL",  sc['calidad'],    "#00ffad", "Calidad: márgenes, ROE y FCF"),
+            ("VAL",  sc['valoracion'], "#00d9ff", "Valoración: P/E vs sector, PEG"),
+            ("MOM",  sc['momentum'],   "#ff9800", "Momentum: precio vs SMA50/200"),
+            ("CON",  sc['consenso'],   "#9b59b6", "Consenso: analistas y upside"),
         ]:
             pct = val_b / 25 * 100
             bars_html += (
-                '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
-                f'<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;'
-                f'font-weight:600;letter-spacing:1px;text-transform:uppercase;width:32px;flex-shrink:0;">{label_b}</div>'
+                f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;" title="{tooltip_b} ({val_b}/25 pts)">'
+                f'<div style="font-family:Space Grotesk,sans-serif;color:#556;font-size:0.65rem;'
+                f'font-weight:700;letter-spacing:1px;text-transform:uppercase;width:32px;flex-shrink:0;'
+                f'cursor:default;" title="{tooltip_b}">{label_b}</div>'
                 '<div style="flex:1;background:#0f1218;border-radius:3px;height:5px;overflow:hidden;">'
                 f'<div style="width:{pct:.0f}%;height:100%;border-radius:3px;background:{color_b};"></div>'
                 '</div>'
@@ -2424,16 +2425,6 @@ def render():
             col_sent, col_news = st.columns([1, 2])
 
             with col_sent:
-                st.markdown("""
-                <div class="mod-box">
-                    <div class="mod-header"><span class="mod-title">📊 Sentimiento de Noticias</span>
-                        <div class="tip-box"><div class="tip-icon">?</div>
-                            <div class="tip-text">Análisis de titulares vía Finnhub (últimos 30 días). Detecta frases con negación para evitar falsos positivos. No es NLP avanzado — úsalo como señal orientativa.</div>
-                        </div>
-                    </div>
-                    <div class="mod-body">
-                """, unsafe_allow_html=True)
-
                 if sentiment:
                     sent_val   = sentiment.get('overall_sentiment', 'neutral')
                     score      = sentiment.get('sentiment_score', 0)
@@ -2443,57 +2434,92 @@ def render():
                     analyzed   = sentiment.get('analyzed_count', 0)
                     sent_colors = {'alcista': '#00ffad', 'bajista': '#f23645', 'neutral': '#ff9800'}
                     sent_color  = sent_colors.get(sent_val, '#888')
+                    gauge_val   = round(max(-1.0, min(1.0, score)) * 100, 1)
 
-                    # Clamp score to [-1, 1] before multiplying to avoid gauge overflow
-                    gauge_val = round(max(-1.0, min(1.0, score)) * 100, 1)
-                    fig_gauge2 = go.Figure(go.Indicator(
-                        mode="gauge+number",
-                        value=gauge_val,
-                        domain={'x': [0, 1], 'y': [0, 1]},
-                        title={'text': "Score Sentimiento", 'font': {'color': 'white', 'size': 12}},
-                        number={'font': {'color': sent_color, 'size': 48}, 'suffix': ''},
-                        gauge={
-                            'axis': {'range': [-100, 100], 'tickcolor': '#333',
-                                     'tickvals': [-100, -50, 0, 50, 100],
-                                     'ticktext': ['-100', '-50', '0', '50', '100']},
-                            'bar': {'color': sent_color, 'thickness': 0.7},
-                            'bgcolor': '#1a1e26',
-                            'borderwidth': 0,
-                            'steps': [
-                                {'range': [-100, -30], 'color': '#2d1515'},
-                                {'range': [-30,   30], 'color': '#1e1e10'},
-                                {'range': [  30, 100], 'color': '#0d2a1a'},
-                            ],
-                        }
-                    ))
-                    fig_gauge2.update_layout(template="plotly_dark", paper_bgcolor='#0c0e12',
-                                             font=dict(color='white'), height=220,
-                                             margin=dict(l=20, r=20, t=40, b=10))
-                    st.plotly_chart(fig_gauge2, use_container_width=True)
+                    # Pure HTML gauge — evita el problema de st.plotly_chart fuera del módulo
+                    # Semiciírculo SVG: ángulo va de 180° (izq, -100) a 0° (der, +100)
+                    # gauge_val en [-100, 100] → angle = 180 - (gauge_val+100)/200*180
+                    import math as _math
+                    angle_deg = 180.0 - (gauge_val + 100.0) / 200.0 * 180.0
+                    angle_rad = _math.radians(angle_deg)
+                    cx, cy, r = 100, 90, 70
+                    nx = cx + r * _math.cos(angle_rad)
+                    ny = cy - r * _math.sin(angle_rad)
+                    # Arc background segments
+                    def _arc(start_val, end_val, color, cx=100, cy=90, r=70, stroke=14):
+                        sa = 180.0 - (start_val+100)/200.0*180.0
+                        ea = 180.0 - (end_val+100)/200.0*180.0
+                        x1 = cx + r*_math.cos(_math.radians(sa))
+                        y1 = cy - r*_math.sin(_math.radians(sa))
+                        x2 = cx + r*_math.cos(_math.radians(ea))
+                        y2 = cy - r*_math.sin(_math.radians(ea))
+                        laf = 1 if abs(end_val - start_val) > 100 else 0
+                        return (f'<path d="M {x1:.1f} {y1:.1f} A {r} {r} 0 {laf} 0 {x2:.1f} {y2:.1f}" '                                f'fill="none" stroke="{color}" stroke-width="{stroke}" stroke-linecap="round"/>')
+
+                    # Active arc from 0 to gauge_val
+                    arc_start = 0; arc_end = gauge_val
+                    if gauge_val >= 0:
+                        active_arc = _arc(0, gauge_val, sent_color)
+                    else:
+                        active_arc = _arc(gauge_val, 0, sent_color)
+
+                    gauge_svg = f"""
+                    <svg viewBox="0 0 200 105" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px;display:block;margin:0 auto;">
+                        <!-- Background track -->
+                        {_arc(-100, 100, '#1a1e26', stroke=14)}
+                        <!-- Colored zones -->
+                        {_arc(-100, -30, '#2d1515', stroke=12)}
+                        {_arc(-30,   30, '#1e1e10', stroke=12)}
+                        {_arc( 30,  100, '#0d2a1a', stroke=12)}
+                        <!-- Active value arc -->
+                        {active_arc}
+                        <!-- Needle -->
+                        <line x1="{cx}" y1="{cy}" x2="{nx:.1f}" y2="{ny:.1f}"
+                              stroke="{sent_color}" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+                        <circle cx="{cx}" cy="{cy}" r="4" fill="{sent_color}"/>
+                        <!-- Tick labels -->
+                        <text x="18" y="96" fill="#444" font-size="8" font-family="monospace">-100</text>
+                        <text x="48" y="30" fill="#444" font-size="8" font-family="monospace">-50</text>
+                        <text x="95" y="18" fill="#444" font-size="8" font-family="monospace">0</text>
+                        <text x="140" y="30" fill="#444" font-size="8" font-family="monospace">50</text>
+                        <text x="162" y="96" fill="#444" font-size="8" font-family="monospace">100</text>
+                        <!-- Score value -->
+                        <text x="{cx}" y="{cy+2}" fill="{sent_color}" font-size="26"
+                              font-family="VT323,monospace" text-anchor="middle" dominant-baseline="middle">{gauge_val:.0f}</text>
+                    </svg>"""
 
                     st.markdown(f"""
-                    <div style="display:flex;gap:8px;margin-top:8px;">
-                        <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                            <div style="font-family:VT323,monospace;color:#777;font-size:0.75rem;">SENTIMIENTO</div>
-                            <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.2rem;">{sent_val.upper()}</div>
+                    <div class="mod-box">
+                        <div class="mod-header">
+                            <span class="mod-title">📊 Sentimiento de Noticias</span>
+                            <div class="tip-box"><div class="tip-icon">?</div>
+                                <div class="tip-text">Análisis de titulares Finnhub (30 días). Detecta negaciones para evitar falsos positivos. Úsalo como señal orientativa, no como predictor exacto.</div>
+                            </div>
                         </div>
-                        <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                            <div style="font-family:VT323,monospace;color:#777;font-size:0.75rem;">ALCISTAS</div>
-                            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.2rem;">{bull_pct:.0f}%</div>
+                        <div class="mod-body">
+                            {gauge_svg}
+                            <div style="display:flex;gap:8px;margin-top:10px;">
+                                <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SENTIMIENTO</div>
+                                    <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.4rem;">{sent_val.upper()}</div>
+                                </div>
+                                <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">ALCISTAS</div>
+                                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.4rem;">{bull_pct:.0f}%</div>
+                                </div>
+                                <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
+                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">BAJISTAS</div>
+                                    <div style="font-family:VT323,monospace;color:#f23645;font-size:1.4rem;">{bear_pct:.0f}%</div>
+                                </div>
+                            </div>
+                            <div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;margin-top:8px;text-align:center;">
+                                📊 {analyzed} titulares analizados de {news_count} disponibles
+                            </div>
                         </div>
-                        <div style="flex:1;text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:10px;">
-                            <div style="font-family:VT323,monospace;color:#777;font-size:0.75rem;">BAJISTAS</div>
-                            <div style="font-family:VT323,monospace;color:#f23645;font-size:1.2rem;">{bear_pct:.0f}%</div>
-                        </div>
-                    </div>
-                    <div style="font-family:Courier New,monospace;color:#444;font-size:10px;margin-top:8px;">
-                        📊 {analyzed} titulares analizados de {news_count} disponibles
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown('<div style="font-family:Courier New,monospace;color:#555;font-size:12px;padding:20px;">Sentimiento no disponible para este ticker.</div>', unsafe_allow_html=True)
-
-                st.markdown("</div></div>", unsafe_allow_html=True)
+                    st.markdown('<div class="mod-box"><div class="mod-body"><div style="font-family:Inter,sans-serif;color:#555;font-size:0.84rem;padding:20px;text-align:center;">Sentimiento no disponible — Finnhub sin datos para este ticker.</div></div></div>', unsafe_allow_html=True)
 
             # ── Panel derecho: Feed de noticias reales ──
             with col_news:
@@ -2594,13 +2620,18 @@ def render():
 | País | {info.get('country', 'N/A')} |
 """
 
+    # ── IA Header (sin wrapper HTML que interfiera con botones Streamlit) ──
     st.markdown("""
-    <div class="rsu-box">
-        <div class="rsu-title">🤖 RSU Artificial Intelligence</div>
-        <p style="font-family:Inter,sans-serif;color:#666;font-size:13px;line-height:1.6;margin-bottom:4px;">
-            Dos modos de análisis: <strong style="color:#00ffad;">Rápido</strong> (snapshot ejecutivo en segundos)
-            o <strong style="color:#00d9ff;">Completo</strong> (informe de 11 secciones con técnico, smart money y catalizadores).
-        </p>
+    <div style="background:linear-gradient(135deg,#0a0c10,#111520);border:1px solid #00ffad33;
+                border-radius:8px;padding:18px 22px;margin:18px 0 10px 0;">
+        <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.4rem;
+                    letter-spacing:3px;text-transform:uppercase;margin-bottom:6px;">
+            🤖 RSU Artificial Intelligence
+        </div>
+        <div style="font-family:Inter,sans-serif;color:#666;font-size:0.84rem;line-height:1.6;">
+            Dos modos: <strong style="color:#00ffad;">Rápido</strong> — snapshot ejecutivo en segundos &nbsp;|&nbsp;
+            <strong style="color:#00d9ff;">Completo</strong> — informe de 11 secciones con técnico, smart money y catalizadores.
+        </div>
     </div>
     """, unsafe_allow_html=True)
 

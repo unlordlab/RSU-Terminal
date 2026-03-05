@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 CAN SLIM Scanner Pro - v4.0.0
@@ -272,13 +273,45 @@ def init_session_state():
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
 def download_batch_history(tickers_tuple: tuple, period: str = "1y") -> dict[str, pd.DataFrame]:
     """
-    Descarga histórico de precio/volumen en UN solo request HTTP batch.
-    yf.download() con múltiples tickers es ~50x más eficiente que llamadas individuales.
+    Descarga histórico de precio/volumen.
+    - 1 ticker  → yf.Ticker().history() (más robusto, evita problemas MultiIndex)
+    - N tickers → yf.download() en batch (eficiente)
     Retorna dict {ticker: DataFrame con OHLCV}.
     """
     tickers = list(tickers_tuple)
     if not tickers:
         return {}
+
+    # ── Caso 1 ticker: usar Ticker().history() — más fiable que download() ──
+    if len(tickers) == 1:
+        t = tickers[0]
+        try:
+            df = yf.Ticker(t).history(period=period, auto_adjust=True)
+            if df is None or df.empty:
+                logger.warning(f"Ticker().history() vacío para {t}")
+                return {}
+            # history() devuelve columnas simples: Open, High, Low, Close, Volume...
+            # Normalizar nombres por si acaso
+            df.columns = [c.capitalize() if c.lower() in
+                          {'open','high','low','close','volume'} else c
+                          for c in df.columns]
+            # Quitar timezone del índice para consistencia con el resto
+            if hasattr(df.index, 'tz') and df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
+            required = {'Close', 'Open', 'High', 'Low', 'Volume'}
+            if not required.issubset(set(df.columns)):
+                logger.warning(f"Columnas insuficientes para {t}: {list(df.columns)}")
+                return {}
+            df = df.dropna(subset=['Close'])
+            if len(df) < 30:
+                logger.warning(f"Muy pocas filas para {t}: {len(df)}")
+                return {}
+            return {t: df}
+        except Exception as e:
+            logger.error(f"Error Ticker().history() para {t}: {e}")
+            return {}
+
+    # ── Caso N tickers: batch download ──────────────────────────────────────
     try:
         raw = yf.download(
             tickers,
@@ -286,35 +319,16 @@ def download_batch_history(tickers_tuple: tuple, period: str = "1y") -> dict[str
             auto_adjust=True,
             progress=False,
             group_by='ticker',
-            threads=True,       # descarga paralela interna de yfinance
+            threads=True,
         )
         result = {}
-        if len(tickers) == 1:
-            t = tickers[0]
-            if not raw.empty:
-                raw = raw.copy()
-                # yfinance ≥0.2.x: MultiIndex (campo, ticker) → aplanar a nivel 0
-                if isinstance(raw.columns, pd.MultiIndex):
-                    raw.columns = [col[0] for col in raw.columns]
-                # Eliminar columnas duplicadas que puedan quedar tras el flatten
-                if raw.columns.duplicated().any():
-                    raw = raw.loc[:, ~raw.columns.duplicated()]
-                # Verificar que tenemos las columnas mínimas necesarias
-                required = {'Close', 'Open', 'High', 'Low', 'Volume'}
-                if required.issubset(set(raw.columns)):
-                    df = raw.dropna(subset=['Close']).copy()
-                    if len(df) > 30:
-                        result[t] = df
-                else:
-                    logger.warning(f"Columnas insuficientes para {t}: {list(raw.columns)}")
-        else:
-            for t in tickers:
-                try:
-                    df = raw[t].dropna(how='all')
-                    if len(df) > 30:
-                        result[t] = df
-                except Exception:
-                    pass
+        for t in tickers:
+            try:
+                df = raw[t].dropna(how='all')
+                if len(df) > 30:
+                    result[t] = df
+            except Exception:
+                pass
         return result
     except Exception as e:
         logger.error(f"Error en batch download: {e}")
@@ -351,6 +365,7 @@ def get_single_ticker_info(ticker: str) -> dict:
     """
     Obtiene el .info de un ticker individual con retry + backoff.
     Cacheado 1h — si el usuario vuelve a analizar el mismo ticker no hace nueva llamada HTTP.
+    Nota: yfinance ≥0.2.x puede devolver .info con pocas claves — se complementa con fast_info.
     """
     last_err = None
     for attempt in range(3):
@@ -359,12 +374,30 @@ def get_single_ticker_info(ticker: str) -> dict:
                 wait = 15 * attempt + random.uniform(1, 5)
                 logger.info(f"Retry {attempt}/2 para {ticker} — esperando {wait:.1f}s")
                 time.sleep(wait)
-            info = yf.Ticker(ticker).info
+            tkr  = yf.Ticker(ticker)
+            info = tkr.info or {}
+
+            # yfinance ≥0.2.x: .info puede devolver dict mínimo sin fundamentales.
+            # Completar con fast_info si faltan campos clave.
+            if len(info) < 10:
+                try:
+                    fi = tkr.fast_info
+                    info.setdefault('marketCap',             getattr(fi, 'market_cap', None))
+                    info.setdefault('previousClose',         getattr(fi, 'previous_close', None))
+                    info.setdefault('fiftyTwoWeekHigh',      getattr(fi, 'year_high', None))
+                    info.setdefault('fiftyTwoWeekLow',       getattr(fi, 'year_low', None))
+                    info.setdefault('regularMarketVolume',   getattr(fi, 'last_volume', None))
+                    info.setdefault('shortName', ticker)
+                except Exception:
+                    pass
+
             if info and len(info) > 5:
                 return info
         except Exception as e:
             last_err = e
             logger.warning(f"get_single_ticker_info {ticker} intento {attempt+1}: {e}")
+    logger.error(f"No se pudo obtener info de {ticker} tras 3 intentos: {last_err}")
+    return {}  # dict vacío — calculate_can_slim_metrics maneja fundamentales en 0
     logger.error(f"No se pudo obtener info de {ticker} tras 3 intentos: {last_err}")
     return {}  # dict vacío — calculate_can_slim_metrics maneja fundamentales en 0
 

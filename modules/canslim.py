@@ -292,15 +292,21 @@ def download_batch_history(tickers_tuple: tuple, period: str = "1y") -> dict[str
         if len(tickers) == 1:
             t = tickers[0]
             if not raw.empty:
-                # yfinance ≥0.2.x devuelve MultiIndex columns incluso con 1 ticker
-                # Ej: ('Close', 'VLO'), ('Open', 'VLO') → aplanar a columnas simples
+                raw = raw.copy()
+                # yfinance ≥0.2.x: MultiIndex (campo, ticker) → aplanar a nivel 0
                 if isinstance(raw.columns, pd.MultiIndex):
-                    # Usar nivel 0 (OHLCV) y descartar nivel 1 (ticker)
-                    raw = raw.copy()
                     raw.columns = [col[0] for col in raw.columns]
-                df = raw.dropna(how='all').copy()
-                if len(df) > 30:   # mínimo de filas — igual que el path multi-ticker
-                    result[t] = df
+                # Eliminar columnas duplicadas que puedan quedar tras el flatten
+                if raw.columns.duplicated().any():
+                    raw = raw.loc[:, ~raw.columns.duplicated()]
+                # Verificar que tenemos las columnas mínimas necesarias
+                required = {'Close', 'Open', 'High', 'Low', 'Volume'}
+                if required.issubset(set(raw.columns)):
+                    df = raw.dropna(subset=['Close']).copy()
+                    if len(df) > 30:
+                        result[t] = df
+                else:
+                    logger.warning(f"Columnas insuficientes para {t}: {list(raw.columns)}")
         else:
             for t in tickers:
                 try:
@@ -925,7 +931,8 @@ def calculate_can_slim_metrics(
             },
         }
     except Exception as e:
-        logger.warning(f"Error calculando {ticker}: {e}")
+        import traceback
+        logger.warning(f"Error calculando {ticker}: {e}\n{traceback.format_exc()}")
         return None
 
 
@@ -1928,12 +1935,26 @@ def render():
                     )
 
                     if result is None:
+                        # Diagnóstico detallado para depuración
+                        hist_ok   = hist_single is not None and not hist_single.empty
+                        hist_rows = len(hist_single) if hist_ok else 0
+                        hist_cols = list(hist_single.columns) if hist_ok else []
+                        info_ok   = bool(info_single)
+                        spy_ok    = not spy_hist.empty
+
                         st.markdown(f"""
                         <div class="risk-box">
                             <div style="font-family:'VT323',monospace;color:{COLORS['danger']};font-size:1.2rem;">
-                                ❌ NO SE PUDO OBTENER DATOS — {ticker_input}
+                                ❌ NO SE PUDO CALCULAR ANÁLISIS — {ticker_input}
                             </div>
-                            <p>Verifica que el ticker sea válido y esté disponible en Yahoo Finance.</p>
+                            <p style="font-family:'Courier New',monospace;font-size:.85rem;color:#ccc;margin-top:10px;">
+                                Diagnóstico:<br>
+                                • Histórico precio: {'✅ ' + str(hist_rows) + ' filas, cols: ' + str(hist_cols) if hist_ok else '❌ Sin datos'}<br>
+                                • Info fundamental: {'✅ OK' if info_ok else '❌ Sin datos (yfinance bloqueado temporalmente)'}<br>
+                                • SPY histórico: {'✅ OK' if spy_ok else '❌ Sin datos'}
+                            </p>
+                            {'<p style="font-family:Courier New,monospace;font-size:.82rem;color:#ff9800;">⚠️ El histórico tiene menos de 50 filas o columnas incorrectas — problema con yfinance/MultiIndex.</p>' if hist_ok and (hist_rows < 50 or not {"Close","High","Low","Open","Volume"}.issubset(set(hist_cols))) else ''}
+                            {'<p style="font-family:Courier New,monospace;font-size:.82rem;color:#888;">ℹ️ Espera 30 segundos y vuelve a intentarlo (rate limit de Yahoo Finance).</p>' if not info_ok else ''}
                         </div>""", unsafe_allow_html=True)
                     else:
                         with st.expander("🔍 Debug Info"):

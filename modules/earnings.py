@@ -178,7 +178,7 @@ def translate_text_cached(text, ticker):
 @st.cache_data(ttl=300, show_spinner=False)
 def get_yfinance_full(ticker):
     try:
-        stock = yf.Ticker(ticker, session=_HTTP)
+        stock = yf.Ticker(ticker)  # session no serializable con st.cache_data
         info  = stock.info or {}
 
         # ── Precio robusto: funciona para micro-caps, SPACs, tickers ilíquidos (ej: AMPX) ──
@@ -1513,16 +1513,6 @@ def render():
     if not yf_data:
         # Intentar diagnóstico: ¿existe el ticker pero sin precio? ¿ticker incorrecto?
         diag_msg = ""
-        try:
-            import yfinance as _yf
-            _test = _yf.Ticker(t_in, session=_HTTP)
-            _info = _test.info or {}
-            if _info.get('longName') or _info.get('shortName'):
-                diag_msg = f" (**{_info.get('shortName', '')}** existe en Yahoo Finance pero no devolvió precio — puede ser un ticker OTC, SPAC o recién listado. Intenta de nuevo en unos segundos.)"
-            elif _info.get('symbol'):
-                diag_msg = " (El ticker existe pero no tiene datos de precio disponibles en este momento.)"
-        except Exception:
-            pass
 
         st.error(f"❌ No se pudieron obtener datos para **'{t_in}'**.{diag_msg}")
         st.markdown(f"""
@@ -2691,6 +2681,4 @@ def render():
 
 if __name__ == "__main__":
     render()
-
-
 

@@ -1622,21 +1622,22 @@ def render():
                 </div>
                 <div style="font-family:'VT323',monospace;color:{color_b};font-size:0.95rem;width:28px;text-align:right;">{val_b}</div>
             </div>"""
-        st.markdown(f"""
-        <div class="rsu-score-box" style="animation:fadeUp 0.2s ease-out both;">
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
-                <div>
-                    <div class="rsu-score-num" style="color:{sc['color']};">{sc['total']}</div>
-                    <div style="font-family:'Space Grotesk',sans-serif;font-size:0.65rem;color:#444;letter-spacing:1px;">/100</div>
-                </div>
-                <div style="flex:1;">
-                    <div class="rsu-score-label" style="color:{sc['color']};">{sc['label']}</div>
-                    <div style="font-family:'Inter',sans-serif;font-size:0.68rem;color:#444;margin-top:2px;">RSU Score</div>
-                </div>
-            </div>
-            {bars_html}
-        </div>
-        """, unsafe_allow_html=True)
+        score_html = (
+            '<div class="rsu-score-box">'
+            '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">'
+            '<div>'
+            f'<div class="rsu-score-num" style="color:{sc["color"]};">{sc["total"]}</div>'
+            '<div style="font-family:Space Grotesk,sans-serif;font-size:0.65rem;color:#444;letter-spacing:1px;">/100</div>'
+            '</div>'
+            '<div style="flex:1;">'
+            f'<div class="rsu-score-label" style="color:{sc["color"]};">{sc["label"]}</div>'
+            '<div style="font-family:Inter,sans-serif;font-size:0.68rem;color:#444;margin-top:2px;">RSU Score</div>'
+            '</div>'
+            '</div>'
+            + bars_html +
+            '</div>'
+        )
+        st.markdown(score_html, unsafe_allow_html=True)
 
     # KPIs rápidos top
     sma200 = market.get('sma_200')
@@ -2279,23 +2280,33 @@ def render():
             if major is not None and not major.empty:
                 try:
                     def _fmt_pct_major(val):
-                        """Yahoo devuelve el valor a veces ya en %, a veces en decimal."""
                         if val is None: return "N/D"
                         try:
                             v = float(val)
-                            # Si el valor ya es un porcentaje razonable (0-100) está en decimal
-                            if 0 <= v <= 1.5:
-                                return f"{v*100:.1f}%"
-                            # Si viene directamente como porcentaje (ej: 78.6)
-                            elif 0 < v <= 100:
-                                return f"{v:.1f}%"
-                            # Valor absurdo — omitir
+                            if 0 <= v <= 1.5:   return f"{v*100:.1f}%"
+                            elif 0 < v <= 100:  return f"{v:.1f}%"
                             return "N/D"
                         except:
                             return str(val)
 
-                    pct_inst   = _fmt_pct_major(major.iloc[2, 0] if len(major) > 2 else None)
-                    pct_retail = _fmt_pct_major(major.iloc[3, 0] if len(major) > 3 else None)
+                    def _lookup_major(df, *labels):
+                        """Busca un valor en major_holders por label (columna 0) o por índice."""
+                        if df is None or df.empty: return None
+                        # Intentar por label en primera columna de texto
+                        for lbl in labels:
+                            try:
+                                matches = df[df.iloc[:,0].astype(str).str.lower().str.contains(lbl.lower())]
+                                if not matches.empty:
+                                    return matches.iloc[0, 1] if len(matches.columns) > 1 else matches.iloc[0, 0]
+                            except Exception:
+                                pass
+                        return None
+
+                    # Buscar % institucional y % retail por label semántico primero
+                    raw_inst   = _lookup_major(major, 'institution', 'institucional') or (major.iloc[2, 0] if len(major) > 2 else None)
+                    raw_retail = _lookup_major(major, 'float', 'retail', 'public')     or (major.iloc[3, 0] if len(major) > 3 else None)
+                    pct_inst   = _fmt_pct_major(raw_inst)
+                    pct_retail = _fmt_pct_major(raw_retail)
                     st.markdown(f"""
                     <div style="display:flex;gap:12px;margin-bottom:18px;">
                         <div style="flex:1;background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;text-align:center;">
@@ -2398,19 +2409,25 @@ def render():
                     sent_colors = {'alcista': '#00ffad', 'bajista': '#f23645', 'neutral': '#ff9800'}
                     sent_color  = sent_colors.get(sent_val, '#888')
 
+                    # Clamp score to [-1, 1] before multiplying to avoid gauge overflow
+                    gauge_val = round(max(-1.0, min(1.0, score)) * 100, 1)
                     fig_gauge2 = go.Figure(go.Indicator(
                         mode="gauge+number",
-                        value=round(score * 100, 1),
+                        value=gauge_val,
                         domain={'x': [0, 1], 'y': [0, 1]},
-                        title={'text': "Score de Sentimiento", 'font': {'color': 'white', 'size': 13}},
+                        title={'text': "Score Sentimiento", 'font': {'color': 'white', 'size': 12}},
+                        number={'font': {'color': sent_color, 'size': 48}, 'suffix': ''},
                         gauge={
-                            'axis': {'range': [-100, 100], 'tickcolor': 'white'},
-                            'bar': {'color': sent_color, 'thickness': 0.75},
+                            'axis': {'range': [-100, 100], 'tickcolor': '#333',
+                                     'tickvals': [-100, -50, 0, 50, 100],
+                                     'ticktext': ['-100', '-50', '0', '50', '100']},
+                            'bar': {'color': sent_color, 'thickness': 0.7},
                             'bgcolor': '#1a1e26',
+                            'borderwidth': 0,
                             'steps': [
-                                {'range': [-100, -33], 'color': '#3d1f1f'},
-                                {'range': [-33, 33],   'color': '#3d3520'},
-                                {'range': [33, 100],   'color': '#1f3d2e'},
+                                {'range': [-100, -30], 'color': '#2d1515'},
+                                {'range': [-30,   30], 'color': '#1e1e10'},
+                                {'range': [  30, 100], 'color': '#0d2a1a'},
                             ],
                         }
                     ))
@@ -2545,8 +2562,8 @@ def render():
     st.markdown("""
     <div class="rsu-box">
         <div class="rsu-title">🤖 RSU Artificial Intelligence</div>
-        <p style="font-family:'Courier New',monospace;color:#666;font-size:13px;line-height:1.6;margin-bottom:4px;">
-            Dos modos de análisis: <strong style="color:#00ffad;">Rápido</strong> (snapshot ejecutivo en segundos) 
+        <p style="font-family:Inter,sans-serif;color:#666;font-size:13px;line-height:1.6;margin-bottom:4px;">
+            Dos modos de análisis: <strong style="color:#00ffad;">Rápido</strong> (snapshot ejecutivo en segundos)
             o <strong style="color:#00d9ff;">Completo</strong> (informe de 11 secciones con técnico, smart money y catalizadores).
         </p>
     </div>
@@ -2681,4 +2698,5 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 

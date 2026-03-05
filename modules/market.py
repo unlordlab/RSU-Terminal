@@ -2391,48 +2391,43 @@ def render():
         except Exception as e:
             return f'⚠ Error: {str(e)[:300]}'
 
-    def _load_supabase_briefing() -> str:
-        """
-        Lee el briefing pre-generado por el job nocturno desde Supabase.
-        Tabla: market_briefings (date TEXT PK, text TEXT, generated_at TEXT, model TEXT)
-        Retorna el texto si es del dia de hoy, None si no existe o es viejo.
-        """
+    def _load_gist_briefing() -> str:
+        """Lee briefing del Gist publico generado por el job nocturno."""
         try:
-            _url = st.secrets.get('SUPABASE_URL', None)
-            _key = st.secrets.get('SUPABASE_ANON_KEY', None)
-            if not _url or not _key:
+            _gist_id = st.secrets.get("BRIEFING_GIST_ID", None)
+            if not _gist_id:
                 return None
-            _today = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+            _today = datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d")
             _r = get_http_session().get(
-                f'{_url}/rest/v1/market_briefings',
-                headers={
-                    'apikey': _key,
-                    'Authorization': f'Bearer {_key}',
-                    'Accept': 'application/json',
-                },
-                params={'date': f'eq.{_today}', 'select': 'text,generated_at,model'},
+                f"https://api.github.com/gists/{_gist_id}",
+                headers={"Accept": "application/vnd.github.v3+json"},
                 timeout=6
             )
-            if _r.status_code == 200:
-                _rows = _r.json()
-                if _rows:
-                    _row  = _rows[0]
-                    _txt  = _row.get('text', '').strip()
-                    _gen  = _row.get('generated_at', '')
-                    _mdl  = _row.get('model', 'Gemini')
-                    if _txt:
-                        return _txt + f'\n\n_(Pre-generado a las {_gen} CET · {_mdl} + Google Search)_'
+            if _r.status_code != 200:
+                return None
+            _files = _r.json().get("files", {})
+            _raw   = _files.get("briefing.json", {}).get("content", "")
+            if not _raw:
+                return None
+            import json as _json
+            _data = _json.loads(_raw)
+            if _data.get("date") == _today:
+                _txt = _data.get("text", "").strip()
+                _gen = _data.get("generated_at", "")
+                _mdl = _data.get("model", "Groq")
+                if _txt:
+                    return _txt + chr(10) + chr(10) + "_(Pre-generado " + _gen + " CET · " + _mdl + ")_"
         except Exception:
             pass
         return None
 
     def _call_gemini_briefing(prompt: str) -> str:
-        # Prioridad 1: briefing pre-generado por job nocturno en Supabase
-        _pre = _load_supabase_briefing()
+        # Prioridad 1: Gist pre-generado por job nocturno
+        _pre = _load_gist_briefing()
         if _pre:
             return _pre
-        # Prioridad 2: generar en tiempo real con Gemini + grounding
-        day_key = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+        # Prioridad 2: generar en tiempo real con Groq
+        day_key = datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d")
         return _cached_briefing(day_key, prompt)
     resumen_prompt = (
         f"Actúa como analista senior de mercados financieros. Hoy es {today_str}. "

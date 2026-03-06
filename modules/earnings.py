@@ -2191,7 +2191,7 @@ def render():
         """, unsafe_allow_html=True)
 
         ea_surprises = earnings_surprises or []
-        next_earnings = calendar_data.get('earnings_date') if calendar_data else None
+        next_earnings = events.get('Earnings Date') if events else None
 
         if not ea_surprises:
             st.info("No hay datos de earnings históricos disponibles para este ticker.")

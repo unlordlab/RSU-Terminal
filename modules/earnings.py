@@ -307,29 +307,122 @@ def get_yfinance_full(ticker):  # cache removed: debug log needs session_state
             'price_to_book':  _safe(info.get('priceToBook')),
         }
 
-        # ── Fallback fast_info para métricas frecuentemente N/D ──
-        # fast_info es más estable que info{} para algunos campos
+        # ── Fallback Layer 1: fast_info ──
         try:
             fi = stock.fast_info
+            fi_map = {
+                'market_cap':            'marketCap',
+                'year_high':             'fiftyTwoWeekHigh',
+                'year_low':              'fiftyTwoWeekLow',
+                'fifty_day_average':     'fiftyDayAverage',
+                'two_hundred_day_average': 'twoHundredDayAverage',
+                'shares':                'sharesOutstanding',
+                'currency':              'currency',
+            }
+            for fi_attr, info_key in fi_map.items():
+                if not info.get(info_key):
+                    v = _safe(getattr(fi, fi_attr, None))
+                    if v: info[info_key] = v
+            # P/E from fast_info
             if metrics['trailing_pe'] is None:
-                fi_pe = _safe(getattr(fi, 'pe_forward', None) or getattr(fi, 'price_eps_ttm', None))
+                fi_pe = _safe(getattr(fi, 'pe_forward', None))
                 if fi_pe: metrics['trailing_pe'] = fi_pe
-            if not info.get('marketCap'):
-                fi_mc = _safe(getattr(fi, 'market_cap', None))
-                if fi_mc: info['marketCap'] = fi_mc
-            if not info.get('fiftyTwoWeekHigh'):
-                fi_hi = _safe(getattr(fi, 'year_high', None))
-                fi_lo = _safe(getattr(fi, 'year_low', None))
-                if fi_hi: info['fiftyTwoWeekHigh'] = fi_hi
-                if fi_lo: info['fiftyTwoWeekLow']  = fi_lo
-            if not info.get('fiftyDayAverage'):
-                fi_sma = _safe(getattr(fi, 'fifty_day_average', None))
-                if fi_sma: info['fiftyDayAverage'] = fi_sma
-            if not info.get('twoHundredDayAverage'):
-                fi_sma2 = _safe(getattr(fi, 'two_hundred_day_average', None))
-                if fi_sma2: info['twoHundredDayAverage'] = fi_sma2
+            # EPS from price + P/E if missing
+            if not info.get('trailingEps') and metrics['trailing_pe'] and cp:
+                info['trailingEps'] = round(cp / metrics['trailing_pe'], 4)
         except Exception as e:
             logger.warning("[yf.fast_info metrics] %s: %s", ticker, e)
+
+        # ── Fallback Layer 2: compute from financials if key metrics still missing ──
+        try:
+            shares = _safe(info.get('sharesOutstanding'))
+            price  = cp or 0
+
+            # income_stmt for EPS, margins, revenue
+            inc = stock.income_stmt
+            if inc is not None and not inc.empty:
+                col = inc.columns[0]  # most recent period
+                net_inc = _safe(inc.loc['Net Income', col]) if 'Net Income' in inc.index else None
+                rev     = _safe(inc.loc['Total Revenue', col]) if 'Total Revenue' in inc.index else None
+                op_inc  = _safe(inc.loc['Operating Income', col]) if 'Operating Income' in inc.index else None
+                gross   = _safe(inc.loc['Gross Profit', col]) if 'Gross Profit' in inc.index else None
+                ebitda  = _safe(inc.loc['EBITDA', col]) if 'EBITDA' in inc.index else None
+
+                if net_inc and shares and not info.get('trailingEps'):
+                    info['trailingEps'] = round(net_inc / shares, 4)
+                if net_inc and rev and not profitability.get('net_margin'):
+                    profitability['net_margin'] = net_inc / rev
+                if op_inc and rev and not profitability.get('op_margin'):
+                    profitability['op_margin'] = op_inc / rev
+                if gross and rev and not profitability.get('gross_margin'):
+                    profitability['gross_margin'] = gross / rev
+                if rev and not profitability.get('revenue_ttm'):
+                    profitability['revenue_ttm'] = rev
+                if ebitda and not info.get('ebitda'):
+                    info['ebitda'] = ebitda
+
+                # P/E from computed EPS
+                eps = _safe(info.get('trailingEps'))
+                if eps and eps != 0 and price and metrics['trailing_pe'] is None:
+                    metrics['trailing_pe'] = round(price / eps, 2)
+
+                # P/S from revenue
+                mc = _safe(info.get('marketCap'))
+                if rev and rev != 0 and mc and metrics['price_to_sales'] is None:
+                    metrics['price_to_sales'] = round(mc / rev, 2)
+
+                # EV/EBITDA
+                if ebitda and ebitda != 0 and mc and metrics['ev_ebitda'] is None:
+                    debt   = _safe(info.get('totalDebt')) or 0
+                    cash   = _safe(info.get('totalCash')) or 0
+                    ev     = mc + debt - cash
+                    metrics['ev_ebitda'] = round(ev / ebitda, 2)
+
+            # balance_sheet for book value, debt
+            bs = stock.balance_sheet
+            if bs is not None and not bs.empty:
+                col = bs.columns[0]
+                equity = _safe(bs.loc['Stockholders Equity', col]) if 'Stockholders Equity' in bs.index else None
+                debt_l = _safe(bs.loc['Long Term Debt', col]) if 'Long Term Debt' in bs.index else None
+                cash_b = _safe(bs.loc['Cash And Cash Equivalents', col]) if 'Cash And Cash Equivalents' in bs.index else None
+                total_debt = _safe(bs.loc['Total Debt', col]) if 'Total Debt' in bs.index else None
+
+                if equity and shares and not info.get('bookValue'):
+                    bv = equity / shares
+                    info['bookValue'] = round(bv, 4)
+                    if price and not metrics['price_to_book']:
+                        metrics['price_to_book'] = round(price / bv, 2)
+                if debt_l and not profitability.get('total_debt'):
+                    profitability['total_debt'] = debt_l
+                if total_debt and equity and equity != 0 and not profitability.get('debt_to_equity'):
+                    profitability['debt_to_equity'] = round(total_debt / equity * 100, 2)
+                if cash_b and not profitability.get('total_cash'):
+                    profitability['total_cash'] = cash_b
+
+            # cashflow for FCF
+            cf = stock.cashflow
+            if cf is not None and not cf.empty:
+                col = cf.columns[0]
+                ocf = _safe(cf.loc['Operating Cash Flow', col]) if 'Operating Cash Flow' in cf.index else None
+                cap = _safe(cf.loc['Capital Expenditure', col]) if 'Capital Expenditure' in cf.index else None
+                if ocf and not profitability.get('operating_cashflow'):
+                    profitability['operating_cashflow'] = ocf
+                if ocf and cap and not profitability.get('free_cashflow'):
+                    profitability['free_cashflow'] = ocf + cap  # capex is negative in yfinance
+
+        except Exception as e:
+            logger.warning("[yf.financials fallback] %s: %s", ticker, e)
+
+        # ── Fallback Layer 3: compute SMAs from hist if still missing ──
+        try:
+            if (not info.get('fiftyDayAverage') or not info.get('twoHundredDayAverage')) and hist_data is not None and not hist_data.empty:
+                closes = hist_data['Close'].dropna()
+                if len(closes) >= 50 and not info.get('fiftyDayAverage'):
+                    info['fiftyDayAverage'] = round(float(closes.tail(50).mean()), 4)
+                if len(closes) >= 200 and not info.get('twoHundredDayAverage'):
+                    info['twoHundredDayAverage'] = round(float(closes.tail(200).mean()), 4)
+        except Exception as e:
+            logger.warning("[yf.sma fallback] %s: %s", ticker, e)
 
         # Rentabilidad
         profitability = {

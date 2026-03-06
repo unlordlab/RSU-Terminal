@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -1800,17 +1799,15 @@ def render():
     </script></body></html>"""
 
     st.markdown(f"""
-    <div class="mod-box" style="margin-bottom:0;">
-        <div class="mod-header">
+    <div class="mod-box" style="margin-bottom:4px;padding-bottom:0;">
+        <div class="mod-header" style="margin-bottom:0;">
             <span class="mod-title">📈 Gráfico Avanzado — {t_in}</span>
             <span title="Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
         </div>
-    </div>
+        <div style="padding:12px 0 0 0;overflow:hidden;border-radius:0 0 8px 8px;">
     """, unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:18px;">', unsafe_allow_html=True)
-        components.html(chart_html, height=462)
-        st.markdown('</div>', unsafe_allow_html=True)
+    components.html(chart_html, height=462)
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
     # ── SOBRE LA EMPRESA ──
     st.markdown(f"""
@@ -2435,8 +2432,10 @@ def render():
                     <span class="mod-title">🎯 Historial de Earnings Surprises</span>
                     <span style="font-family:'Courier New',monospace;color:#555;font-size:11px;">Fuente: {source_label}</span>
                 </div>
-                <div class="mod-body">
+            </div>
             """, unsafe_allow_html=True)
+            with st.container():
+              st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 8px 8px;padding:16px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
             dates        = [s['date'] for s in reversed(earnings_surprises)]
             surprises_v  = [s['surprise_pct'] for s in reversed(earnings_surprises)]
@@ -2503,7 +2502,7 @@ def render():
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("</div></div>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
             if not api_keys['alpha_vantage']:
                 st.warning("⚠️ Configura **ALPHA_VANTAGE_API_KEY** para obtener datos precisos de earnings surprises.")
@@ -2600,8 +2599,10 @@ def render():
                 <span class="mod-title">🏦 Fondos Institucionales — Declaraciones 13F (SEC)</span>
                 <span title="Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
             </div>
-            <div class="mod-body">
+        </div>
         """, unsafe_allow_html=True)
+        with st.container():
+          st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 8px 8px;padding:16px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
         # Usar datos ya cargados en get_yfinance_full — sin llamada extra a Yahoo Finance
         holders_data = inst_data_preload if inst_data_preload else get_institutional_holders(t_in)
@@ -2715,7 +2716,7 @@ def render():
             de pago como WhaleWisdom, Tikr o publicaciones directas de los fondos.
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ══ TAB 8: NOTICIAS & SENTIMIENTO ══
     with tabs[8]:
@@ -2759,8 +2760,7 @@ def render():
                                 'tickvals': [-100, -50, 0, 50, 100],
                                 'ticktext': ['-100', '-50', '0', '50', '100'],
                                 'tickfont': {'size': 10, 'color': '#555'},
-                                'linecolor': '#1a1e26',
-                                'gridcolor': '#1a1e26',
+                                'tickcolor': '#1a1e26',
                             },
                             'bar': {'color': sent_color, 'thickness': 0.25},
                             'bgcolor': '#0a0c10',
@@ -3283,5 +3283,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

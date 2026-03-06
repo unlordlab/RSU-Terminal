@@ -1781,7 +1781,7 @@ def render():
     <div class="mod-box" style="margin-bottom:0;">
         <div class="mod-header">
             <span class="mod-title">📈 Gráfico Avanzado — {t_in}</span>
-            <span title="Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
+            <div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores.</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1889,7 +1889,7 @@ def render():
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">💵 Múltiplos de Valoración</span>
-                <span title="Verde = barato · Naranja = valoración media · Rojo = caro. Umbrales estándar de análisis fundamental." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
+                <div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Verde = barato · Naranja = valoración media · Rojo = caro. Umbrales estándar de análisis fundamental.</div></div>
             </div>
             <div class="mod-body">{rows_html}</div>
         </div>
@@ -2025,7 +2025,7 @@ def render():
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">📈 Rentabilidad y Salud Financiera</span>
-                <span title="Verde = bueno · Naranja = neutral · Rojo = precaución. ROE y Márgenes ajustados al sector: un ROE del 8% es excelente para un banco pero débil para tech." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
+                <div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Verde = bueno · Naranja = neutral · Rojo = precaución. ROE y Márgenes ajustados al sector: un ROE del 8% es excelente para un banco pero débil para tech.</div></div>
             </div>
             <div class="mod-body">{sector_rentab_note}{rows_html}</div>
         </div>
@@ -2365,15 +2365,11 @@ def render():
 
             # ── History table ──
             if reactions:
-                st.markdown("""
-                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;
-                            padding:14px 18px;margin-top:8px;">
-                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
-                                letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Historial</div>
-                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1rem;margin-bottom:12px;">
-                        Tabla de reacciones a earnings
-                    </div>
-                """, unsafe_allow_html=True)
+                _hist_header = (
+                    '<div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;padding:14px 18px;margin-top:8px;">'
+                    '<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Historial</div>'
+                    '<div style="font-family:VT323,monospace;color:#ccc;font-size:1rem;margin-bottom:12px;">Tabla de reacciones a earnings</div>'
+                )
 
                 def _cell(v, green_if_pos=True):
                     if v is None: return '<td style="color:#444;text-align:right;padding:6px 10px;">—</td>'
@@ -2393,32 +2389,21 @@ def render():
                         f'color:{"#00ffad" if r["surprise"]>0 else "#f23645"};">{r["surprise"]:+.1f}%</td>'
                         f'</tr>'
                     )
-                st.markdown(f"""
-                    <div style="overflow-x:auto;">
-                    <table style="width:100%;border-collapse:collapse;">
-                        <thead>
-                            <tr style="border-bottom:1px solid #1a1e26;">
-                                <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Trimestre</th>
-                                <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Fecha</th>
-                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Apertura</th>
-                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">High</th>
-                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Low</th>
-                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">+3D</th>
-                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Sorpresa EPS</th>
-                            </tr>
-                        </thead>
-                        <tbody>{rows}</tbody>
-                    </table>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    _hist_header +
+                    '<div style="overflow-x:auto;">'
+                    '<table style="width:100%;border-collapse:collapse;">'
+                    '<thead><tr style="border-bottom:1px solid #1a1e26;">'
+                    '<th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Trimestre</th>'
+                    '<th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Fecha</th>'
+                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Apertura</th>'
+                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Alto</th>'
+                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Bajo</th>'
+                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">+3D</th>'
+                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Sorpresa EPS</th>'
+                    f'</tr></thead><tbody>{rows}</tbody>'
+                    '</table></div></div>',
+                    unsafe_allow_html=True)
 
 
     # ══ TAB 5: EARNINGS SURPRISES ══
@@ -2431,8 +2416,9 @@ def render():
                     <span class="mod-title">🎯 Historial de Earnings Surprises</span>
                     <span style="font-family:'Courier New',monospace;color:#555;font-size:11px;">Fuente: {source_label}</span>
                 </div>
-                <div class="mod-body">
+            </div>
             """, unsafe_allow_html=True)
+            st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 10px 10px;padding:16px 20px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
             dates        = [s['date'] for s in reversed(earnings_surprises)]
             surprises_v  = [s['surprise_pct'] for s in reversed(earnings_surprises)]
@@ -2499,7 +2485,7 @@ def render():
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("</div></div>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
             if not api_keys['alpha_vantage']:
                 st.warning("⚠️ Configura **ALPHA_VANTAGE_API_KEY** para obtener datos precisos de earnings surprises.")
@@ -2594,10 +2580,11 @@ def render():
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">🏦 Fondos Institucionales — Declaraciones 13F (SEC)</span>
-                <span title="Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
+                <div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR.</div></div>
             </div>
-            <div class="mod-body">
+        </div>
         """, unsafe_allow_html=True)
+        st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 10px 10px;padding:16px 20px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
         # Usar datos ya cargados en get_yfinance_full — sin llamada extra a Yahoo Finance
         holders_data = inst_data_preload if inst_data_preload else get_institutional_holders(t_in)
@@ -2711,7 +2698,7 @@ def render():
             de pago como WhaleWisdom, Tikr o publicaciones directas de los fondos.
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ══ TAB 8: NOTICIAS & SENTIMIENTO ══
     with tabs[8]:
@@ -2820,12 +2807,12 @@ def render():
                     st.markdown(
                         '<div class="mod-box">'
                         '<div class="mod-header"><span class="mod-title">📊 Sentimiento</span>'
-                        '<span title="Análisis de titulares Finnhub (últimos 30 días). Score va de -100 (muy bajista) a +100 (muy alcista)." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;">?</span>'
-                        '</div>'
-                        '<div class="mod-body" style="padding:12px;">'
-                        + svg + kpi_row +
-                        '</div></div>',
+                        '<div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Análisis de titulares Finnhub (últimos 30 días). Score de -100 (muy bajista) a +100 (muy alcista).</div></div>'
+                        '</div><div class="mod-body" style="padding:8px 12px 12px;">',
                         unsafe_allow_html=True)
+                    st.plotly_chart(fig_sent, use_container_width=True,
+                                    config={'displayModeBar': False}, key='gauge_sentiment')
+                    st.markdown(kpi_row + '</div></div>', unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="mod-box"><div class="mod-body">
@@ -2871,7 +2858,7 @@ def render():
                     <div class="mod-box">
                         <div class="mod-header">
                             <span class="mod-title">📰 Últimas Noticias (30 días)</span>
-                            <span title="Noticias vía Finnhub. Clic en el titular para abrir la fuente original." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
+                            <div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Noticias vía Finnhub. Clic en el titular para abrir la fuente original.</div></div>
                         </div>
                         <div class="mod-body" style="max-height:420px;overflow-y:auto;padding:12px 16px;">
                             {news_items}
@@ -2928,12 +2915,11 @@ def render():
 
                 # ── Heatmap: year × month matrix ──
                 years = sorted(h_full['year'].unique(), reverse=True)
-                st.markdown("""
-                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-bottom:16px;">
-                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Rentabilidad Mensual — Mapa de Calor</div>
-                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
-                """ + f"{lookback_years}" + """ años de rendimiento histórico mensual</div>
-                """, unsafe_allow_html=True)
+                _hm_hdr = (
+                    '<div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-bottom:16px;">'
+                    '<div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Rentabilidad Mensual — Mapa de Calor</div>'
+                    f'<div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">{lookback_years} años de rendimiento histórico mensual</div>'
+                )
 
                 def _cell_color(v):
                     if v is None: return "#1a1e26", "#444"
@@ -2981,20 +2967,17 @@ def render():
                     '<span style="font-family:monospace;font-size:0.7rem;color:#00ffad;">■ ≥ 10%</span>'
                     '</div></div>'
                 )
-                st.markdown(hdr + rows_h + legend, unsafe_allow_html=True)
+                st.markdown(_hm_hdr + hdr + rows_h + legend, unsafe_allow_html=True)
 
                 # ── Patrones de Estacionalidad table ──
-                st.markdown("""
-                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;
-                            padding:20px;margin-top:16px;">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-                        <span style="font-size:1.1rem;">📅</span>
-                        <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Patrones de Estacionalidad</div>
-                    </div>
-                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
-                        Patrones históricos de precio por período temporal
-                    </div>
-                """, unsafe_allow_html=True)
+                _pt_hdr = (
+                    '<div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-top:16px;">'
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">'
+                    '<span style="font-size:1.1rem;">📅</span>'
+                    '<div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Patrones de Estacionalidad</div>'
+                    '</div>'
+                    '<div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">Patrones históricos de precio por período temporal</div>'
+                )
 
                 # Table header
                 tbl = (
@@ -3051,7 +3034,7 @@ def render():
                     'Puntuación = media×3 + consistencia×0.4 − desv.est×0.5'
                     '</div></div>'
                 )
-                st.markdown(tbl + footnote, unsafe_allow_html=True)
+                st.markdown(_pt_hdr + tbl + footnote, unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════
     # SUGERENCIAS AUTOMÁTICAS
@@ -3066,7 +3049,7 @@ def render():
     <div class="mod-box">
         <div class="mod-header">
             <span class="mod-title">💡 Sugerencias de Inversión</span>
-            <span title="Análisis automatizado con datos reales de Yahoo Finance. No constituye asesoramiento financiero." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
+            <div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Análisis automatizado con datos reales de Yahoo Finance. No constituye asesoramiento financiero.</div></div>
         </div>
         <div class="mod-body">{sug_html}</div>
     </div>
@@ -3256,12 +3239,12 @@ def render():
             """, unsafe_allow_html=True)
             with st.container():
                 st.markdown(
-                    '<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;'
-                    'padding:24px;background:#0a0c10;margin-bottom:18px;">',
+                    '<div style="border:1px solid #00ffad1a;border-radius:0 0 8px 8px;'
+                    'padding:24px;background:#0a0c10;margin-bottom:18px;">'
+                    + st.session_state['last_report'] +
+                    '</div>',
                     unsafe_allow_html=True
                 )
-                st.markdown(st.session_state['last_report'])
-                st.markdown('</div>', unsafe_allow_html=True)
 
         col_dl, _ = st.columns([1, 3])
         with col_dl:
@@ -3288,5 +3271,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

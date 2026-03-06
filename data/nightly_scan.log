@@ -128,3 +128,49 @@
 2026-03-05 04:36:06,324 [INFO] Completo: 67 candidatos
 2026-03-05 04:36:06,344 [INFO] Guardado: data/scan_cache.json
 2026-03-05 04:36:06,344 [INFO] Tiempo: 5.7 min — OK
+2026-03-06 04:28:21,516 [INFO] ============================================================
+2026-03-06 04:28:21,516 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-06 04:28 UTC
+2026-03-06 04:28:21,555 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-06 04:28:21,555 [INFO] Universo: 480 tickers
+2026-03-06 04:28:21,555 [INFO] PASO 1/4 — Historico batch...
+2026-03-06 04:28:24,065 [ERROR] 
+1 Failed download:
+2026-03-06 04:28:24,065 [ERROR] ['ALLE']: OperationalError('database is locked')
+2026-03-06 04:28:24,135 [INFO]   Batch 1 — 49 descargados
+2026-03-06 04:28:26,264 [INFO]   Batch 2 — 99 descargados
+2026-03-06 04:28:28,555 [INFO]   Batch 3 — 149 descargados
+2026-03-06 04:28:30,814 [INFO]   Batch 4 — 199 descargados
+2026-03-06 04:28:33,212 [INFO]   Batch 5 — 249 descargados
+2026-03-06 04:28:35,429 [INFO]   Batch 6 — 299 descargados
+2026-03-06 04:28:37,542 [INFO]   Batch 7 — 349 descargados
+2026-03-06 04:28:40,639 [INFO]   Batch 8 — 399 descargados
+2026-03-06 04:28:42,819 [INFO]   Batch 9 — 449 descargados
+2026-03-06 04:28:44,695 [INFO]   Batch 10 — 479 descargados
+2026-03-06 04:28:44,696 [INFO] PASO 2/4 — Info fundamental...
+2026-03-06 04:29:14,267 [INFO]   Info: 50/480
+2026-03-06 04:29:44,707 [INFO]   Info: 100/480
+2026-03-06 04:30:15,060 [INFO]   Info: 150/480
+2026-03-06 04:30:45,826 [INFO]   Info: 200/480
+2026-03-06 04:31:15,969 [INFO]   Info: 250/480
+2026-03-06 04:31:46,137 [INFO]   Info: 300/480
+2026-03-06 04:32:16,668 [INFO]   Info: 350/480
+2026-03-06 04:32:47,326 [INFO]   Info: 400/480
+2026-03-06 04:33:17,271 [INFO]   Info: 450/480
+2026-03-06 04:33:36,126 [INFO]   480 tickers
+2026-03-06 04:33:36,126 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-06 04:33:36,212 [INFO]   467 tickers
+2026-03-06 04:33:36,212 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-06 04:33:36,849 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-03-06 04:33:36,849 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-06 04:33:37,012 [INFO]   50/467 — candidatos: 8
+2026-03-06 04:33:37,173 [INFO]   100/467 — candidatos: 14
+2026-03-06 04:33:37,334 [INFO]   150/467 — candidatos: 23
+2026-03-06 04:33:37,495 [INFO]   200/467 — candidatos: 31
+2026-03-06 04:33:37,657 [INFO]   250/467 — candidatos: 41
+2026-03-06 04:33:37,819 [INFO]   300/467 — candidatos: 51
+2026-03-06 04:33:37,981 [INFO]   350/467 — candidatos: 59
+2026-03-06 04:33:38,142 [INFO]   400/467 — candidatos: 66
+2026-03-06 04:33:38,303 [INFO]   450/467 — candidatos: 73
+2026-03-06 04:33:38,358 [INFO] Completo: 74 candidatos
+2026-03-06 04:33:38,375 [INFO] Guardado: data/scan_cache.json
+2026-03-06 04:33:38,375 [INFO] Tiempo: 5.3 min — OK

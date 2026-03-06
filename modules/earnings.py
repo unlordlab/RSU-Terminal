@@ -1486,7 +1486,7 @@ def inject_css():
 # ────────────────────────────────────────────────
 
 def render():
-    st.set_page_config(page_title="RSU Earnings", page_icon="📅", layout="wide",
+    st.set_page_config(page_title="RSU Research", page_icon="🔬", layout="wide",
                        initial_sidebar_state="collapsed")
     inject_css()
 
@@ -1498,8 +1498,8 @@ def render():
     # HEADER
     st.markdown("""
     <div style="text-align:center; margin-bottom:28px;">
-        <div class="vt-label" style="margin-bottom:10px;">[CONEXIÓN SEGURA ESTABLECIDA // RSU ANALYTICS v4.0]</div>
-        <div class="landing-title">📅 RSU EARNINGS</div><br>
+        <div class="vt-label" style="margin-bottom:10px;">[CONEXIÓN SEGURA ESTABLECIDA // RSU ANALYTICS v5.0]</div>
+        <div class="landing-title">🔬 RSU RESEARCH</div><br>
         <div class="landing-desc">ANÁLISIS DE RESULTADOS · FUNDAMENTALES · SORPRESAS · IA</div>
     </div>
     """, unsafe_allow_html=True)

@@ -1813,6 +1813,7 @@ def render():
         "📅 Eventos & Calendario",
         "🏦 Fondos Institucionales",
         "📰 Noticias & Sentimiento",
+        "📅 Estacionalidad",
     ])
 
     # ══ TAB 1: VALORACIÓN ══
@@ -2167,10 +2168,28 @@ def render():
             """, unsafe_allow_html=True)
 
             if rec_summary is not None and not rec_summary.empty:
-                cols_map = {'strongBuy': 'C.Fuerte', 'buy': 'Comprar', 'hold': 'Mantener', 'sell': 'Vender', 'strongSell': 'V.Fuerte'}
-                st.markdown("""<div class="mod-box"><div class="mod-header"><span class="mod-title">📆 Histórico de Recomendaciones (últimos 6 meses)</span></div><div class="mod-body">""", unsafe_allow_html=True)
-                st.dataframe(rec_summary.rename(columns=cols_map), use_container_width=True)
-                st.markdown("</div></div>", unsafe_allow_html=True)
+                cols_map = {'strongBuy': 'C.Fuerte', 'buy': 'Comprar', 'hold': 'Mantener',
+                            'sell': 'Vender', 'strongSell': 'V.Fuerte', 'period': 'Período'}
+                df_r = rec_summary.rename(columns=cols_map)
+                # Build pure HTML table to keep it inside mod-box
+                th_style = 'padding:8px 14px;font-family:Space Grotesk,sans-serif;font-size:0.68rem;color:#555;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #1a1e26;text-align:right;'
+                thead = '<tr>' + ''.join(f'<th style="{th_style}text-align:{"left" if i==0 else "right"}">{c}</th>' for i,c in enumerate(df_r.columns)) + '</tr>'
+                rows_html = ''
+                for _, row in df_r.iterrows():
+                    cells = ''
+                    for i,v in enumerate(row):
+                        td = f'padding:7px 14px;font-family:{"Inter" if i==0 else "monospace"},sans-serif;font-size:{"0.8" if i==0 else "0.85"}rem;color:{"#888" if i==0 else "#ccc"};border-bottom:1px solid #0f1218;text-align:{"left" if i==0 else "right"};'
+                        cells += f'<td style="{td}">{v}</td>'
+                    rows_html += f'<tr>{cells}</tr>'
+                rec_html = (
+                    '<div class="mod-box">'
+                    '<div class="mod-header"><span class="mod-title">📆 Histórico de Recomendaciones (últimos 6 meses)</span></div>'
+                    '<div class="mod-body" style="overflow-x:auto;padding:0;">'
+                    f'<table style="width:100%;border-collapse:collapse;">'
+                    f'<thead>{thead}</thead><tbody>{rows_html}</tbody>'
+                    '</table></div></div>'
+                )
+                st.markdown(rec_html, unsafe_allow_html=True)
         else:
             st.info("No hay recomendaciones de analistas disponibles.")
 
@@ -2720,67 +2739,47 @@ def render():
                     sent_color  = sent_colors.get(sent_val, '#888')
                     gauge_val   = round(max(-1.0, min(1.0, score)) * 100, 1)
 
-                    # Pure SVG semicircle gauge
-                    def _arc_path(v1, v2, cx=100, cy=88, r=62):
-                        """SVG arc from value v1 to v2 on a [-100,100] semicircle."""
-                        a1 = _math.radians(180.0 - (v1 + 100) / 200.0 * 180.0)
-                        a2 = _math.radians(180.0 - (v2 + 100) / 200.0 * 180.0)
-                        x1, y1 = cx + r * _math.cos(a1), cy - r * _math.sin(a1)
-                        x2, y2 = cx + r * _math.cos(a2), cy - r * _math.sin(a2)
-                        laf = 1 if abs(v2 - v1) > 100 else 0
-                        return f"M {x1:.1f} {y1:.1f} A {r} {r} 0 {laf} 0 {x2:.1f} {y2:.1f}"
+                    # ── SVG semicircle gauge — layered rendering ──
+                    import math as _m2
+                    CX2, CY2, R2 = 100, 100, 72
 
-                    def _needle(val, cx=100, cy=88, r=55):
-                        a = _math.radians(180.0 - (val + 100) / 200.0 * 180.0)
-                        nx = cx + r * _math.cos(a)
-                        ny = cy - r * _math.sin(a)
-                        return f"{cx:.1f},{cy:.1f} {nx:.1f},{ny:.1f}"
+                    def _a(v1, v2):
+                        a1 = _m2.radians(180.0-(v1+100)/200.0*180.0)
+                        a2 = _m2.radians(180.0-(v2+100)/200.0*180.0)
+                        x1,y1 = CX2+R2*_m2.cos(a1), CY2-R2*_m2.sin(a1)
+                        x2,y2 = CX2+R2*_m2.cos(a2), CY2-R2*_m2.sin(a2)
+                        laf = 1 if abs(v2-v1)>100 else 0
+                        return f"M {x1:.1f},{y1:.1f} A {R2},{R2} 0 {laf},0 {x2:.1f},{y2:.1f}"
 
-                    # ── SVG half-donut gauge (clean, no overlapping arcs) ──
-                    import math as _m
-                    # Semicircle: left=-100, right=+100, top=0
-                    # angle=180° at left, 0° at right (standard math coords)
-                    CX, CY, R, SW = 110, 95, 72, 16  # center, radius, stroke-width
-                    def _gauge_arc(v1, v2, color, sw=SW):
-                        # Convert value [-100,100] to angle [180,0] degrees
-                        a1 = _m.radians(180.0 - (v1+100)/200.0*180.0)
-                        a2 = _m.radians(180.0 - (v2+100)/200.0*180.0)
-                        x1 = CX + R*_m.cos(a1); y1 = CY - R*_m.sin(a1)
-                        x2 = CX + R*_m.cos(a2); y2 = CY - R*_m.sin(a2)
-                        laf = 1 if (v2-v1) > 100 else 0
-                        return (f'<path d="M {x1:.2f},{y1:.2f} A {R},{R} 0 {laf},0 {x2:.2f},{y2:.2f}" '
-                                f'fill="none" stroke="{color}" stroke-width="{sw}" stroke-linecap="butt"/>')
-                    # Needle
-                    na = _m.radians(180.0-(gauge_val+100)/200.0*180.0)
-                    nx = CX+(R-4)*_m.cos(na); ny = CY-(R-4)*_m.sin(na)
-                    bx1 = CX+8*_m.cos(na+_m.pi/2); by1 = CY-8*_m.sin(na+_m.pi/2)
-                    bx2 = CX+8*_m.cos(na-_m.pi/2); by2 = CY-8*_m.sin(na-_m.pi/2)
+                    _na = _m2.radians(180.0-(gauge_val+100)/200.0*180.0)
+                    _nx = CX2+(R2-8)*_m2.cos(_na)
+                    _ny = CY2-(R2-8)*_m2.sin(_na)
+
                     svg = (
-                        '<svg viewBox="0 0 220 105" xmlns="http://www.w3.org/2000/svg"'
-                        ' style="width:100%;max-width:280px;display:block;margin:4px auto;">'
-                        # Track
-                        + _gauge_arc(-100, 100, '#1c2030') +
-                        # Zones
-                        _gauge_arc(-100, -40, '#3d1515') +
-                        _gauge_arc(-40,   40, '#222210') +
-                        _gauge_arc( 40,  100, '#0d2a1a') +
-                        # Active value arc (from 0 to gauge_val, thicker)
-                        _gauge_arc(min(0,gauge_val), max(0,gauge_val), sent_color, SW+2) +
-                        # Needle triangle
-                        f'<polygon points="{nx:.1f},{ny:.1f} {bx1:.1f},{by1:.1f} {bx2:.1f},{by2:.1f}"'
-                        f' fill="{sent_color}" opacity="0.9"/>'
-                        f'<circle cx="{CX}" cy="{CY}" r="6" fill="#0a0c10" stroke="{sent_color}" stroke-width="2"/>'
-                        # Tick labels
-                        '<text x="4"   y="100" fill="#555" font-size="8" font-family="monospace">-100</text>'
-                        '<text x="44"  y="30"  fill="#555" font-size="8" font-family="monospace">-50</text>'
-                        '<text x="105" y="16"  fill="#555" font-size="8" font-family="monospace">0</text>'
-                        '<text x="155" y="30"  fill="#555" font-size="8" font-family="monospace">50</text>'
-                        '<text x="176" y="100" fill="#555" font-size="8" font-family="monospace">100</text>'
-                        # Big score number
-                        f'<text x="{CX}" y="{CY-8}" fill="{sent_color}" font-size="28"'
-                        ' font-family="VT323,monospace" text-anchor="middle" dominant-baseline="auto">'
-                        + str(int(gauge_val)) +
-                        '</text>'
+                        '<svg viewBox="0 0 200 108" xmlns="http://www.w3.org/2000/svg"'
+                        ' style="width:100%;max-width:260px;display:block;margin:6px auto 2px;">'
+                        # Layer 1: full bg track
+                        '<path d="' + _a(-100,100) + '" fill="none" stroke="#1c2030" stroke-width="20" stroke-linecap="round"/>'
+                        # Layer 2: zone tints (thinner)
+                        '<path d="' + _a(-100,-35) + '" fill="none" stroke="#3a1010" stroke-width="16" stroke-linecap="round"/>'
+                        '<path d="' + _a(-35, 35)  + '" fill="none" stroke="#1e1e0e" stroke-width="16" stroke-linecap="round"/>'
+                        '<path d="' + _a( 35, 100) + '" fill="none" stroke="#0a2818" stroke-width="16" stroke-linecap="round"/>'
+                        # Layer 3: active arc (bright, thinnest)
+                        '<path d="' + _a(min(0,gauge_val), max(0,gauge_val)) + '"'
+                        ' fill="none" stroke="' + sent_color + '" stroke-width="11" stroke-linecap="round"/>'
+                        # Layer 4: needle
+                        f'<line x1="{CX2}" y1="{CY2}" x2="{_nx:.1f}" y2="{_ny:.1f}"'
+                        ' stroke="' + sent_color + '" stroke-width="2.5" stroke-linecap="round"/>'
+                        f'<circle cx="{CX2}" cy="{CY2}" r="5" fill="#0d0f15" stroke="' + sent_color + '" stroke-width="1.5"/>'
+                        # Layer 5: tick labels
+                        '<text x="4"   y="107" fill="#555" font-size="7" font-family="monospace">-100</text>'
+                        '<text x="36"  y="32"  fill="#555" font-size="7" font-family="monospace">-50</text>'
+                        '<text x="92"  y="17"  fill="#555" font-size="7" font-family="monospace">0</text>'
+                        '<text x="143" y="32"  fill="#555" font-size="7" font-family="monospace">50</text>'
+                        '<text x="164" y="107" fill="#555" font-size="7" font-family="monospace">100</text>'
+                        # Layer 6: score number (above center)
+                        f'<text x="{CX2}" y="{CY2-16}" fill="' + sent_color + '" font-size="28"'
+                        ' font-family="VT323,monospace" text-anchor="middle">' + str(int(gauge_val)) + '</text>'
                         '</svg>'
                     )
                     kpi_row = (
@@ -2871,6 +2870,172 @@ def render():
                     </div></div>
                     """, unsafe_allow_html=True)
 
+    # ══ TAB 9: ESTACIONALIDAD ══
+    with tabs[9]:
+        if hist_1y is None or hist_1y.empty:
+            st.info("Se necesitan datos históricos para calcular la estacionalidad.")
+        else:
+            import numpy as np
+            from datetime import datetime as _dt
+            import calendar as _cal
+
+            # ── Load 5 years of history ──
+            try:
+                import yfinance as _yf2
+                _tk = _yf2.Ticker(t_in)
+                hist_5y = _tk.history(period="5y", interval="1mo", auto_adjust=True)
+            except Exception:
+                hist_5y = hist_1y  # fallback
+
+            lookback_years = st.number_input("Look-back (años)", min_value=1, max_value=10,
+                                              value=5, step=1, key="seas_lookback")
+
+            if hist_5y is not None and not hist_5y.empty:
+                # Compute monthly returns
+                try:
+                    import yfinance as _yf3
+                    _tkr = _yf3.Ticker(t_in)
+                    h_full = _tkr.history(period=f"{lookback_years}y", interval="1mo", auto_adjust=True)
+                except Exception:
+                    h_full = hist_5y
+
+                h_full = h_full[h_full['Close'] > 0].copy()
+                h_full['ret'] = h_full['Close'].pct_change() * 100
+                h_full['year']  = h_full.index.year
+                h_full['month'] = h_full.index.month
+                h_full = h_full.dropna(subset=['ret'])
+
+                now_month = _dt.now().month
+                months = list(range(1, 13))
+                month_names = [_cal.month_name[m] for m in months]
+
+                # ── Heatmap: year × month matrix ──
+                years = sorted(h_full['year'].unique(), reverse=True)
+                st.markdown("""
+                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-bottom:16px;">
+                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Monthly Returns Heatmap</div>
+                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
+                """ + f"{lookback_years}" + """-year historical performance by month</div>
+                """, unsafe_allow_html=True)
+
+                def _cell_color(v):
+                    if v is None: return "#1a1e26", "#444"
+                    if v >= 10:  return "#0d4a2a", "#00ffad"
+                    if v >= 3:   return "#0a2818", "#00cc88"
+                    if v >= 0:   return "#111a14", "#559966"
+                    if v >= -3:  return "#1a1510", "#886644"
+                    if v >= -10: return "#2a1010", "#cc4444"
+                    return "#3d0a0a", "#f23645"
+
+                # Header row
+                hdr = '<table style="width:100%;border-collapse:collapse;font-family:Space Grotesk,sans-serif;">'
+                hdr += '<tr><th style="text-align:left;padding:6px 8px;color:#555;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;min-width:50px;">YEAR</th>'
+                for mn in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']:
+                    hdr += f'<th style="text-align:center;padding:6px 4px;color:#555;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;min-width:60px;">{mn}</th>'
+                hdr += '</tr>'
+
+                rows_h = ''
+                for yr in years:
+                    yr_data = h_full[h_full['year'] == yr]
+                    row = f'<tr><td style="padding:4px 8px;font-family:monospace;color:#888;font-size:0.8rem;">{yr}</td>'
+                    for m in months:
+                        m_data = yr_data[yr_data['month'] == m]['ret']
+                        if len(m_data) > 0:
+                            v = round(float(m_data.iloc[0]), 2)
+                            bg, fg = _cell_color(v)
+                            border = "border:1px solid #00d9ff44;" if yr == _dt.now().year and m == now_month else ""
+                            row += (f'<td style="text-align:center;padding:5px 3px;{border}">'
+                                    f'<div style="background:{bg};border-radius:4px;padding:5px 2px;'
+                                    f'font-family:monospace;color:{fg};font-size:0.75rem;">'
+                                    f'{"+" if v>=0 else ""}{v:.2f}%</div></td>')
+                        else:
+                            row += '<td style="text-align:center;padding:5px 3px;"><div style="background:#111;border-radius:4px;padding:5px 2px;color:#333;font-size:0.75rem;">—</div></td>'
+                    row += '</tr>'
+                    rows_h += row
+
+                legend = (
+                    '</table>'
+                    '<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">'
+                    '<span style="font-family:Inter,sans-serif;color:#555;font-size:0.72rem;font-weight:600;">Color Scale:</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#f23645;">■ ≤ -10%</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#cc4444;">■ -3% to 0%</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#555;">■ ~0%</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#00cc88;">■ 0% to 3%</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#00ffad;">■ ≥ 10%</span>'
+                    '</div></div>'
+                )
+                st.markdown(hdr + rows_h + legend, unsafe_allow_html=True)
+
+                # ── Seasonality Patterns table ──
+                st.markdown("""
+                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;
+                            padding:20px;margin-top:16px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                        <span style="font-size:1.1rem;">📅</span>
+                        <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Seasonality Patterns</div>
+                    </div>
+                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
+                        Historical price patterns and trends by time period
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Table header
+                tbl = (
+                    '<table style="width:100%;border-collapse:collapse;">'
+                    '<thead><tr style="border-bottom:1px solid #1a1e26;">'
+                )
+                for col in ['MONTH','AVG RETURN %','CONSISTENCY %','STD DEV %','REL. VOL','MAX DRAWDOWN %','SCORE']:
+                    align = 'left' if col=='MONTH' else 'right'
+                    tbl += f'<th style="text-align:{align};padding:8px 12px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;">{col}</th>'
+                tbl += '</tr></thead><tbody>'
+
+                # Per-month stats
+                all_rets = {m: h_full[h_full['month']==m]['ret'].values for m in months}
+                max_vol = max(np.std(v) for v in all_rets.values() if len(v)>0) or 1
+
+                for i, m in enumerate(months):
+                    rets = all_rets[m]
+                    if len(rets) == 0:
+                        continue
+                    avg   = float(np.mean(rets))
+                    cons  = float(np.mean(rets > 0) * 100)
+                    std   = float(np.std(rets))
+                    rel_v = round(std / max_vol * 10, 2) if max_vol else 0
+                    mdd   = float(np.min(rets))
+                    # Score: avg*3 + cons*0.4 - std*0.5
+                    score = round(avg*3 + cons*0.4 - std*0.5, 1)
+                    sc_color = "#00ffad" if score>=30 else ("#ff9800" if score>=10 else "#f23645")
+                    avg_c = "#00ffad" if avg>=0 else "#f23645"
+                    mdd_c = "#00ffad" if mdd>=0 else "#f23645"
+                    cur_border = "border-left:2px solid #ff9800;" if m == now_month else ""
+
+                    tbl += (
+                        f'<tr style="border-bottom:1px solid #0f1218;{cur_border}">'
+                        f'<td style="padding:8px 12px;font-family:Inter,sans-serif;color:#ccc;font-size:0.82rem;">{month_names[i]}</td>'
+                        f'<td style="text-align:right;padding:8px 12px;">'
+                        f'<span style="background:{"rgba(0,255,173,0.1)" if avg>=0 else "rgba(242,54,69,0.1)"};'
+                        f'color:{avg_c};padding:2px 8px;border-radius:4px;font-family:monospace;font-size:0.78rem;">'
+                        f'{"+" if avg>=0 else ""}{avg:.2f}%</span></td>'
+                        f'<td style="text-align:right;padding:8px 12px;font-family:monospace;color:#888;font-size:0.78rem;">{cons:.0f}%</td>'
+                        f'<td style="text-align:right;padding:8px 12px;font-family:monospace;color:#666;font-size:0.78rem;">{std:.2f}%</td>'
+                        f'<td style="text-align:right;padding:8px 12px;font-family:monospace;color:#666;font-size:0.78rem;">{rel_v:.2f}</td>'
+                        f'<td style="text-align:right;padding:8px 12px;font-family:monospace;color:{mdd_c};font-size:0.78rem;">{mdd:.2f}%</td>'
+                        f'<td style="text-align:right;padding:8px 12px;">'
+                        f'<span style="background:{sc_color}22;color:{sc_color};padding:2px 8px;'
+                        f'border-radius:4px;font-family:monospace;font-size:0.78rem;">{score}</span></td>'
+                        f'</tr>'
+                    )
+
+                tbl += '</tbody></table>'
+                footnote = (
+                    '<div style="margin-top:12px;font-family:Inter,sans-serif;color:#444;font-size:0.72rem;">'
+                    'Avg Return chip: verde=positivo, rojo=negativo. &nbsp;'
+                    'Borde amarillo = mes actual del calendario. &nbsp;'
+                    'Score = avg×3 + consistency×0.4 − stddev×0.5'
+                    '</div></div>'
+                )
+                st.markdown(tbl + footnote, unsafe_allow_html=True)
+
     # ══════════════════════════════════════════════
     # SUGERENCIAS AUTOMÁTICAS
     # ══════════════════════════════════════════════
@@ -2919,10 +3084,10 @@ def render():
 | País | {info.get('country', 'N/A')} |
 """
 
-    # ── IA Section ──
+    # ── IA Section — exact pattern from ia_report.py that works ──
     st.markdown("""
     <div style="background:linear-gradient(135deg,#0a0c10,#111520);border:1px solid #00ffad33;
-                border-radius:8px;padding:18px 22px;margin:18px 0 10px 0;">
+                border-radius:8px;padding:18px 22px;margin:18px 0 8px 0;">
         <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.4rem;
                     letter-spacing:3px;text-transform:uppercase;margin-bottom:6px;">
             🤖 RSU Artificial Intelligence
@@ -2934,20 +3099,9 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── IA Buttons en sidebar — garantiza render independiente del HTML principal ──
-    with st.sidebar:
-        st.markdown("""
-        <div style="margin:16px 0 8px;border-top:1px solid #1a1e26;padding-top:16px;">
-            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.1rem;
-                        letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">
-                🤖 RSU IA
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        btn_rapido   = st.button("⚡ ANÁLISIS RÁPIDO",        key="btn_rapido",   use_container_width=True)
-        btn_completo = st.button("📋 INFORME COMPLETO (11s)", key="btn_completo", use_container_width=True)
-        if btn_rapido or btn_completo:
-            st.caption("▸ Generando análisis IA...")
+    col_ia1, col_ia2 = st.columns(2)
+    btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",               key="btn_rapido",   use_container_width=True)
+    btn_completo = col_ia2.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo", use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 

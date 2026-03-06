@@ -2728,63 +2728,41 @@ def render():
                     sent_color  = sent_colors.get(sent_val, '#888')
                     gauge_val   = round(max(-1.0, min(1.0, score)) * 100, 1)
 
-                    # ── SVG gauge: stroke-dasharray approach (no arc overlap) ──
-                    import math as _gm
-                    # Use a circle with r=60 in a 200x110 viewbox
-                    # semicircle = half circumference = π*r
-                    _R = 60
-                    _CX, _CY = 100, 100
-                    _CIRC = _gm.pi * _R   # half-circle arc length
-
-                    # Map value [-100,100] to dasharray offset
-                    # val=−100 → full dash (empty gauge), val=100 → no dash (full gauge)
-                    def _dash(v1, v2):
-                        # Arc length of segment [v1,v2]
-                        seg = abs(v2-v1)/200.0 * _CIRC
-                        # Offset = arc from start to v1
-                        off = (v1+100)/200.0 * _CIRC
-                        return seg, off
-
-                    # Needle
-                    _na = _gm.radians(180.0 - (gauge_val+100)/200.0*180.0)
-                    _nx = _CX + (_R-6)*_gm.cos(_na)
-                    _ny = _CY - (_R-6)*_gm.sin(_na)
-
-                    # Build zone paths using plain arc commands
-                    def _zone(v1, v2):
-                        a1 = _gm.radians(180.0-(v1+100)/200.0*180.0)
-                        a2 = _gm.radians(180.0-(v2+100)/200.0*180.0)
-                        x1,y1 = _CX+_R*_gm.cos(a1), _CY-_R*_gm.sin(a1)
-                        x2,y2 = _CX+_R*_gm.cos(a2), _CY-_R*_gm.sin(a2)
-                        laf = 0
-                        return f"M {x1:.1f},{y1:.1f} A {_R},{_R} 0 {laf},0 {x2:.1f},{y2:.1f}"
-
-                    svg = (
-                        '<svg viewBox="0 0 200 108" xmlns="http://www.w3.org/2000/svg"'
-                        ' style="width:100%;max-width:260px;display:block;margin:6px auto;">'
-                        # Zone 1: bearish (dark red)
-                        '<path d="' + _zone(-100,-35) + '" fill="none" stroke="#3a1212" stroke-width="18" stroke-linecap="butt"/>'
-                        # Zone 2: neutral (dark)
-                        '<path d="' + _zone(-35,35)   + '" fill="none" stroke="#1c1c0e" stroke-width="18" stroke-linecap="butt"/>'
-                        # Zone 3: bullish (dark green)
-                        '<path d="' + _zone(35,100)   + '" fill="none" stroke="#0a2a14" stroke-width="18" stroke-linecap="butt"/>'
-                        # Active arc (bright, thinner, on top)
-                        '<path d="' + _zone(min(0,gauge_val), max(0,gauge_val)) + '"'
-                        ' fill="none" stroke="' + sent_color + '" stroke-width="10" stroke-linecap="butt" opacity="0.95"/>'
-                        # Needle
-                        f'<line x1="{_CX}" y1="{_CY}" x2="{_nx:.1f}" y2="{_ny:.1f}"'
-                        ' stroke="' + sent_color + '" stroke-width="2.5" stroke-linecap="round"/>'
-                        f'<circle cx="{_CX}" cy="{_CY}" r="4.5" fill="#0d0f16" stroke="' + sent_color + '" stroke-width="1.5"/>'
-                        # Tick labels at correct positions
-                        '<text x="4"   y="106" fill="#555" font-size="7" font-family="monospace">-100</text>'
-                        '<text x="36"  y="32"  fill="#555" font-size="7" font-family="monospace">-50</text>'
-                        '<text x="93"  y="17"  fill="#555" font-size="7" font-family="monospace">0</text>'
-                        '<text x="143" y="32"  fill="#555" font-size="7" font-family="monospace">50</text>'
-                        '<text x="164" y="106" fill="#555" font-size="7" font-family="monospace">100</text>'
-                        # Score (positioned above needle pivot)
-                        f'<text x="{_CX}" y="{_CY-14}" fill="' + sent_color + '" font-size="28"'
-                        ' font-family="VT323,monospace" text-anchor="middle">' + str(int(gauge_val)) + '</text>'
-                        '</svg>'
+                    # ── Plotly Indicator gauge ──
+                    fig_sent = go.Figure(go.Indicator(
+                        mode="gauge+number",
+                        value=gauge_val,
+                        number={'font': {'size': 42, 'color': sent_color, 'family': 'VT323, monospace'},
+                                'valueformat': '.0f'},
+                        gauge={
+                            'axis': {
+                                'range': [-100, 100],
+                                'tickvals': [-100, -50, 0, 50, 100],
+                                'ticktext': ['-100', '-50', '0', '50', '100'],
+                                'tickfont': {'size': 11, 'color': '#555'},
+                                'tickcolor': '#333',
+                            },
+                            'bar': {'color': sent_color, 'thickness': 0.28},
+                            'bgcolor': '#0a0c10',
+                            'borderwidth': 0,
+                            'steps': [
+                                {'range': [-100, -35], 'color': '#2a0d0d'},
+                                {'range': [-35,   35], 'color': '#141408'},
+                                {'range': [35,   100], 'color': '#0a1e10'},
+                            ],
+                            'threshold': {
+                                'line': {'color': sent_color, 'width': 4},
+                                'thickness': 0.8,
+                                'value': gauge_val,
+                            },
+                        },
+                        domain={'x': [0, 1], 'y': [0, 1]},
+                    ))
+                    fig_sent.update_layout(
+                        paper_bgcolor='#0d0f16',
+                        font={'color': '#888', 'family': 'Space Grotesk, sans-serif'},
+                        margin=dict(l=20, r=20, t=20, b=5),
+                        height=190,
                     )
                     kpi_row = (
                         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">'

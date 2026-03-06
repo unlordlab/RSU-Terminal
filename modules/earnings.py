@@ -1781,10 +1781,7 @@ def render():
     <div class="mod-box" style="margin-bottom:0;">
         <div class="mod-header">
             <span class="mod-title">📈 Gráfico Avanzado — {t_in}</span>
-            <div class="tip-box">
-                <div class="tip-icon">?</div>
-                <div class="tip-text">Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores.</div>
-            </div>
+            <span title="Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1811,6 +1808,7 @@ def render():
         "📈 Rentabilidad",
         "💰 Precio Objetivo",
         "📋 Recomendaciones",
+        "📉 Earnings Analysis",
         "🎯 Earnings Surprises",
         "📅 Eventos & Calendario",
         "🏦 Fondos Institucionales",
@@ -1890,9 +1888,7 @@ def render():
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">💵 Múltiplos de Valoración</span>
-                <div class="tip-box"><div class="tip-icon">?</div>
-                    <div class="tip-text">Verde = barato · Naranja = valoración media · Rojo = caro. Umbrales estándar de análisis fundamental.</div>
-                </div>
+                <span title="Verde = barato · Naranja = valoración media · Rojo = caro. Umbrales estándar de análisis fundamental." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
             </div>
             <div class="mod-body">{rows_html}</div>
         </div>
@@ -2028,9 +2024,7 @@ def render():
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">📈 Rentabilidad y Salud Financiera</span>
-                <div class="tip-box"><div class="tip-icon">?</div>
-                    <div class="tip-text">Verde = bueno · Naranja = neutral · Rojo = precaución. ROE y Márgenes ajustados al sector: un ROE del 8% es excelente para un banco pero débil para tech.</div>
-                </div>
+                <span title="Verde = bueno · Naranja = neutral · Rojo = precaución. ROE y Márgenes ajustados al sector: un ROE del 8% es excelente para un banco pero débil para tech." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
             </div>
             <div class="mod-body">{sector_rentab_note}{rows_html}</div>
         </div>
@@ -2180,8 +2174,234 @@ def render():
         else:
             st.info("No hay recomendaciones de analistas disponibles.")
 
-    # ══ TAB 5: EARNINGS SURPRISES ══
+    # ══ TAB 4: EARNINGS ANALYSIS ══
     with tabs[4]:
+        st.markdown("""
+        <div class="mod-box">
+            <div class="mod-header">
+                <span class="mod-icon">📉</span>
+                <div>
+                    <div class="mod-title">Earnings Analysis</div>
+                    <div style="font-family:Inter,sans-serif;color:#555;font-size:0.75rem;">
+                        Performance metrics and historical earnings reaction data
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        ea_surprises = earnings_surprises or []
+        next_earnings = calendar_data.get('earnings_date') if calendar_data else None
+
+        if not ea_surprises:
+            st.info("No hay datos de earnings históricos disponibles para este ticker.")
+        else:
+            import numpy as np
+
+            # ── Build reaction metrics from surprises ──
+            n_q = min(len(ea_surprises), 8)
+            recent = ea_surprises[:n_q]
+
+            # EPS beats
+            eps_beats = sum(1 for e in recent if (e.get('surprise_pct') or 0) > 0)
+
+            # For gap/price reaction we use hist_1y if available
+            reactions = []
+            if hist_1y is not None and not hist_1y.empty:
+                for surp in recent:
+                    try:
+                        rd = surp.get('report_date') or surp.get('date')
+                        if not rd: continue
+                        import pandas as pd
+                        rd_ts = pd.Timestamp(str(rd))
+                        idx = hist_1y.index.searchsorted(rd_ts)
+                        if idx >= len(hist_1y) or idx == 0: continue
+                        pre_close = float(hist_1y['Close'].iloc[idx-1])
+                        open_price = float(hist_1y['Open'].iloc[idx]) if idx < len(hist_1y) else None
+                        d3_close  = float(hist_1y['Close'].iloc[min(idx+2, len(hist_1y)-1)])
+                        gap_pct   = (open_price - pre_close)/pre_close*100 if open_price else None
+                        d3_pct    = (d3_close   - pre_close)/pre_close*100
+                        high_pct  = (float(hist_1y['High'].iloc[idx]) - pre_close)/pre_close*100
+                        low_pct   = (float(hist_1y['Low'].iloc[idx])  - pre_close)/pre_close*100
+                        reactions.append({
+                            'quarter': surp.get('quarter',''),
+                            'date': str(rd)[:10],
+                            'surprise': surp.get('surprise_pct',0) or 0,
+                            'gap': gap_pct, 'high': high_pct,
+                            'low': low_pct, 'd3': d3_pct,
+                        })
+                    except Exception:
+                        pass
+
+            avg_gap = np.mean([r['gap'] for r in reactions if r['gap'] is not None]) if reactions else None
+            gap_vol = np.std( [r['gap'] for r in reactions if r['gap'] is not None]) if reactions and len(reactions)>1 else None
+            avg_d3  = np.mean([r['d3'] for r in reactions]) if reactions else None
+
+            # Scores (0-100)
+            gup_score   = max(0,min(100, int((avg_gap or 0)*5 + 50)))
+            eps_score   = int(eps_beats/n_q*100)
+            fade_score  = max(0,min(100, int((avg_d3 or 0)*3 + 50))) if avg_d3 is not None else 50
+            consistency = max(0,min(100, int(100 - (gap_vol or 5)*8))) if gap_vol is not None else 50
+            overall     = int(consistency*0.3 + gup_score*0.3 + fade_score*0.2 + eps_score*0.2)
+
+            # ── Snapshot header ──
+            next_str = ""
+            if next_earnings:
+                try:
+                    from datetime import datetime as _dt
+                    ne = next_earnings[0] if isinstance(next_earnings, list) else next_earnings
+                    next_str = str(ne)[:10]
+                except Exception:
+                    next_str = str(next_earnings)[:10]
+
+            def _fc(v, pos_green=True):
+                """Color for percentage value."""
+                if v is None: return "#888"
+                return "#00ffad" if (v > 0) == pos_green else "#f23645"
+
+            def _fp(v, decimals=1):
+                if v is None: return "N/D"
+                return f"{v:+.{decimals}f}%"
+
+            # ── Snapshot bar ──
+            st.markdown(f"""
+            <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;
+                        padding:16px 20px;margin-bottom:12px;display:flex;
+                        flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+                <div>
+                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
+                                letter-spacing:1px;text-transform:uppercase;">Snapshot</div>
+                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.1rem;">
+                        Earnings reaction (last {n_q})
+                    </div>
+                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;">
+                        Long-biased profile · KPIs based on look-back window
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
+                                letter-spacing:1px;text-transform:uppercase;">Next Earnings</div>
+                    <div style="font-family:VT323,monospace;color:#00d9ff;font-size:1.3rem;">
+                        {next_str if next_str else "N/D"}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ── 4 KPI cards + radar ──
+            col_radar, col_kpis = st.columns([1, 1])
+
+            with col_radar:
+                # Radar chart: Consistency, Gap-up, EPS, Fade, +3D
+                radar_vals = [consistency, gup_score, eps_score, fade_score,
+                              max(0,min(100,int((avg_d3 or 0)*3+50)))]
+                radar_labels = ["Consistency","Gap-up","EPS beats","Fade resist.","+3D"]
+                fig_radar = go.Figure(go.Scatterpolar(
+                    r=radar_vals + [radar_vals[0]],
+                    theta=radar_labels + [radar_labels[0]],
+                    fill='toself',
+                    fillcolor='rgba(0,255,173,0.08)',
+                    line=dict(color='#00ffad', width=2),
+                    marker=dict(color='#00ffad', size=5)
+                ))
+                fig_radar.update_layout(
+                    polar=dict(
+                        bgcolor='#0a0c10',
+                        radialaxis=dict(range=[0,100], showticklabels=True,
+                                        tickfont=dict(size=8,color='#444'),
+                                        gridcolor='#1a1e26', linecolor='#1a1e26'),
+                        angularaxis=dict(tickfont=dict(size=9,color='#888'),
+                                         gridcolor='#1a1e26', linecolor='#1a1e26')
+                    ),
+                    paper_bgcolor='#0c0e12', plot_bgcolor='#0c0e12',
+                    font=dict(color='white'),
+                    showlegend=False, margin=dict(l=20,r=20,t=20,b=20), height=240
+                )
+                st.plotly_chart(fig_radar, use_container_width=True)
+
+            with col_kpis:
+                def _kpi(label, value, sub="", color="#00ffad"):
+                    return (
+                        f'<div style="background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;'
+                        f'padding:14px 16px;margin-bottom:8px;">'
+                        f'<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;'
+                        f'letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">{label}</div>'
+                        f'<div style="font-family:VT323,monospace;color:{color};font-size:1.8rem;">{value}</div>'
+                        f'<div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;">{sub}</div>'
+                        f'</div>'
+                    )
+                ov_color = "#00ffad" if overall>=60 else ("#ff9800" if overall>=40 else "#f23645")
+                st.markdown(
+                    _kpi("Overall Score", f"{overall}/100", "Consistency·Gap·Fade·EPS", ov_color) +
+                    _kpi("EPS Beats", f"{eps_beats} / {n_q}", "Beats in look-back",
+                         "#00ffad" if eps_beats/n_q>=0.6 else "#ff9800") +
+                    _kpi("Avg Gap (next open)", _fp(avg_gap), "Vs pre-release close",
+                         _fc(avg_gap)) +
+                    _kpi("Gap Volatility (σ)", f"{gap_vol:.2f} pp" if gap_vol is not None else "N/D",
+                         "Std dev of next-open gap", "#00d9ff"),
+                    unsafe_allow_html=True
+                )
+
+            # ── History table ──
+            if reactions:
+                st.markdown("""
+                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;
+                            padding:14px 18px;margin-top:8px;">
+                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
+                                letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">History</div>
+                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1rem;margin-bottom:12px;">
+                        Earnings reaction table
+                    </div>
+                """, unsafe_allow_html=True)
+
+                def _cell(v, green_if_pos=True):
+                    if v is None: return '<td style="color:#444;text-align:right;padding:6px 10px;">—</td>'
+                    c = "#00ffad" if (v>0)==green_if_pos else "#f23645"
+                    bg = "rgba(0,255,173,0.06)" if v>0 else "rgba(242,54,69,0.06)"
+                    return f'<td style="color:{c};background:{bg};text-align:right;padding:6px 10px;font-family:monospace;font-size:0.82rem;">{v:+.1f}%</td>'
+
+                rows = ""
+                for r in reactions:
+                    rows += (
+                        f'<tr style="border-bottom:1px solid #0f1218;">'
+                        f'<td style="padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#888;font-size:0.78rem;">{r["quarter"]}</td>'
+                        f'<td style="padding:6px 10px;font-family:monospace;color:#555;font-size:0.75rem;">{r["date"]}</td>'
+                        + _cell(r["gap"]) + _cell(r["high"]) + _cell(r["low"])
+                        + _cell(r["d3"]) +
+                        f'<td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:0.8rem;'
+                        f'color:{"#00ffad" if r["surprise"]>0 else "#f23645"};">{r["surprise"]:+.1f}%</td>'
+                        f'</tr>'
+                    )
+                st.markdown(f"""
+                    <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid #1a1e26;">
+                                <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Quarter</th>
+                                <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Reported</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Open</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">High</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Low</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">+3D</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">EPS Surp.</th>
+                            </tr>
+                        </thead>
+                        <tbody>{rows}</tbody>
+                    </table>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+    # ══ TAB 5: EARNINGS SURPRISES ══
+    with tabs[5]:
         if earnings_surprises and len(earnings_surprises) > 0:
             source_label = "Alpha Vantage" if av_surprises else "Yahoo Finance"
             st.markdown(f"""
@@ -2265,7 +2485,7 @@ def render():
             st.info("No hay datos de earnings surprises disponibles para este ticker.")
 
     # ══ TAB 6: EVENTOS & CALENDARIO ══
-    with tabs[5]:
+    with tabs[6]:
         event_map = {
             'Earnings Date':        ('📅', 'Próximos Resultados Trimestrales'),
             'Ex-Dividend Date':     ('💵', 'Fecha Ex-Dividendo'),
@@ -2348,14 +2568,12 @@ def render():
                 """, unsafe_allow_html=True)
 
     # ══ TAB 7: FONDOS INSTITUCIONALES ══
-    with tabs[6]:
+    with tabs[7]:
         st.markdown("""
         <div class="mod-box">
             <div class="mod-header">
                 <span class="mod-title">🏦 Fondos Institucionales — Declaraciones 13F (SEC)</span>
-                <div class="tip-box"><div class="tip-icon">?</div>
-                    <div class="tip-text">Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR.</div>
-                </div>
+                <span title="Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
             </div>
             <div class="mod-body">
         """, unsafe_allow_html=True)
@@ -2475,7 +2693,7 @@ def render():
         st.markdown("</div></div>", unsafe_allow_html=True)
 
     # ══ TAB 8: NOTICIAS & SENTIMIENTO ══
-    with tabs[7]:
+    with tabs[8]:
         if not api_keys['finnhub']:
             st.markdown("""
             <div class="mod-box"><div class="mod-body">
@@ -2518,36 +2736,51 @@ def render():
                         ny = cy - r * _math.sin(a)
                         return f"{cx:.1f},{cy:.1f} {nx:.1f},{ny:.1f}"
 
-                    # ── Build SVG gauge via string concatenation (no nested f-strings) ──
+                    # ── SVG half-donut gauge (clean, no overlapping arcs) ──
                     import math as _m
-                    def _ap(v1, v2, cx=100, cy=88, r=62):
-                        a1 = _m.radians(180.0-(v1+100)/200.0*180.0)
-                        a2 = _m.radians(180.0-(v2+100)/200.0*180.0)
-                        x1,y1 = cx+r*_m.cos(a1), cy-r*_m.sin(a1)
-                        x2,y2 = cx+r*_m.cos(a2), cy-r*_m.sin(a2)
-                        laf = 1 if abs(v2-v1)>100 else 0
-                        return f"M {x1:.1f} {y1:.1f} A {r} {r} 0 {laf} 0 {x2:.1f} {y2:.1f}"
-                    na  = _m.radians(180.0-(gauge_val+100)/200.0*180.0)
-                    nx  = 100+55*_m.cos(na); ny = 88-55*_m.sin(na)
+                    # Semicircle: left=-100, right=+100, top=0
+                    # angle=180° at left, 0° at right (standard math coords)
+                    CX, CY, R, SW = 110, 95, 72, 16  # center, radius, stroke-width
+                    def _gauge_arc(v1, v2, color, sw=SW):
+                        # Convert value [-100,100] to angle [180,0] degrees
+                        a1 = _m.radians(180.0 - (v1+100)/200.0*180.0)
+                        a2 = _m.radians(180.0 - (v2+100)/200.0*180.0)
+                        x1 = CX + R*_m.cos(a1); y1 = CY - R*_m.sin(a1)
+                        x2 = CX + R*_m.cos(a2); y2 = CY - R*_m.sin(a2)
+                        laf = 1 if (v2-v1) > 100 else 0
+                        return (f'<path d="M {x1:.2f},{y1:.2f} A {R},{R} 0 {laf},0 {x2:.2f},{y2:.2f}" '
+                                f'fill="none" stroke="{color}" stroke-width="{sw}" stroke-linecap="butt"/>')
+                    # Needle
+                    na = _m.radians(180.0-(gauge_val+100)/200.0*180.0)
+                    nx = CX+(R-4)*_m.cos(na); ny = CY-(R-4)*_m.sin(na)
+                    bx1 = CX+8*_m.cos(na+_m.pi/2); by1 = CY-8*_m.sin(na+_m.pi/2)
+                    bx2 = CX+8*_m.cos(na-_m.pi/2); by2 = CY-8*_m.sin(na-_m.pi/2)
                     svg = (
-                        '<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"'
-                        ' style="width:100%;max-width:260px;display:block;margin:8px auto;">'
-                        '<path d="' + _ap(-100,100) + '" fill="none" stroke="#1a1e26" stroke-width="14" stroke-linecap="round"/>'
-                        '<path d="' + _ap(-100,-30) + '" fill="none" stroke="#2d1515" stroke-width="12" stroke-linecap="round"/>'
-                        '<path d="' + _ap(-30,30)   + '" fill="none" stroke="#1e1e10" stroke-width="12" stroke-linecap="round"/>'
-                        '<path d="' + _ap(30,100)   + '" fill="none" stroke="#0d2a1a" stroke-width="12" stroke-linecap="round"/>'
-                        '<path d="' + _ap(min(0,gauge_val),max(0,gauge_val)) + '"'
-                        ' fill="none" stroke="' + sent_color + '" stroke-width="12" stroke-linecap="round" opacity="0.9"/>'
-                        f'<line x1="100" y1="88" x2="{nx:.1f}" y2="{ny:.1f}"'
-                        ' stroke="' + sent_color + '" stroke-width="2.5" stroke-linecap="round"/>'
-                        '<circle cx="100" cy="88" r="4" fill="' + sent_color + '"/>'
-                        '<text x="8"   y="96" fill="#444" font-size="7" font-family="monospace">-100</text>'
-                        '<text x="42"  y="26" fill="#444" font-size="7" font-family="monospace">-50</text>'
-                        '<text x="94"  y="14" fill="#444" font-size="7" font-family="monospace">0</text>'
-                        '<text x="141" y="26" fill="#444" font-size="7" font-family="monospace">50</text>'
-                        '<text x="163" y="96" fill="#444" font-size="7" font-family="monospace">100</text>'
-                        '<text x="100" y="72" fill="' + sent_color + '" font-size="22"'
-                        ' font-family="VT323,monospace" text-anchor="middle">' + str(int(gauge_val)) + '</text>'
+                        '<svg viewBox="0 0 220 105" xmlns="http://www.w3.org/2000/svg"'
+                        ' style="width:100%;max-width:280px;display:block;margin:4px auto;">'
+                        # Track
+                        + _gauge_arc(-100, 100, '#1c2030') +
+                        # Zones
+                        _gauge_arc(-100, -40, '#3d1515') +
+                        _gauge_arc(-40,   40, '#222210') +
+                        _gauge_arc( 40,  100, '#0d2a1a') +
+                        # Active value arc (from 0 to gauge_val, thicker)
+                        _gauge_arc(min(0,gauge_val), max(0,gauge_val), sent_color, SW+2) +
+                        # Needle triangle
+                        f'<polygon points="{nx:.1f},{ny:.1f} {bx1:.1f},{by1:.1f} {bx2:.1f},{by2:.1f}"'
+                        f' fill="{sent_color}" opacity="0.9"/>'
+                        f'<circle cx="{CX}" cy="{CY}" r="6" fill="#0a0c10" stroke="{sent_color}" stroke-width="2"/>'
+                        # Tick labels
+                        '<text x="4"   y="100" fill="#555" font-size="8" font-family="monospace">-100</text>'
+                        '<text x="44"  y="30"  fill="#555" font-size="8" font-family="monospace">-50</text>'
+                        '<text x="105" y="16"  fill="#555" font-size="8" font-family="monospace">0</text>'
+                        '<text x="155" y="30"  fill="#555" font-size="8" font-family="monospace">50</text>'
+                        '<text x="176" y="100" fill="#555" font-size="8" font-family="monospace">100</text>'
+                        # Big score number
+                        f'<text x="{CX}" y="{CY-8}" fill="{sent_color}" font-size="28"'
+                        ' font-family="VT323,monospace" text-anchor="middle" dominant-baseline="auto">'
+                        + str(int(gauge_val)) +
+                        '</text>'
                         '</svg>'
                     )
                     kpi_row = (
@@ -2571,9 +2804,8 @@ def render():
                     st.markdown(
                         '<div class="mod-box">'
                         '<div class="mod-header"><span class="mod-title">📊 Sentimiento</span>'
-                        '<div class="tip-box"><div class="tip-icon">?</div>'
-                        '<div class="tip-text">Análisis de titulares Finnhub (30 días).</div>'
-                        '</div></div>'
+                        '<span title="Análisis de titulares Finnhub (30 días)." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;">?</span>'
+                        '</div>'
                         '<div class="mod-body" style="padding:12px;">'
                         + svg + kpi_row +
                         '</div></div>',
@@ -2623,9 +2855,7 @@ def render():
                     <div class="mod-box">
                         <div class="mod-header">
                             <span class="mod-title">📰 Últimas Noticias (30 días)</span>
-                            <div class="tip-box"><div class="tip-icon">?</div>
-                                <div class="tip-text">Noticias vía Finnhub. Clic en el titular para abrir la fuente original.</div>
-                            </div>
+                            <span title="Noticias vía Finnhub. Clic en el titular para abrir la fuente original." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
                         </div>
                         <div class="mod-body" style="max-height:420px;overflow-y:auto;padding:12px 16px;">
                             {news_items}
@@ -2654,9 +2884,7 @@ def render():
     <div class="mod-box">
         <div class="mod-header">
             <span class="mod-title">💡 Sugerencias de Inversión</span>
-            <div class="tip-box"><div class="tip-icon">?</div>
-                <div class="tip-text">Análisis automatizado con datos reales de Yahoo Finance. No constituye asesoramiento financiero.</div>
-            </div>
+            <span title="Análisis automatizado con datos reales de Yahoo Finance. No constituye asesoramiento financiero." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
         </div>
         <div class="mod-body">{sug_html}</div>
     </div>
@@ -2706,21 +2934,20 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Forzar visibilidad de botones con CSS específico ──
-    st.markdown("""
-    <style>
-    div[data-testid="stButton"] > button {
-        background: linear-gradient(90deg,#00ffad,#00cc8a) !important;
-        color: #000 !important; font-weight: 800 !important;
-        font-size: 1rem !important; padding: 14px !important;
-        border: none !important; border-radius: 6px !important;
-        width: 100% !important; display: block !important;
-        visibility: visible !important; opacity: 1 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    btn_rapido   = st.button("⚡  ANÁLISIS RÁPIDO — Snapshot ejecutivo",   key="btn_rapido",   use_container_width=True)
-    btn_completo = st.button("📋  INFORME COMPLETO — 11 secciones con IA", key="btn_completo", use_container_width=True)
+    # ── IA Buttons en sidebar — garantiza render independiente del HTML principal ──
+    with st.sidebar:
+        st.markdown("""
+        <div style="margin:16px 0 8px;border-top:1px solid #1a1e26;padding-top:16px;">
+            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.1rem;
+                        letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">
+                🤖 RSU IA
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        btn_rapido   = st.button("⚡ ANÁLISIS RÁPIDO",        key="btn_rapido",   use_container_width=True)
+        btn_completo = st.button("📋 INFORME COMPLETO (11s)", key="btn_completo", use_container_width=True)
+        if btn_rapido or btn_completo:
+            st.caption("▸ Generando análisis IA...")
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 

@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -2519,64 +2518,66 @@ def render():
                         ny = cy - r * _math.sin(a)
                         return f"{cx:.1f},{cy:.1f} {nx:.1f},{ny:.1f}"
 
-                    gauge_html = f"""
-                    <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"
-                         style="width:100%;max-width:260px;display:block;margin:8px auto 0;">
-                      <!-- bg track -->
-                      <path d="{_arc_path(-100,100)}" fill="none" stroke="#1a1e26" stroke-width="14" stroke-linecap="round"/>
-                      <!-- zone colors -->
-                      <path d="{_arc_path(-100,-30)}" fill="none" stroke="#2d1515" stroke-width="12" stroke-linecap="round"/>
-                      <path d="{_arc_path(-30,30)}"   fill="none" stroke="#1e1e10" stroke-width="12" stroke-linecap="round"/>
-                      <path d="{_arc_path(30,100)}"   fill="none" stroke="#0d2a1a" stroke-width="12" stroke-linecap="round"/>
-                      <!-- active arc -->
-                      <path d="{_arc_path(min(0,gauge_val), max(0,gauge_val))}"
-                            fill="none" stroke="{sent_color}" stroke-width="12" stroke-linecap="round" opacity="0.9"/>
-                      <!-- needle -->
-                      <line x1="100" y1="88" x2="{100 + 55*_math.cos(_math.radians(180-(gauge_val+100)/200*180)):.1f}"
-                            y2="{88  - 55*_math.sin(_math.radians(180-(gauge_val+100)/200*180)):.1f}"
-                            stroke="{sent_color}" stroke-width="2.5" stroke-linecap="round"/>
-                      <circle cx="100" cy="88" r="4" fill="{sent_color}"/>
-                      <!-- tick labels -->
-                      <text x="8"   y="95" fill="#444" font-size="7.5" font-family="monospace">-100</text>
-                      <text x="41"  y="26" fill="#444" font-size="7.5" font-family="monospace">-50</text>
-                      <text x="93"  y="13" fill="#444" font-size="7.5" font-family="monospace">0</text>
-                      <text x="141" y="26" fill="#444" font-size="7.5" font-family="monospace">50</text>
-                      <text x="163" y="95" fill="#444" font-size="7.5" font-family="monospace">100</text>
-                      <!-- score number -->
-                      <text x="100" y="72" fill="{sent_color}" font-size="22"
-                            font-family="VT323,monospace" text-anchor="middle">{gauge_val:.0f}</text>
-                    </svg>"""
-
-                    st.markdown(f"""
-                    <div class="mod-box">
-                        <div class="mod-header">
-                            <span class="mod-title">📊 Sentimiento</span>
-                            <div class="tip-box"><div class="tip-icon">?</div>
-                                <div class="tip-text">Análisis de titulares Finnhub (30 días). Detecta negaciones para evitar falsos positivos.</div>
-                            </div>
-                        </div>
-                        <div class="mod-body" style="padding:12px;">
-                            {gauge_html}
-                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">
-                                <div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">
-                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SEÑAL</div>
-                                    <div style="font-family:VT323,monospace;color:{sent_color};font-size:1.2rem;">{sent_val.upper()}</div>
-                                </div>
-                                <div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">
-                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">ALCISTA</div>
-                                    <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.2rem;">{bull_pct:.0f}%</div>
-                                </div>
-                                <div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">
-                                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">BAJISTA</div>
-                                    <div style="font-family:VT323,monospace;color:#f23645;font-size:1.2rem;">{bear_pct:.0f}%</div>
-                                </div>
-                            </div>
-                            <div style="font-family:Inter,sans-serif;color:#444;font-size:0.68rem;margin-top:8px;text-align:center;">
-                                {analyzed} titulares de {news_count} analizados
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # ── Build SVG gauge via string concatenation (no nested f-strings) ──
+                    import math as _m
+                    def _ap(v1, v2, cx=100, cy=88, r=62):
+                        a1 = _m.radians(180.0-(v1+100)/200.0*180.0)
+                        a2 = _m.radians(180.0-(v2+100)/200.0*180.0)
+                        x1,y1 = cx+r*_m.cos(a1), cy-r*_m.sin(a1)
+                        x2,y2 = cx+r*_m.cos(a2), cy-r*_m.sin(a2)
+                        laf = 1 if abs(v2-v1)>100 else 0
+                        return f"M {x1:.1f} {y1:.1f} A {r} {r} 0 {laf} 0 {x2:.1f} {y2:.1f}"
+                    na  = _m.radians(180.0-(gauge_val+100)/200.0*180.0)
+                    nx  = 100+55*_m.cos(na); ny = 88-55*_m.sin(na)
+                    svg = (
+                        '<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"'
+                        ' style="width:100%;max-width:260px;display:block;margin:8px auto;">'
+                        '<path d="' + _ap(-100,100) + '" fill="none" stroke="#1a1e26" stroke-width="14" stroke-linecap="round"/>'
+                        '<path d="' + _ap(-100,-30) + '" fill="none" stroke="#2d1515" stroke-width="12" stroke-linecap="round"/>'
+                        '<path d="' + _ap(-30,30)   + '" fill="none" stroke="#1e1e10" stroke-width="12" stroke-linecap="round"/>'
+                        '<path d="' + _ap(30,100)   + '" fill="none" stroke="#0d2a1a" stroke-width="12" stroke-linecap="round"/>'
+                        '<path d="' + _ap(min(0,gauge_val),max(0,gauge_val)) + '"'
+                        ' fill="none" stroke="' + sent_color + '" stroke-width="12" stroke-linecap="round" opacity="0.9"/>'
+                        f'<line x1="100" y1="88" x2="{nx:.1f}" y2="{ny:.1f}"'
+                        ' stroke="' + sent_color + '" stroke-width="2.5" stroke-linecap="round"/>'
+                        '<circle cx="100" cy="88" r="4" fill="' + sent_color + '"/>'
+                        '<text x="8"   y="96" fill="#444" font-size="7" font-family="monospace">-100</text>'
+                        '<text x="42"  y="26" fill="#444" font-size="7" font-family="monospace">-50</text>'
+                        '<text x="94"  y="14" fill="#444" font-size="7" font-family="monospace">0</text>'
+                        '<text x="141" y="26" fill="#444" font-size="7" font-family="monospace">50</text>'
+                        '<text x="163" y="96" fill="#444" font-size="7" font-family="monospace">100</text>'
+                        '<text x="100" y="72" fill="' + sent_color + '" font-size="22"'
+                        ' font-family="VT323,monospace" text-anchor="middle">' + str(int(gauge_val)) + '</text>'
+                        '</svg>'
+                    )
+                    kpi_row = (
+                        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">'
+                        '<div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">'
+                        '<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SEÑAL</div>'
+                        '<div style="font-family:VT323,monospace;color:' + sent_color + ';font-size:1.2rem;">' + sent_val.upper() + '</div>'
+                        '</div>'
+                        '<div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">'
+                        '<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">ALCISTA</div>'
+                        '<div style="font-family:VT323,monospace;color:#00ffad;font-size:1.2rem;">' + f"{bull_pct:.0f}%" + '</div>'
+                        '</div>'
+                        '<div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">'
+                        '<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">BAJISTA</div>'
+                        '<div style="font-family:VT323,monospace;color:#f23645;font-size:1.2rem;">' + f"{bear_pct:.0f}%" + '</div>'
+                        '</div></div>'
+                        '<div style="font-family:Inter,sans-serif;color:#444;font-size:0.68rem;margin-top:8px;text-align:center;">'
+                        + str(analyzed) + ' titulares de ' + str(news_count) + ' analizados'
+                        '</div>'
+                    )
+                    st.markdown(
+                        '<div class="mod-box">'
+                        '<div class="mod-header"><span class="mod-title">📊 Sentimiento</span>'
+                        '<div class="tip-box"><div class="tip-icon">?</div>'
+                        '<div class="tip-text">Análisis de titulares Finnhub (30 días).</div>'
+                        '</div></div>'
+                        '<div class="mod-body" style="padding:12px;">'
+                        + svg + kpi_row +
+                        '</div></div>',
+                        unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="mod-box"><div class="mod-body">
@@ -2705,8 +2706,21 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    btn_rapido   = st.button("⚡ ANÁLISIS RÁPIDO — Snapshot ejecutivo",          key="btn_rapido",   use_container_width=True)
-    btn_completo = st.button("📋 INFORME COMPLETO — 11 secciones con IA",        key="btn_completo", use_container_width=True)
+    # ── Forzar visibilidad de botones con CSS específico ──
+    st.markdown("""
+    <style>
+    div[data-testid="stButton"] > button {
+        background: linear-gradient(90deg,#00ffad,#00cc8a) !important;
+        color: #000 !important; font-weight: 800 !important;
+        font-size: 1rem !important; padding: 14px !important;
+        border: none !important; border-radius: 6px !important;
+        width: 100% !important; display: block !important;
+        visibility: visible !important; opacity: 1 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    btn_rapido   = st.button("⚡  ANÁLISIS RÁPIDO — Snapshot ejecutivo",   key="btn_rapido",   use_container_width=True)
+    btn_completo = st.button("📋  INFORME COMPLETO — 11 secciones con IA", key="btn_completo", use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 
@@ -2831,5 +2845,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

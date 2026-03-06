@@ -1295,27 +1295,6 @@ Céntrate especialmente en las razones por las cuales la acción podría realiza
 ---
 Mantén el estilo claro, profesional, directo y orientado a la toma de decisiones de inversión. Responde siempre en castellano."""
 
-# ── PROMPT GROK (xAI) ── análisis de investigación en tiempo real ──
-PROMPT_GROK = """Por favor, analiza {t} para mí y proporciona lo siguiente, de forma concisa y claramente organizada:
-1. Explica a qué se dedica la empresa con lenguaje muy sencillo: tres puntos breves sobre lo que hace y cualquier ejemplo o analogía útil con la que me pueda identificar.
-2. Resumen profesional (máximo 10 frases): sector, productos/servicios principales, competidores primarios (lista los tickers), métricas o hitos destacables, ventaja competitiva/foso (moat), por qué son únicos y, si se trata de una biotecnológica, indica si tienen un producto comercial o están en fases clínicas.
-3. En una tabla, proporciona lo siguiente:
-   - Cualquier tema candente, narrativa o historia de la acción.
-   - Cualquier catalizador (resultados, noticias, macro).
-   - Cualquier dato fundamental significativo (gran crecimiento en beneficios o ingresos, foso, producto o servicio único, gestión superior, patentes, etc.).
-4. Muestra todas las principales noticias/eventos de los últimos 3 meses en una tabla con:
-   - Fecha (AAAA-MM-DD).
-   - Tipo de evento (Resultados, Lanzamiento de producto, Mejora/Degradación de analistas, etc.).
-   - Resumen breve (máximo 1-2 frases).
-   - Enlace directo a la fuente.
-   - Marca cualquier evento importante que haya movido el precio (resultados sorpresa, cambio significativo en las previsiones/guidance, acciones de analistas de primer nivel).
-5. Menciona cualquier compra/venta reciente de insiders o presentaciones institucionales si están visibles.
-6. Resume cómo se mueve la acción en comparación con sus competidores principales y la tendencia general del sector en el último mes (subida/bajada).
-7. Señala los próximos catalizadores (resultados, lanzamientos de productos, eventos regulatorios) en los próximos 30 días.
-8. Anota cualquier cambio en los precios objetivo de los analistas para este ticker durante el período mencionado.
-
-Responde en castellano, con estilo claro, conciso y fácil de leer para decisiones de inversión. Usa tablas siempre que sea posible."""
-
 PROMPT_RSU_RAPIDO = """Analiza {t} en castellano. Sé directo y breve.
 
 **DATOS ACTUALES (Yahoo Finance / FMP):**
@@ -1799,15 +1778,17 @@ def render():
     </script></body></html>"""
 
     st.markdown(f"""
-    <div class="mod-box" style="margin-bottom:4px;padding-bottom:0;">
-        <div class="mod-header" style="margin-bottom:0;">
+    <div class="mod-box" style="margin-bottom:0;">
+        <div class="mod-header">
             <span class="mod-title">📈 Gráfico Avanzado — {t_in}</span>
             <span title="Gráfico TradingView interactivo con RSI, Media Móvil y MACD. Puedes cambiar timeframe y añadir indicadores." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
         </div>
-        <div style="padding:12px 0 0 0;overflow:hidden;border-radius:0 0 8px 8px;">
+    </div>
     """, unsafe_allow_html=True)
-    components.html(chart_html, height=462)
-    st.markdown('</div></div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div style="border:1px solid #00ffad1a;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;margin-bottom:18px;">', unsafe_allow_html=True)
+        components.html(chart_html, height=462)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ── SOBRE LA EMPRESA ──
     st.markdown(f"""
@@ -2123,7 +2104,7 @@ def render():
             fig_gauge.update_layout(template="plotly_dark", paper_bgcolor='#11141a',
                                     font=dict(color='white'), height=280,
                                     margin=dict(l=30, r=30, t=50, b=30))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+            st.plotly_chart(fig_gauge, use_container_width=True, key="gauge_rsu_score")
         else:
             st.info("No hay datos de precio objetivo disponibles para este ticker.")
 
@@ -2357,7 +2338,7 @@ def render():
                     margin=dict(l=70, r=70, t=50, b=50),
                     height=320
                 )
-                st.plotly_chart(fig_radar, use_container_width=True)
+                st.plotly_chart(fig_radar, use_container_width=True, key="radar_earnings")
 
             with col_kpis:
                 def _kpi(label, value, sub="", color="#00ffad"):
@@ -2384,6 +2365,16 @@ def render():
 
             # ── History table ──
             if reactions:
+                st.markdown("""
+                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;
+                            padding:14px 18px;margin-top:8px;">
+                    <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
+                                letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Historial</div>
+                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1rem;margin-bottom:12px;">
+                        Tabla de reacciones a earnings
+                    </div>
+                """, unsafe_allow_html=True)
+
                 def _cell(v, green_if_pos=True):
                     if v is None: return '<td style="color:#444;text-align:right;padding:6px 10px;">—</td>'
                     c = "#00ffad" if (v>0)==green_if_pos else "#f23645"
@@ -2402,24 +2393,32 @@ def render():
                         f'color:{"#00ffad" if r["surprise"]>0 else "#f23645"};">{r["surprise"]:+.1f}%</td>'
                         f'</tr>'
                     )
-                st.markdown(
-                    '<div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;padding:14px 18px;margin-top:8px;">' +
-                    '<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Historial</div>' +
-                    '<div style="font-family:VT323,monospace;color:#ccc;font-size:1rem;margin-bottom:12px;">Tabla de reacciones a earnings</div>' +
-                    '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
-                    '<thead><tr style="border-bottom:1px solid #1a1e26;">' +
-                    '<th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Trimestre</th>' +
-                    '<th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Fecha</th>' +
-                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Apertura</th>' +
-                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Intraday Alto</th>' +
-                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Intraday Bajo</th>' +
-                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">+3 Días</th>' +
-                    '<th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Sorpresa EPS</th>' +
-                    '</tr></thead><tbody>' +
-                    rows +
-                    '</tbody></table></div></div>',
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"""
+                    <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid #1a1e26;">
+                                <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Trimestre</th>
+                                <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Fecha</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Apertura</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">High</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Low</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">+3D</th>
+                                <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Sorpresa EPS</th>
+                            </tr>
+                        </thead>
+                        <tbody>{rows}</tbody>
+                    </table>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
 
     # ══ TAB 5: EARNINGS SURPRISES ══
@@ -2432,10 +2431,8 @@ def render():
                     <span class="mod-title">🎯 Historial de Earnings Surprises</span>
                     <span style="font-family:'Courier New',monospace;color:#555;font-size:11px;">Fuente: {source_label}</span>
                 </div>
-            </div>
+                <div class="mod-body">
             """, unsafe_allow_html=True)
-            with st.container():
-              st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 8px 8px;padding:16px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
             dates        = [s['date'] for s in reversed(earnings_surprises)]
             surprises_v  = [s['surprise_pct'] for s in reversed(earnings_surprises)]
@@ -2478,7 +2475,7 @@ def render():
             )
             fig_surp.update_xaxes(gridcolor='#1a1e26', tickangle=-45)
             fig_surp.update_yaxes(gridcolor='#1a1e26')
-            st.plotly_chart(fig_surp, use_container_width=True)
+            st.plotly_chart(fig_surp, use_container_width=True, key="surp_chart")
 
             # KPIs de sorpresas
             beats = sum(1 for s in earnings_surprises if s['surprise'] >= 0)
@@ -2502,7 +2499,7 @@ def render():
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div></div>", unsafe_allow_html=True)
         else:
             if not api_keys['alpha_vantage']:
                 st.warning("⚠️ Configura **ALPHA_VANTAGE_API_KEY** para obtener datos precisos de earnings surprises.")
@@ -2599,10 +2596,8 @@ def render():
                 <span class="mod-title">🏦 Fondos Institucionales — Declaraciones 13F (SEC)</span>
                 <span title="Datos reales de declaraciones trimestrales obligatorias a la SEC (formulario 13F). Muestra qué fondos institucionales tienen posición en esta empresa y cuántas acciones declararon. Fuente: Yahoo Finance / SEC EDGAR." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">?</span>
             </div>
-        </div>
+            <div class="mod-body">
         """, unsafe_allow_html=True)
-        with st.container():
-          st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 8px 8px;padding:16px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
         # Usar datos ya cargados en get_yfinance_full — sin llamada extra a Yahoo Finance
         holders_data = inst_data_preload if inst_data_preload else get_institutional_holders(t_in)
@@ -2716,7 +2711,7 @@ def render():
             de pago como WhaleWisdom, Tikr o publicaciones directas de los fondos.
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
     # ══ TAB 8: NOTICIAS & SENTIMIENTO ══
     with tabs[8]:
@@ -2746,47 +2741,66 @@ def render():
                     sent_color  = sent_colors.get(sent_val, '#888')
                     gauge_val   = round(max(-1.0, min(1.0, score)) * 100, 1)
 
-                    # ── Gauge usando Plotly indicator — clean speedometer ──
-                    fig_gauge = go.Figure(go.Indicator(
-                        mode="gauge+number",
-                        value=gauge_val,
-                        number={
-                            'font': {'size': 36, 'color': sent_color, 'family': 'VT323, monospace'},
-                            'suffix': '',
-                        },
-                        gauge={
-                            'axis': {
-                                'range': [-100, 100],
-                                'tickvals': [-100, -50, 0, 50, 100],
-                                'ticktext': ['-100', '-50', '0', '50', '100'],
-                                'tickfont': {'size': 10, 'color': '#555'},
-                                'tickcolor': '#1a1e26',
-                            },
-                            'bar': {'color': sent_color, 'thickness': 0.25},
-                            'bgcolor': '#0a0c10',
-                            'borderwidth': 0,
-                            'steps': [
-                                {'range': [-100, -35], 'color': '#3a1212'},
-                                {'range': [-35,  35],  'color': '#1c1c0e'},
-                                {'range': [35,  100],  'color': '#0a2818'},
-                            ],
-                            'threshold': {
-                                'line': {'color': sent_color, 'width': 3},
-                                'thickness': 0.85,
-                                'value': gauge_val,
-                            },
-                        },
-                        domain={'x': [0, 1], 'y': [0, 1]},
-                    ))
-                    fig_gauge.update_layout(
-                        paper_bgcolor='#0d0f16',
-                        font={'color': '#888', 'family': 'Space Grotesk, sans-serif'},
-                        margin=dict(l=20, r=20, t=20, b=10),
-                        height=180,
+                    # ── SVG gauge: stroke-dasharray approach (no arc overlap) ──
+                    import math as _gm
+                    # Use a circle with r=60 in a 200x110 viewbox
+                    # semicircle = half circumference = π*r
+                    _R = 60
+                    _CX, _CY = 100, 100
+                    _CIRC = _gm.pi * _R   # half-circle arc length
+
+                    # Map value [-100,100] to dasharray offset
+                    # val=−100 → full dash (empty gauge), val=100 → no dash (full gauge)
+                    def _dash(v1, v2):
+                        # Arc length of segment [v1,v2]
+                        seg = abs(v2-v1)/200.0 * _CIRC
+                        # Offset = arc from start to v1
+                        off = (v1+100)/200.0 * _CIRC
+                        return seg, off
+
+                    # Needle
+                    _na = _gm.radians(180.0 - (gauge_val+100)/200.0*180.0)
+                    _nx = _CX + (_R-6)*_gm.cos(_na)
+                    _ny = _CY - (_R-6)*_gm.sin(_na)
+
+                    # Build zone paths using plain arc commands
+                    def _zone(v1, v2):
+                        a1 = _gm.radians(180.0-(v1+100)/200.0*180.0)
+                        a2 = _gm.radians(180.0-(v2+100)/200.0*180.0)
+                        x1,y1 = _CX+_R*_gm.cos(a1), _CY-_R*_gm.sin(a1)
+                        x2,y2 = _CX+_R*_gm.cos(a2), _CY-_R*_gm.sin(a2)
+                        laf = 0
+                        return f"M {x1:.1f},{y1:.1f} A {_R},{_R} 0 {laf},0 {x2:.1f},{y2:.1f}"
+
+                    svg = (
+                        '<svg viewBox="0 0 200 108" xmlns="http://www.w3.org/2000/svg"'
+                        ' style="width:100%;max-width:260px;display:block;margin:6px auto;">'
+                        # Zone 1: bearish (dark red)
+                        '<path d="' + _zone(-100,-35) + '" fill="none" stroke="#3a1212" stroke-width="18" stroke-linecap="butt"/>'
+                        # Zone 2: neutral (dark)
+                        '<path d="' + _zone(-35,35)   + '" fill="none" stroke="#1c1c0e" stroke-width="18" stroke-linecap="butt"/>'
+                        # Zone 3: bullish (dark green)
+                        '<path d="' + _zone(35,100)   + '" fill="none" stroke="#0a2a14" stroke-width="18" stroke-linecap="butt"/>'
+                        # Active arc (bright, thinner, on top)
+                        '<path d="' + _zone(min(0,gauge_val), max(0,gauge_val)) + '"'
+                        ' fill="none" stroke="' + sent_color + '" stroke-width="10" stroke-linecap="butt" opacity="0.95"/>'
+                        # Needle
+                        f'<line x1="{_CX}" y1="{_CY}" x2="{_nx:.1f}" y2="{_ny:.1f}"'
+                        ' stroke="' + sent_color + '" stroke-width="2.5" stroke-linecap="round"/>'
+                        f'<circle cx="{_CX}" cy="{_CY}" r="4.5" fill="#0d0f16" stroke="' + sent_color + '" stroke-width="1.5"/>'
+                        # Tick labels at correct positions
+                        '<text x="4"   y="106" fill="#555" font-size="7" font-family="monospace">-100</text>'
+                        '<text x="36"  y="32"  fill="#555" font-size="7" font-family="monospace">-50</text>'
+                        '<text x="93"  y="17"  fill="#555" font-size="7" font-family="monospace">0</text>'
+                        '<text x="143" y="32"  fill="#555" font-size="7" font-family="monospace">50</text>'
+                        '<text x="164" y="106" fill="#555" font-size="7" font-family="monospace">100</text>'
+                        # Score (positioned above needle pivot)
+                        f'<text x="{_CX}" y="{_CY-14}" fill="' + sent_color + '" font-size="28"'
+                        ' font-family="VT323,monospace" text-anchor="middle">' + str(int(gauge_val)) + '</text>'
+                        '</svg>'
                     )
-                    st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
                     kpi_row = (
-                        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px;">'
+                        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">'
                         '<div style="text-align:center;background:#0a0c10;border:1px solid #1a1e26;border-radius:6px;padding:8px 4px;">'
                         '<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;">SEÑAL</div>'
                         '<div style="font-family:VT323,monospace;color:' + sent_color + ';font-size:1.2rem;">' + sent_val.upper() + '</div>'
@@ -2803,16 +2817,15 @@ def render():
                         + str(analyzed) + ' titulares de ' + str(news_count) + ' analizados'
                         '</div>'
                     )
-                    # Render gauge + KPIs inside mod-box using st.container
                     st.markdown(
                         '<div class="mod-box">'
                         '<div class="mod-header"><span class="mod-title">📊 Sentimiento</span>'
                         '<span title="Análisis de titulares Finnhub (últimos 30 días). Score va de -100 (muy bajista) a +100 (muy alcista)." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;">?</span>'
                         '</div>'
-                        '<div class="mod-body" style="padding:8px 12px 12px;">',
+                        '<div class="mod-body" style="padding:12px;">'
+                        + svg + kpi_row +
+                        '</div></div>',
                         unsafe_allow_html=True)
-                    st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
-                    st.markdown(kpi_row + '</div></div>', unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="mod-box"><div class="mod-body">
@@ -2915,11 +2928,12 @@ def render():
 
                 # ── Heatmap: year × month matrix ──
                 years = sorted(h_full['year'].unique(), reverse=True)
-                _heatmap_header = (
-                    '<div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-bottom:16px;">' +
-                    '<div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Rentabilidad Mensual — Mapa de Calor</div>' +
-                    f'<div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">{lookback_years} años de rendimiento histórico mensual</div>'
-                )
+                st.markdown("""
+                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-bottom:16px;">
+                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Rentabilidad Mensual — Mapa de Calor</div>
+                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
+                """ + f"{lookback_years}" + """ años de rendimiento histórico mensual</div>
+                """, unsafe_allow_html=True)
 
                 def _cell_color(v):
                     if v is None: return "#1a1e26", "#444"
@@ -2967,17 +2981,20 @@ def render():
                     '<span style="font-family:monospace;font-size:0.7rem;color:#00ffad;">■ ≥ 10%</span>'
                     '</div></div>'
                 )
-                st.markdown(_heatmap_header + hdr + rows_h + legend, unsafe_allow_html=True)
+                st.markdown(hdr + rows_h + legend, unsafe_allow_html=True)
 
                 # ── Patrones de Estacionalidad table ──
-                _seas_header = (
-                    '<div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-top:16px;">' +
-                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">' +
-                    '<span style="font-size:1.1rem;">📅</span>' +
-                    '<div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Patrones de Estacionalidad</div>' +
-                    '</div>' +
-                    '<div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">Patrones históricos de precio por período temporal</div>'
-                )
+                st.markdown("""
+                <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;
+                            padding:20px;margin-top:16px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                        <span style="font-size:1.1rem;">📅</span>
+                        <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Patrones de Estacionalidad</div>
+                    </div>
+                    <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
+                        Patrones históricos de precio por período temporal
+                    </div>
+                """, unsafe_allow_html=True)
 
                 # Table header
                 tbl = (
@@ -3034,7 +3051,7 @@ def render():
                     'Puntuación = media×3 + consistencia×0.4 − desv.est×0.5'
                     '</div></div>'
                 )
-                st.markdown(_seas_header + tbl + footnote, unsafe_allow_html=True)
+                st.markdown(tbl + footnote, unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════
     # SUGERENCIAS AUTOMÁTICAS
@@ -3101,7 +3118,7 @@ def render():
                     border-top:1px solid #1a1e26;padding-top:10px;">
             <strong style="color:#00ffad;">⚡ Rápido</strong> — Snapshot ejecutivo: precio, valoración, catalizadores y riesgo en segundos.<br>
             <strong style="color:#00d9ff;">📋 Completo</strong> — Informe de 11 secciones: empresa, fundamentales, técnico, smart money y perspectivas.<br>
-            <strong style="color:#ff9800;">🔍 Grok</strong> — Investigación en tiempo real con web search: noticias, insiders, catalizadores y movimientos sectoriales.
+            <strong style="color:#ff9800;">🔍 Grok</strong> — Investigación en tiempo real: noticias, insiders, catalizadores y movimientos sectoriales vía xAI.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -3189,7 +3206,7 @@ def render():
                     st.error(f"❌ Error generando el informe: {e2}")
                     logger.error("[IA fallback] %s: %s", t_in, e2)
 
-    # ── GROK (xAI) execution ──
+    # ── GROK (xAI) ──
     if btn_grok:
         xai_key = st.secrets.get("XAI_API_KEY", "")
         if not xai_key:
@@ -3202,36 +3219,25 @@ def render():
                 🔍 Consultando Grok (xAI) para {t_in}...
             </div>
             """, unsafe_allow_html=True)
-            grok_placeholder = st.empty()
             try:
                 import requests as _req
-                headers_grok = {
-                    "Authorization": f"Bearer {xai_key}",
-                    "Content-Type": "application/json"
-                }
-                payload_grok = {
-                    "model": "grok-3-latest",
-                    "messages": [{"role": "user", "content": prompt_grok_final}],
-                    "temperature": 0.2,
-                    "max_tokens": 8192,
-                    "stream": False
-                }
-                resp_grok = _req.post(
+                resp_g = _req.post(
                     "https://api.x.ai/v1/chat/completions",
-                    json=payload_grok, headers=headers_grok, timeout=120
+                    json={"model":"grok-3-latest","messages":[{"role":"user","content":prompt_grok_final}],
+                          "temperature":0.2,"max_tokens":8192},
+                    headers={"Authorization":f"Bearer {xai_key}","Content-Type":"application/json"},
+                    timeout=120
                 )
-                resp_grok.raise_for_status()
-                grok_text = resp_grok.json()["choices"][0]["message"]["content"]
+                resp_g.raise_for_status()
+                grok_text = resp_g.json()["choices"][0]["message"]["content"]
                 st.session_state['last_report']        = grok_text
                 st.session_state['last_report_ticker'] = t_in
-                grok_placeholder.markdown(
-                    f'<div style="border:1px solid #ff980033;border-radius:8px;'
-                    f'padding:24px;background:#0a0c10;margin-bottom:12px;">'
-                    f'<div style="font-family:Space Grotesk,sans-serif;color:#ff9800;'
-                    f'font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">'
-                    f'🔍 GROK (xAI) — {t_in}</div>'
-                    + grok_text +
-                    '</div>',
+                st.markdown(
+                    '<div style="border:1px solid #ff980033;border-radius:8px;'
+                    'padding:24px;background:#0a0c10;margin-bottom:12px;">'
+                    '<div style="font-family:Space Grotesk,sans-serif;color:#ff9800;'
+                    'font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">'
+                    f'🔍 GROK (xAI) — {t_in}' + '</div>' + grok_text + '</div>',
                     unsafe_allow_html=True
                 )
             except Exception as eg:
@@ -3259,11 +3265,10 @@ def render():
 
         col_dl, _ = st.columns([1, 3])
         with col_dl:
-            _fname_prefix = "Grok" if btn_grok else "RSU"
             st.download_button(
                 label="⬇️ DESCARGAR INFORME (.md)",
                 data=st.session_state['last_report'].encode('utf-8'),
-                file_name=f"{_fname_prefix}_Research_{t_in}_{datetime.now().strftime('%Y%m%d')}.md",
+                file_name=f"RSU_Earnings_{t_in}_{datetime.now().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
                 key="download_report"
             )
@@ -3283,6 +3288,5 @@ def render():
 
 if __name__ == "__main__":
     render()
-
 
 

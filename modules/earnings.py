@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -2664,9 +2663,8 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    _ia_c1, _ia_c2 = st.columns(2)
-    btn_rapido   = _ia_c1.button("⚡ ANÁLISIS RÁPIDO",               key="btn_rapido",   use_container_width=True)
-    btn_completo = _ia_c2.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo", use_container_width=True)
+    btn_rapido   = st.button("⚡ ANÁLISIS RÁPIDO — Snapshot ejecutivo",          key="btn_rapido",   use_container_width=True)
+    btn_completo = st.button("📋 INFORME COMPLETO — 11 secciones con IA",        key="btn_completo", use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 
@@ -2791,5 +2789,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

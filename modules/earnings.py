@@ -918,7 +918,7 @@ def get_suggestions(info, recommendations, target_data, profitability):
     return suggestions if suggestions else ["ℹ️ Datos insuficientes para generar sugerencias específicas."]
 
 # ────────────────────────────────────────────────
-# RSU SCORE — Score de salud 0-100
+# RSU PUNTUACIÓN — Score de salud 0-100
 # ────────────────────────────────────────────────
 
 def compute_rsu_score(info, metrics, profitability, market, recommendations, target_data):
@@ -1400,7 +1400,7 @@ def inject_css():
         .ticker-price  { font-family: 'VT323', monospace; font-size: 2.6rem; color: #fff; text-align: right; }
         .ticker-change { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; font-weight: 600; text-align: right; }
 
-        /* ── SCORE RSU ── */
+        /* ── PUNTUACIÓN RSU ── */
         .rsu-score-box { background: #0a0c10; border: 1px solid #1a1e26; border-radius: 8px; padding: 16px; text-align: center; }
         .rsu-score-num { font-family: 'VT323', monospace; font-size: 3.5rem; letter-spacing: 2px; line-height: 1; }
         .rsu-score-label { font-family: 'Space Grotesk', sans-serif; font-size: 0.78rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-top: 4px; }
@@ -1670,7 +1670,7 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── RSU SCORE + KPIs RÁPIDOS (jerarquía: información crítica arriba) ──
+    # ── RSU PUNTUACIÓN + KPIs RÁPIDOS (jerarquía: información crítica arriba) ──
     score_col, k1, k2, k3, k4 = st.columns([1.2, 1, 1, 1, 1])
     sc = rsu_score
     with score_col:
@@ -2202,7 +2202,7 @@ def render():
                 <div>
                     <div class="mod-title">Earnings Analysis</div>
                     <div style="font-family:Inter,sans-serif;color:#555;font-size:0.75rem;">
-                        Performance metrics and historical earnings reaction data
+                        Métricas de rendimiento y reacción histórica a earnings
                     </div>
                 </div>
             </div>
@@ -2291,10 +2291,10 @@ def render():
                     <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
                                 letter-spacing:1px;text-transform:uppercase;">Snapshot</div>
                     <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.1rem;">
-                        Earnings reaction (last {n_q})
+                        Reacción a earnings (últimos {n_q})
                     </div>
                     <div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;">
-                        Long-biased profile · KPIs based on look-back window
+                        Perfil sesgo alcista · KPIs basados en la ventana de análisis
                     </div>
                 </div>
                 <div style="text-align:right;">
@@ -2308,33 +2308,35 @@ def render():
             """, unsafe_allow_html=True)
 
             # ── 4 KPI cards + radar ──
-            col_radar, col_kpis = st.columns([1, 1])
+            col_radar, col_kpis = st.columns([3, 2])
 
             with col_radar:
-                # Radar chart: Consistency, Gap-up, EPS, Fade, +3D
-                radar_vals = [consistency, gup_score, eps_score, fade_score,
+                radar_vals = [gup_score, eps_score, consistency, fade_score,
                               max(0,min(100,int((avg_d3 or 0)*3+50)))]
-                radar_labels = ["Consistency","Gap-up","EPS beats","Fade resist.","+3D"]
+                radar_labels = ["Gap-up","EPS Beats","Consistencia","Fade Resist.","+3D"]
                 fig_radar = go.Figure(go.Scatterpolar(
                     r=radar_vals + [radar_vals[0]],
                     theta=radar_labels + [radar_labels[0]],
                     fill='toself',
-                    fillcolor='rgba(0,255,173,0.08)',
+                    fillcolor='rgba(0,255,173,0.07)',
                     line=dict(color='#00ffad', width=2),
-                    marker=dict(color='#00ffad', size=5)
+                    marker=dict(color='#00ffad', size=6)
                 ))
                 fig_radar.update_layout(
                     polar=dict(
                         bgcolor='#0a0c10',
                         radialaxis=dict(range=[0,100], showticklabels=True,
+                                        tickvals=[20,40,60,80,100],
                                         tickfont=dict(size=8,color='#444'),
                                         gridcolor='#1a1e26', linecolor='#1a1e26'),
-                        angularaxis=dict(tickfont=dict(size=9,color='#888'),
+                        angularaxis=dict(tickfont=dict(size=10,color='#888'),
                                          gridcolor='#1a1e26', linecolor='#1a1e26')
                     ),
                     paper_bgcolor='#0c0e12', plot_bgcolor='#0c0e12',
-                    font=dict(color='white'),
-                    showlegend=False, margin=dict(l=20,r=20,t=20,b=20), height=240
+                    font=dict(color='white', family='Space Grotesk'),
+                    showlegend=False,
+                    margin=dict(l=70, r=70, t=50, b=50),
+                    height=320
                 )
                 st.plotly_chart(fig_radar, use_container_width=True)
 
@@ -2343,21 +2345,21 @@ def render():
                     return (
                         f'<div style="background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;'
                         f'padding:14px 16px;margin-bottom:8px;">'
-                        f'<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.68rem;'
+                        f'<div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;'
                         f'letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">{label}</div>'
-                        f'<div style="font-family:VT323,monospace;color:{color};font-size:1.8rem;">{value}</div>'
-                        f'<div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;">{sub}</div>'
+                        f'<div style="font-family:VT323,monospace;color:{color};font-size:1.9rem;line-height:1.1;">{value}</div>'
+                        f'<div style="font-family:Inter,sans-serif;color:#444;font-size:0.72rem;margin-top:2px;">{sub}</div>'
                         f'</div>'
                     )
                 ov_color = "#00ffad" if overall>=60 else ("#ff9800" if overall>=40 else "#f23645")
                 st.markdown(
-                    _kpi("Overall Score", f"{overall}/100", "Consistency·Gap·Fade·EPS", ov_color) +
-                    _kpi("EPS Beats", f"{eps_beats} / {n_q}", "Beats in look-back",
+                    _kpi("Puntuación Total", f"{overall}/100", "Consistencia · Gap · Fade · EPS", ov_color) +
+                    _kpi("Batidos EPS", f"{eps_beats} / {n_q}", "Batidos en el período",
                          "#00ffad" if eps_beats/n_q>=0.6 else "#ff9800") +
-                    _kpi("Avg Gap (next open)", _fp(avg_gap), "Vs pre-release close",
+                    _kpi("Gap Medio (Apertura)", _fp(avg_gap), "Vs. cierre pre-publicación",
                          _fc(avg_gap)) +
-                    _kpi("Gap Volatility (σ)", f"{gap_vol:.2f} pp" if gap_vol is not None else "N/D",
-                         "Std dev of next-open gap", "#00d9ff"),
+                    _kpi("Volatilidad Gap (σ)", f"{gap_vol:.2f} pp" if gap_vol is not None else "N/D",
+                         "Desv. est. del gap de apertura", "#00d9ff"),
                     unsafe_allow_html=True
                 )
 
@@ -2367,9 +2369,9 @@ def render():
                 <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:8px;
                             padding:14px 18px;margin-top:8px;">
                     <div style="font-family:Space Grotesk,sans-serif;color:#555;font-size:0.7rem;
-                                letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">History</div>
+                                letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Historial</div>
                     <div style="font-family:VT323,monospace;color:#ccc;font-size:1rem;margin-bottom:12px;">
-                        Earnings reaction table
+                        Tabla de reacciones a earnings
                     </div>
                 """, unsafe_allow_html=True)
 
@@ -2397,11 +2399,11 @@ def render():
                         <thead>
                             <tr style="border-bottom:1px solid #1a1e26;">
                                 <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Quarter</th>
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Trimestre</th>
                                 <th style="text-align:left;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Reported</th>
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Fecha</th>
                                 <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Open</th>
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Gap Apertura</th>
                                 <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
                                     color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">High</th>
                                 <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
@@ -2409,7 +2411,7 @@ def render():
                                 <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
                                     color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">+3D</th>
                                 <th style="text-align:right;padding:6px 10px;font-family:Space Grotesk,sans-serif;
-                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">EPS Surp.</th>
+                                    color:#555;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">Sorpresa EPS</th>
                             </tr>
                         </thead>
                         <tbody>{rows}</tbody>
@@ -2670,7 +2672,7 @@ def render():
                 </div>
                 """, unsafe_allow_html=True)
                 col_map = {'Holder': 'Institución', 'Shares': 'Acciones',
-                           'Date Reported': 'Fecha', '% Out': '% del Float', 'Value': 'Valor (USD)'}
+                           'Date Fecha': 'Fecha', '% Out': '% del Float', 'Value': 'Valor (USD)'}
                 inst_display = inst.rename(columns=col_map).head(15)
                 if 'Valor (USD)' in inst_display.columns:
                     inst_display['Valor (USD)'] = inst_display['Valor (USD)'].apply(
@@ -2687,7 +2689,7 @@ def render():
                 </div>
                 """, unsafe_allow_html=True)
                 mf_col_map = {'Holder': 'Fondo', 'Shares': 'Acciones',
-                              'Date Reported': 'Fecha', '% Out': '% del Float', 'Value': 'Valor (USD)'}
+                              'Date Fecha': 'Fecha', '% Out': '% del Float', 'Value': 'Valor (USD)'}
                 mf_display = mf.rename(columns=mf_col_map).head(10)
                 if 'Valor (USD)' in mf_display.columns:
                     mf_display['Valor (USD)'] = mf_display['Valor (USD)'].apply(
@@ -2739,46 +2741,61 @@ def render():
                     sent_color  = sent_colors.get(sent_val, '#888')
                     gauge_val   = round(max(-1.0, min(1.0, score)) * 100, 1)
 
-                    # ── SVG semicircle gauge — layered rendering ──
-                    import math as _m2
-                    CX2, CY2, R2 = 100, 100, 72
+                    # ── SVG gauge: stroke-dasharray approach (no arc overlap) ──
+                    import math as _gm
+                    # Use a circle with r=60 in a 200x110 viewbox
+                    # semicircle = half circumference = π*r
+                    _R = 60
+                    _CX, _CY = 100, 100
+                    _CIRC = _gm.pi * _R   # half-circle arc length
 
-                    def _a(v1, v2):
-                        a1 = _m2.radians(180.0-(v1+100)/200.0*180.0)
-                        a2 = _m2.radians(180.0-(v2+100)/200.0*180.0)
-                        x1,y1 = CX2+R2*_m2.cos(a1), CY2-R2*_m2.sin(a1)
-                        x2,y2 = CX2+R2*_m2.cos(a2), CY2-R2*_m2.sin(a2)
-                        laf = 1 if abs(v2-v1)>100 else 0
-                        return f"M {x1:.1f},{y1:.1f} A {R2},{R2} 0 {laf},0 {x2:.1f},{y2:.1f}"
+                    # Map value [-100,100] to dasharray offset
+                    # val=−100 → full dash (empty gauge), val=100 → no dash (full gauge)
+                    def _dash(v1, v2):
+                        # Arc length of segment [v1,v2]
+                        seg = abs(v2-v1)/200.0 * _CIRC
+                        # Offset = arc from start to v1
+                        off = (v1+100)/200.0 * _CIRC
+                        return seg, off
 
-                    _na = _m2.radians(180.0-(gauge_val+100)/200.0*180.0)
-                    _nx = CX2+(R2-8)*_m2.cos(_na)
-                    _ny = CY2-(R2-8)*_m2.sin(_na)
+                    # Needle
+                    _na = _gm.radians(180.0 - (gauge_val+100)/200.0*180.0)
+                    _nx = _CX + (_R-6)*_gm.cos(_na)
+                    _ny = _CY - (_R-6)*_gm.sin(_na)
+
+                    # Build zone paths using plain arc commands
+                    def _zone(v1, v2):
+                        a1 = _gm.radians(180.0-(v1+100)/200.0*180.0)
+                        a2 = _gm.radians(180.0-(v2+100)/200.0*180.0)
+                        x1,y1 = _CX+_R*_gm.cos(a1), _CY-_R*_gm.sin(a1)
+                        x2,y2 = _CX+_R*_gm.cos(a2), _CY-_R*_gm.sin(a2)
+                        laf = 0
+                        return f"M {x1:.1f},{y1:.1f} A {_R},{_R} 0 {laf},0 {x2:.1f},{y2:.1f}"
 
                     svg = (
                         '<svg viewBox="0 0 200 108" xmlns="http://www.w3.org/2000/svg"'
-                        ' style="width:100%;max-width:260px;display:block;margin:6px auto 2px;">'
-                        # Layer 1: full bg track
-                        '<path d="' + _a(-100,100) + '" fill="none" stroke="#1c2030" stroke-width="20" stroke-linecap="round"/>'
-                        # Layer 2: zone tints (thinner)
-                        '<path d="' + _a(-100,-35) + '" fill="none" stroke="#3a1010" stroke-width="16" stroke-linecap="round"/>'
-                        '<path d="' + _a(-35, 35)  + '" fill="none" stroke="#1e1e0e" stroke-width="16" stroke-linecap="round"/>'
-                        '<path d="' + _a( 35, 100) + '" fill="none" stroke="#0a2818" stroke-width="16" stroke-linecap="round"/>'
-                        # Layer 3: active arc (bright, thinnest)
-                        '<path d="' + _a(min(0,gauge_val), max(0,gauge_val)) + '"'
-                        ' fill="none" stroke="' + sent_color + '" stroke-width="11" stroke-linecap="round"/>'
-                        # Layer 4: needle
-                        f'<line x1="{CX2}" y1="{CY2}" x2="{_nx:.1f}" y2="{_ny:.1f}"'
+                        ' style="width:100%;max-width:260px;display:block;margin:6px auto;">'
+                        # Zone 1: bearish (dark red)
+                        '<path d="' + _zone(-100,-35) + '" fill="none" stroke="#3a1212" stroke-width="18" stroke-linecap="butt"/>'
+                        # Zone 2: neutral (dark)
+                        '<path d="' + _zone(-35,35)   + '" fill="none" stroke="#1c1c0e" stroke-width="18" stroke-linecap="butt"/>'
+                        # Zone 3: bullish (dark green)
+                        '<path d="' + _zone(35,100)   + '" fill="none" stroke="#0a2a14" stroke-width="18" stroke-linecap="butt"/>'
+                        # Active arc (bright, thinner, on top)
+                        '<path d="' + _zone(min(0,gauge_val), max(0,gauge_val)) + '"'
+                        ' fill="none" stroke="' + sent_color + '" stroke-width="10" stroke-linecap="butt" opacity="0.95"/>'
+                        # Needle
+                        f'<line x1="{_CX}" y1="{_CY}" x2="{_nx:.1f}" y2="{_ny:.1f}"'
                         ' stroke="' + sent_color + '" stroke-width="2.5" stroke-linecap="round"/>'
-                        f'<circle cx="{CX2}" cy="{CY2}" r="5" fill="#0d0f15" stroke="' + sent_color + '" stroke-width="1.5"/>'
-                        # Layer 5: tick labels
-                        '<text x="4"   y="107" fill="#555" font-size="7" font-family="monospace">-100</text>'
+                        f'<circle cx="{_CX}" cy="{_CY}" r="4.5" fill="#0d0f16" stroke="' + sent_color + '" stroke-width="1.5"/>'
+                        # Tick labels at correct positions
+                        '<text x="4"   y="106" fill="#555" font-size="7" font-family="monospace">-100</text>'
                         '<text x="36"  y="32"  fill="#555" font-size="7" font-family="monospace">-50</text>'
-                        '<text x="92"  y="17"  fill="#555" font-size="7" font-family="monospace">0</text>'
+                        '<text x="93"  y="17"  fill="#555" font-size="7" font-family="monospace">0</text>'
                         '<text x="143" y="32"  fill="#555" font-size="7" font-family="monospace">50</text>'
-                        '<text x="164" y="107" fill="#555" font-size="7" font-family="monospace">100</text>'
-                        # Layer 6: score number (above center)
-                        f'<text x="{CX2}" y="{CY2-16}" fill="' + sent_color + '" font-size="28"'
+                        '<text x="164" y="106" fill="#555" font-size="7" font-family="monospace">100</text>'
+                        # Score (positioned above needle pivot)
+                        f'<text x="{_CX}" y="{_CY-14}" fill="' + sent_color + '" font-size="28"'
                         ' font-family="VT323,monospace" text-anchor="middle">' + str(int(gauge_val)) + '</text>'
                         '</svg>'
                     )
@@ -2803,7 +2820,7 @@ def render():
                     st.markdown(
                         '<div class="mod-box">'
                         '<div class="mod-header"><span class="mod-title">📊 Sentimiento</span>'
-                        '<span title="Análisis de titulares Finnhub (30 días)." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;">?</span>'
+                        '<span title="Análisis de titulares Finnhub (últimos 30 días). Score va de -100 (muy bajista) a +100 (muy alcista)." style="cursor:help;color:#444;font-size:0.75rem;border:1px solid #333;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;">?</span>'
                         '</div>'
                         '<div class="mod-body" style="padding:12px;">'
                         + svg + kpi_row +
@@ -2887,7 +2904,7 @@ def render():
             except Exception:
                 hist_5y = hist_1y  # fallback
 
-            lookback_years = st.number_input("Look-back (años)", min_value=1, max_value=10,
+            lookback_years = st.number_input("Ventana análisis (años)", min_value=1, max_value=10,
                                               value=5, step=1, key="seas_lookback")
 
             if hist_5y is not None and not hist_5y.empty:
@@ -2913,9 +2930,9 @@ def render():
                 years = sorted(h_full['year'].unique(), reverse=True)
                 st.markdown("""
                 <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;padding:20px;margin-bottom:16px;">
-                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Monthly Returns Heatmap</div>
+                    <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;margin-bottom:4px;">Rentabilidad Mensual — Mapa de Calor</div>
                     <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
-                """ + f"{lookback_years}" + """-year historical performance by month</div>
+                """ + f"{lookback_years}" + """ años de rendimiento histórico mensual</div>
                 """, unsafe_allow_html=True)
 
                 def _cell_color(v):
@@ -2956,26 +2973,26 @@ def render():
                 legend = (
                     '</table>'
                     '<div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">'
-                    '<span style="font-family:Inter,sans-serif;color:#555;font-size:0.72rem;font-weight:600;">Color Scale:</span>'
+                    '<span style="font-family:Inter,sans-serif;color:#555;font-size:0.72rem;font-weight:600;">Escala de Color:</span>'
                     '<span style="font-family:monospace;font-size:0.7rem;color:#f23645;">■ ≤ -10%</span>'
-                    '<span style="font-family:monospace;font-size:0.7rem;color:#cc4444;">■ -3% to 0%</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#cc4444;">■ -3% a 0%</span>'
                     '<span style="font-family:monospace;font-size:0.7rem;color:#555;">■ ~0%</span>'
-                    '<span style="font-family:monospace;font-size:0.7rem;color:#00cc88;">■ 0% to 3%</span>'
+                    '<span style="font-family:monospace;font-size:0.7rem;color:#00cc88;">■ 0% a 3%</span>'
                     '<span style="font-family:monospace;font-size:0.7rem;color:#00ffad;">■ ≥ 10%</span>'
                     '</div></div>'
                 )
                 st.markdown(hdr + rows_h + legend, unsafe_allow_html=True)
 
-                # ── Seasonality Patterns table ──
+                # ── Patrones de Estacionalidad table ──
                 st.markdown("""
                 <div style="background:#0c0e14;border:1px solid #1a1e26;border-radius:10px;
                             padding:20px;margin-top:16px;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
                         <span style="font-size:1.1rem;">📅</span>
-                        <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Seasonality Patterns</div>
+                        <div style="font-family:VT323,monospace;color:#ccc;font-size:1.3rem;">Patrones de Estacionalidad</div>
                     </div>
                     <div style="font-family:Inter,sans-serif;color:#444;font-size:0.75rem;margin-bottom:16px;">
-                        Historical price patterns and trends by time period
+                        Patrones históricos de precio por período temporal
                     </div>
                 """, unsafe_allow_html=True)
 
@@ -2984,8 +3001,8 @@ def render():
                     '<table style="width:100%;border-collapse:collapse;">'
                     '<thead><tr style="border-bottom:1px solid #1a1e26;">'
                 )
-                for col in ['MONTH','AVG RETURN %','CONSISTENCY %','STD DEV %','REL. VOL','MAX DRAWDOWN %','SCORE']:
-                    align = 'left' if col=='MONTH' else 'right'
+                for col in ['MES','REND. MEDIO %','CONSISTENCIA %','DESV. EST. %','VOL. REL.','MÁXIMO DRAWDOWN %','PUNTUACIÓN']:
+                    align = 'left' if col=='MES' else 'right'
                     tbl += f'<th style="text-align:{align};padding:8px 12px;font-family:Space Grotesk,sans-serif;color:#555;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;">{col}</th>'
                 tbl += '</tr></thead><tbody>'
 
@@ -3029,9 +3046,9 @@ def render():
                 tbl += '</tbody></table>'
                 footnote = (
                     '<div style="margin-top:12px;font-family:Inter,sans-serif;color:#444;font-size:0.72rem;">'
-                    'Avg Return chip: verde=positivo, rojo=negativo. &nbsp;'
+                    'Chip Rend. Medio: verde=positivo, rojo=negativo. &nbsp;'
                     'Borde amarillo = mes actual del calendario. &nbsp;'
-                    'Score = avg×3 + consistency×0.4 − stddev×0.5'
+                    'Puntuación = media×3 + consistencia×0.4 − desv.est×0.5'
                     '</div></div>'
                 )
                 st.markdown(tbl + footnote, unsafe_allow_html=True)
@@ -3084,24 +3101,30 @@ def render():
 | País | {info.get('country', 'N/A')} |
 """
 
-    # ── IA Section — exact pattern from ia_report.py that works ──
+    # ── IA Section ──
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#0a0c10,#111520);border:1px solid #00ffad33;
-                border-radius:8px;padding:18px 22px;margin:18px 0 8px 0;">
-        <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.4rem;
-                    letter-spacing:3px;text-transform:uppercase;margin-bottom:6px;">
-            🤖 RSU Artificial Intelligence
+    <div style="background:#0c0e14;border:1px solid #00ffad33;border-radius:10px;
+                padding:20px 24px 16px;margin:20px 0 12px 0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:1.4rem;">🤖</span>
+            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.6rem;
+                        letter-spacing:3px;text-transform:uppercase;">RSU Artificial Intelligence</div>
+            <span style="background:#00ffad22;color:#00ffad;font-family:monospace;font-size:0.65rem;
+                         padding:2px 8px;border-radius:4px;border:1px solid #00ffad44;margin-left:auto;">
+                AI POWERED
+            </span>
         </div>
-        <div style="font-family:Inter,sans-serif;color:#666;font-size:0.84rem;line-height:1.6;">
-            Dos modos: <strong style="color:#00ffad;">Rápido</strong> — snapshot ejecutivo en segundos &nbsp;|&nbsp;
-            <strong style="color:#00d9ff;">Completo</strong> — informe de 11 secciones con técnico, smart money y catalizadores.
+        <div style="font-family:Inter,sans-serif;color:#555;font-size:0.83rem;line-height:1.7;
+                    border-top:1px solid #1a1e26;padding-top:10px;">
+            <strong style="color:#00ffad;">⚡ Rápido</strong> — Snapshot ejecutivo: precio, valoración, catalizadores y riesgo en segundos.<br>
+            <strong style="color:#00d9ff;">📋 Completo</strong> — Informe de 11 secciones: empresa, fundamentales, técnico, smart money, catalizadores y perspectivas.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     col_ia1, col_ia2 = st.columns(2)
-    btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",               key="btn_rapido",   use_container_width=True)
-    btn_completo = col_ia2.button("📋 INFORME COMPLETO (11 SECCIONES)", key="btn_completo", use_container_width=True)
+    btn_rapido   = col_ia1.button("▶  GENERAR ANÁLISIS RÁPIDO",        key="btn_rapido",   use_container_width=True)
+    btn_completo = col_ia2.button("▶  GENERAR INFORME COMPLETO (11s)", key="btn_completo", use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 
@@ -3226,6 +3249,7 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 
 

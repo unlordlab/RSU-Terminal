@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -175,13 +176,25 @@ def translate_text_cached(text, ticker):
 # YFINANCE — DATOS PRINCIPALES (cacheado)
 # ────────────────────────────────────────────────
 
-@st.cache_data(ttl=300, show_spinner=False)
-def get_yfinance_full(ticker):
+def get_yfinance_full(ticker):  # cache removed: debug log needs session_state
+    """
+    Carga datos de yfinance con 3 estrategias de precio y modo debug.
+    Devuelve datos parciales si hay historial aunque info{} esté vacío.
+    Nunca devuelve None si existe algún precio accesible.
+    """
+    debug_log = []   # acumulamos pasos — se expone en UI si falla
     try:
-        stock = yf.Ticker(ticker)  # session no serializable con st.cache_data
-        info  = stock.info or {}
+        stock = yf.Ticker(ticker)
+        debug_log.append("✅ yf.Ticker() creado")
 
-        # ── Precio robusto: funciona para micro-caps, SPACs, tickers ilíquidos (ej: AMPX) ──
+        try:
+            info = stock.info or {}
+            debug_log.append(f"✅ info dict: {len(info)} keys | quoteType={info.get('quoteType','?')} longName={info.get('longName','?')[:40]}")
+        except Exception as e:
+            info = {}
+            debug_log.append(f"⚠️ info falló: {e}")
+
+        # ── Estrategia 1: campos de precio en info{} ──
         cp_check = (
             _safe(info.get('currentPrice')) or
             _safe(info.get('regularMarketPrice')) or
@@ -192,29 +205,39 @@ def get_yfinance_full(ticker):
             _safe(info.get('postMarketPrice')) or
             _safe(info.get('preMarketPrice'))
         )
+        if cp_check:
+            debug_log.append(f"✅ Precio desde info: {cp_check}")
+        else:
+            debug_log.append(f"⚠️ info no tiene precio. Keys disponibles: {list(info.keys())[:20]}")
 
-        # Fallback 1: historial reciente (últimos 5 días) — cubre la mayoría de casos
+        # ── Estrategia 2: historial reciente ──
+        hist_data = None
         if not cp_check:
             try:
-                hist_short = stock.history(period="5d", interval="1d", auto_adjust=True)
-                if hist_short is not None and not hist_short.empty and 'Close' in hist_short.columns:
-                    last_close = _safe(float(hist_short['Close'].dropna().iloc[-1]))
+                hist_data = stock.history(period="5d", interval="1d", auto_adjust=True)
+                if hist_data is not None and not hist_data.empty and 'Close' in hist_data.columns:
+                    last_close = _safe(float(hist_data['Close'].dropna().iloc[-1]))
                     if last_close:
                         cp_check = last_close
                         info['currentPrice'] = last_close
                         info['regularMarketPrice'] = last_close
-                        if len(hist_short) >= 2:
-                            prev = _safe(float(hist_short['Close'].dropna().iloc[-2]))
+                        if len(hist_data) >= 2:
+                            prev = _safe(float(hist_data['Close'].dropna().iloc[-2]))
                             if prev: info['previousClose'] = prev
-                        logger.info("[yf fallback hist] %s precio=%.4f", ticker, last_close)
+                        debug_log.append(f"✅ Precio desde history(5d): {last_close}")
+                    else:
+                        debug_log.append(f"⚠️ history(5d) devolvió datos pero Close={last_close}")
+                else:
+                    debug_log.append(f"⚠️ history(5d) vacío o sin columna Close: {hist_data}")
             except Exception as e:
-                logger.warning("[yf fallback hist] %s: %s", ticker, e)
+                debug_log.append(f"❌ history(5d) excepción: {e}")
 
-        # Fallback 2: fast_info — más ligero, menos datos, pero muy compatible
+        # ── Estrategia 3: fast_info ──
         if not cp_check:
             try:
                 fi = stock.fast_info
                 last = _safe(getattr(fi, 'last_price', None))
+                debug_log.append(f"fast_info.last_price={last} | attrs={[a for a in dir(fi) if not a.startswith('_')][:8]}")
                 if last:
                     cp_check = last
                     info['currentPrice'] = last
@@ -223,14 +246,24 @@ def get_yfinance_full(ticker):
                     if prev: info['previousClose'] = prev
                     mc = _safe(getattr(fi, 'market_cap', None))
                     if mc and not info.get('marketCap'): info['marketCap'] = mc
-                    logger.info("[yf fast_info] %s precio=%.4f", ticker, last)
+                    debug_log.append(f"✅ Precio desde fast_info: {last}")
+                else:
+                    debug_log.append(f"⚠️ fast_info.last_price es None o 0")
             except Exception as e:
-                logger.warning("[yf fast_info] %s: %s", ticker, e)
+                debug_log.append(f"❌ fast_info excepción: {e}")
 
         if not cp_check:
-            logger.warning("[get_yfinance_full] Sin precio para %s. Keys: %s",
-                           ticker, list(info.keys())[:15])
+            debug_log.append(f"❌ FALLO TOTAL: sin precio para {ticker}")
+            # Guardar log en session_state para mostrarlo en UI
+            import streamlit as _st
+            st.session_state['_debug_log'] = debug_log
+            st.session_state['_debug_ticker'] = ticker
+            logger.warning("[get_yfinance_full] Sin precio para %s | %s", ticker, " | ".join(debug_log))
             return None
+
+        # Si llegamos aquí, tenemos precio. Guardar debug log de éxito también.
+        st.session_state['_debug_log'] = debug_log
+        st.session_state['_debug_ticker'] = ticker
 
         # Recomendaciones
         recommendations = None
@@ -1539,19 +1572,28 @@ def render():
         finnhub_data = get_finnhub_data(t_in, api_keys['finnhub']) if api_keys['finnhub'] else None
 
     if not yf_data:
-        # Intentar diagnóstico: ¿existe el ticker pero sin precio? ¿ticker incorrecto?
-        diag_msg = ""
+        st.error(f"❌ No se pudieron obtener datos para **'{t_in}'**.")
 
-        st.error(f"❌ No se pudieron obtener datos para **'{t_in}'**.{diag_msg}")
-        st.markdown(f"""
+        # ── Debug log detallado ──
+        debug_log  = st.session_state.get('_debug_log', [])
+        if debug_log:
+            with st.expander("🔍 Debug — ¿qué falló exactamente?", expanded=True):
+                for step in debug_log:
+                    color = "#00ffad" if step.startswith("✅") else ("#ff9800" if step.startswith("⚠️") else "#f23645")
+                    st.markdown(
+                        f'<div style="font-family:monospace;font-size:0.78rem;color:{color};'
+                        f'padding:3px 0;border-bottom:1px solid #111;">{step}</div>',
+                        unsafe_allow_html=True
+                    )
+
+        st.markdown("""
         <div style="background:#0a0c10;border:1px solid #1a1e26;border-radius:8px;padding:16px;margin-top:8px;">
             <div style="font-family:'Space Grotesk',sans-serif;font-size:0.8rem;color:#666;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Posibles causas</div>
             <div style="font-family:'Inter',sans-serif;font-size:0.84rem;color:#888;line-height:1.8;">
                 ▸ El ticker no existe o está mal escrito (ej: <strong style="color:#00ffad;">AAPL</strong> no <strong style="color:#f23645;">apple</strong>)<br>
-                ▸ Ticker de bolsa europea — añade el sufijo (ej: <strong style="color:#00ffad;">IBE.MC</strong> para Iberdola en BME)<br>
-                ▸ Micro-cap o SPAC con poca liquidez — Yahoo Finance puede tardar en indexarlo<br>
-                ▸ Ticker recién listado (&lt;30 días) — historial insuficiente<br>
-                ▸ Problema temporal de la API de Yahoo Finance — intenta de nuevo en 30 segundos
+                ▸ Bolsa europea — añade sufijo (ej: <strong style="color:#00ffad;">IBE.MC</strong> BME, <strong style="color:#00ffad;">AMS.AS</strong> Amsterdam)<br>
+                ▸ Yahoo Finance con problemas temporales — espera 30s y recarga<br>
+                ▸ yfinance desactualizado — puede requerir actualización en el servidor
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -2789,6 +2831,5 @@ def render():
 
 if __name__ == "__main__":
     render()
-
 
 

@@ -3084,10 +3084,18 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("""
+    <div style="display:flex;gap:10px;align-items:center;margin:4px 0 8px 0;">
+        <div style="height:1px;flex:1;background:#1a1e26;"></div>
+        <div style="font-family:'Space Grotesk',sans-serif;color:#444;font-size:0.65rem;
+                    letter-spacing:2px;text-transform:uppercase;">Selecciona modo de análisis</div>
+        <div style="height:1px;flex:1;background:#1a1e26;"></div>
+    </div>
+    """, unsafe_allow_html=True)
     col_ia1, col_ia2, col_ia3 = st.columns(3)
-    btn_rapido   = col_ia1.button("▶  ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)
-    btn_completo = col_ia2.button("▶  INFORME COMPLETO (11s)",   key="btn_completo", use_container_width=True)
-    btn_grok     = col_ia3.button("🔍  INVESTIGACIÓN GROK (xAI)", key="btn_grok",     use_container_width=True)
+    btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)
+    btn_completo = col_ia2.button("📋 INFORME COMPLETO (11s)",   key="btn_completo", use_container_width=True)
+    btn_grok     = col_ia3.button("🔍 GROK — INVESTIGACIÓN xAI", key="btn_grok",     use_container_width=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 

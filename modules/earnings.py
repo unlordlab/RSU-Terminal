@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -192,6 +193,80 @@ def get_yfinance_full(ticker):  # cache removed: debug log needs session_state
         except Exception as e:
             info = {}
             debug_log.append(f"⚠️ info falló: {e}")
+
+        # ── Yahoo Finance v8 quoteSummary fallback ──
+        # yfinance info{} frequently returns <30 keys; Yahoo's own API returns 200+
+        # Enrich info{} with any missing fields from the full quoteSummary
+        _KEY_FIELDS = {
+            'longBusinessSummary', 'sector', 'industry', 'shortName', 'longName',
+            'trailingPE', 'forwardPE', 'priceToSalesTrailing12Months',
+            'enterpriseToEbitda', 'pegRatio', 'priceToBook',
+            'trailingEps', 'forwardEps', 'bookValue',
+            'profitMargins', 'operatingMargins', 'grossMargins',
+            'returnOnEquity', 'returnOnAssets',
+            'revenueGrowth', 'earningsGrowth', 'debtToEquity',
+            'totalRevenue', 'ebitda', 'freeCashflow', 'operatingCashflow',
+            'totalCash', 'totalDebt', 'currentRatio',
+            'beta', 'dividendYield', 'dividendRate', 'payoutRatio',
+            'targetMeanPrice', 'targetHighPrice', 'targetLowPrice', 'targetMedianPrice',
+            'numberOfAnalystOpinions', 'heldPercentInsiders', 'heldPercentInstitutions',
+            'fullTimeEmployees', 'country', 'city', 'website',
+        }
+        _missing = _KEY_FIELDS - set(k for k, v in info.items() if v is not None)
+        if len(_missing) > 5:  # many fields missing → try direct API
+            try:
+                _modules = ','.join([
+                    'summaryProfile', 'defaultKeyStatistics', 'financialData',
+                    'summaryDetail', 'price', 'incomeStatementHistory',
+                    'balanceSheetHistory',
+                ])
+                _headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json',
+                }
+                _url = f'https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules={_modules}'
+                _resp = requests.get(_url, headers=_headers, timeout=10)
+                if _resp.status_code == 200:
+                    _data = _resp.json().get('quoteSummary', {}).get('result', [{}])[0]
+
+                    # Map all modules into info{}
+                    _module_map = {
+                        'summaryProfile':     ['sector','industry','longBusinessSummary','country','city','website','fullTimeEmployees'],
+                        'defaultKeyStatistics': ['trailingEps','forwardEps','bookValue','priceToBook','pegRatio',
+                                                  'enterpriseToEbitda','shortRatio','heldPercentInsiders',
+                                                  'heldPercentInstitutions','beta','earningsGrowth'],
+                        'financialData':      ['trailingPE','forwardPE','priceToSalesTrailing12Months',
+                                               'profitMargins','operatingMargins','grossMargins',
+                                               'returnOnEquity','returnOnAssets','revenueGrowth',
+                                               'debtToEquity','totalRevenue','ebitda','freeCashflow',
+                                               'operatingCashflow','totalCash','totalDebt','currentRatio',
+                                               'targetMeanPrice','targetHighPrice','targetLowPrice',
+                                               'targetMedianPrice','numberOfAnalystOpinions'],
+                        'summaryDetail':      ['dividendYield','dividendRate','payoutRatio','beta',
+                                               'trailingPE','forwardPE'],
+                        'price':              ['shortName','longName','regularMarketPrice','marketCap',
+                                               'regularMarketVolume','regularMarketOpen',
+                                               'regularMarketPreviousClose','currency'],
+                    }
+                    for module, keys in _module_map.items():
+                        mod_data = _data.get(module, {})
+                        for k in keys:
+                            if not info.get(k):  # only fill missing
+                                raw = mod_data.get(k)
+                                if raw is not None:
+                                    # Yahoo wraps values: {"raw": 123.4, "fmt": "123.4"}
+                                    if isinstance(raw, dict):
+                                        v = raw.get('raw') if raw.get('raw') is not None else raw.get('fmt')
+                                    else:
+                                        v = raw
+                                    if v is not None:
+                                        info[k] = v
+
+                    debug_log.append(f"✅ Yahoo v10 quoteSummary enriched: now {len(info)} keys")
+                else:
+                    debug_log.append(f"⚠️ Yahoo v10 status {_resp.status_code}")
+            except Exception as _ye:
+                debug_log.append(f"⚠️ Yahoo v10 fallback falló: {_ye}")
 
         # ── Estrategia 1: campos de precio en info{} ──
         cp_check = (
@@ -543,6 +618,67 @@ def get_yfinance_full(ticker):  # cache removed: debug log needs session_state
             inst_data['mutual_funds']  = stock.mutualfund_holders
         except Exception as e:
             logger.warning("[yf.inst_data] %s: %s", ticker, e)
+
+        # ── Refresh all metric dicts after enrichment layers ──
+        for _k, _info_k in [
+            ('trailing_pe',    'trailingPE'),
+            ('forward_pe',     'forwardPE'),
+            ('price_to_sales', 'priceToSalesTrailing12Months'),
+            ('ev_ebitda',      'enterpriseToEbitda'),
+            ('peg_ratio',      'pegRatio'),
+            ('price_to_book',  'priceToBook'),
+        ]:
+            if metrics.get(_k) is None:
+                v = _safe(info.get(_info_k))
+                if v: metrics[_k] = v
+
+        for _k, _info_k in [
+            ('net_margin',         'profitMargins'),
+            ('op_margin',          'operatingMargins'),
+            ('gross_margin',       'grossMargins'),
+            ('roe',                'returnOnEquity'),
+            ('roa',                'returnOnAssets'),
+            ('revenue_growth',     'revenueGrowth'),
+            ('earnings_growth',    'earningsGrowth'),
+            ('debt_to_equity',     'debtToEquity'),
+            ('free_cashflow',      'freeCashflow'),
+            ('operating_cashflow', 'operatingCashflow'),
+            ('revenue_ttm',        'totalRevenue'),
+            ('total_cash',         'totalCash'),
+            ('total_debt',         'totalDebt'),
+            ('current_ratio',      'currentRatio'),
+        ]:
+            if profitability.get(_k) is None:
+                v = _safe(info.get(_info_k))
+                if v: profitability[_k] = v
+
+        for _k, _info_k in [
+            ('eps',           'trailingEps'),
+            ('eps_forward',   'forwardEps'),
+            ('beta',          'beta'),
+            ('52w_high',      'fiftyTwoWeekHigh'),
+            ('52w_low',       'fiftyTwoWeekLow'),
+            ('sma_50',        'fiftyDayAverage'),
+            ('sma_200',       'twoHundredDayAverage'),
+            ('book_value',    'bookValue'),
+            ('dividend_yield','dividendYield'),
+            ('n_analysts',    'numberOfAnalystOpinions'),
+            ('insider_pct',   'heldPercentInsiders'),
+            ('inst_pct',      'heldPercentInstitutions'),
+        ]:
+            if market.get(_k) is None:
+                v = _safe(info.get(_info_k))
+                if v: market[_k] = v
+
+        # Refresh target_data
+        _tm2 = _safe(info.get('targetMeanPrice'))
+        _cp2 = market.get('price') or cp
+        if _tm2 and not target_data.get('mean'):
+            target_data['mean']   = _tm2
+            target_data['high']   = _safe(info.get('targetHighPrice'))
+            target_data['low']    = _safe(info.get('targetLowPrice'))
+            target_data['median'] = _safe(info.get('targetMedianPrice'))
+            if _cp2: target_data['upside'] = round((_tm2 - _cp2) / _cp2 * 100, 1)
 
         return {
             'info': info, 'recommendations': recommendations, 'rec_summary': rec_summary,
@@ -1988,60 +2124,63 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-        # Métricas adicionales
-        eps        = market.get('eps') or 0
-        eps_fwd    = market.get('eps_forward') or 0
-        beta       = market.get('beta') or 0
-        book       = market.get('book_value') or 0
-        hi52       = market.get('52w_high') or 0
-        lo52       = market.get('52w_low') or 0
-        sma50      = market.get('sma_50') or 0
-        sma200     = market.get('sma_200') or 0
+        # Métricas adicionales — N/D si no disponible
+        def _fmt_dollar(v):
+            if v is None or v == 0: return 'N/D', '#555'
+            return f'${v:.2f}', '#00ffad'
+        def _fmt_plain(v, decimals=2):
+            if v is None or v == 0: return 'N/D', '#555'
+            return f'{v:.{decimals}f}', '#00ffad'
+
+        eps     = market.get('eps')
+        eps_fwd = market.get('eps_forward')
+        beta    = market.get('beta')
+        hi52    = market.get('52w_high')
+        lo52    = market.get('52w_low')
+        sma50   = market.get('sma_50')
+        sma200  = market.get('sma_200')
+
+        eps_str,    eps_col    = _fmt_dollar(eps)
+        epsfwd_str, epsfwd_col = _fmt_dollar(eps_fwd)
+        hi52_str,   hi52_col   = _fmt_dollar(hi52)
+        lo52_str,   _          = _fmt_dollar(lo52); lo52_col = '#f23645' if lo52 else '#555'
+        sma50_str,  _          = _fmt_dollar(sma50); sma50_col = '#ff9800' if sma50 else '#555'
+        sma200_str, _          = _fmt_dollar(sma200); sma200_col = '#5b8ff9' if sma200 else '#555'
+        if beta:
+            beta_str = f'{beta:.2f}'; beta_col = '#ff9800' if beta > 1.5 else '#00ffad'
+        else:
+            beta_str = 'N/D'; beta_col = '#555'
 
         extra_html = f"""
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">EPS (TTM)</div>
-                    <div class="profit-value" style="color:#00ffad;">${eps:.2f}</div>
-                </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">EPS Forward</div>
-                    <div class="profit-value" style="color:#00d9ff;">${eps_fwd:.2f}</div>
-                </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">Beta</div>
-                    <div class="profit-value" style="color:{'#ff9800' if beta > 1.5 else '#00ffad'}">{beta:.2f}</div>
-                </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">Máx. 52 Semanas</div>
-                    <div class="profit-value" style="color:#00ffad;">${hi52:.2f}</div>
-                </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">Mín. 52 Semanas</div>
-                    <div class="profit-value" style="color:#f23645;">${lo52:.2f}</div>
-                </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">SMA 50</div>
-                    <div class="profit-value" style="color:#ff9800;">${sma50:.2f}</div>
-                </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-                <div class="profit-box">
-                    <div class="profit-label">SMA 200</div>
-                    <div class="profit-value" style="color:#5b8ff9;">${sma200:.2f}</div>
-                </div>
-            </div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">EPS (TTM)</div>
+                <div class="profit-value" style="color:{eps_col};">{eps_str}</div>
+            </div></div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">EPS Forward</div>
+                <div class="profit-value" style="color:{epsfwd_col};">{epsfwd_str}</div>
+            </div></div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">Beta</div>
+                <div class="profit-value" style="color:{beta_col};">{beta_str}</div>
+            </div></div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">Máx. 52 Semanas</div>
+                <div class="profit-value" style="color:{hi52_col};">{hi52_str}</div>
+            </div></div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">Mín. 52 Semanas</div>
+                <div class="profit-value" style="color:{lo52_col};">{lo52_str}</div>
+            </div></div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">SMA 50</div>
+                <div class="profit-value" style="color:{sma50_col};">{sma50_str}</div>
+            </div></div>
+            <div style="flex:1;min-width:120px;"><div class="profit-box">
+                <div class="profit-label">SMA 200</div>
+                <div class="profit-value" style="color:{sma200_col};">{sma200_str}</div>
+            </div></div>
         </div>
         """
         st.markdown(f"""
@@ -3350,5 +3489,3 @@ def render():
 
 if __name__ == "__main__":
     render()
-
-

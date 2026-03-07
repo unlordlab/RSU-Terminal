@@ -1693,10 +1693,34 @@ def inject_css():
         .highlight-quote { background: #00ffad0a; border: 1px solid #00ffad22; border-radius: 8px; padding: 16px 20px; font-family: 'VT323', monospace; font-size: 1.2rem; color: #00ffad99; text-align: center; letter-spacing: 1px; margin: 16px 0; }
 
         /* ── TOOLTIP ── */
-        .tip-box  { position: relative; cursor: help; z-index: 10; }
-        .tip-icon { width: 20px; height: 20px; border-radius: 50%; background: #1a1e26; border: 1px solid #333; display: flex; align-items: center; justify-content: center; color: #666; font-size: 11px; font-weight: bold; }
-        .tip-text { visibility: hidden; width: 260px; background: #111520; color: #bbb; text-align: left; padding: 12px; border-radius: 6px; position: fixed; z-index: 9999; opacity: 0; transition: opacity 0.2s; font-size: 11px; border: 1px solid #00ffad22; font-family: 'Inter', sans-serif; box-shadow: 0 4px 24px #00000080; pointer-events: none; }
+        .tip-box  { position: relative; cursor: help; z-index: 100; display: inline-flex; }
+        .tip-icon { width: 18px; height: 18px; border-radius: 50%; background: #1a1e26; border: 1px solid #2a2e3a; display: flex; align-items: center; justify-content: center; color: #555; font-size: 10px; font-weight: bold; flex-shrink: 0; transition: border-color 0.15s; }
+        .tip-box:hover .tip-icon { border-color: #00ffad55; color: #00ffad; }
+        .tip-text {
+            visibility: hidden; opacity: 0;
+            width: 240px;
+            background: #111520;
+            color: #bbb;
+            font-size: 11px;
+            line-height: 1.5;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid #00ffad22;
+            box-shadow: 0 6px 24px #00000090;
+            font-family: 'Inter', sans-serif;
+            pointer-events: none;
+            /* absolute inside tip-box, appears below the icon */
+            position: absolute;
+            top: 24px;
+            right: 0;
+            z-index: 9999;
+            transition: opacity 0.15s;
+            white-space: normal;
+            word-break: break-word;
+        }
         .tip-box:hover .tip-text { visibility: visible; opacity: 1; }
+        /* flip left when near right edge */
+        .tip-box.tip-left .tip-text { right: auto; left: 0; }
 
         /* ── TABS ── */
         .stTabs [data-baseweb="tab-list"]  { gap: 4px; background: #0a0c10; padding: 8px; border-radius: 8px; border: 1px solid #00ffad1a; margin-bottom: 16px; flex-wrap: wrap; }
@@ -2681,7 +2705,6 @@ def render():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 10px 10px;padding:16px 20px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
 
             dates        = [s['date'] for s in reversed(earnings_surprises)]
             surprises_v  = [s['surprise_pct'] for s in reversed(earnings_surprises)]
@@ -2748,7 +2771,6 @@ def render():
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown('</div>', unsafe_allow_html=True)
         else:
             if not api_keys['alpha_vantage']:
                 st.warning("⚠️ Configura **ALPHA_VANTAGE_API_KEY** para obtener datos precisos de earnings surprises.")
@@ -2847,8 +2869,6 @@ def render():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown('<div style="border:1px solid #1a1e26;border-top:none;border-radius:0 0 10px 10px;padding:16px 20px;background:#0a0c10;margin-bottom:12px;">', unsafe_allow_html=True)
-
         # Usar datos ya cargados en get_yfinance_full — sin llamada extra a Yahoo Finance
         holders_data = inst_data_preload if inst_data_preload else get_institutional_holders(t_in)
 
@@ -2961,7 +2981,6 @@ def render():
             de pago como WhaleWisdom, Tikr o publicaciones directas de los fondos.
         </div>
         """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # ══ TAB 8: NOTICIAS & SENTIMIENTO ══
     with tabs[8]:
@@ -2993,10 +3012,8 @@ def render():
 
                     # ── Plotly Indicator gauge ──
                     fig_sent = go.Figure(go.Indicator(
-                        mode="gauge+number",
+                        mode="gauge",          # number handled via annotation
                         value=gauge_val,
-                        number={'font': {'size': 42, 'color': sent_color, 'family': 'VT323, monospace'},
-                                'valueformat': '.0f'},
                         gauge={
                             'axis': {
                                 'range': [-100, 100],
@@ -3021,11 +3038,20 @@ def render():
                         },
                         domain={'x': [0, 1], 'y': [0, 1]},
                     ))
+                    # Centred score annotation — avoids Plotly's misaligned number
+                    fig_sent.add_annotation(
+                        x=0.5, y=0.18,
+                        xref='paper', yref='paper',
+                        text=f'<b>{int(gauge_val)}</b>',
+                        font=dict(size=44, color=sent_color, family='VT323, monospace'),
+                        showarrow=False,
+                        xanchor='center',
+                    )
                     fig_sent.update_layout(
                         paper_bgcolor='#0d0f16',
                         font={'color': '#888', 'family': 'Space Grotesk, sans-serif'},
-                        margin=dict(l=20, r=20, t=20, b=5),
-                        height=190,
+                        margin=dict(l=20, r=20, t=10, b=5),
+                        height=200,
                     )
                     kpi_row = (
                         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">'
@@ -3049,11 +3075,13 @@ def render():
                         '<div class="mod-box">'
                         '<div class="mod-header"><span class="mod-title">📊 Sentimiento</span>'
                         '<div class="tip-box" style="display:inline-flex;margin-left:6px;"><div class="tip-icon">?</div><div class="tip-text">Análisis de titulares Finnhub (últimos 30 días). Score de -100 (muy bajista) a +100 (muy alcista).</div></div>'
-                        '</div><div class="mod-body" style="padding:8px 12px 12px;">',
+                        '</div>'
+                        '<div class="mod-body" style="padding:8px 12px 12px;">'
+                        + kpi_row +
+                        '</div></div>',
                         unsafe_allow_html=True)
                     st.plotly_chart(fig_sent, use_container_width=True,
                                     config={'displayModeBar': False}, key='gauge_sentiment')
-                    st.markdown(kpi_row + '</div></div>', unsafe_allow_html=True)
                 else:
                     st.markdown("""
                     <div class="mod-box"><div class="mod-body">
@@ -3520,4 +3548,5 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 

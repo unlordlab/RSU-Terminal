@@ -7,6 +7,13 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, roc_auc_score
+from sklearn.calibration import CalibratedClassifierCV
+import warnings
+warnings.filterwarnings('ignore')
 
 # ────────────────────────────────────────────────
 # FUNCIONES AUXILIARES
@@ -663,6 +670,579 @@ def render_risks_section():
     """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
+# BACKTEST + ML ENGINE
+# ────────────────────────────────────────────────
+
+@st.cache_data(ttl=600, show_spinner=False)
+def build_feature_matrix(symbol, horizon_days=5):
+    """
+    Descarga 2 años de datos diarios y construye features + etiquetas para ML/backtest.
+    Label: 1 si el precio sube >= 1% en los próximos `horizon_days` días, else 0.
+    """
+    raw = download_data(symbol, '2y', '1d')
+    if raw.empty or len(raw) < 100:
+        return None, "Datos insuficientes para backtest (mínimo 100 días)."
+    data = flatten_columns(raw).copy()
+
+    close  = ensure_1d_series(data['Close'])
+    volume = ensure_1d_series(data['Volume']) if 'Volume' in data.columns else pd.Series(1, index=close.index)
+    open_  = ensure_1d_series(data['Open'])   if 'Open'  in data.columns else close
+
+    # ── Features ──────────────────────────────────────────────
+    ema9  = calculate_ema(close, 9)
+    ema21 = calculate_ema(close, 21)
+    ema50 = calculate_ema(close, 50)
+
+    # Z-Score (retornos log, estacionario)
+    log_ret   = np.log(close / close.shift(1))
+    std20     = log_ret.rolling(20).std()
+    dev_pct   = (close - ema21) / ema21
+    z_score   = dev_pct / std20.replace(0, np.nan)
+
+    # RSI Wilder
+    rsi = calculate_rsi(close, 14)
+
+    # Momentum
+    ret_1d  = close.pct_change(1)
+    ret_5d  = close.pct_change(5)
+    ret_20d = close.pct_change(20)
+
+    # EMA slopes (velocidad de tendencia)
+    ema21_slope = ema21.pct_change(3)
+    ema50_slope = ema50.pct_change(5)
+
+    # Cruce EMA rápida/lenta (señal binaria)
+    ema_cross = (ema9 > ema21).astype(int)
+
+    # Volumen relativo y direccional
+    vol_avg20 = volume.rolling(20).mean()
+    vol_ratio = volume / vol_avg20.replace(0, 1)
+    bull_vol  = volume.where(close >= open_, 0)
+    bear_vol  = volume.where(close < open_,  0)
+    vol_dir   = (bull_vol.rolling(10).sum() /
+                 (bull_vol.rolling(10).sum() + bear_vol.rolling(10).sum() + 1e-9))
+
+    # Volatilidad
+    atr = (close.rolling(14).std() / close)
+
+    # ── Feature DataFrame ──────────────────────────────────────
+    feat = pd.DataFrame({
+        'z_score':      z_score,
+        'rsi':          rsi,
+        'ret_1d':       ret_1d,
+        'ret_5d':       ret_5d,
+        'ret_20d':      ret_20d,
+        'ema21_slope':  ema21_slope,
+        'ema50_slope':  ema50_slope,
+        'ema_cross':    ema_cross,
+        'vol_ratio':    vol_ratio,
+        'vol_dir':      vol_dir,
+        'atr':          atr,
+        'ema9_vs_21':   (ema9 - ema21) / ema21,
+        'ema21_vs_50':  (ema21 - ema50) / ema50,
+    }, index=close.index)
+
+    # ── Label: retorno futuro > +1% en horizon_days ────────────
+    future_ret = close.shift(-horizon_days) / close - 1
+    feat['label']       = (future_ret > 0.01).astype(int)
+    feat['future_ret']  = future_ret
+    feat['close']       = close.values
+    feat['date']        = close.index
+
+    feat = feat.dropna()
+    return feat, None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def train_ml_model(symbol, horizon_days=5):
+    """Entrena Random Forest con TimeSeriesSplit (sin data leakage) y calibra probabilidades."""
+    feat_df, err = build_feature_matrix(symbol, horizon_days)
+    if feat_df is None:
+        return None, None, None, err
+
+    feature_cols = ['z_score','rsi','ret_1d','ret_5d','ret_20d',
+                    'ema21_slope','ema50_slope','ema_cross',
+                    'vol_ratio','vol_dir','atr','ema9_vs_21','ema21_vs_50']
+
+    X = feat_df[feature_cols].values
+    y = feat_df['label'].values
+
+    if len(X) < 80:
+        return None, None, None, "Histórico demasiado corto para entrenar."
+
+    # TimeSeriesSplit: respeta orden cronológico, sin mirar el futuro
+    tscv   = TimeSeriesSplit(n_splits=5)
+    scaler = StandardScaler()
+
+    # Random Forest base
+    rf_base = RandomForestClassifier(
+        n_estimators=200, max_depth=6, min_samples_leaf=10,
+        class_weight='balanced', random_state=42, n_jobs=-1
+    )
+    # Calibración isotónica para que las probabilidades sean fiables
+    model = CalibratedClassifierCV(rf_base, cv=tscv, method='isotonic')
+
+    # Entrenamos en el 80% más antiguo, evaluamos en el 20% más reciente
+    split_idx  = int(len(X) * 0.8)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+
+    X_train_sc = scaler.fit_transform(X_train)
+    X_test_sc  = scaler.transform(X_test)
+
+    model.fit(X_train_sc, y_train)
+    y_prob = model.predict_proba(X_test_sc)[:, 1]
+    y_pred = (y_prob >= 0.5).astype(int)
+
+    try:
+        auc = roc_auc_score(y_test, y_prob)
+    except Exception:
+        auc = 0.5
+
+    # Importancia de features (del estimador base)
+    try:
+        importances = model.calibrated_classifiers_[0].estimator.feature_importances_
+    except Exception:
+        importances = np.zeros(len(feature_cols))
+
+    metrics = {
+        'auc':          round(auc, 3),
+        'accuracy':     round((y_pred == y_test).mean(), 3),
+        'win_rate_pred':round(y_pred.mean(), 3),
+        'win_rate_real':round(y_test.mean(), 3),
+        'n_train':      len(X_train),
+        'n_test':       len(X_test),
+        'feature_cols': feature_cols,
+        'importances':  importances.tolist(),
+    }
+
+    # Probabilidad actual (último punto)
+    X_current  = scaler.transform(X[-1:])
+    prob_now   = float(model.predict_proba(X_current)[0, 1])
+
+    return model, scaler, {'metrics': metrics, 'prob_now': prob_now,
+                           'feat_df': feat_df, 'feature_cols': feature_cols,
+                           'y_test': y_test, 'y_prob': y_prob,
+                           'X_test_dates': feat_df.index[split_idx:]}, None
+
+
+def run_backtest(feat_df, horizon_days=5, score_threshold=60):
+    """
+    Backtest estadístico puro (sin ML): simula entradas cuando Z-Score ≤ 1σ.
+    Mide win rate, retorno promedio y distribución por Z-Score bucket.
+    """
+    df = feat_df.copy()
+
+    # Buckets de Z-Score
+    bins   = [-np.inf, -2, -1, 0, 1, 2, np.inf]
+    labels = ['<-2σ', '-2σ/-1σ', '-1σ/0', '0/+1σ', '+1σ/+2σ', '>+2σ']
+    df['z_bucket'] = pd.cut(df['z_score'], bins=bins, labels=labels)
+
+    results = []
+    for bucket in labels:
+        sub = df[df['z_bucket'] == bucket]
+        if len(sub) < 5:
+            continue
+        results.append({
+            'bucket':      bucket,
+            'n_trades':    len(sub),
+            'win_rate':    round(sub['label'].mean() * 100, 1),
+            'avg_ret_pct': round(sub['future_ret'].mean() * 100, 2),
+            'med_ret_pct': round(sub['future_ret'].median() * 100, 2),
+            'best_ret':    round(sub['future_ret'].max() * 100, 2),
+            'worst_ret':   round(sub['future_ret'].min() * 100, 2),
+        })
+
+    # Equity curve: entrar cuando |z| <= 1 y mantener horizon_days
+    signals = df[df['z_score'].abs() <= 1].copy()
+    equity_dates  = list(signals.index)
+    equity_rets   = list(signals['future_ret'])
+
+    return pd.DataFrame(results), equity_dates, equity_rets
+
+
+# ── Gráficos del engine ────────────────────────────────────────
+
+def create_backtest_distribution(bt_df, horizon_days):
+    fig = go.Figure()
+    colors = ['#f23645','#ff6d00','#ff9800','#4caf50','#ff9800','#f23645']
+    for i, row in bt_df.iterrows():
+        fig.add_trace(go.Bar(
+            x=[row['bucket']], y=[row['win_rate']],
+            marker_color=colors[i % len(colors)],
+            marker_line=dict(color='rgba(0,255,173,0.3)', width=1),
+            name=row['bucket'],
+            text=[f"{row['win_rate']}%<br>n={row['n_trades']}"],
+            textposition='outside',
+            textfont=dict(color='white', family='VT323,monospace', size=12),
+            hovertemplate=(f"<b>{row['bucket']}</b><br>"
+                           f"Win Rate: {row['win_rate']}%<br>"
+                           f"Ret avg: {row['avg_ret_pct']}%<br>"
+                           f"n trades: {row['n_trades']}<extra></extra>"),
+        ))
+    fig.add_hline(y=50, line_dash='dash', line_color='rgba(255,255,255,0.3)',
+                  annotation_text='50% (azar)', annotation_font_color='#888',
+                  annotation_font_family='Courier New')
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title=dict(text=f"WIN RATE POR ZONA Z-SCORE // HORIZONTE {horizon_days}D",
+                   font=dict(color='#00ffad', size=13, family='VT323,monospace')),
+        xaxis=dict(color='white', gridcolor='#1a1e26', tickfont=dict(family='Courier New')),
+        yaxis=dict(color='white', gridcolor='#1a1e26', range=[0, 110],
+                   title='Win Rate (%)', tickfont=dict(family='Courier New')),
+        showlegend=False, height=320, margin=dict(l=50, r=20, t=55, b=40)
+    )
+    return fig
+
+
+def create_equity_curve(equity_dates, equity_rets, symbol):
+    if not equity_dates:
+        return go.Figure()
+    cum = np.cumprod([1 + r for r in equity_rets])
+    cum_pct = (cum - 1) * 100
+    colors  = ['#00ffad' if r >= 0 else '#f23645' for r in equity_rets]
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.7, 0.3], vertical_spacing=0.06,
+                        subplot_titles=('EQUITY CURVE // ENTRADAS Z≤1σ', 'RETORNO POR TRADE'))
+    fig.add_trace(go.Scatter(
+        x=equity_dates, y=cum_pct,
+        line=dict(color='#00ffad', width=2),
+        fill='tozeroy', fillcolor='rgba(0,255,173,0.07)',
+        name='Equity acumulado',
+        hovertemplate='%{x|%Y-%m-%d}<br>Retorno acum: %{y:.1f}%<extra></extra>'
+    ), row=1, col=1)
+    fig.add_hline(y=0, line_color='rgba(255,255,255,0.2)', row=1, col=1)
+    fig.add_trace(go.Bar(
+        x=equity_dates, y=[r * 100 for r in equity_rets],
+        marker_color=colors, name='Ret por trade',
+        hovertemplate='%{x|%Y-%m-%d}<br>Ret: %{y:.2f}%<extra></extra>'
+    ), row=2, col=1)
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        height=460, showlegend=False,
+        margin=dict(l=50, r=30, t=60, b=40),
+    )
+    fig.update_annotations(font=dict(color='#00ffad', family='VT323,monospace', size=13))
+    fig.update_xaxes(gridcolor='#1a1e26', color='white')
+    fig.update_yaxes(gridcolor='#1a1e26', color='white')
+    return fig
+
+
+def create_feature_importance_chart(feature_cols, importances):
+    paired = sorted(zip(importances, feature_cols), reverse=True)
+    imps, names = zip(*paired)
+    fig = go.Figure(go.Bar(
+        x=list(imps), y=list(names), orientation='h',
+        marker_color='#00d9ff',
+        marker_line=dict(color='rgba(0,217,255,0.3)', width=1),
+        text=[f"{v:.3f}" for v in imps], textposition='outside',
+        textfont=dict(color='white', family='Courier New', size=10)
+    ))
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title=dict(text="IMPORTANCIA DE FEATURES // RANDOM FOREST",
+                   font=dict(color='#00d9ff', size=13, family='VT323,monospace')),
+        xaxis=dict(color='white', gridcolor='#1a1e26', tickfont=dict(family='Courier New')),
+        yaxis=dict(color='white', gridcolor='#1a1e26', tickfont=dict(family='Courier New', size=10),
+                   autorange='reversed'),
+        height=380, margin=dict(l=130, r=60, t=55, b=40), showlegend=False
+    )
+    return fig
+
+
+def create_ml_calibration_chart(y_test, y_prob):
+    """Reliability diagram: probabilidades predichas vs frecuencia real."""
+    bins   = np.linspace(0, 1, 11)
+    mids   = (bins[:-1] + bins[1:]) / 2
+    freqs  = []
+    counts = []
+    for lo, hi in zip(bins[:-1], bins[1:]):
+        mask = (y_prob >= lo) & (y_prob < hi)
+        if mask.sum() > 0:
+            freqs.append(y_test[mask].mean())
+            counts.append(mask.sum())
+        else:
+            freqs.append(None)
+            counts.append(0)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=[0, 1], y=[0, 1], mode='lines',
+        line=dict(color='rgba(255,255,255,0.25)', dash='dash', width=1),
+        name='Calibración perfecta'
+    ))
+    fig.add_trace(go.Scatter(
+        x=list(mids), y=freqs, mode='lines+markers',
+        line=dict(color='#00ffad', width=2),
+        marker=dict(size=[max(4, c // 3) for c in counts], color='#00ffad',
+                    symbol='circle', line=dict(color='#0a0c10', width=1)),
+        name='Modelo',
+        hovertemplate='Prob predicha: %{x:.2f}<br>Freq real: %{y:.2f}<extra></extra>'
+    ))
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title=dict(text="CALIBRACIÓN // PROBABILIDAD PREDICHA vs FRECUENCIA REAL",
+                   font=dict(color='#00ffad', size=13, family='VT323,monospace')),
+        xaxis=dict(title='Probabilidad predicha', color='white', gridcolor='#1a1e26',
+                   range=[0, 1], tickfont=dict(family='Courier New')),
+        yaxis=dict(title='Frecuencia real de subida', color='white', gridcolor='#1a1e26',
+                   range=[0, 1], tickfont=dict(family='Courier New')),
+        height=300, margin=dict(l=60, r=20, t=55, b=50), showlegend=True,
+        legend=dict(bgcolor='rgba(12,14,18,0.9)', bordercolor='rgba(0,255,173,0.2)',
+                    borderwidth=1, font=dict(color='white', family='Courier New', size=10))
+    )
+    return fig
+
+
+def create_prob_gauge(prob, horizon_days):
+    color = '#00ffad' if prob >= 0.6 else '#ff9800' if prob >= 0.45 else '#f23645'
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=round(prob * 100, 1),
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': f"PROB. SUBIDA +1% // {horizon_days}D",
+               'font': {'size': 13, 'color': color, 'family': 'VT323,monospace'}},
+        number={'font': {'size': 36, 'color': 'white', 'family': 'VT323,monospace'}, 'suffix': "%"},
+        gauge={
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': '#1a1e26'},
+            'bar': {'color': color, 'thickness': 0.75},
+            'bgcolor': '#0a0c10',
+            'borderwidth': 2, 'bordercolor': 'rgba(0,255,173,0.2)',
+            'steps': [
+                {'range': [0, 40],   'color': hex_to_rgba('#f23645', 0.12)},
+                {'range': [40, 55],  'color': hex_to_rgba('#ff9800', 0.12)},
+                {'range': [55, 100], 'color': hex_to_rgba('#00ffad', 0.12)},
+            ],
+            'threshold': {'line': {'color': 'white', 'width': 3},
+                          'thickness': 0.8, 'value': round(prob * 100, 1)}
+        }
+    ))
+    fig.update_layout(**PLOTLY_LAYOUT, height=280, margin=dict(l=20, r=20, t=60, b=20))
+    return fig
+
+
+def render_backtest_ml_section():
+    st.markdown("""
+    <div style="font-family:'VT323',monospace; color:#555; font-size:0.85rem; letter-spacing:3px; margin-bottom:18px;">
+        [MOTOR DE PROBABILIDAD HISTÓRICA // BACKTEST + ML]
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        bt_symbol = st.text_input("SÍMBOLO", value="AAPL", key="bt_symbol",
+                                  help="Ticker para backtest (2 años de histórico diario)").upper().strip()
+    with col2:
+        horizon = st.selectbox("HORIZONTE (días)", [3, 5, 10, 20], index=1, key="bt_horizon")
+    with col3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        run_btn = st.button("// EJECUTAR ANÁLISIS", use_container_width=True,
+                            type="primary", key="bt_run_btn")
+
+    st.markdown("""
+    <div class="phase-box" style="border-left-color:#00d9ff; margin-bottom:20px;">
+        <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:0.95rem; letter-spacing:2px;">
+            ¿QUÉ HACE ESTA TAB?
+        </div>
+        <div style="font-family:'Courier New'; color:#aaa; font-size:11px; margin-top:6px; line-height:1.7;">
+            ▸ <b>Backtest estadístico</b>: analiza 2 años de datos reales y mide cuál fue el win rate 
+            histórico para cada zona del Z-Score.<br>
+            ▸ <b>Random Forest calibrado</b>: entrena un modelo ML con 13 features técnicas usando 
+            TimeSeriesSplit (sin data leakage) y estima la probabilidad de subida para HOY.<br>
+            ▸ <b>Sin magia</b>: AUC > 0.55 ya es útil como filtro adicional. AUC ~0.50 = aleatorio.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if run_btn and bt_symbol:
+        with st.spinner("Entrenando modelo // calculando backtest histórico..."):
+
+            # ── Backtest estadístico ────────────────────────────────
+            feat_df, err = build_feature_matrix(bt_symbol, horizon)
+            if feat_df is None:
+                st.error(err)
+                return
+
+            bt_df, eq_dates, eq_rets = run_backtest(feat_df, horizon)
+
+            # ── Modelo ML ─────────────────────────────────────────
+            model, scaler, ml_result, ml_err = train_ml_model(bt_symbol, horizon)
+            if ml_result is None:
+                st.warning(f"ML no disponible: {ml_err}")
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+
+            # ── Sección 1: Probabilidad actual ─────────────────────
+            if ml_result:
+                prob   = ml_result['prob_now']
+                m      = ml_result['metrics']
+                prob_color = '#00ffad' if prob >= 0.6 else '#ff9800' if prob >= 0.45 else '#f23645'
+                verdict_ml = ("▸ SEÑAL ALCISTA" if prob >= 0.6
+                              else "▸ SEÑAL NEUTRA" if prob >= 0.45
+                              else "▸ SEÑAL BAJISTA")
+
+                st.markdown(f"""
+                <div style="background:linear-gradient(135deg,#0c0e12,#1a1e26);
+                            border:2px solid {prob_color}; border-radius:8px;
+                            padding:24px; text-align:center; margin-bottom:24px;
+                            box-shadow:0 0 20px {prob_color}22;">
+                    <div style="font-family:'VT323',monospace; color:#555; font-size:0.85rem;
+                                letter-spacing:3px; margin-bottom:8px;">
+                        PROBABILIDAD ML // {bt_symbol} // HORIZONTE {horizon}D
+                    </div>
+                    <div style="font-family:'VT323',monospace; font-size:4.5rem; color:{prob_color};
+                                text-shadow:0 0 18px {prob_color}66; line-height:1;">
+                        {prob*100:.1f}%
+                    </div>
+                    <div style="font-family:'VT323',monospace; font-size:1.2rem;
+                                color:white; letter-spacing:3px; margin-top:8px;">
+                        {verdict_ml}
+                    </div>
+                    <div style="margin-top:14px; display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+                        <span class="verdict-badge" style="background:#00d9ff11;color:#00d9ff;border:1px solid #00d9ff33;">
+                            AUC {m['auc']}
+                        </span>
+                        <span class="verdict-badge" style="background:#00ffad11;color:#00ffad;border:1px solid #00ffad33;">
+                            ACC {m['accuracy']:.0%}
+                        </span>
+                        <span class="verdict-badge" style="background:#ff980011;color:#ff9800;border:1px solid #ff980033;">
+                            TRAIN {m['n_train']} días
+                        </span>
+                        <span class="verdict-badge" style="background:#9c27b011;color:#9c27b0;border:1px solid #9c27b033;">
+                            TEST {m['n_test']} días
+                        </span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                p1, p2 = st.columns([1, 2])
+                with p1:
+                    st.plotly_chart(create_prob_gauge(prob, horizon),
+                                    use_container_width=True, key="prob_gauge")
+                with p2:
+                    st.plotly_chart(
+                        create_ml_calibration_chart(
+                            ml_result['y_test'], ml_result['y_prob']
+                        ), use_container_width=True, key="calib_chart"
+                    )
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+
+            # ── Sección 2: Backtest por zona Z-Score ───────────────
+            st.markdown("""
+            <div style="font-family:'VT323',monospace; color:#00ffad; font-size:1.3rem;
+                        letter-spacing:3px; margin-bottom:12px;">
+                02 // BACKTEST ESTADÍSTICO // WIN RATE POR ZONA
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.plotly_chart(create_backtest_distribution(bt_df, horizon),
+                            use_container_width=True, key="bt_dist")
+
+            # Tabla de resultados
+            display_df = bt_df.rename(columns={
+                'bucket':      'Zona Z-Score',
+                'n_trades':    'N Entradas',
+                'win_rate':    'Win Rate %',
+                'avg_ret_pct': 'Ret. Medio %',
+                'med_ret_pct': 'Ret. Mediana %',
+                'best_ret':    'Mejor %',
+                'worst_ret':   'Peor %',
+            })
+
+            def style_row(row):
+                wr = row['Win Rate %']
+                color = '#00332a' if wr >= 60 else '#332200' if wr >= 50 else '#330a0a'
+                return [f'background-color:{color}'] * len(row)
+
+            st.dataframe(
+                display_df.style.apply(style_row, axis=1)
+                                .format({'Win Rate %': '{:.1f}', 'Ret. Medio %': '{:.2f}',
+                                         'Ret. Mediana %': '{:.2f}', 'Mejor %': '{:.2f}',
+                                         'Peor %': '{:.2f}'}),
+                use_container_width=True, hide_index=True
+            )
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+
+            # ── Sección 3: Equity curve ────────────────────────────
+            st.markdown("""
+            <div style="font-family:'VT323',monospace; color:#00ffad; font-size:1.3rem;
+                        letter-spacing:3px; margin-bottom:12px;">
+                03 // EQUITY CURVE // ESTRATEGIA Z≤1σ
+            </div>
+            """, unsafe_allow_html=True)
+
+            if eq_dates:
+                total_ret   = (np.prod([1 + r for r in eq_rets]) - 1) * 100
+                n_trades    = len(eq_rets)
+                wr_bt       = sum(r > 0 for r in eq_rets) / n_trades * 100
+                avg_ret     = np.mean(eq_rets) * 100
+                max_dd_arr  = np.array(eq_rets)
+                cum_arr     = np.cumprod(1 + max_dd_arr)
+                roll_max    = np.maximum.accumulate(cum_arr)
+                dd_arr      = (cum_arr - roll_max) / roll_max * 100
+                max_dd      = dd_arr.min()
+
+                dd1, dd2, dd3, dd4 = st.columns(4)
+                dd_color = '#00ffad' if total_ret >= 0 else '#f23645'
+                with dd1:
+                    render_metric_card("RETORNO TOTAL", f"{total_ret:+.1f}%",
+                                       f"Estrategia Z≤1σ / {horizon}d", dd_color)
+                with dd2:
+                    render_metric_card("WIN RATE BT", f"{wr_bt:.1f}%",
+                                       f"{n_trades} entradas históricas", '#00ffad' if wr_bt >= 55 else '#ff9800')
+                with dd3:
+                    render_metric_card("RET. MEDIO", f"{avg_ret:+.2f}%",
+                                       "Por entrada", '#00ffad' if avg_ret >= 0 else '#f23645')
+                with dd4:
+                    render_metric_card("MAX DRAWDOWN", f"{max_dd:.1f}%",
+                                       "Peor racha histórica", '#f23645')
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.plotly_chart(create_equity_curve(eq_dates, eq_rets, bt_symbol),
+                                use_container_width=True, key="equity_curve")
+            else:
+                st.warning("No hay suficientes entradas Z≤1σ en el período analizado.")
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+
+            # ── Sección 4: Feature importance ─────────────────────
+            if ml_result:
+                st.markdown("""
+                <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1.3rem;
+                            letter-spacing:3px; margin-bottom:12px;">
+                    04 // IMPORTANCIA DE FEATURES // RANDOM FOREST
+                </div>
+                """, unsafe_allow_html=True)
+
+                m = ml_result['metrics']
+                st.plotly_chart(
+                    create_feature_importance_chart(m['feature_cols'], m['importances']),
+                    use_container_width=True, key="feat_importance"
+                )
+
+                st.markdown(f"""
+                <div class="terminal-box" style="margin-top:16px;">
+                    <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1rem; letter-spacing:2px; margin-bottom:8px;">
+                        INTERPRETACIÓN DEL MODELO
+                    </div>
+                    <div style="font-family:'Courier New'; color:#aaa; font-size:11px; line-height:1.8;">
+                        ▸ <strong style="color:#00ffad;">AUC {m['auc']}</strong>: 
+                        {"Modelo con poder predictivo útil (> 0.55)" if m['auc'] > 0.55 else "Cerca del azar (0.50 = aleatorio). Tomar con cautela."}
+                        <br>
+                        ▸ Win rate real en test: {m['win_rate_real']:.0%} — Win rate predicho: {m['win_rate_pred']:.0%}
+                        <br>
+                        ▸ Las features más importantes revelan qué factores el modelo considera más predictivos.
+                        <br>
+                        ▸ <strong style="color:#ff9800;">ADVERTENCIA</strong>: backtests pasados no garantizan resultados futuros.
+                          Usa este módulo como filtro adicional, nunca como señal única.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+# ────────────────────────────────────────────────
 # RENDER PRINCIPAL
 # ────────────────────────────────────────────────
 
@@ -682,7 +1262,7 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["// ANÁLISIS", "// METODOLOGÍA", "// RIESGOS"])
+    tab1, tab2, tab3, tab4 = st.tabs(["// ANÁLISIS", "// BACKTEST + ML", "// METODOLOGÍA", "// RIESGOS"])
 
     with tab1:
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -851,8 +1431,12 @@ Puntos:   {rsu_data['volume_component']}/20
                         st.code(traceback.format_exc())
 
     with tab2:
-        render_explanation_section()
+        render_backtest_ml_section()
 
     with tab3:
+        render_explanation_section()
+
+    with tab4:
         render_risks_section()
+
 

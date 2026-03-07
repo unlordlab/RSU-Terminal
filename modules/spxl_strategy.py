@@ -488,56 +488,39 @@ def render():
             font-size: 0.82rem; color: #3a3a3a;
             letter-spacing: 3px; margin-bottom: 10px;
         }
-        /* ══ PHOSPHOR TITLE ════════════════════════════ */
-        .phosphor-title-wrap {
+        /* ══ PIXEL TITLE ════════════════════════════════ */
+        .pixel-title-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
             background: #000;
-            border: 2px solid #00ff4422;
-            border-radius: 6px;
-            padding: 18px 32px 16px;
-            display: inline-block;
-            margin: 0 auto 6px;
-            position: relative;
-            box-shadow: 0 0 40px #00ff4408, inset 0 0 30px #00000088;
+            padding: 14px 28px 12px;
+            margin: 0 auto 4px;
+            border-bottom: 2px solid #00ffad;
+            width: 100%;
         }
-        .phosphor-title-wrap::before {
-            content: "";
-            position: absolute; inset: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 3px,
-                rgba(0,255,68,0.025) 3px,
-                rgba(0,255,68,0.025) 4px
-            );
-            border-radius: 4px;
-            pointer-events: none;
-        }
-        .phosphor-title {
+        .pixel-title {
             font-family: 'VT323', monospace;
-            font-size: 3.8rem;
+            font-size: 3.2rem;
             font-weight: 400;
-            color: #00ff44;
-            letter-spacing: 10px;
+            color: #00ffad;
+            letter-spacing: 8px;
             text-transform: uppercase;
             text-shadow:
-                0 0 4px  #00ff44cc,
-                0 0 10px #00ff4488,
-                0 0 22px #00ff4444,
-                0 0 50px #00ff4411;
+                0 0 6px  #00ffadcc,
+                0 0 14px #00ffad66,
+                0 0 28px #00ffad22;
             line-height: 1;
-            display: block;
-            animation: phosphorFlicker 10s ease-in-out infinite;
+            animation: pixelFlicker 12s ease-in-out infinite;
         }
-        @keyframes phosphorFlicker {
-            0%, 94%, 100% { opacity: 1; }
-            95%  { opacity: 0.88; }
-            96%  { opacity: 1;    }
-            97%  { opacity: 0.92; }
+        @keyframes pixelFlicker {
+            0%, 95%, 100% { opacity: 1; }
+            96%  { opacity: 0.85; }
+            97%  { opacity: 1;    }
+            98%  { opacity: 0.9;  }
         }
-        .main-title {
-            /* kept for legacy refs but hidden — phosphor-title replaces it */
-            display: none;
-        }
+        .main-title { display: none; }
         .sub-title {
             font-family: 'VT323', monospace;
             color: #00d9ff; font-size: 0.95rem;
@@ -993,9 +976,10 @@ def render():
         <div class="header-corner-tr"></div>
         <div class="header-corner-bl"></div>
         <div class="header-corner-br"></div>
-        <div class="header-pre">[SECURE CONNECTION ESTABLISHED // RSU TRADING SYSTEM v5.0]</div>
-        <div class="phosphor-title-wrap">
-            <span class="phosphor-title">ESTRATEGIA SPXL</span>
+        <div class="header-pre">[SECURE CONNECTION ESTABLISHED // RSU TRADING SYSTEM v6.0]</div>
+        <div class="pixel-title-wrap">
+            <span style="font-size:2.4rem;">📈</span>
+            <span class="pixel-title">ESTRATEGIA SPXL</span>
         </div>
         <div class="sub-title">REDISTRIBUTION STRATEGY RESEARCH UNIT // SISTEMA ACTIVO</div>
         <div class="market-status">
@@ -1560,10 +1544,11 @@ def render():
                 value=10_000, step=1_000, key="bt_capital",
                 help="Sin límite máximo. Introduce cualquier cifra."))
         with cfg2:
-            bt_year = st.selectbox(
-                "Año de inicio:", [2008, 2010, 2015, 2020],
-                index=0, key="bt_year",
-                help="2008 = datos reales desde lanzamiento de SPXL")
+            bt_year = int(st.number_input(
+                "Año de inicio:", min_value=2008,
+                max_value=datetime.now().year - 1,
+                value=2008, step=1, key="bt_year",
+                help="Desde 2008 — lanzamiento real de SPXL"))
 
         df_bt  = df_hist[df_hist.index.year >= int(bt_year)].copy()
         trades, eq_df, bnh_df = run_backtest(df_bt, bt_capital)
@@ -1711,5 +1696,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

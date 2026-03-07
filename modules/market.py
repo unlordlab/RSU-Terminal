@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -2257,20 +2256,39 @@ def render():
     ticker_html = generate_ticker_html()
     components.html(ticker_html, height=50, scrolling=False)
     
-    # Título principal con halo verde cyan estilo "2026 ROADMAP"
-    st.markdown('''
-    <div style="text-align:center; padding:18px 0 10px 0; background:#0c0e12;">
-        <span style="
-            font-family: \'VT323\', \'Share Tech Mono\', \'Courier New\', monospace;
-            font-size: 2.8rem;
-            font-weight: normal;
-            color: #00ffad;
-            text-shadow: 0 0 20px #00ffad, 0 0 40px #00ffad88, 0 0 80px #00ffad44;
-            letter-spacing: 5px;
-            text-transform: uppercase;
-        ">Market Dashboard</span>
-    </div>
-    ''', unsafe_allow_html=True)
+    # ── TÍTULO PRINCIPAL estilo RSU Research + quote aleatorio ────────────────
+    import random as _random
+    _QUOTES = [
+        ("En un mercado alcista, las malas noticias se ignoran y las buenas noticias se celebran; en un mercado bajista, las buenas noticias se ignoran y las malas noticias se exageran.", ""),
+        ("Hay una guerra de clases, de acuerdo, pero es mi clase, la clase rica, la que está haciendo la guerra, y la estamos ganando.", "Warren Buffett"),
+        ("El mercado de valores es un mecanismo para transferir dinero de los impacientes a los pacientes.", "Warren Buffett"),
+        ("El mercado no te gana; te ganas tú mismo al no poder controlar tus emociones.", "Jesse Livermore"),
+        ("Las manos fuertes no compran en la euforia, compran cuando las manos débiles ya no pueden soportar más dolor.", ""),
+        ("Cuando el último escéptico se vuelve alcista, es hora de vender.", ""),
+        ("El mercado puede permanecer irracional más tiempo del que tú puedes permanecer solvente.", "John Maynard Keynes"),
+        ("El éxito en el trading consiste en comprarle a los pesimistas y venderle a los optimistas.", ""),
+        ("La bolsa es un lugar donde las crisis se preparan... es el árbol donde los pequeños inversores son sacudidos para que sus ahorros caigan en los bolsillos de los grandes especuladores.", "Friedrich Engels"),
+        ("He estado especulando... en acciones americanas, pero sobre todo en las inglesas... No requiere mucho tiempo y uno puede correr algún riesgo para quitarle el dinero a sus enemigos.", "Karl Marx"),
+    ]
+    if 'daily_quote' not in st.session_state:
+        st.session_state['daily_quote'] = _random.choice(_QUOTES)
+    _q_text, _q_author = st.session_state['daily_quote']
+    _q_attr = f' — {_q_author}' if _q_author else ''
+    _q_html = (
+        '<div style="background:#0c0e12;padding:16px 24px 8px 24px;">'
+        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:10px;">'
+        '<div style="font-size:2rem;filter:drop-shadow(0 0 8px #00ffad) drop-shadow(0 0 18px #00ffad88);">&#128202;</div>'
+        '<div style="font-family:VT323,Share Tech Mono,Courier New,monospace;font-size:2.6rem;color:#00ffad;'
+        'text-shadow:0 0 18px #00ffad,0 0 36px #00ffad66,0 0 70px #00ffad33;'
+        'letter-spacing:6px;text-transform:uppercase;line-height:1;">RSU MARKET DASHBOARD</div>'
+        '</div>'
+        '<div style="font-family:Courier New,monospace;font-size:11px;color:#4a5568;'
+        'letter-spacing:0.3px;padding:6px 8px;border-left:2px solid #00ffad33;'
+        'margin-left:4px;font-style:italic;line-height:1.5;">'
+        + '&ldquo;' + _q_text + '&rdquo;' + _q_attr
+        + '</div></div>'
+    )
+    st.markdown(_q_html, unsafe_allow_html=True)
 
     # ── API HEALTH BAR ─────────────────────────────────────────────────────────
     apis = [
@@ -2304,6 +2322,7 @@ def render():
         font-weight: 700 !important;
         letter-spacing: 1.5px !important;
         border-radius: 5px !important;
+        white-space: nowrap !important;
         box-shadow: 0 0 8px #00ffad22 !important;
         padding: 0 12px !important;
         height: 32px !important;
@@ -2389,9 +2408,16 @@ def render():
     </script>
     """, height=0, scrolling=False)
 
+    # ── BOTÓN ACTUALIZAR (inline, sin wrap) ─────────────────────────────────
+    st.markdown('''
+    <style>
+    div[data-testid="stButton"]:has(button[data-testid="baseButton-primary"]#global_refresh_btn) button,
+    button[kind="primary"] { white-space: nowrap !important; }
+    </style>
+    ''', unsafe_allow_html=True)
     col_r1, col_r2 = st.columns([1, 9])
     with col_r1:
-        if st.button("↻ Actualizar", key="global_refresh", type="primary"):
+        if st.button("↻  ACTUALIZAR", key="global_refresh", type="primary"):
             # Preservar el briefing — solo borrar datos de mercado
             _saved_briefing = st.session_state.get("briefing_text", "")
             _saved_briefing_ts = st.session_state.get("briefing_ts", "")

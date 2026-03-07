@@ -696,4 +696,7 @@ if menu in modules:
     try:
         modules[menu].render()
     except Exception as e:
+        import traceback
         st.error(f"Error cargando módulo: {e}")
+        st.code(traceback.format_exc(), language="python")
+

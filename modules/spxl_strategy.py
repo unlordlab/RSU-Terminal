@@ -281,7 +281,7 @@ def chart_equity(eq_df, bnh_df, trades=None):
             mode="markers+text",
             name="TAKE PROFIT",
             marker=dict(color=C_RED, size=8, symbol="triangle-up",
-                        line=dict(color="#ff000066", width=1)),
+                        line=dict(color="rgba(255,0,0,0.4)", width=1)),
             text=exit_labels,
             textposition="top center",
             textfont=dict(family="VT323", size=11, color=C_RED),
@@ -310,7 +310,7 @@ def chart_equity(eq_df, bnh_df, trades=None):
             mode="markers+text",
             name="ENTRADAS",
             marker=dict(color=C_GREEN, size=7, symbol="triangle-down",
-                        line=dict(color="#00ffad44", width=1)),
+                        line=dict(color="rgba(0,255,173,0.27)", width=1)),
             text=entry_labels,
             textposition="bottom center",
             textfont=dict(family="VT323", size=11, color=C_GREEN),
@@ -1707,4 +1707,3 @@ def render():
 
 if __name__ == "__main__":
     render()
-

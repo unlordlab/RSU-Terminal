@@ -1,4 +1,4 @@
-# modules/spxl_strategy.py  — v4.0 (optimizations + roadmap title style)
+# modules/spxl_strategy.py  — v5.0 (all functional improvements + telegram)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,6 +7,15 @@ import plotly.graph_objects as go
 import streamlit.components.v1 as components
 import os
 from datetime import datetime
+
+try:
+    from modules.telegram_notifier import (
+        send_alert, build_phase_alert,
+        build_target_alert, build_cds_alert,
+    )
+    TELEGRAM_OK = True
+except Exception:
+    TELEGRAM_OK = False
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STRATEGY CONFIG  ← edit all parameters here
@@ -81,6 +90,49 @@ def _phase_state(current_price: float, spxl_high: float) -> tuple:
         if dd < threshold:
             return label, color
     return "FASE 4", "#f23645"
+
+@st.cache_data(ttl=3600)
+def _fetch_cds() -> float | None:
+    """Fetch BAMLH0A0HYM2 from FRED public API. Returns latest value or None."""
+    try:
+        import requests
+        url = ("https://fred.stlouisfed.org/graph/fredgraph.csv"
+               "?id=BAMLH0A0HYM2")
+        r = requests.get(url, timeout=8)
+        if r.status_code != 200:
+            return None
+        lines = [l for l in r.text.strip().splitlines() if not l.startswith("DATE")]
+        # Walk back to find a non-empty value
+        for line in reversed(lines):
+            parts = line.split(",")
+            if len(parts) == 2 and parts[1].strip() not in ("", "."):
+                return float(parts[1].strip())
+    except Exception:
+        pass
+    return None
+
+
+@st.cache_data(ttl=300)
+def _fetch_vix_and_bonds() -> dict:
+    """Fetch VIX and US 10Y yield."""
+    result = {"vix": None, "vix_change": None,
+              "bond10y": None, "bond10y_change": None}
+    try:
+        vix = yf.Ticker("^VIX").history(period="2d")
+        if len(vix) >= 2:
+            result["vix"]        = float(vix['Close'].iloc[-1])
+            result["vix_change"] = float(vix['Close'].iloc[-1]) - float(vix['Close'].iloc[-2])
+    except Exception:
+        pass
+    try:
+        tnx = yf.Ticker("^TNX").history(period="2d")
+        if len(tnx) >= 2:
+            result["bond10y"]        = float(tnx['Close'].iloc[-1])
+            result["bond10y_change"] = float(tnx['Close'].iloc[-1]) - float(tnx['Close'].iloc[-2])
+    except Exception:
+        pass
+    return result
+
 
 PLOT_LAYOUT = dict(
     paper_bgcolor=C_BG,
@@ -778,6 +830,79 @@ def render():
         ::-webkit-scrollbar-track { background: #0a0c10; }
         ::-webkit-scrollbar-thumb { background: #1a1e26; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #00ffad33; }
+        /* ══ MACRO ROW ═════════════════════════════════ */
+        .macro-card {
+            background: #0c0e12; border: 1px solid #1a1e26;
+            border-top: 2px solid #00d9ff33; border-radius: 4px;
+            padding: 14px 18px; text-align: center;
+            transition: border-color .3s, transform .2s;
+        }
+        .macro-card:hover { border-color:#00d9ff55; transform:translateY(-1px); }
+        .macro-val  { font-family:'VT323',monospace; font-size:2rem; color:white; letter-spacing:2px; }
+        .macro-lbl  { font-family:'Share Tech Mono',monospace; color:#3a3a3a; font-size:.65rem;
+                      text-transform:uppercase; letter-spacing:2px; margin-bottom:4px; }
+        .macro-chg  { font-family:'VT323',monospace; font-size:1.1rem; }
+
+        /* ══ PRICE TIMESTAMP BADGE ═════════════════════ */
+        .price-badge {
+            display:inline-flex; align-items:center; gap:6px;
+            font-family:'Share Tech Mono',monospace; font-size:.7rem;
+            color:#444; border:1px solid #1a1e26; border-radius:3px;
+            padding:3px 10px; margin-top:6px;
+        }
+        .price-badge.stale { border-color:#ff980044; color:#ff9800; }
+
+        /* ══ SESSION STATE PANEL ═══════════════════════ */
+        .ref-panel {
+            background: #0c0e12; border:1px solid #00ffad22;
+            border-left:3px solid #00ffad; border-radius:0 4px 4px 0;
+            padding:16px 20px; margin:12px 0;
+        }
+        .ref-panel-title {
+            font-family:'VT323',monospace; color:#00ffad;
+            font-size:1rem; letter-spacing:3px; margin-bottom:10px;
+        }
+        .ref-stat { display:flex; justify-content:space-between; align-items:baseline;
+                    font-family:'Share Tech Mono',monospace; font-size:.78rem;
+                    color:#555; margin:4px 0; }
+        .ref-stat span:last-child { color:#00ffad; font-family:'VT323',monospace;
+                                     font-size:1.1rem; }
+
+        /* ══ PHASE EXECUTION TRACKER ════════════════════ */
+        .exec-row {
+            display:flex; justify-content:space-between; align-items:center;
+            padding:8px 14px; margin:4px 0;
+            background:#0c0e12; border:1px solid #1a1e26; border-radius:4px;
+            font-family:'Share Tech Mono',monospace; font-size:.78rem; color:#555;
+            transition:background .2s;
+        }
+        .exec-row.done { border-left:3px solid #00ffad; color:#888; background:#00ffad05; }
+        .exec-row .exec-phase { font-family:'VT323',monospace; font-size:1rem; color:#00ffad; }
+        .exec-row .exec-price { color:white; font-family:'VT323',monospace; font-size:1rem; }
+
+        /* ══ SIMULATOR BOX ══════════════════════════════ */
+        .sim-box {
+            background: linear-gradient(135deg, #0c0e12 0%, #0e1116 100%);
+            border:1px solid #00d9ff22; border-radius:4px; padding:20px; margin:15px 0;
+        }
+        .sim-result-val {
+            font-family:'VT323',monospace; font-size:2.2rem; color:#00d9ff;
+            letter-spacing:2px; text-align:center; margin:10px 0;
+        }
+        .sim-result-lbl {
+            font-family:'Share Tech Mono',monospace; font-size:.7rem;
+            color:#444; text-transform:uppercase; letter-spacing:2px; text-align:center;
+        }
+
+        /* ══ CDS LIVE VALUE ═════════════════════════════ */
+        .cds-live {
+            font-family:'VT323',monospace; font-size:3rem; text-align:center;
+            letter-spacing:3px; margin:10px 0;
+        }
+        .cds-live.safe     { color:#00ffad; text-shadow:0 0 20px #00ffad44; }
+        .cds-live.warning  { color:#ff9800; text-shadow:0 0 20px #ff980044; }
+        .cds-live.danger   { color:#f23645; text-shadow:0 0 20px #f2364544; }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -805,27 +930,31 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── MARKET DATA  (split fetchers so one failure doesn't break both) ───────
+    # ── MARKET DATA ───────────────────────────────────────────────────────────
     @st.cache_data(ttl=300)
     def _fetch_spxl():
         hist = yf.Ticker("SPXL").history(period="1y")
         if hist.empty:
             return None
-        cur  = float(hist['Close'].iloc[-1])
-        prev = float(hist['Close'].iloc[-2])
-        high = float(hist['High'].max())
-        low  = float(hist['Low'].min())
-        d    = CFG["phase_drops"]
-        p1   = high * (1 - d[0])
-        p2   = p1   * (1 - d[1])
-        p3   = p2   * (1 - d[2])
-        p4   = p3   * (1 - d[3])
+        cur   = float(hist['Close'].iloc[-1])
+        prev  = float(hist['Close'].iloc[-2])
+        high  = float(hist['High'].max())
+        low   = float(hist['Low'].min())
+        # Try to get the timestamp of last price
+        try:
+            last_ts = hist.index[-1].to_pydatetime()
+        except Exception:
+            last_ts = None
+        d  = CFG["phase_drops"]
+        p1 = high * (1 - d[0])
+        p2 = p1   * (1 - d[1])
+        p3 = p2   * (1 - d[2])
+        p4 = p3   * (1 - d[3])
         return {
-            "price":    cur,
-            "change":   (cur - prev) / prev * 100,
-            "high":     high,
-            "low":      low,
+            "price":    cur, "change": (cur - prev) / prev * 100,
+            "high":     high, "low": low,
             "drawdown": (cur - high) / high * 100,
+            "last_ts":  last_ts,
             "levels":   {"phase1": p1, "phase2": p2, "phase3": p3, "phase4": p4},
         }
 
@@ -842,8 +971,10 @@ def render():
 
     with st.spinner("// SINCRONIZANDO DATOS DE MERCADO..."):
         try:
-            spxl_data = _fetch_spxl()
-            spx_data  = _fetch_spx()
+            spxl_data  = _fetch_spxl()
+            spx_data   = _fetch_spx()
+            macro_data = _fetch_vix_and_bonds()
+            cds_value  = _fetch_cds()
         except Exception as e:
             st.error(f"Error obteniendo datos de mercado: {e}")
             return
@@ -852,17 +983,50 @@ def render():
         st.error("No se pudieron obtener datos de SPXL")
         return
 
-    # Unified dict for the rest of the UI (keeps existing variable names)
     data = {
         "spxl_price":  spxl_data["price"],
         "spxl_change": spxl_data["change"],
         "spxl_high":   spxl_data["high"],
         "spxl_low":    spxl_data["low"],
         "drawdown":    spxl_data["drawdown"],
+        "last_ts":     spxl_data.get("last_ts"),
         "spx_price":   spx_data["price"],
         "spx_change":  spx_data["change"],
         "buy_levels":  spxl_data["levels"],
     }
+
+    # ── SESSION STATE: reference high & phase execution tracker ───────────────
+    if "ref_high" not in st.session_state:
+        st.session_state["ref_high"]       = data["spxl_high"]
+        st.session_state["ref_high_date"]  = datetime.now().strftime("%Y-%m-%d")
+        st.session_state["ref_high_price"] = data["spxl_price"]
+    if "phases_executed" not in st.session_state:
+        st.session_state["phases_executed"] = {1: None, 2: None, 3: None, 4: None}
+
+    # Recompute levels from FIXED reference high
+    ref_high = st.session_state["ref_high"]
+    d = CFG["phase_drops"]
+    fixed_p1 = ref_high * (1 - d[0])
+    fixed_p2 = fixed_p1 * (1 - d[1])
+    fixed_p3 = fixed_p2 * (1 - d[2])
+    fixed_p4 = fixed_p3 * (1 - d[3])
+    data["fixed_levels"] = {
+        "phase1": fixed_p1, "phase2": fixed_p2,
+        "phase3": fixed_p3, "phase4": fixed_p4,
+    }
+    data["ref_high"] = ref_high
+
+    # ── PRICE TIMESTAMP BADGE ─────────────────────────────────────────────────
+    market_open = _is_market_open()
+    last_ts     = data.get("last_ts")
+    if last_ts:
+        ts_str   = last_ts.strftime("%Y-%m-%d %H:%M UTC")
+        is_stale = not market_open
+        badge_cls = "price-badge stale" if is_stale else "price-badge"
+        badge_txt = "⚠ PRECIO DE CIERRE ANTERIOR" if is_stale else "● PRECIO EN TIEMPO REAL"
+        st.markdown(
+            f'<div class="{badge_cls}">{badge_txt} &nbsp;|&nbsp; {ts_str}</div>',
+            unsafe_allow_html=True)
 
     # ── METRIC CARDS ──────────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
@@ -896,6 +1060,59 @@ def render():
             <div class="metric-change" style="color:#2a2a2a;">DD: {dd:.1f}%</div>
         </div>""", unsafe_allow_html=True)
 
+    # ── MACRO ROW: VIX + 10Y ──────────────────────────────────────────────────
+    vix    = macro_data.get("vix")
+    vixchg = macro_data.get("vix_change")
+    b10y   = macro_data.get("bond10y")
+    b10chg = macro_data.get("bond10y_change")
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+
+    with mc1:
+        if vix is not None:
+            vix_color = "#00ffad" if vix < 20 else "#ff9800" if vix < 30 else "#f23645"
+            vix_label = "CALMA" if vix < 20 else "ALERTA" if vix < 30 else "PÁNICO"
+            vc_str    = f"{vixchg:+.2f}" if vixchg is not None else "—"
+            vc_color  = "#f23645" if (vixchg or 0) > 0 else "#00ffad"
+            st.markdown(f"""<div class="macro-card" style="border-top-color:{vix_color}44;">
+                <div class="macro-lbl">// VIX · {vix_label}</div>
+                <div class="macro-val" style="color:{vix_color};">{vix:.1f}</div>
+                <div class="macro-chg" style="color:{vc_color};">{vc_str}</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="macro-card"><div class="macro-lbl">// VIX</div><div class="macro-val" style="color:#333;">—</div></div>', unsafe_allow_html=True)
+
+    with mc2:
+        if b10y is not None:
+            bc_str   = f"{b10chg:+.2f}%" if b10chg is not None else "—"
+            bc_color = "#f23645" if (b10chg or 0) > 0 else "#00ffad"
+            st.markdown(f"""<div class="macro-card" style="border-top-color:#00d9ff33;">
+                <div class="macro-lbl">// BONO 10Y USA</div>
+                <div class="macro-val" style="color:#00d9ff;">{b10y:.2f}%</div>
+                <div class="macro-chg" style="color:{bc_color};">{bc_str}</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="macro-card"><div class="macro-lbl">// BONO 10Y</div><div class="macro-val" style="color:#333;">—</div></div>', unsafe_allow_html=True)
+
+    with mc3:
+        cds_disp = f"{cds_value:.2f}" if cds_value is not None else "N/D"
+        cds_color = "#00ffad" if (cds_value or 0) < 5 else "#ff9800" if (cds_value or 0) < 10.7 else "#f23645"
+        cds_lbl   = "NORMAL" if (cds_value or 0) < 5 else "ATENCIÓN" if (cds_value or 0) < 10.7 else "⚠ STOP"
+        st.markdown(f"""<div class="macro-card" style="border-top-color:{cds_color}44;">
+            <div class="macro-lbl">// CDS HY · {cds_lbl}</div>
+            <div class="macro-val" style="color:{cds_color};">{cds_disp}</div>
+            <div class="macro-chg" style="color:#333;">BAMLH0A0HYM2</div>
+        </div>""", unsafe_allow_html=True)
+
+    with mc4:
+        ref_dd = (data['spxl_price'] - ref_high) / ref_high * 100
+        rph, rphc = _phase_state(data['spxl_price'], ref_high)
+        st.markdown(f"""<div class="macro-card" style="border-top-color:{rphc}44;">
+            <div class="macro-lbl">// DD vs REF FIJO</div>
+            <div class="macro-val" style="color:{rphc};">{ref_dd:.1f}%</div>
+            <div class="macro-chg" style="color:#2a2a2a;">REF: ${ref_high:.2f}</div>
+        </div>""", unsafe_allow_html=True)
+
     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ── TABS ──────────────────────────────────────────────────────────────────
@@ -913,28 +1130,100 @@ def render():
                         unsafe_allow_html=True)
             components.html(_tv_widget("AMEX:SPXL", "tv_spxl", height=500), height=520)
 
-        with col_right:
-            st.markdown('<div class="section-header-bar">▸ SEÑALES // FASES</div>',
+            # ── SIMULATOR ─────────────────────────────────────────────────────
+            st.markdown('<div class="section-header-bar" style="margin-top:20px;">▸ SIMULADOR ¿QUÉ PASA SI COMPRO HOY?</div>',
                         unsafe_allow_html=True)
+            sim_col1, sim_col2, sim_col3 = st.columns(3)
+            with sim_col1:
+                sim_fase = st.selectbox("Fase de entrada:", [1, 2, 3, 4], key="sim_fase")
+            with sim_col2:
+                fixed_lvls = data["fixed_levels"]
+                phase_key  = f"phase{sim_fase}"
+                default_px = round(fixed_lvls[phase_key], 2)
+                sim_price  = st.number_input("Precio de compra ($):", min_value=0.01,
+                                              value=float(default_px), step=0.5, key="sim_price")
+            with sim_col3:
+                sim_capital = st.number_input("Capital total ($):", min_value=1000,
+                                               value=10000, step=1000, key="sim_cap")
+
+            alloc_pcts   = CFG["phase_alloc"]
+            sim_alloc    = sim_capital * alloc_pcts[sim_fase - 1]
+            sim_shares   = sim_alloc / sim_price if sim_price > 0 else 0
+            sim_target   = sim_price * (1 + CFG["take_profit"])
+            sim_needed   = ((sim_target - data['spxl_price']) / data['spxl_price'] * 100
+                             if data['spxl_price'] > 0 else 0)
+            sim_gain_abs = sim_shares * (sim_target - sim_price)
+
+            sr1, sr2, sr3, sr4 = st.columns(4)
+            for col, val, lbl in [
+                (sr1, f"${sim_price:.2f}", "PRECIO ENTRADA"),
+                (sr2, f"${sim_target:.2f}", "TARGET +20%"),
+                (sr3, f"{sim_needed:+.1f}%", "SPXL NECESITA SUBIR"),
+                (sr4, f"${sim_gain_abs:,.0f}", "GANANCIA ESTIMADA"),
+            ]:
+                with col:
+                    color = "#00d9ff" if "GANANCIA" in lbl else "#00ffad" if sim_needed <= 0 else "#ff9800"
+                    st.markdown(f"""<div class="sim-box" style="padding:14px;margin:6px 0;">
+                        <div class="sim-result-lbl">{lbl}</div>
+                        <div class="sim-result-val" style="color:{color};font-size:1.6rem;">{val}</div>
+                    </div>""", unsafe_allow_html=True)
+
+            if sim_needed <= 0:
+                st.markdown('<div class="alert-box alert-buy">✅ PRECIO ACTUAL YA ESTÁ SOBRE EL TARGET — revisa el precio de entrada</div>', unsafe_allow_html=True)
+
+        with col_right:
+            # ── REFERENCE HIGH PANEL ──────────────────────────────────────────
+            st.markdown(f"""
+            <div class="ref-panel">
+                <div class="ref-panel-title">▸ MÁXIMO DE REFERENCIA</div>
+                <div class="ref-stat"><span>Fijado el:</span>
+                    <span>{st.session_state['ref_high_date']}</span></div>
+                <div class="ref-stat"><span>Precio al fijar:</span>
+                    <span>${st.session_state['ref_high_price']:.2f}</span></div>
+                <div class="ref-stat"><span>Máximo ref:</span>
+                    <span>${ref_high:.2f}</span></div>
+                <div class="ref-stat"><span>DD desde ref:</span>
+                    <span>{(data['spxl_price'] - ref_high) / ref_high * 100:.1f}%</span></div>
+            </div>""", unsafe_allow_html=True)
+
+            rc1, rc2 = st.columns(2)
+            with rc1:
+                if st.button("🔒 FIJAR MÁXIMO AHORA", use_container_width=True, key="fix_high"):
+                    st.session_state["ref_high"]       = data["spxl_high"]
+                    st.session_state["ref_high_date"]  = datetime.now().strftime("%Y-%m-%d")
+                    st.session_state["ref_high_price"] = data["spxl_price"]
+                    st.session_state["phases_executed"] = {1: None, 2: None, 3: None, 4: None}
+                    st.rerun()
+            with rc2:
+                if st.button("♻ RESET CICLO", use_container_width=True, key="reset_cycle"):
+                    st.session_state["phases_executed"] = {1: None, 2: None, 3: None, 4: None}
+                    st.rerun()
+
+            st.markdown('<div class="section-header-bar" style="margin-top:16px;">▸ SEÑALES // FASES</div>',
+                        unsafe_allow_html=True)
+
             cur    = data['spxl_price']
-            levels = data['buy_levels']
-            phases = [
-                ("FASE 1: COMPRA INICIAL",  levels['phase1'], 0.20, cur <= levels['phase1']),
-                ("FASE 2: SEGUNDA ENTRADA", levels['phase2'], 0.15, cur <= levels['phase2']),
-                ("FASE 3: TERCERA ENTRADA", levels['phase3'], 0.20, cur <= levels['phase3']),
-                ("FASE 4: ENTRADA FINAL",   levels['phase4'], 0.20, cur <= levels['phase4']),
+            levels = data["fixed_levels"]
+            phases_cfg = [
+                ("FASE 1: COMPRA INICIAL",  levels['phase1'], 0.20),
+                ("FASE 2: SEGUNDA ENTRADA", levels['phase2'], 0.15),
+                ("FASE 3: TERCERA ENTRADA", levels['phase3'], 0.20),
+                ("FASE 4: ENTRADA FINAL",   levels['phase4'], 0.20),
             ]
-            for i, (name, price, alloc, is_active) in enumerate(phases, 1):
-                if is_active:
-                    sc, st_txt = "active",    ">> ACTIVA"
-                elif cur > price:
-                    sc, st_txt = "pending",   "__ ESPERA"
+            for i, (name, price, alloc) in enumerate(phases_cfg, 1):
+                executed = st.session_state["phases_executed"].get(i)
+                level_hit = cur <= price
+                if executed:
+                    sc, st_txt = "completed", "// EJECUTADA"
+                elif level_hit:
+                    sc, st_txt = "active", ">> ACTIVA"
                 else:
-                    sc, st_txt = "completed", "// DONE"
+                    sc, st_txt = "pending", "__ ESPERA"
                 dist  = (cur - price) / price * 100
                 dcol  = "#00ffad" if dist <= 0 else "#f23645"
-                prog  = min(100, max(0, (data['spxl_high'] - cur) /
-                            (data['spxl_high'] - price) * 100)) if data['spxl_high'] > price else 0
+                prog  = min(100, max(0, (ref_high - cur) /
+                            (ref_high - price) * 100)) if ref_high > price else 0
+                exec_info = f"@ ${executed:.2f}" if executed else ""
                 st.markdown(f"""
                 <div class="phase-card {sc}">
                     <div class="phase-number">[{i}]</div>
@@ -943,7 +1232,7 @@ def render():
                     <div style="display:flex;justify-content:space-between;align-items:baseline;">
                         <span style="font-family:'VT323',monospace;color:white;font-size:1.55rem;
                                      letter-spacing:2px;">${price:.2f}</span>
-                        <span style="font-family:'VT323',monospace;color:#333;font-size:.8rem;">{st_txt}</span>
+                        <span style="font-family:'VT323',monospace;color:#333;font-size:.8rem;">{st_txt} {exec_info}</span>
                     </div>
                     <div class="progress-bar"><div class="progress-fill" style="width:{prog:.0f}%"></div></div>
                     <div style="margin-top:6px;font-family:'Share Tech Mono',monospace;
@@ -953,14 +1242,43 @@ def render():
                     </div>
                 </div>""", unsafe_allow_html=True)
 
+                # Checkbox to mark phase as executed
+                if level_hit and not executed:
+                    if st.checkbox(f"✓ Marcar Fase {i} como ejecutada", key=f"exec_ph_{i}"):
+                        st.session_state["phases_executed"][i] = cur
+                        st.rerun()
+
+            # ── ALERT BOX ─────────────────────────────────────────────────────
             st.markdown("<br>", unsafe_allow_html=True)
             if cur <= levels['phase4']:
                 st.markdown('<div class="alert-box alert-sell">🚨 COMPRA MÁXIMA ACTIVA<br>TODAS LAS FASES DISPONIBLES</div>', unsafe_allow_html=True)
             elif cur <= levels['phase1']:
                 st.markdown('<div class="alert-box alert-buy">✅ COMPRA ACTIVA<br>EJECUTAR PROTOCOLO</div>', unsafe_allow_html=True)
             else:
-                d = (cur - levels['phase1']) / levels['phase1'] * 100
-                st.markdown(f'<div class="alert-box alert-warning">⏳ STAND BY<br>FALTAN {d:.1f}% PARA FASE 1</div>', unsafe_allow_html=True)
+                d_to_f1 = (cur - levels['phase1']) / levels['phase1'] * 100
+                st.markdown(f'<div class="alert-box alert-warning">⏳ STAND BY<br>FALTAN {d_to_f1:.1f}% PARA FASE 1</div>', unsafe_allow_html=True)
+
+            # ── TELEGRAM ALERTS ───────────────────────────────────────────────
+            if TELEGRAM_OK:
+                phases_tg = [
+                    (1, levels['phase1'], 0.20),
+                    (2, levels['phase2'], 0.15),
+                    (3, levels['phase3'], 0.20),
+                    (4, levels['phase4'], 0.20),
+                ]
+                for ph_num, ph_level, ph_alloc in phases_tg:
+                    if cur <= ph_level:
+                        key = f"tg_ph{ph_num}_{ph_level:.2f}"
+                        if key not in st.session_state:
+                            send_alert(build_phase_alert(ph_num, cur, ph_level, ph_alloc))
+                            st.session_state[key] = True
+
+                # CDS stop alert
+                if cds_value and cds_value > 10.7:
+                    cds_key = f"tg_cds_{cds_value:.1f}"
+                    if cds_key not in st.session_state:
+                        send_alert(build_cds_alert(cds_value))
+                        st.session_state[cds_key] = True
 
     # ════════════════════════════════════════════
     # TAB 2: ESTRATEGIA
@@ -1019,7 +1337,7 @@ def render():
     with tab3:
         st.markdown('<div class="section-header-bar">▸ CALCULADORA DE CAPITAL</div>', unsafe_allow_html=True)
         col_c1, col_c2 = st.columns(2)
-        lv = data['buy_levels']
+        lv = data['fixed_levels']   # ← uses fixed reference high
 
         with col_c1:
             st.markdown('<div style="font-family:\'VT323\',monospace;color:#333;font-size:.82rem;letter-spacing:2px;margin-bottom:10px;">// INPUT PARAMETERS</div>', unsafe_allow_html=True)
@@ -1071,6 +1389,11 @@ def render():
             if data['spxl_price'] >= target_price:
                 st.balloons()
                 st.markdown('<div class="alert-box alert-sell">🎯 OBJETIVO ALCANZADO // EJECUTAR SALIDA TOTAL</div>', unsafe_allow_html=True)
+                if TELEGRAM_OK:
+                    tp_key = f"tg_tp_{target_price:.2f}"
+                    if tp_key not in st.session_state:
+                        send_alert(build_target_alert(data['spxl_price'], precio_medio, target_price))
+                        st.session_state[tp_key] = True
             else:
                 rem = (target_price - data['spxl_price']) / data['spxl_price'] * 100
                 st.markdown(f'<div class="alert-box alert-warning">⏳ EN POSICIÓN // FALTAN {rem:.1f}% PARA TARGET</div>', unsafe_allow_html=True)
@@ -1080,23 +1403,42 @@ def render():
     # ════════════════════════════════════════════
     with tab4:
         st.markdown('<div class="section-header-bar">▸ RIESGO SISTÉMICO // CDS MONITOR</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div class="terminal-box">
-            <div style="font-family:'VT323',monospace;color:#00d9ff;font-size:1rem;letter-spacing:2px;margin-bottom:6px;">
-                ÍNDICE: BAMLH0A0HYM2</div>
-            <div style="font-family:'Share Tech Mono',monospace;color:#444;font-size:.78rem;">
-                ICE BofA US High Yield Index Option-Adjusted Spread</div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("""
+
+        # Live CDS value
+        cds_cls  = "safe" if (cds_value or 0) < 5 else "warning" if (cds_value or 0) < 10.7 else "danger"
+        cds_disp = f"{cds_value:.2f}" if cds_value is not None else "N/D"
+        cds_lbl  = "NIVEL NORMAL" if (cds_value or 0) < 5 else "ZONA DE ATENCIÓN" if (cds_value or 0) < 10.7 else "⚠ STOP SISTÉMICO ACTIVO"
+        cds_src  = "FRED API" if cds_value is not None else "sin datos — usando gráfico TradingView"
+
+        cv1, cv2, cv3 = st.columns([1, 2, 1])
+        with cv2:
+            st.markdown(f"""
+            <div class="terminal-box" style="text-align:center;">
+                <div class="macro-lbl" style="font-size:.75rem;">BAMLH0A0HYM2 // {cds_src}</div>
+                <div class="cds-live {cds_cls}">{cds_disp}</div>
+                <div style="font-family:'VT323',monospace;font-size:1rem;
+                            letter-spacing:3px;color:#555;">{cds_lbl}</div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;
+                            color:#2a2a2a;margin-top:6px;">UMBRAL DE STOP: 10.70</div>
+            </div>""", unsafe_allow_html=True)
+
+        # Gauge — marker position driven by real data
+        if cds_value is not None:
+            # Scale: 0=0%, 10.7=100% crisis, cap display at 15
+            gauge_pct = min(95, max(2, cds_value / 15 * 100))
+        else:
+            gauge_pct = 30  # fallback
+        st.markdown(f"""
         <div style="margin:22px 0 5px;font-family:'VT323',monospace;color:#333;font-size:.82rem;letter-spacing:2px;">
             // NIVEL DE ESTRÉS SISTÉMICO</div>
-        <div class="cds-gauge"><div class="cds-marker" style="left:30%;"></div></div>
+        <div class="cds-gauge"><div class="cds-marker" style="left:{gauge_pct:.1f}%;"></div></div>
         <div class="cds-labels">
             <span style="color:#00ffad;">NORMAL</span>
             <span>ATENCIÓN</span><span>PELIGRO</span>
             <span style="color:#f23645;">CRISIS &gt;10.7</span>
         </div>""", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
+
         components.html(
             _tv_widget("FRED:BAMLH0A0HYM2", "tv_cds", height=400,
                        interval="W", hide_toolbar=True),
@@ -1255,11 +1597,31 @@ def render():
                 Exclusivamente educativo — no constituye asesoramiento financiero.
             </div>""", unsafe_allow_html=True)
 
+    # ── SIDEBAR: TELEGRAM TEST ────────────────────────────────────────────────
+    if TELEGRAM_OK:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown(
+            '<div style="font-family:\'VT323\',monospace;color:#444;'
+            'font-size:.8rem;letter-spacing:2px;">// TELEGRAM ALERTS</div>',
+            unsafe_allow_html=True)
+        if st.sidebar.button("📲 TEST NOTIFICACIÓN", use_container_width=True):
+            ok = send_alert(
+                "✅ <b>SPXL Bot conectado.</b>\n"
+                f"Precio actual: <code>${data['spxl_price']:.2f}</code>\n"
+                f"Estado: <code>{_phase_state(data['spxl_price'], ref_high)[0]}</code>")
+            st.sidebar.success("✓ Enviado") if ok else st.sidebar.error("✗ Error — revisa secrets")
+    else:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown(
+            '<div style="font-family:\'VT323\',monospace;color:#333;'
+            'font-size:.78rem;letter-spacing:2px;">// TELEGRAM: módulo no disponible</div>',
+            unsafe_allow_html=True)
+
     # ── FOOTER ────────────────────────────────────────────────────────────────
     st.markdown("""
     <div class="footer">
         <p>
-            [END OF TRANSMISSION // RSU TRADING SYSTEM v4.0]<br>
+            [END OF TRANSMISSION // RSU TRADING SYSTEM v5.0]<br>
             [REDISTRIBUTION STRATEGY RESEARCH UNIT // ALL RIGHTS RESERVED]
         </p>
     </div>""", unsafe_allow_html=True)
@@ -1267,3 +1629,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

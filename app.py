@@ -414,6 +414,129 @@ st.markdown("""
     ::-webkit-scrollbar-track { background: #0c0e12; }
     ::-webkit-scrollbar-thumb { background: #00d9ff22; border-radius: 2px; }
     ::-webkit-scrollbar-thumb:hover { background: #00d9ff66; }
+
+    /* ══════════════════════════════════════════════════════
+       RESPONSIVE — Previene compresión en tablets y laptops
+       ══════════════════════════════════════════════════════ */
+
+    /* Contenedor principal: sin ancho máximo restrictivo */
+    .main .block-container {
+        min-width: 0;
+        max-width: 100% !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+        box-sizing: border-box;
+    }
+
+    /* Columnas nunca se comprimen por debajo de su contenido */
+    [data-testid="column"] {
+        min-width: 0;
+        overflow: visible !important;
+    }
+
+    /* En pantallas >= 640px las columnas NO se apilan (Streamlit lo hace por defecto) */
+    @media screen and (min-width: 640px) {
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap !important;
+            align-items: stretch;
+            gap: 0.75rem;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex-shrink: 1 !important;
+            min-width: 120px !important;
+        }
+    }
+
+    /* En móvil real se permite apilar */
+    @media screen and (max-width: 639px) {
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+    }
+
+    /* Métricas: valor nunca cortado con ellipsis */
+    [data-testid="stMetric"] { min-width: 100px; overflow: visible !important; }
+    [data-testid="stMetricValue"] {
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        font-size: clamp(1rem, 1.8vw, 1.6rem) !important;
+    }
+    [data-testid="stMetricLabel"] {
+        white-space: nowrap !important;
+        font-size: clamp(0.6rem, 1.1vw, 0.85rem) !important;
+    }
+    [data-testid="stMetricDelta"] {
+        white-space: nowrap !important;
+        font-size: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+    }
+
+    /* Gráficos Plotly: nunca por debajo de 300px */
+    .js-plotly-plot, .plotly, [data-testid="stPlotlyChart"] {
+        min-height: 300px;
+        width: 100% !important;
+    }
+
+    /* DataFrames: scroll horizontal en lugar de compresión */
+    [data-testid="stDataFrame"], .stDataFrame {
+        overflow-x: auto !important;
+        max-width: 100%;
+    }
+    [data-testid="stDataFrame"] > div { min-width: 400px; }
+
+    /* Tabs: texto de pestañas nunca cortado */
+    [data-testid="stTabs"] [role="tab"] {
+        white-space: nowrap;
+        font-size: clamp(0.7rem, 1.2vw, 0.9rem) !important;
+    }
+
+    /* Inputs / selects: se adaptan sin romperse */
+    [data-testid="stSelectbox"],
+    [data-testid="stMultiSelect"],
+    [data-testid="stTextInput"] {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* ── SIDEBAR ANCHO FIJO EN TODOS LOS VIEWPORTS ──────────
+       Impide que el sidebar crezca y comprima el contenido.
+       Streamlit lo expande en resoluciones intermedias — aqui
+       lo bloqueamos con un ancho fijo universal. ──────────── */
+
+    /* Ancho fijo universal: escritorio y monitores grandes */
+    [data-testid="stSidebar"],
+    [data-testid="stSidebar"] > div:first-child {
+        width: 238px !important;
+        min-width: 238px !important;
+        max-width: 238px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Tablet (640-1280px): ligeramente mas estrecho */
+    @media screen and (min-width: 640px) and (max-width: 1280px) {
+        [data-testid="stSidebar"],
+        [data-testid="stSidebar"] > div:first-child {
+            width: 210px !important;
+            min-width: 210px !important;
+            max-width: 210px !important;
+        }
+        .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+    }
+
+    /* Movil: sidebar se colapsa (comportamiento nativo Streamlit) */
+    @media screen and (max-width: 639px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -574,6 +697,3 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
-
-
-

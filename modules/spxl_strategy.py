@@ -1,4 +1,4 @@
-# modules/spxl_strategy.py  — v6.0 (phosphor title + backtest fixes + entry markers)
+# modules/spxl_strategy.py  — v7.0 (6 phases + tiered selling rules + bug fixes)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,20 +21,47 @@ except Exception:
 # STRATEGY CONFIG  ← edit all parameters here
 # ══════════════════════════════════════════════════════════════════════════════
 CFG = {
-    "phase_drops":   [0.15, 0.10, 0.07, 0.10],   # drop from previous level
-    "phase_alloc":   [0.20, 0.15, 0.20, 0.20],   # capital % per phase
-    "take_profit":   0.20,                         # +20% over avg cost → sell
-    "reserve_pct":   0.25,                         # cash kept in reserve
-    "dd_phase_map":  [(15, "STAND BY", "#333"),
-                      (25, "FASE 1",   "#00ffad"),
-                      (32, "FASE 2",   "#00ffad"),
-                      (39, "FASE 3",   "#ff9800"),
-                      (999,"FASE 4",   "#f23645")],
+    # 6 phases: drops from previous level
+    "phase_drops":   [0.15, 0.10, 0.07, 0.10, 0.10, 0.10],
+    # 6 phases: capital % per phase (total 90%, 10% reserve)
+    "phase_alloc":   [0.20, 0.15, 0.20, 0.20, 0.15, 0.10],
+    "reserve_pct":   0.10,   # 10% kept in reserve
+
+    # ── Selling rules (tiered by phases invested) ──────────────────────────
+    # Scenario A: ≤3 phases (≤55% invested)
+    "sell_a_tp":          0.20,   # +20% → sell 95% of position
+    "sell_a_keep":        0.05,   # keep 5% running
+    "sell_a_runner_tp":   0.17,   # runner target: +17% additional
+    "sell_a_trail_stop":  0.11,   # trailing stop from peak if runner fails
+
+    # Scenario B: ≥4 phases (≥55% invested, ≤5 phases)
+    "sell_b_tp":          0.10,   # +10% → sell 80% of position
+    "sell_b_keep":        0.20,   # keep 20% running
+    "sell_b_trail_be":    0.00,   # initial trail: break-even
+    "sell_b_trail_act":   0.14,   # above +14% → trail 11% from peak
+    "sell_b_trail_stop":  0.11,
+    "sell_b_close_from":  0.10,   # close remaining +10% from first sell price
+
+    # Scenario C: fully invested (all 6 phases, ~100%)
+    "sell_c_trim1_pct":   0.65,   # trim 65% at +5%
+    "sell_c_trim1_tp":    0.05,
+    "sell_c_trail_be":    0.00,   # trail at break-even on remaining 35%
+    "sell_c_trim2_pct":   0.15,   # trim 15% more at +10%
+    "sell_c_trim2_tp":    0.10,
+    "sell_c_final_tp":    0.20,   # close final 20% at +20%
+
+    # dd → phase state thresholds
+    "dd_phase_map":  [(15,  "STAND BY", "#333"),
+                      (23,  "FASE 1",   "#00ffad"),
+                      (30,  "FASE 2",   "#00ffad"),
+                      (36,  "FASE 3",   "#ff9800"),
+                      (43,  "FASE 4",   "#ff9800"),
+                      (50,  "FASE 5",   "#f23645"),
+                      (999, "FASE 6",   "#f23645")],
 }
 # Convenience aliases used by backtest engine
-PHASE_DROPS    = CFG["phase_drops"]
-PHASE_ALLOC    = CFG["phase_alloc"]
-TAKE_PROFIT_BT = CFG["take_profit"]
+PHASE_DROPS = CFG["phase_drops"]
+PHASE_ALLOC = CFG["phase_alloc"]
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 C_GREEN  = "#00ffad"
@@ -72,15 +99,23 @@ def _tv_widget(symbol: str, container_id: str, height: int = 500,
 
 
 def _is_market_open() -> bool:
-    """NYSE open Mon–Fri 13:30–20:00 UTC (ET±5h offset approximation)."""
-    from datetime import timezone
-    now_utc = datetime.now(timezone.utc)
-    if now_utc.weekday() >= 5:          # Sat/Sun
-        return False
-    h, m = now_utc.hour, now_utc.minute
-    open_min  = 13 * 60 + 30            # 09:30 ET → 13:30 UTC
-    close_min = 20 * 60                 # 16:00 ET → 20:00 UTC
-    return open_min <= h * 60 + m < close_min
+    """NYSE open Mon–Fri 09:30–16:00 ET — DST-aware via pytz."""
+    try:
+        import pytz
+        et = pytz.timezone("America/New_York")
+        now_et = datetime.now(pytz.utc).astimezone(et)
+        if now_et.weekday() >= 5:
+            return False
+        t = now_et.hour * 60 + now_et.minute
+        return 9 * 60 + 30 <= t < 16 * 60
+    except Exception:
+        # Fallback: UTC-based approximation (no DST)
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
+        if now_utc.weekday() >= 5:
+            return False
+        t = now_utc.hour * 60 + now_utc.minute
+        return 13 * 60 + 30 <= t < 20 * 60
 
 
 def _phase_state(current_price: float, spxl_high: float) -> tuple:
@@ -162,63 +197,165 @@ def load_spxl_history():
 
 
 def run_backtest(df, initial_capital=100_000):
-    initial_capital = float(initial_capital)   # guard against Streamlit int/str quirks
+    initial_capital = float(initial_capital)
     prices        = df["price"].values
     dates         = df.index.values
     cash          = initial_capital
     shares        = 0.0
     avg_cost      = 0.0
     cycle_high    = prices[0]
-    phase_entered = [False] * 4
-    phase_levels  = [None] * 4
+    phase_entered = [False] * 6
     trades        = []
     equity_curve  = []
-    bnh_shares    = (initial_capital * 0.75) / prices[0]
-    bnh_cash      = initial_capital * 0.25
+    bnh_shares    = (initial_capital * (1 - CFG["reserve_pct"])) / prices[0]
+    bnh_cash      = initial_capital * CFG["reserve_pct"]
     peak_equity   = initial_capital
 
+    # Runner tracking (partial exit state)
+    runner_shares  = 0.0   # shares kept after first trim
+    runner_cost    = 0.0   # avg cost of runner
+    runner_peak    = 0.0   # peak price of runner (for trailing stop)
+    first_sell_px  = 0.0   # price of first trim (for scenario B close target)
+    trim_stage     = 0     # 0=none,1=trimmed,2=trimmed2
+
     for date, price in zip(dates, prices):
-        if shares == 0 and price > cycle_high:
+        phases_in = sum(phase_entered)
+
+        # ── Update cycle high when flat ──────────────────────────────────────
+        if shares == 0 and runner_shares == 0 and price > cycle_high:
             cycle_high    = price
-            phase_entered = [False] * 4
-            phase_levels  = [None] * 4
+            phase_entered = [False] * 6
 
-        p1     = cycle_high * (1 - PHASE_DROPS[0])
-        p2     = p1         * (1 - PHASE_DROPS[1])
-        p3     = p2         * (1 - PHASE_DROPS[2])
-        p4     = p3         * (1 - PHASE_DROPS[3])
-        levels = [p1, p2, p3, p4]
+        # ── Compute 6 entry levels ────────────────────────────────────────────
+        lvl = [0.0] * 6
+        lvl[0] = cycle_high * (1 - PHASE_DROPS[0])
+        for i in range(1, 6):
+            lvl[i] = lvl[i-1] * (1 - PHASE_DROPS[i])
 
-        for ph in range(4):
-            if not phase_entered[ph] and price <= levels[ph]:
+        # ── Phase entries ─────────────────────────────────────────────────────
+        for ph in range(6):
+            if not phase_entered[ph] and price <= lvl[ph]:
                 alloc_cash = initial_capital * PHASE_ALLOC[ph]
                 if cash >= alloc_cash:
-                    bought      = alloc_cash / price
-                    total_cost  = avg_cost * shares + alloc_cash
-                    shares     += bought
-                    avg_cost    = total_cost / shares
-                    cash       -= alloc_cash
+                    bought     = alloc_cash / price
+                    total_cost = avg_cost * shares + alloc_cash
+                    shares    += bought
+                    avg_cost   = total_cost / shares if shares > 0 else 0
+                    cash      -= alloc_cash
                     phase_entered[ph] = True
-                    phase_levels[ph]  = price
 
-        if shares > 0 and avg_cost > 0 and price >= avg_cost * (1 + TAKE_PROFIT_BT):
-            trades.append({
-                "exit_date":   pd.Timestamp(date),
-                "exit_price":  price,
-                "avg_cost":    avg_cost,
-                "gain_pct":    (price - avg_cost) / avg_cost * 100,
-                "profit":      (price - avg_cost) * shares,
-                "phases_used": sum(phase_entered),
-                "shares":      shares,
-            })
-            cash         += shares * price
-            shares        = 0.0
-            avg_cost      = 0.0
-            cycle_high    = price
-            phase_entered = [False] * 4
-            phase_levels  = [None] * 4
+        # ── Selling logic (tiered) ────────────────────────────────────────────
+        phases_in = sum(phase_entered)
 
-        portfolio_val = cash + shares * price
+        if shares > 0 and avg_cost > 0:
+            gain = (price - avg_cost) / avg_cost
+
+            # ── Scenario C: fully invested (all 6 phases) ─────────────────────
+            if phases_in == 6 and trim_stage == 0:
+                if gain >= CFG["sell_c_trim1_tp"]:
+                    trim_qty    = shares * CFG["sell_c_trim1_pct"]
+                    cash       += trim_qty * price
+                    runner_shares = shares - trim_qty
+                    runner_cost   = avg_cost
+                    runner_peak   = price
+                    first_sell_px = price
+                    shares        = 0.0
+                    trim_stage    = 1
+
+            elif trim_stage == 1 and runner_shares > 0:
+                runner_peak = max(runner_peak, price)
+                rg = (price - runner_cost) / runner_cost
+                if rg >= CFG["sell_c_trim2_tp"]:
+                    trim2_qty      = runner_shares * (CFG["sell_c_trim2_pct"] /
+                                                      (1 - CFG["sell_c_trim1_pct"]))
+                    cash          += trim2_qty * price
+                    runner_shares -= trim2_qty
+                    trim_stage     = 2
+                # Trailing stop at break-even if runner falls back
+                elif price <= runner_cost:
+                    cash          += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-TSL"))
+                    runner_shares  = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+
+            elif trim_stage == 2 and runner_shares > 0:
+                rg = (price - runner_cost) / runner_cost
+                if rg >= CFG["sell_c_final_tp"]:
+                    cash          += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-FINAL"))
+                    runner_shares  = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+                elif price <= runner_cost:
+                    cash          += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-BE"))
+                    runner_shares  = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+
+            # ── Scenario B: 4–5 phases ─────────────────────────────────────────
+            elif phases_in >= 4 and trim_stage == 0:
+                if gain >= CFG["sell_b_tp"]:
+                    main_qty      = shares * (1 - CFG["sell_b_keep"])
+                    cash         += main_qty * price
+                    runner_shares = shares * CFG["sell_b_keep"]
+                    runner_cost   = avg_cost
+                    runner_peak   = price
+                    first_sell_px = price
+                    shares        = 0.0
+                    trim_stage    = 1
+
+            elif trim_stage == 1 and phases_in >= 4 and runner_shares > 0:
+                runner_peak = max(runner_peak, price)
+                rg_from_entry = (price - runner_cost) / runner_cost
+                # Close target: +10% from first sell price
+                close_target = first_sell_px * (1 + CFG["sell_b_close_from"])
+                if price >= close_target:
+                    cash          += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "B-CLOSE"))
+                    runner_shares  = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+                # Trailing stop
+                elif rg_from_entry >= CFG["sell_b_trail_act"]:
+                    trail_stop_px = runner_peak * (1 - CFG["sell_b_trail_stop"])
+                    if price <= trail_stop_px:
+                        cash          += runner_shares * price
+                        trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "B-TSL"))
+                        runner_shares  = 0.0; trim_stage = 0
+                        cycle_high = price; phase_entered = [False] * 6
+                elif price <= runner_cost:   # break-even stop
+                    cash          += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "B-BE"))
+                    runner_shares  = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+
+            # ── Scenario A: ≤3 phases ──────────────────────────────────────────
+            elif phases_in <= 3 and trim_stage == 0:
+                if gain >= CFG["sell_a_tp"]:
+                    main_qty      = shares * (1 - CFG["sell_a_keep"])
+                    cash         += main_qty * price
+                    runner_shares = shares * CFG["sell_a_keep"]
+                    runner_cost   = avg_cost
+                    runner_peak   = price
+                    first_sell_px = price
+                    shares        = 0.0
+                    trim_stage    = 1
+                    trades.append(_make_trade(date, price, avg_cost, main_qty, phases_in, "A-MAIN"))
+
+            elif trim_stage == 1 and phases_in <= 3 and runner_shares > 0:
+                runner_peak = max(runner_peak, price)
+                runner_target = first_sell_px * (1 + CFG["sell_a_runner_tp"])
+                trail_stop_px = runner_peak * (1 - CFG["sell_a_trail_stop"])
+                if price >= runner_target:
+                    cash         += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "A-RUNNER"))
+                    runner_shares = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+                elif price <= trail_stop_px:
+                    cash         += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "A-TSL"))
+                    runner_shares = 0.0; trim_stage = 0
+                    cycle_high = price; phase_entered = [False] * 6
+
+        portfolio_val = cash + shares * price + runner_shares * price
         equity_curve.append({"date": pd.Timestamp(date), "equity": portfolio_val})
         if portfolio_val > peak_equity:
             peak_equity = portfolio_val
@@ -227,6 +364,20 @@ def run_backtest(df, initial_capital=100_000):
                   for d, p in zip(dates, prices)]
 
     return trades, pd.DataFrame(equity_curve), pd.DataFrame(bnh_equity)
+
+
+def _make_trade(date, exit_price, avg_cost, qty, phases_used, scenario):
+    """Helper to build a trade dict."""
+    return {
+        "exit_date":   pd.Timestamp(date),
+        "exit_price":  float(exit_price),
+        "avg_cost":    float(avg_cost),
+        "gain_pct":    (float(exit_price) - float(avg_cost)) / float(avg_cost) * 100,
+        "profit":      (float(exit_price) - float(avg_cost)) * float(qty),
+        "phases_used": int(phases_used),
+        "shares":      float(qty),
+        "scenario":    scenario,
+    }
 
 
 def compute_stats(trades, eq_df, bnh_df, initial_capital):
@@ -352,13 +503,27 @@ def chart_trades(trades):
     if not trades:
         return None
     t      = pd.DataFrame(trades).sort_values("exit_date")
-    colors = [C_GREEN if g > 0 else C_RED for g in t["gain_pct"]]
+    # Color by scenario
+    sc_colors = {"A-MAIN": C_GREEN, "A-RUNNER": "#7dff6b", "A-TSL": C_ORANGE,
+                 "B-CLOSE": C_BLUE, "B-TSL": C_ORANGE, "B-BE": "#ff5555",
+                 "C-FINAL": C_GREEN, "C-TSL": C_ORANGE, "C-BE": "#ff5555"}
+    colors = [sc_colors.get(tr.get("scenario",""), C_GREEN if g > 0 else C_RED)
+              for tr, g in zip(t.to_dict("records"), t["gain_pct"])]
+    labels = [tr.get("scenario","") for tr in t.to_dict("records")]
     fig    = go.Figure()
     fig.add_trace(go.Bar(x=t["exit_date"], y=t["gain_pct"],
-        marker_color=colors, marker_line_color="rgba(0,0,0,0)"))
-    fig.add_hline(y=TAKE_PROFIT_BT * 100, line_dash="dot", line_color=C_GREEN, opacity=0.5,
-                  annotation_text="TARGET +20%",
-                  annotation_font=dict(family="VT323", size=12, color=C_GREEN))
+        marker_color=colors, marker_line_color="rgba(0,0,0,0)",
+        text=labels, textposition="outside",
+        textfont=dict(family="VT323", size=9, color="#555")))
+    fig.add_hline(y=20, line_dash="dot", line_color=C_GREEN, opacity=0.4,
+                  annotation_text="A: +20%",
+                  annotation_font=dict(family="VT323", size=11, color=C_GREEN))
+    fig.add_hline(y=10, line_dash="dot", line_color=C_BLUE, opacity=0.4,
+                  annotation_text="B: +10%",
+                  annotation_font=dict(family="VT323", size=11, color=C_BLUE))
+    fig.add_hline(y=5, line_dash="dot", line_color=C_ORANGE, opacity=0.35,
+                  annotation_text="C: +5%",
+                  annotation_font=dict(family="VT323", size=11, color=C_ORANGE))
     fig.update_layout(**PLOT_LAYOUT,
         title=dict(text="OPERACIONES COMPLETADAS // GANANCIA POR TRADE",
                    font=dict(family="VT323", size=18, color=C_BLUE), x=0.01),
@@ -1061,19 +1226,16 @@ def render():
         st.session_state["ref_high_date"]  = datetime.now().strftime("%Y-%m-%d")
         st.session_state["ref_high_price"] = data["spxl_price"]
     if "phases_executed" not in st.session_state:
-        st.session_state["phases_executed"] = {1: None, 2: None, 3: None, 4: None}
+        st.session_state["phases_executed"] = {i: None for i in range(1, 7)}
 
     # Recompute levels from FIXED reference high
     ref_high = st.session_state["ref_high"]
     d = CFG["phase_drops"]
-    fixed_p1 = ref_high * (1 - d[0])
-    fixed_p2 = fixed_p1 * (1 - d[1])
-    fixed_p3 = fixed_p2 * (1 - d[2])
-    fixed_p4 = fixed_p3 * (1 - d[3])
-    data["fixed_levels"] = {
-        "phase1": fixed_p1, "phase2": fixed_p2,
-        "phase3": fixed_p3, "phase4": fixed_p4,
-    }
+    lvl = [0.0] * 6
+    lvl[0] = ref_high * (1 - d[0])
+    for i in range(1, 6):
+        lvl[i] = lvl[i-1] * (1 - d[i])
+    data["fixed_levels"] = {f"phase{i+1}": lvl[i] for i in range(6)}
     data["ref_high"] = ref_high
 
     # ── PRICE TIMESTAMP BADGE ─────────────────────────────────────────────────
@@ -1195,7 +1357,7 @@ def render():
                         unsafe_allow_html=True)
             sim_col1, sim_col2, sim_col3 = st.columns(3)
             with sim_col1:
-                sim_fase = st.selectbox("Fase de entrada:", [1, 2, 3, 4], key="sim_fase")
+                sim_fase = st.selectbox("Fase de entrada:", [1, 2, 3, 4, 5, 6], key="sim_fase")
             with sim_col2:
                 fixed_lvls = data["fixed_levels"]
                 phase_key  = f"phase{sim_fase}"
@@ -1206,23 +1368,37 @@ def render():
                 sim_capital = st.number_input("Capital total ($):", min_value=1000,
                                                value=10000, step=1000, key="sim_cap")
 
-            alloc_pcts   = CFG["phase_alloc"]
-            sim_fase_idx = int(sim_fase) - 1
+            alloc_pcts    = CFG["phase_alloc"]
+            sim_fase_idx  = int(sim_fase) - 1
             sim_capital_f = float(sim_capital)
             sim_price_f   = float(sim_price) if float(sim_price) > 0 else 1.0
-            sim_alloc    = sim_capital_f * alloc_pcts[sim_fase_idx]
-            sim_shares   = sim_alloc / sim_price_f
-            sim_target   = sim_price_f * (1 + CFG["take_profit"])
+            sim_alloc     = sim_capital_f * alloc_pcts[sim_fase_idx]
+            sim_shares    = sim_alloc / sim_price_f
+
+            phases_so_far = int(sim_fase)
+            if phases_so_far == 6:
+                sc_label   = "ESCENARIO C"
+                sim_target = sim_price_f * (1 + CFG["sell_c_trim1_tp"])
+                tp_label   = f"+{CFG['sell_c_trim1_tp']:.0%} → trim 65%"
+            elif phases_so_far >= 4:
+                sc_label   = "ESCENARIO B"
+                sim_target = sim_price_f * (1 + CFG["sell_b_tp"])
+                tp_label   = f"+{CFG['sell_b_tp']:.0%} → vender 80%"
+            else:
+                sc_label   = "ESCENARIO A"
+                sim_target = sim_price_f * (1 + CFG["sell_a_tp"])
+                tp_label   = f"+{CFG['sell_a_tp']:.0%} → vender 95%"
+
             sim_needed   = ((sim_target - data['spxl_price']) / data['spxl_price'] * 100
                              if data['spxl_price'] > 0 else 0)
             sim_gain_abs = sim_shares * (sim_target - sim_price_f)
 
             sr1, sr2, sr3, sr4 = st.columns(4)
             for col, val, lbl in [
-                (sr1, f"${sim_price:.2f}", "PRECIO ENTRADA"),
-                (sr2, f"${sim_target:.2f}", "TARGET +20%"),
-                (sr3, f"{sim_needed:+.1f}%", "SPXL NECESITA SUBIR"),
-                (sr4, f"${sim_gain_abs:,.0f}", "GANANCIA ESTIMADA"),
+                (sr1, f"${sim_price:.2f}",    "PRECIO ENTRADA"),
+                (sr2, f"${sim_target:.2f}",   f"TARGET ({tp_label})"),
+                (sr3, f"{sim_needed:+.1f}%",  "SPXL NECESITA SUBIR"),
+                (sr4, f"${sim_gain_abs:,.0f}","GANANCIA ESTIMADA"),
             ]:
                 with col:
                     color = "#00d9ff" if "GANANCIA" in lbl else "#00ffad" if sim_needed <= 0 else "#ff9800"
@@ -1230,6 +1406,8 @@ def render():
                         <div class="sim-result-lbl">{lbl}</div>
                         <div class="sim-result-val" style="color:{color};font-size:1.6rem;">{val}</div>
                     </div>""", unsafe_allow_html=True)
+
+            st.markdown(f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.7rem;color:#333;text-align:center;margin-top:4px;letter-spacing:2px;">// {sc_label}</div>', unsafe_allow_html=True)
 
             if sim_needed <= 0:
                 st.markdown('<div class="alert-box alert-buy">✅ PRECIO ACTUAL YA ESTÁ SOBRE EL TARGET — revisa el precio de entrada</div>', unsafe_allow_html=True)
@@ -1255,11 +1433,18 @@ def render():
                     st.session_state["ref_high"]       = data["spxl_high"]
                     st.session_state["ref_high_date"]  = datetime.now().strftime("%Y-%m-%d")
                     st.session_state["ref_high_price"] = data["spxl_price"]
-                    st.session_state["phases_executed"] = {1: None, 2: None, 3: None, 4: None}
+                    st.session_state["phases_executed"] = {i: None for i in range(1, 7)}
+                    # Clear stale Telegram alert keys so new levels re-trigger
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("tg_ph"):
+                            del st.session_state[k]
                     st.rerun()
             with rc2:
                 if st.button("♻ RESET CICLO", use_container_width=True, key="reset_cycle"):
-                    st.session_state["phases_executed"] = {1: None, 2: None, 3: None, 4: None}
+                    st.session_state["phases_executed"] = {i: None for i in range(1, 7)}
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("tg_ph"):
+                            del st.session_state[k]
                     st.rerun()
 
             st.markdown('<div class="section-header-bar" style="margin-top:16px;">▸ SEÑALES // FASES</div>',
@@ -1268,10 +1453,12 @@ def render():
             cur    = data['spxl_price']
             levels = data["fixed_levels"]
             phases_cfg = [
-                ("FASE 1: COMPRA INICIAL",  levels['phase1'], 0.20),
-                ("FASE 2: SEGUNDA ENTRADA", levels['phase2'], 0.15),
-                ("FASE 3: TERCERA ENTRADA", levels['phase3'], 0.20),
-                ("FASE 4: ENTRADA FINAL",   levels['phase4'], 0.20),
+                (f"FASE {i+1}", levels[f"phase{i+1}"], CFG["phase_alloc"][i])
+                for i in range(6)
+            ]
+            phase_names = [
+                "PRIMERA CAÍDA",  "SEGUNDA CAÍDA",  "TERCERA CAÍDA",
+                "CUARTA CAÍDA",   "QUINTA CAÍDA",   "SEXTA CAÍDA",
             ]
             for i, (name, price, alloc) in enumerate(phases_cfg, 1):
                 executed = st.session_state["phases_executed"].get(i)
@@ -1291,7 +1478,7 @@ def render():
                 <div class="phase-card {sc}">
                     <div class="phase-number">[{i}]</div>
                     <div style="font-family:'VT323',monospace;color:#00ffad;font-size:.9rem;
-                                letter-spacing:2px;margin-bottom:6px;">{name}</div>
+                                letter-spacing:2px;margin-bottom:6px;">{phase_names[i-1]} · {name}</div>
                     <div style="display:flex;justify-content:space-between;align-items:baseline;">
                         <span style="font-family:'VT323',monospace;color:white;font-size:1.55rem;
                                      letter-spacing:2px;">${price:.2f}</span>
@@ -1313,23 +1500,20 @@ def render():
 
             # ── ALERT BOX ─────────────────────────────────────────────────────
             st.markdown("<br>", unsafe_allow_html=True)
-            if cur <= levels['phase4']:
-                st.markdown('<div class="alert-box alert-sell">🚨 COMPRA MÁXIMA ACTIVA<br>TODAS LAS FASES DISPONIBLES</div>', unsafe_allow_html=True)
+            phases_active = sum(1 for i in range(1,7) if cur <= levels[f"phase{i}"])
+            if cur <= levels['phase6']:
+                st.markdown('<div class="alert-box alert-sell">🚨 FASE 6 ACTIVA — INVERSIÓN MÁXIMA</div>', unsafe_allow_html=True)
             elif cur <= levels['phase1']:
-                st.markdown('<div class="alert-box alert-buy">✅ COMPRA ACTIVA<br>EJECUTAR PROTOCOLO</div>', unsafe_allow_html=True)
+                st.markdown('<div class="alert-box alert-buy">✅ COMPRA ACTIVA — EJECUTAR PROTOCOLO</div>', unsafe_allow_html=True)
             else:
                 d_to_f1 = (cur - levels['phase1']) / levels['phase1'] * 100
-                st.markdown(f'<div class="alert-box alert-warning">⏳ STAND BY<br>FALTAN {d_to_f1:.1f}% PARA FASE 1</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="alert-box alert-warning">⏳ STAND BY — FALTAN {d_to_f1:.1f}% PARA FASE 1</div>', unsafe_allow_html=True)
 
             # ── TELEGRAM ALERTS ───────────────────────────────────────────────
             if TELEGRAM_OK:
-                phases_tg = [
-                    (1, levels['phase1'], 0.20),
-                    (2, levels['phase2'], 0.15),
-                    (3, levels['phase3'], 0.20),
-                    (4, levels['phase4'], 0.20),
-                ]
-                for ph_num, ph_level, ph_alloc in phases_tg:
+                for ph_num in range(1, 7):
+                    ph_level = levels[f"phase{ph_num}"]
+                    ph_alloc = CFG["phase_alloc"][ph_num - 1]
                     if cur <= ph_level:
                         key = f"tg_ph{ph_num}_{ph_level:.2f}"
                         if key not in st.session_state:
@@ -1355,33 +1539,90 @@ def render():
                 Estrategia basada en que el S&amp;P 500 mantiene
                 <span style="color:#00ffad;">macro tendencia alcista</span> a largo plazo.
                 SPXL amplifica ese movimiento 3x. La estrategia explota correcciones
-                para acumular posición escalonada.
+                para acumular posición escalonada en 6 fases, con salidas parciales
+                adaptadas según el nivel de inversión alcanzado.
             </p>
         </div>""", unsafe_allow_html=True)
 
-        st.markdown('<div class="section-header-bar">▸ REGLAS DE ENTRADA</div>', unsafe_allow_html=True)
-        for icon, title, desc in [
-            ("1","PRIMERA CAÍDA (-15% desde máximo)","Invertir 20% del capital asignado"),
-            ("2","SEGUNDA CAÍDA (-10% desde Fase 1)", "Invertir 15% del capital asignado"),
-            ("3","TERCERA CAÍDA (-7% desde Fase 2)",  "Invertir 20% del capital asignado"),
-            ("4","CUARTA CAÍDA  (-10% desde Fase 3)", "Invertir 20% del capital // 75% total"),
-        ]:
+        # ── BUYING RULES ─────────────────────────────────────────────────────
+        st.markdown('<div class="section-header-bar">▸ REGLAS DE ENTRADA // 6 FASES</div>', unsafe_allow_html=True)
+        buy_rules = [
+            ("1", "PRIMERA CAÍDA  (−15% desde máximo)",    "Invertir 20% del capital"),
+            ("2", "SEGUNDA CAÍDA  (−10% desde Fase 1)",    "Invertir 15% del capital"),
+            ("3", "TERCERA CAÍDA  (−7% desde Fase 2)",     "Invertir 20% del capital"),
+            ("4", "CUARTA CAÍDA   (−10% desde Fase 3)",    "Invertir 20% del capital"),
+            ("5", "QUINTA CAÍDA   (−10% desde Fase 4)",    "Invertir 15% del capital"),
+            ("6", "SEXTA CAÍDA    (−10% desde Fase 5)",    "Invertir 10% del capital — MÁXIMA INVERSIÓN"),
+        ]
+        for icon, title, desc in buy_rules:
+            bold = "color:white" if icon in ("1","2","3","4") else "color:#888"
             st.markdown(f"""
             <div class="rule-item">
                 <div class="rule-icon">{icon}</div>
                 <div>
-                    <div style="color:white;font-size:.88rem;margin-bottom:4px;">{title}</div>
+                    <div style="{bold};font-size:.88rem;margin-bottom:4px;">{title}</div>
                     <div style="color:#444;font-size:.78rem;">{desc}</div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
-        st.markdown('<div class="section-header-bar" style="margin-top:22px;">▸ REGLA DE SALIDA</div>', unsafe_allow_html=True)
+        # ── SELLING RULES ─────────────────────────────────────────────────────
+        st.markdown('<div class="section-header-bar" style="margin-top:28px;">▸ REGLAS DE SALIDA // ESCALONADA POR EXPOSICIÓN</div>', unsafe_allow_html=True)
+
+        # Scenario A
         st.markdown("""
-        <div class="rule-item" style="border-left:3px solid #f23645;">
-            <div class="rule-icon" style="border-color:#f2364522;color:#f23645;background:#f2364509;">$</div>
-            <div>
-                <div style="color:white;font-size:.88rem;margin-bottom:4px;">TAKE PROFIT (+20% sobre precio medio)</div>
-                <div style="color:#444;font-size:.78rem;">Vender toda la posición al alcanzar objetivo. Sin parciales.</div>
+        <div class="terminal-box" style="border-left:3px solid #00ffad;margin-bottom:12px;">
+            <div style="font-family:'VT323',monospace;color:#00ffad;font-size:1.1rem;letter-spacing:3px;margin-bottom:10px;">
+                ESCENARIO A — HASTA 3 FASES INVERTIDAS (≤55% capital)</div>
+            <div class="rule-item" style="border:none;padding:6px 0;background:transparent;">
+                <div class="rule-icon" style="background:#00ffad0a;border-color:#00ffad22;">$</div>
+                <div style="color:#aaa;font-size:.83rem;line-height:1.8;">
+                    Al <span style="color:#00ffad;">+20%</span> sobre precio medio →
+                    vender <span style="color:#00ffad;">95%</span> de la posición.<br>
+                    Dejar <span style="color:#00ffad;">5%</span> como <i>runner</i> buscando
+                    <span style="color:#00ffad;">+17%</span> adicional desde el precio de venta.<br>
+                    Si no alcanza el +17%: <span style="color:#ff9800;">trailing stop −11%</span>
+                    desde el máximo que haya alcanzado.
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        # Scenario B
+        st.markdown("""
+        <div class="terminal-box" style="border-left:3px solid #00d9ff;margin-bottom:12px;">
+            <div style="font-family:'VT323',monospace;color:#00d9ff;font-size:1.1rem;letter-spacing:3px;margin-bottom:10px;">
+                ESCENARIO B — 4 O MÁS FASES INVERTIDAS (≥55% capital)</div>
+            <div class="rule-item" style="border:none;padding:6px 0;background:transparent;">
+                <div class="rule-icon" style="background:#00d9ff0a;border-color:#00d9ff22;color:#00d9ff;">$</div>
+                <div style="color:#aaa;font-size:.83rem;line-height:1.8;">
+                    Al <span style="color:#00d9ff;">+10%</span> → vender
+                    <span style="color:#00d9ff;">80%</span> de la posición.<br>
+                    Dejar <span style="color:#00d9ff;">20%</span> con trailing stop en
+                    <span style="color:#00d9ff;">break-even</span> inicialmente.<br>
+                    Si sube al <span style="color:#00d9ff;">+14%</span> → activar trail
+                    <span style="color:#ff9800;">−11%</span> desde máximo.<br>
+                    Cerrar el runner cuando suba
+                    <span style="color:#00d9ff;">+10%</span> desde el precio de la primera venta.
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        # Scenario C
+        st.markdown("""
+        <div class="terminal-box" style="border-left:3px solid #f23645;margin-bottom:12px;">
+            <div style="font-family:'VT323',monospace;color:#f23645;font-size:1.1rem;letter-spacing:3px;margin-bottom:10px;">
+                ESCENARIO C — TOTALMENTE INVERTIDO (6 FASES / ~100% capital)</div>
+            <div class="rule-item" style="border:none;padding:6px 0;background:transparent;">
+                <div class="rule-icon" style="background:#f236450a;border-color:#f2364522;color:#f23645;">$</div>
+                <div style="color:#aaa;font-size:.83rem;line-height:1.8;">
+                    Al <span style="color:#ff9800;">+5%</span> →
+                    vender <span style="color:#f23645;">65%</span> de la posición.<br>
+                    Dejar <span style="color:#f23645;">35%</span> con stop en
+                    <span style="color:#f23645;">break-even</span>.<br>
+                    Al <span style="color:#ff9800;">+10%</span> desde primera venta →
+                    vender <span style="color:#f23645;">15%</span> más.<br>
+                    Al <span style="color:#ff9800;">+20%</span> desde primera venta →
+                    cerrar el <span style="color:#f23645;">20%</span> final.
+                </div>
             </div>
         </div>""", unsafe_allow_html=True)
 
@@ -1415,8 +1656,11 @@ def render():
         with col_c2:
             st.markdown('<div style="font-family:\'VT323\',monospace;color:#333;font-size:.82rem;letter-spacing:2px;margin-bottom:10px;">// ALLOCATION OUTPUT</div>', unsafe_allow_html=True)
             total_inv = 0
-            for fase, pct, precio in [("FASE 1",0.20,lv['phase1']),("FASE 2",0.15,lv['phase2']),
-                                       ("FASE 3",0.20,lv['phase3']),("FASE 4",0.20,lv['phase4'])]:
+            fase_data = [
+                (f"FASE {i+1}", CFG["phase_alloc"][i], lv[f"phase{i+1}"])
+                for i in range(6)
+            ]
+            for fase, pct, precio in fase_data:
                 monto = capital_total * pct
                 total_inv += monto
                 st.markdown(f"""
@@ -1427,10 +1671,10 @@ def render():
                         <span style="color:#2a2a2a;font-size:.72rem;margin-left:8px;">@ ${precio:.2f}</span>
                     </div>
                 </div>""", unsafe_allow_html=True)
-            reserva = capital_total * 0.25
+            reserva = capital_total * CFG["reserve_pct"]
             st.markdown(f"""
             <div class="calc-item calc-reserve">
-                <span style="color:#555;font-size:.85rem;">RESERVA (25%)</span>
+                <span style="color:#555;font-size:.85rem;">RESERVA ({CFG['reserve_pct']:.0%})</span>
                 <span style="color:#ff9800;font-family:'VT323',monospace;font-size:1.25rem;">${reserva:,.0f}</span>
             </div>
             <div class="calc-total">
@@ -1444,14 +1688,26 @@ def render():
             valor_actual = cantidad_acciones * data['spxl_price']
             costo_total  = cantidad_acciones * precio_medio
             pnl_pct      = (valor_actual - costo_total) / costo_total * 100 if costo_total > 0 else 0
-            target_price = precio_medio * 1.20
+
+            # Let user specify how many phases are invested to show correct scenario
+            n_phases_inv = int(st.selectbox("Fases invertidas actualmente:", [1,2,3,4,5,6], index=2))
+            if n_phases_inv == 6:
+                target_price = precio_medio * (1 + CFG["sell_c_trim1_tp"])
+                sc_txt = f"Escenario C: trim 65% al +{CFG['sell_c_trim1_tp']:.0%}"
+            elif n_phases_inv >= 4:
+                target_price = precio_medio * (1 + CFG["sell_b_tp"])
+                sc_txt = f"Escenario B: vender 80% al +{CFG['sell_b_tp']:.0%}"
+            else:
+                target_price = precio_medio * (1 + CFG["sell_a_tp"])
+                sc_txt = f"Escenario A: vender 95% al +{CFG['sell_a_tp']:.0%}"
+
             c1, c2, c3   = st.columns(3)
             c1.metric("Valor Actual",    f"${valor_actual:,.2f}", f"{pnl_pct:+.2f}%")
-            c2.metric("Objetivo Venta",  f"${target_price:.2f}", "+20%")
+            c2.metric("Objetivo Venta",  f"${target_price:.2f}", sc_txt)
             c3.metric("Distancia Target",f"{((target_price - data['spxl_price']) / data['spxl_price'] * 100):.2f}%")
             if data['spxl_price'] >= target_price:
                 st.balloons()
-                st.markdown('<div class="alert-box alert-sell">🎯 OBJETIVO ALCANZADO // EJECUTAR SALIDA TOTAL</div>', unsafe_allow_html=True)
+                st.markdown('<div class="alert-box alert-sell">🎯 OBJETIVO ALCANZADO // EJECUTAR SALIDA PARCIAL</div>', unsafe_allow_html=True)
                 if TELEGRAM_OK:
                     tp_key = f"tg_tp_{target_price:.2f}"
                     if tp_key not in st.session_state:
@@ -1687,7 +1943,7 @@ def render():
     st.markdown("""
     <div class="footer">
         <p>
-            [END OF TRANSMISSION // RSU TRADING SYSTEM v6.0]<br>
+            [END OF TRANSMISSION // RSU TRADING SYSTEM v7.0]<br>
             [REDISTRIBUTION STRATEGY RESEARCH UNIT // ALL RIGHTS RESERVED]
         </p>
     </div>""", unsafe_allow_html=True)
@@ -1695,5 +1951,6 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 
 

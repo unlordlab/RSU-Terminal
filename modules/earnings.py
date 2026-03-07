@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -194,79 +193,7 @@ def get_yfinance_full(ticker):  # cache removed: debug log needs session_state
             info = {}
             debug_log.append(f"⚠️ info falló: {e}")
 
-        # ── Yahoo Finance v8 quoteSummary fallback ──
-        # yfinance info{} frequently returns <30 keys; Yahoo's own API returns 200+
-        # Enrich info{} with any missing fields from the full quoteSummary
-        _KEY_FIELDS = {
-            'longBusinessSummary', 'sector', 'industry', 'shortName', 'longName',
-            'trailingPE', 'forwardPE', 'priceToSalesTrailing12Months',
-            'enterpriseToEbitda', 'pegRatio', 'priceToBook',
-            'trailingEps', 'forwardEps', 'bookValue',
-            'profitMargins', 'operatingMargins', 'grossMargins',
-            'returnOnEquity', 'returnOnAssets',
-            'revenueGrowth', 'earningsGrowth', 'debtToEquity',
-            'totalRevenue', 'ebitda', 'freeCashflow', 'operatingCashflow',
-            'totalCash', 'totalDebt', 'currentRatio',
-            'beta', 'dividendYield', 'dividendRate', 'payoutRatio',
-            'targetMeanPrice', 'targetHighPrice', 'targetLowPrice', 'targetMedianPrice',
-            'numberOfAnalystOpinions', 'heldPercentInsiders', 'heldPercentInstitutions',
-            'fullTimeEmployees', 'country', 'city', 'website',
-        }
-        _missing = _KEY_FIELDS - set(k for k, v in info.items() if v is not None)
-        if len(_missing) > 5:  # many fields missing → try direct API
-            try:
-                _modules = ','.join([
-                    'summaryProfile', 'defaultKeyStatistics', 'financialData',
-                    'summaryDetail', 'price', 'incomeStatementHistory',
-                    'balanceSheetHistory',
-                ])
-                _headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json',
-                }
-                _url = f'https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules={_modules}'
-                _resp = requests.get(_url, headers=_headers, timeout=10)
-                if _resp.status_code == 200:
-                    _data = _resp.json().get('quoteSummary', {}).get('result', [{}])[0]
-
-                    # Map all modules into info{}
-                    _module_map = {
-                        'summaryProfile':     ['sector','industry','longBusinessSummary','country','city','website','fullTimeEmployees'],
-                        'defaultKeyStatistics': ['trailingEps','forwardEps','bookValue','priceToBook','pegRatio',
-                                                  'enterpriseToEbitda','shortRatio','heldPercentInsiders',
-                                                  'heldPercentInstitutions','beta','earningsGrowth'],
-                        'financialData':      ['trailingPE','forwardPE','priceToSalesTrailing12Months',
-                                               'profitMargins','operatingMargins','grossMargins',
-                                               'returnOnEquity','returnOnAssets','revenueGrowth',
-                                               'debtToEquity','totalRevenue','ebitda','freeCashflow',
-                                               'operatingCashflow','totalCash','totalDebt','currentRatio',
-                                               'targetMeanPrice','targetHighPrice','targetLowPrice',
-                                               'targetMedianPrice','numberOfAnalystOpinions'],
-                        'summaryDetail':      ['dividendYield','dividendRate','payoutRatio','beta',
-                                               'trailingPE','forwardPE'],
-                        'price':              ['shortName','longName','regularMarketPrice','marketCap',
-                                               'regularMarketVolume','regularMarketOpen',
-                                               'regularMarketPreviousClose','currency'],
-                    }
-                    for module, keys in _module_map.items():
-                        mod_data = _data.get(module, {})
-                        for k in keys:
-                            if not info.get(k):  # only fill missing
-                                raw = mod_data.get(k)
-                                if raw is not None:
-                                    # Yahoo wraps values: {"raw": 123.4, "fmt": "123.4"}
-                                    if isinstance(raw, dict):
-                                        v = raw.get('raw') if raw.get('raw') is not None else raw.get('fmt')
-                                    else:
-                                        v = raw
-                                    if v is not None:
-                                        info[k] = v
-
-                    debug_log.append(f"✅ Yahoo v10 quoteSummary enriched: now {len(info)} keys")
-                else:
-                    debug_log.append(f"⚠️ Yahoo v10 status {_resp.status_code}")
-            except Exception as _ye:
-                debug_log.append(f"⚠️ Yahoo v10 fallback falló: {_ye}")
+        # (Yahoo v10 direct fallback removed — FMP handles enrichment in render())
 
         # ── Estrategia 1: campos de precio en info{} ──
         cp_check = (
@@ -1019,17 +946,91 @@ def fmp_override_metrics(yf_data, fmp_data):
             yf_data['target_data']['median'] = safe_float(pt.get('targetMedian')) or yf_data['target_data'].get('median')
             yf_data['target_data']['upside'] = ((mean - cp) / cp * 100) if (mean and cp) else yf_data['target_data'].get('upside')
 
+    # ── Populate info{} from FMP (critical for get_suggestions, sector labels) ──
+    info = yf_data.get('info', {})
+    prof = fmp_data.get('profile', {})
+    r    = fmp_data.get('ratios', {})
+    km   = fmp_data.get('key_metrics', {})
+
+    # Profile fields → info{}
+    _fmp_info_map = [
+        ('sector',               'sector'),
+        ('industry',             'industry'),
+        ('description',          'longBusinessSummary'),
+        ('companyName',          'shortName'),
+        ('companyName',          'longName'),
+        ('beta',                 'beta'),
+        ('fullTimeEmployees',    'fullTimeEmployees'),
+        ('country',              'country'),
+        ('website',              'website'),
+        ('mktCap',               'marketCap'),
+        ('price',                'currentPrice'),
+        ('volAvg',               'averageVolume'),
+        ('dcfDiff',              None),   # skip
+    ]
+    for fmp_k, info_k in _fmp_info_map:
+        if info_k and not info.get(info_k) and prof.get(fmp_k) is not None:
+            info[info_k] = prof[fmp_k]
+
+    # Ratios → info{} (for get_suggestions which reads info directly)
+    _fmp_ratio_map = [
+        ('peRatioTTM',           'trailingPE'),
+        ('priceToSalesRatioTTM', 'priceToSalesTrailing12Months'),
+        ('priceToBookRatioTTM',  'priceToBook'),
+        ('pegRatioTTM',          'pegRatio'),
+        ('returnOnEquityTTM',    'returnOnEquity'),
+        ('returnOnAssetsTTM',    'returnOnAssets'),
+        ('netProfitMarginTTM',   'profitMargins'),
+        ('operatingProfitMarginTTM', 'operatingMargins'),
+        ('grossProfitMarginTTM', 'grossMargins'),
+        ('debtEquityRatioTTM',   'debtToEquity'),
+        ('currentRatioTTM',      'currentRatio'),
+        ('revenueGrowthTTM',     'revenueGrowth'),
+        ('epsTTM',               'trailingEps'),
+    ]
+    for fmp_k, info_k in _fmp_ratio_map:
+        if not info.get(info_k):
+            v = safe_float(r.get(fmp_k))
+            if v is not None: info[info_k] = v
+
+    # Key metrics → info{}
+    _fmp_km_map = [
+        ('enterpriseValueOverEBITDATTM', 'enterpriseToEbitda'),
+        ('revenuePerShareTTM',           None),
+    ]
+    for fmp_k, info_k in _fmp_km_map:
+        if info_k and not info.get(info_k):
+            v = safe_float(km.get(fmp_k))
+            if v is not None: info[info_k] = v
+
+    # Also sync market dict with FMP price/market data
+    mkt = yf_data.get('market', {})
+    if prof.get('beta') and not mkt.get('beta'):
+        mkt['beta'] = safe_float(prof['beta'])
+    if prof.get('mktCap') and not mkt.get('market_cap'):
+        mkt['market_cap'] = safe_float(prof['mktCap'])
+    yf_data['market'] = mkt
+    yf_data['info']   = info
+
     return yf_data
 
 # ────────────────────────────────────────────────
 # SUGERENCIAS AUTOMÁTICAS
 # ────────────────────────────────────────────────
 
-def get_suggestions(info, recommendations, target_data, profitability):
+def get_suggestions(info, recommendations, target_data, profitability, metrics=None):
     suggestions = []
 
     sector = (info.get('sector') or '').lower()
     industry = (info.get('industry') or '').lower()
+    metrics = metrics or {}
+
+    # Merge metrics/info for all reads — metrics{} has more reliable values
+    def _get(info_key, met_key=None, default=None):
+        v = info.get(info_key)
+        if v is None and met_key:
+            v = metrics.get(met_key)
+        return v if v is not None else default
 
     # ── Umbrales ajustados por sector ──
     # PE razonable varía enormemente: utilities ~15, tech ~30, biotech no aplica
@@ -1830,6 +1831,36 @@ def render():
     # Aplicar overrides FMP sobre datos yfinance (FMP más fiable para ratios)
     if fmp_data:
         yf_data = fmp_override_metrics(yf_data, fmp_data)
+
+    # Sync metrics{} and profitability{} → info{} so get_suggestions has full data
+    _yf_info = yf_data.get('info', {})
+    _yf_met  = yf_data.get('metrics', {})
+    _yf_prof = yf_data.get('profitability', {})
+    _yf_mkt  = yf_data.get('market', {})
+    _sync_map = [
+        (_yf_met,  'trailing_pe',    'trailingPE'),
+        (_yf_met,  'forward_pe',     'forwardPE'),
+        (_yf_met,  'price_to_sales', 'priceToSalesTrailing12Months'),
+        (_yf_met,  'ev_ebitda',      'enterpriseToEbitda'),
+        (_yf_met,  'peg_ratio',      'pegRatio'),
+        (_yf_met,  'price_to_book',  'priceToBook'),
+        (_yf_prof, 'roe',            'returnOnEquity'),
+        (_yf_prof, 'roa',            'returnOnAssets'),
+        (_yf_prof, 'net_margin',     'profitMargins'),
+        (_yf_prof, 'op_margin',      'operatingMargins'),
+        (_yf_prof, 'gross_margin',   'grossMargins'),
+        (_yf_prof, 'revenue_growth', 'revenueGrowth'),
+        (_yf_prof, 'earnings_growth','earningsGrowth'),
+        (_yf_prof, 'debt_to_equity', 'debtToEquity'),
+        (_yf_prof, 'current_ratio',  'currentRatio'),
+        (_yf_mkt,  'eps',            'trailingEps'),
+        (_yf_mkt,  'eps_forward',    'forwardEps'),
+        (_yf_mkt,  'beta',           'beta'),
+    ]
+    for src, src_k, info_k in _sync_map:
+        if not _yf_info.get(info_k) and src.get(src_k) is not None:
+            _yf_info[info_k] = src[src_k]
+    yf_data['info'] = _yf_info
 
     info              = yf_data['info']
     recommendations   = yf_data['recommendations']
@@ -3250,7 +3281,7 @@ def render():
     # SUGERENCIAS AUTOMÁTICAS
     # ══════════════════════════════════════════════
     st.markdown("<hr>", unsafe_allow_html=True)
-    suggestions = get_suggestions(info, recommendations, target_data, profitability)
+    suggestions = get_suggestions(info, recommendations, target_data, profitability, metrics=metrics)
     sug_html = "".join(
         f'<div class="suggestion-item"><strong style="color:#00ffad;">{i}.</strong> {s}</div>'
         for i, s in enumerate(suggestions, 1)
@@ -3489,3 +3520,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

@@ -494,7 +494,6 @@ def render():
             align-items: center;
             justify-content: center;
             gap: 16px;
-            background: #000;
             padding: 14px 28px 12px;
             margin: 0 auto 4px;
             border-bottom: 2px solid #00ffad;
@@ -1696,6 +1695,5 @@ def render():
 
 if __name__ == "__main__":
     render()
-
 
 

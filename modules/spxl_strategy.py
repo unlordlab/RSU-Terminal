@@ -1,4 +1,3 @@
-
 # modules/spxl_strategy.py  — v6.0 (phosphor title + backtest fixes + entry markers)
 import streamlit as st
 import pandas as pd
@@ -334,9 +333,11 @@ def chart_drawdown(eq_df, bnh_df):
     fig.add_trace(go.Scatter(x=eq_df["date"], y=strat_dd, name="ESTRATEGIA RSU",
         line=dict(color=C_ORANGE, width=1.5),
         fill="tozeroy", fillcolor="rgba(255,152,0,0.06)"))
-    for yr, lbl, col in [("2002-10-09","DOT-COM","#f23645"),("2009-03-09","GFC 2008","#f23645"),
-                          ("2020-03-23","COVID","#ff9800"),("2022-10-12","BEAR 22","#ff9800")]:
-        fig.add_vline(x=yr, line_width=1, line_dash="dash", line_color=col, opacity=0.4,
+    for yr, lbl, col in [("2009-03-09","GFC 2008","#f23645"),
+                          ("2020-03-23","COVID","#ff9800"),
+                          ("2022-10-12","BEAR 22","#ff9800")]:
+        fig.add_vline(x=pd.Timestamp(yr).timestamp() * 1000,
+                      line_width=1, line_dash="dash", line_color=col, opacity=0.4,
                       annotation_text=lbl,
                       annotation_font=dict(family="VT323", size=12, color=col),
                       annotation_position="top right")
@@ -1710,4 +1711,5 @@ def render():
 
 if __name__ == "__main__":
     render()
+
 

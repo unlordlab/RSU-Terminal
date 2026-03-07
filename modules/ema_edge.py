@@ -6,6 +6,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ────────────────────────────────────────────────
 # FUNCIONES AUXILIARES
@@ -44,37 +45,52 @@ def calculate_ema(prices, period):
     return prices.ewm(span=period, adjust=False).mean()
 
 def calculate_z_score(price, ema, std_period=20):
+    """Z-Score calculado sobre retornos logarítmicos para estacionariedad.
+    Evita que el std escale con el nivel de precio absoluto."""
     price = ensure_1d_series(price)
-    ema = ensure_1d_series(ema)
-    std = price.rolling(window=std_period).std()
-    return (price - ema) / std
+    ema   = ensure_1d_series(ema)
+    # Retornos log: estacionarios y comparables entre activos/épocas
+    log_returns = np.log(price / price.shift(1))
+    std_returns = log_returns.rolling(window=std_period).std()
+    # Desviación relativa al precio actual, normalizada por vol de retornos
+    deviation = (price - ema) / ema  # desviación porcentual respecto a la EMA
+    return deviation / std_returns.replace(0, np.nan)
 
 def calculate_rsi(prices, period=14):
+    """RSI con suavizado de Wilder (ewm alpha=1/period), estándar de la industria."""
     prices = ensure_1d_series(prices)
     delta = prices.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    # Wilder smoothing: alpha = 1/period (equivalente a com=period-1)
+    avg_gain = gain.ewm(com=period - 1, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(com=period - 1, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, 1e-10)
     return 100 - (100 / (1 + rs))
 
+@st.cache_data(ttl=300, show_spinner=False)
+def download_data(symbol, period, interval):
+    """Descarga cacheada con TTL de 5 minutos para evitar re-requests innecesarios."""
+    data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
+    return data
+
+@st.cache_data(ttl=300, show_spinner=False)
 def get_multi_timeframe_trend(symbol):
-    trends = {}
     timeframes = {
         '1D': ('1y', '1d'),
         '4H': ('3mo', '1h'),
         '1H': ('1mo', '1h'),
         '15m': ('5d', '15m')
     }
-    for tf, (period, interval) in timeframes.items():
+
+    def fetch_tf(tf, period, interval):
         try:
-            data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
+            data = download_data(symbol, period, interval)
             if data.empty:
-                trends[tf] = {'trend': 'NO_DATA', 'strength': 0}
-                continue
+                return tf, {'trend': 'NO_DATA', 'strength': 0}
             data = flatten_columns(data)
             if 'Close' not in data.columns or len(data) < 50:
-                trends[tf] = {'trend': 'INSUFFICIENT_DATA', 'strength': 0}
-                continue
+                return tf, {'trend': 'INSUFFICIENT_DATA', 'strength': 0}
             close = ensure_1d_series(data['Close'])
             ema_fast = calculate_ema(close, 9 if tf in ['15m', '1H'] else 20)
             ema_slow = calculate_ema(close, 21 if tf in ['15m', '1H'] else 50)
@@ -83,40 +99,88 @@ def get_multi_timeframe_trend(symbol):
             ema_slow_val = float(ema_slow.iloc[-1])
             trend = "BULLISH" if ema_fast_val > ema_slow_val else "BEARISH"
             strength = abs(ema_fast_val - ema_slow_val) / current_price * 100
-            trends[tf] = {
+            return tf, {
                 'trend': trend, 'strength': float(strength),
                 'price': float(current_price), 'ema_fast': float(ema_fast_val), 'ema_slow': float(ema_slow_val)
             }
         except Exception as e:
-            trends[tf] = {'trend': 'ERROR', 'strength': 0, 'error': str(e)}
+            return tf, {'trend': 'ERROR', 'strength': 0, 'error': str(e)}
+
+    trends = {}
+    # Paralelizar las 4 descargas simultáneamente (reducción típica: 4x → 1x latencia)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(fetch_tf, tf, period, interval): tf
+                   for tf, (period, interval) in timeframes.items()}
+        for future in as_completed(futures):
+            tf, result = future.result()
+            trends[tf] = result
     return trends
 
 def analyze_volume_profile(data, lookback=20):
     data = flatten_columns(data)
     if 'Volume' not in data.columns:
-        return {'current_volume': 0, 'avg_volume': 0, 'volume_ratio': 1, 'trend_volume': "NEUTRAL", 'institutional_participation': False}
+        return {'current_volume': 0, 'avg_volume': 0, 'volume_ratio': 1,
+                'trend_volume': "NEUTRAL", 'institutional_participation': False,
+                'directional_bias': 'NEUTRAL', 'buy_pressure': 0.5}
     volume = ensure_1d_series(data['Volume'])
+    close  = ensure_1d_series(data['Close']) if 'Close' in data.columns else None
+    open_  = ensure_1d_series(data['Open'])  if 'Open'  in data.columns else None
+
     if len(volume) < lookback:
-        return {'current_volume': 0, 'avg_volume': 0, 'volume_ratio': 1, 'trend_volume': "NEUTRAL", 'institutional_participation': False}
+        return {'current_volume': 0, 'avg_volume': 0, 'volume_ratio': 1,
+                'trend_volume': "NEUTRAL", 'institutional_participation': False,
+                'directional_bias': 'NEUTRAL', 'buy_pressure': 0.5}
+
     current_vol = float(volume.iloc[-1])
-    avg_vol = float(volume.tail(lookback).mean())
+    avg_vol     = float(volume.tail(lookback).mean())
     volume_ratio = current_vol / avg_vol if avg_vol > 0 else 1
-    recent_vol = float(volume.tail(5).mean())
+
+    recent_vol   = float(volume.tail(5).mean())
     previous_vol = float(volume.iloc[-10:-5].mean()) if len(volume) >= 10 else recent_vol
-    vol_trend = "INCREASING" if recent_vol > previous_vol * 1.1 else "DECREASING" if recent_vol < previous_vol * 0.9 else "STABLE"
+    vol_trend    = ("INCREASING" if recent_vol > previous_vol * 1.1
+                    else "DECREASING" if recent_vol < previous_vol * 0.9 else "STABLE")
+
+    # Volumen direccional: separar velas alcistas vs bajistas
+    buy_pressure = 0.5
+    directional_bias = 'NEUTRAL'
+    if close is not None and open_ is not None:
+        recent = data.tail(lookback).copy()
+        r_vol   = ensure_1d_series(recent['Volume'])
+        r_close = ensure_1d_series(recent['Close'])
+        r_open  = ensure_1d_series(recent['Open'])
+        bull_vol = r_vol[r_close >= r_open].sum()
+        bear_vol = r_vol[r_close < r_open].sum()
+        total_dir_vol = bull_vol + bear_vol
+        if total_dir_vol > 0:
+            buy_pressure = float(bull_vol / total_dir_vol)
+            directional_bias = ('COMPRADOR' if buy_pressure > 0.6
+                                else 'VENDEDOR' if buy_pressure < 0.4 else 'NEUTRAL')
+
     return {
         'current_volume': int(current_vol), 'avg_volume': int(avg_vol),
         'volume_ratio': float(volume_ratio), 'trend_volume': vol_trend,
-        'institutional_participation': volume_ratio > 2.0
+        'institutional_participation': volume_ratio > 2.0,
+        'directional_bias': directional_bias, 'buy_pressure': buy_pressure
     }
 
 def calculate_rsu_score(z_score, trend_alignment, volume_score, rsi_value):
     z_abs = abs(z_score)
     z_points = 40 if z_abs <= 0.5 else 30 if z_abs <= 1.0 else 15 if z_abs <= 2.0 else 0
-    tf_count = len([t for t in trend_alignment.values() if t not in ['ERROR', 'NO_DATA', 'INSUFFICIENT_DATA', None]])
-    bullish_count = len([t for t in trend_alignment.values() if t == 'BULLISH'])
-    if tf_count > 0:
-        ratio = bullish_count / tf_count
+
+    # Pesos por timeframe: mayor timeframe = mayor peso (jerarquía de tendencia)
+    TF_WEIGHTS = {'1D': 0.45, '4H': 0.30, '1H': 0.15, '15m': 0.10}
+    weighted_bullish = 0.0
+    total_weight = 0.0
+    valid_trends = {}
+    for tf, trend in trend_alignment.items():
+        if trend not in ['ERROR', 'NO_DATA', 'INSUFFICIENT_DATA', None]:
+            w = TF_WEIGHTS.get(tf, 0.1)
+            total_weight += w
+            valid_trends[tf] = trend
+            if trend == 'BULLISH':
+                weighted_bullish += w
+    if total_weight > 0:
+        ratio = weighted_bullish / total_weight
         trend_points = 30 if ratio >= 0.75 else 20 if ratio >= 0.5 else 10 if ratio >= 0.25 else 0
     else:
         trend_points = 0
@@ -136,6 +200,7 @@ def calculate_rsu_score(z_score, trend_alignment, volume_score, rsi_value):
     return {
         'total': total, 'z_component': z_points, 'trend_component': trend_points,
         'volume_component': vol_points, 'rsi_component': rsi_points,
+        'trend_ratio': ratio if total_weight > 0 else 0,
         'grade': (grade, grade_text), 'verdict': (verdict, color)
     }
 
@@ -632,7 +697,7 @@ def render():
 
         show_debug = st.checkbox("mostrar debug de datos", value=False, key="debug_checkbox")
 
-        if analyze_btn or symbol:
+        if analyze_btn:
             with st.spinner("Calculando matrices de probabilidad..."):
                 try:
                     tf_map = {"15m": ("5d", "15m"), "1h": ("1mo", "1h"), "4h": ("3mo", "1h"), "1d": ("1y", "1d")}
@@ -641,7 +706,7 @@ def render():
                     if show_debug:
                         st.write(f"Descargando: {symbol} | Periodo: {period} | Intervalo: {interval}")
 
-                    data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
+                    data = download_data(symbol, period, interval)
 
                     if show_debug:
                         st.write("Estructura original:")
@@ -686,19 +751,24 @@ def render():
                     render_verdict_banner(rsu_data)
 
                     # Métricas
-                    m1, m2, m3, m4 = st.columns(4)
+                    m1, m2, m3, m4, m5 = st.columns(5)
                     with m1:
                         render_metric_card("TENSIÓN ELÁSTICA", f"{current_z:+.2f}σ", "Z-Score vs EMA21", get_z_color(current_z))
                     with m2:
                         trend_1d = trends.get('1D', {}).get('trend', 'N/A')
                         trend_color = "#00ffad" if trend_1d == "BULLISH" else "#f23645" if trend_1d == "BEARISH" else "#555"
-                        render_metric_card("TENDENCIA 1D", trend_1d, "Dirección principal", trend_color)
+                        render_metric_card("TENDENCIA 1D", trend_1d, "Dirección principal (ponderada)", trend_color)
                     with m3:
                         vol_color = "#00ffad" if vol_analysis['volume_ratio'] > 1.5 else "#ff9800" if vol_analysis['volume_ratio'] > 1 else "#f23645"
                         render_metric_card("VOLUMEN", f"{vol_analysis['volume_ratio']:.2f}x", "vs Promedio 20d", vol_color)
                     with m4:
                         rsi_color = "#00ffad" if 40 <= rsi <= 60 else "#ff9800" if 30 <= rsi < 40 or 60 < rsi <= 70 else "#f23645"
-                        render_metric_card("RSI", f"{rsi:.1f}", "Momentum 14d", rsi_color)
+                        render_metric_card("RSI", f"{rsi:.1f}", "Momentum Wilder 14d", rsi_color)
+                    with m5:
+                        bias = vol_analysis.get('directional_bias', 'NEUTRAL')
+                        bp   = vol_analysis.get('buy_pressure', 0.5)
+                        bias_color = "#00ffad" if bias == 'COMPRADOR' else "#f23645" if bias == 'VENDEDOR' else "#888"
+                        render_metric_card("PRESIÓN", bias, f"Compra: {bp:.0%}", bias_color)
 
                     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -752,10 +822,12 @@ Zona:       {"Neutral (40-60)" if 40 <= rsi <= 60 else "Alta (60-70)" if 60 < rs
 Puntos:     {rsu_data['rsi_component']}/10
                             """)
                         with col_c2:
-                            st.markdown("**Multi-Timeframe**")
+                            st.markdown("**Multi-Timeframe (Ponderado)**")
+                            TF_W = {'1D': 0.45, '4H': 0.30, '1H': 0.15, '15m': 0.10}
                             for tf, info in trends.items():
-                                st.write(f"▸ **{tf}**: {info.get('trend', 'N/A')} ({info.get('strength', 0):.3f}%)")
-                            st.code(f"Alcistas: {len([t for t in trend_alignment.values() if t == 'BULLISH'])}/4\nPuntos:   {rsu_data['trend_component']}/30")
+                                w = TF_W.get(tf, 0.1)
+                                st.write(f"▸ **{tf}** (peso {w:.0%}): {info.get('trend', 'N/A')} ({info.get('strength', 0):.3f}%)")
+                            st.code(f"Ratio alcista ponderado: {rsu_data.get('trend_ratio',0):.1%}\nPuntos:   {rsu_data['trend_component']}/30")
 
                             st.markdown("**Volumen**")
                             st.code(f"""
@@ -763,13 +835,14 @@ Hoy:      {vol_analysis['current_volume']:,}
 Avg 20d:  {vol_analysis['avg_volume']:,}
 Ratio:    {vol_analysis['volume_ratio']:.2f}x
 Trend:    {vol_analysis['trend_volume']}
+Presión:  {vol_analysis.get('directional_bias','N/A')} ({vol_analysis.get('buy_pressure',0.5):.0%} compra)
 Puntos:   {rsu_data['volume_component']}/20
                             """)
 
                         st.subheader("Fórmula Final")
                         st.code(f"RSU SCORE = {rsu_data['z_component']} + {rsu_data['trend_component']} + {rsu_data['volume_component']} + {rsu_data['rsi_component']} = {rsu_data['total']}/100")
 
-                        st.info("Nota: El Z-Score asume distribución normal de retornos. Los mercados tienen 'fat tails', lo que significa que eventos extremos son más frecuentes de lo que la distribución normal predice.")
+                        st.info("Nota: El Z-Score v2 usa retornos logarítmicos para estacionariedad — evita que el std escale con el nivel de precio. El RSI usa suavizado de Wilder (EWM) estándar de la industria. Los timeframes 1D/4H tienen mayor peso en la tendencia que 1H/15m.")
 
                 except Exception as e:
                     st.error(f"Error en el análisis: {str(e)}")
@@ -782,3 +855,4 @@ Puntos:   {rsu_data['volume_component']}/20
 
     with tab3:
         render_risks_section()
+

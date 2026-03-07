@@ -1,4 +1,3 @@
-
 # modules/spxl_strategy.py  — v6.0 (phosphor title + backtest fixes + entry markers)
 import streamlit as st
 import pandas as pd
@@ -1223,12 +1222,15 @@ def render():
                                                value=10000, step=1000, key="sim_cap")
 
             alloc_pcts   = CFG["phase_alloc"]
-            sim_alloc    = sim_capital * alloc_pcts[sim_fase - 1]
-            sim_shares   = sim_alloc / sim_price if sim_price > 0 else 0
-            sim_target   = sim_price * (1 + CFG["take_profit"])
+            sim_fase_idx = int(sim_fase) - 1
+            sim_capital_f = float(sim_capital)
+            sim_price_f   = float(sim_price) if float(sim_price) > 0 else 1.0
+            sim_alloc    = sim_capital_f * alloc_pcts[sim_fase_idx]
+            sim_shares   = sim_alloc / sim_price_f
+            sim_target   = sim_price_f * (1 + CFG["take_profit"])
             sim_needed   = ((sim_target - data['spxl_price']) / data['spxl_price'] * 100
                              if data['spxl_price'] > 0 else 0)
-            sim_gain_abs = sim_shares * (sim_target - sim_price)
+            sim_gain_abs = sim_shares * (sim_target - sim_price_f)
 
             sr1, sr2, sr3, sr4 = st.columns(4)
             for col, val, lbl in [
@@ -1417,11 +1419,11 @@ def render():
 
         with col_c1:
             st.markdown('<div style="font-family:\'VT323\',monospace;color:#333;font-size:.82rem;letter-spacing:2px;margin-bottom:10px;">// INPUT PARAMETERS</div>', unsafe_allow_html=True)
-            capital_total     = st.number_input("Capital Total ($):", min_value=1000, value=10000, step=1000)
+            capital_total     = float(st.number_input("Capital Total ($):", min_value=1000, value=10000, step=1000))
             tiene_posicion    = st.checkbox("¿Tienes posición abierta?")
             if tiene_posicion:
-                precio_medio      = st.number_input("Precio medio ($):", min_value=0.0, value=0.0, step=0.1)
-                cantidad_acciones = st.number_input("Nº Acciones:", min_value=0, value=0, step=1)
+                precio_medio      = float(st.number_input("Precio medio ($):", min_value=0.0, value=0.0, step=0.1))
+                cantidad_acciones = int(st.number_input("Nº Acciones:", min_value=0, value=0, step=1))
             else:
                 precio_medio, cantidad_acciones = 0, 0
 
@@ -1551,10 +1553,10 @@ def render():
 
         cfg1, cfg2, _ = st.columns([1, 1, 2])
         with cfg1:
-            bt_capital = st.number_input(
+            bt_capital = float(st.number_input(
                 "Capital inicial ($):", min_value=100,
                 value=10_000, step=1_000, key="bt_capital",
-                help="Sin límite máximo. Introduce cualquier cifra.")
+                help="Sin límite máximo. Introduce cualquier cifra."))
         with cfg2:
             bt_year = st.selectbox(
                 "Año de inicio:", [2008, 2010, 2015, 2020],
@@ -1707,3 +1709,4 @@ def render():
 
 if __name__ == "__main__":
     render()
+

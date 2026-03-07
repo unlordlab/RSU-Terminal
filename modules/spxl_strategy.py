@@ -1,3 +1,4 @@
+
 # modules/spxl_strategy.py  — v6.0 (phosphor title + backtest fixes + entry markers)
 import streamlit as st
 import pandas as pd
@@ -1563,7 +1564,7 @@ def render():
                 index=0, key="bt_year",
                 help="2008 = datos reales desde lanzamiento de SPXL")
 
-        df_bt  = df_hist[df_hist.index.year >= bt_year].copy()
+        df_bt  = df_hist[df_hist.index.year >= int(bt_year)].copy()
         trades, eq_df, bnh_df = run_backtest(df_bt, bt_capital)
         stats  = compute_stats(trades, eq_df, bnh_df, bt_capital)
 

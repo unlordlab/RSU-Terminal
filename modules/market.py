@@ -2275,16 +2275,16 @@ def render():
     _q_text, _q_author = st.session_state['daily_quote']
     _q_attr = f' — {_q_author}' if _q_author else ''
     _q_html = (
-        '<div style="background:#0c0e12;padding:16px 24px 8px 24px;">'
-        '<div style="display:flex;align-items:center;gap:16px;margin-bottom:10px;">'
-        '<div style="font-size:2rem;filter:drop-shadow(0 0 8px #00ffad) drop-shadow(0 0 18px #00ffad88);">&#128202;</div>'
-        '<div style="font-family:VT323,Share Tech Mono,Courier New,monospace;font-size:2.6rem;color:#00ffad;'
+        '<div style="background:#0c0e12;padding:22px 24px 12px 24px;text-align:center;">'
+        '<div style="display:inline-flex;align-items:center;gap:16px;margin-bottom:12px;">'
+        '<div style="font-size:2.2rem;filter:drop-shadow(0 0 8px #00ffad) drop-shadow(0 0 18px #00ffad88);">&#128202;</div>'
+        '<div style="font-family:VT323,Share Tech Mono,Courier New,monospace;font-size:2.8rem;color:#00ffad;'
         'text-shadow:0 0 18px #00ffad,0 0 36px #00ffad66,0 0 70px #00ffad33;'
-        'letter-spacing:6px;text-transform:uppercase;line-height:1;">RSU MARKET DASHBOARD</div>'
-        '</div>'
-        '<div style="font-family:Courier New,monospace;font-size:11px;color:#4a5568;'
-        'letter-spacing:0.3px;padding:6px 8px;border-left:2px solid #00ffad33;'
-        'margin-left:4px;font-style:italic;line-height:1.5;">'
+        'letter-spacing:7px;text-transform:uppercase;line-height:1;">RSU MARKET DASHBOARD</div>'
+        '</div><br>'
+        '<div style="display:inline-block;font-family:Courier New,monospace;font-size:11.5px;color:#4a5568;'
+        'letter-spacing:0.4px;padding:5px 16px;border-left:2px solid #00ffad33;border-right:2px solid #00ffad33;'
+        'font-style:italic;line-height:1.6;max-width:860px;">'
         + '&ldquo;' + _q_text + '&rdquo;' + _q_attr
         + '</div></div>'
     )
@@ -2323,6 +2323,10 @@ def render():
         letter-spacing: 1.5px !important;
         border-radius: 5px !important;
         white-space: nowrap !important;
+        min-width: 150px !important;
+        height: 40px !important;
+        font-size: 15px !important;
+        padding: 0 18px !important;
         box-shadow: 0 0 8px #00ffad22 !important;
         padding: 0 12px !important;
         height: 32px !important;
@@ -2408,16 +2412,23 @@ def render():
     </script>
     """, height=0, scrolling=False)
 
-    # ── BOTÓN ACTUALIZAR (inline, sin wrap) ─────────────────────────────────
+    # ── BOTÓN ACTUALIZAR — CSS forzado para evitar wrap ─────────────────────
     st.markdown('''
     <style>
-    div[data-testid="stButton"]:has(button[data-testid="baseButton-primary"]#global_refresh_btn) button,
-    button[kind="primary"] { white-space: nowrap !important; }
+    /* Forzar botón Actualizar a no hacer wrap y ser más grande */
+    div[data-testid="column"]:first-child .stButton button {
+        white-space: nowrap !important;
+        min-width: 160px !important;
+        height: 40px !important;
+        font-size: 16px !important;
+        padding: 0 20px !important;
+        letter-spacing: 2px !important;
+    }
     </style>
     ''', unsafe_allow_html=True)
-    col_r1, col_r2 = st.columns([1, 9])
+    col_r1, col_r2 = st.columns([2, 8])
     with col_r1:
-        if st.button("↻  ACTUALIZAR", key="global_refresh", type="primary"):
+        if st.button("ACTUALIZAR", key="global_refresh", type="primary"):
             # Preservar el briefing — solo borrar datos de mercado
             _saved_briefing = st.session_state.get("briefing_text", "")
             _saved_briefing_ts = st.session_state.get("briefing_ts", "")
@@ -4261,8 +4272,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             '</div>',
             unsafe_allow_html=True
         )
-
-
 
 
 

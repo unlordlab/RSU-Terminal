@@ -193,7 +193,77 @@ def get_yfinance_full(ticker):  # cache removed: debug log needs session_state
             info = {}
             debug_log.append(f"⚠️ info falló: {e}")
 
-        # (Yahoo v10 direct fallback removed — FMP handles enrichment in render())
+        # ── Yahoo Finance quoteSummary directo (fallback cuando info{} incompleto) ──
+        _CRITICAL = {'sector','industry','longBusinessSummary','trailingPE',
+                     'profitMargins','returnOnEquity','totalRevenue','trailingEps'}
+        _missing_critical = _CRITICAL - set(k for k,v in info.items() if v is not None)
+        if len(_missing_critical) >= 3:
+            try:
+                _mods = 'summaryProfile,defaultKeyStatistics,financialData,summaryDetail,price,incomeStatementHistory'
+                _ua   = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                _hdrs = {'User-Agent': _ua, 'Accept': 'application/json',
+                         'Accept-Language': 'en-US,en;q=0.9',
+                         'Referer': 'https://finance.yahoo.com/'}
+                # Try v8 first, then v10
+                for _base in ['https://query1.finance.yahoo.com', 'https://query2.finance.yahoo.com']:
+                    _url = f'{_base}/v10/finance/quoteSummary/{ticker}?modules={_mods}&formatted=false&lang=en-US'
+                    try:
+                        _r = requests.get(_url, headers=_hdrs, timeout=8)
+                        if _r.status_code == 200:
+                            _res = _r.json().get('quoteSummary',{}).get('result')
+                            if _res:
+                                _d = _res[0]
+                                _fills = {
+                                    'summaryProfile':       ['sector','industry','longBusinessSummary',
+                                                             'country','city','website','fullTimeEmployees'],
+                                    'defaultKeyStatistics': ['trailingEps','forwardEps','bookValue',
+                                                             'priceToBook','pegRatio','enterpriseToEbitda',
+                                                             'shortRatio','heldPercentInsiders',
+                                                             'heldPercentInstitutions','beta','earningsGrowth',
+                                                             'sharesOutstanding'],
+                                    'financialData':        ['trailingPE','forwardPE',
+                                                             'priceToSalesTrailing12Months',
+                                                             'profitMargins','operatingMargins','grossMargins',
+                                                             'returnOnEquity','returnOnAssets','revenueGrowth',
+                                                             'debtToEquity','totalRevenue','ebitda',
+                                                             'freeCashflow','operatingCashflow',
+                                                             'totalCash','totalDebt','currentRatio',
+                                                             'targetMeanPrice','targetHighPrice',
+                                                             'targetLowPrice','targetMedianPrice',
+                                                             'numberOfAnalystOpinions'],
+                                    'summaryDetail':        ['dividendYield','dividendRate','payoutRatio',
+                                                             'fiftyTwoWeekHigh','fiftyTwoWeekLow',
+                                                             'fiftyDayAverage','twoHundredDayAverage',
+                                                             'averageVolume','marketCap','beta',
+                                                             'trailingPE','forwardPE'],
+                                    'price':                ['shortName','longName','regularMarketPrice',
+                                                             'marketCap','regularMarketVolume',
+                                                             'regularMarketPreviousClose','currency',
+                                                             'regularMarketOpen'],
+                                }
+                                enriched = 0
+                                for _mod, _keys in _fills.items():
+                                    _mod_data = _d.get(_mod, {})
+                                    for _k in _keys:
+                                        if info.get(_k) is None:
+                                            _raw = _mod_data.get(_k)
+                                            if _raw is None: continue
+                                            # Yahoo wraps numeric: {"raw":1.23,"fmt":"1.23"} or plain value
+                                            if isinstance(_raw, dict):
+                                                _v = _raw.get('raw')
+                                                if _v is None: _v = _raw.get('longFmt') or _raw.get('fmt')
+                                            else:
+                                                _v = _raw
+                                            if _v is not None and _v != '':
+                                                info[_k] = _v
+                                                enriched += 1
+                                debug_log.append(f"✅ quoteSummary ({_base.split('.')[1]}): +{enriched} campos, total {len(info)}")
+                                break  # success, no need to try second base
+                    except Exception as _e2:
+                        debug_log.append(f"⚠️ quoteSummary {_base}: {_e2}")
+                        continue
+            except Exception as _ye:
+                debug_log.append(f"⚠️ quoteSummary outer: {_ye}")
 
         # ── Estrategia 1: campos de precio en info{} ──
         cp_check = (
@@ -3314,6 +3384,19 @@ def render():
         f'<div class="suggestion-item"><strong style="color:#00ffad;">{i}.</strong> {s}</div>'
         for i, s in enumerate(suggestions, 1)
     )
+
+    # ── Debug expander (siempre disponible, collapsado) ──
+    _dbg = st.session_state.get('_debug_log', [])
+    if _dbg:
+        with st.expander("🔍 Debug yfinance — ver log de carga", expanded=False):
+            _missing_now = [k for k in ['sector','industry','longBusinessSummary','trailingPE',
+                            'profitMargins','returnOnEquity','totalRevenue','trailingEps'] if not info.get(k)]
+            if _missing_now:
+                st.warning(f"⚠️ Campos aún vacíos en info{{}}: {_missing_now}")
+            for step in _dbg:
+                color = "#00ffad" if step.startswith("✅") else ("#ff9800" if step.startswith("⚠️") else "#f23645")
+                st.markdown(f'<div style="font-family:monospace;font-size:0.78rem;color:{color};padding:2px 0;">{step}</div>',
+                            unsafe_allow_html=True)
     st.markdown(f"""
     <div class="mod-box">
         <div class="mod-header">

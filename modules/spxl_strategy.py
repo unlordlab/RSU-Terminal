@@ -1,4 +1,5 @@
-# modules/spxl_strategy.py  — v5.0 (all functional improvements + telegram)
+
+# modules/spxl_strategy.py  — v6.0 (phosphor title + backtest fixes + entry markers)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -152,30 +153,17 @@ PLOT_LAYOUT = dict(
 # ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=3600)
 def load_spxl_history():
+    """Load real SPXL data from launch date 2008-11-05 to present."""
     spxl    = yf.Ticker("SPXL")
-    df_real = spxl.history(start="2008-11-05", end="2025-01-01")[["Close"]].copy()
+    df_real = spxl.history(start="2008-11-05")[["Close"]].copy()
     df_real.index = df_real.index.tz_localize(None)
     df_real.columns = ["price"]
-
-    spy    = yf.Ticker("SPY")
-    df_spy = spy.history(start="2000-01-01", end="2008-11-05")[["Close"]].copy()
-    df_spy.index = df_spy.index.tz_localize(None)
-    df_spy.columns = ["spy"]
-
-    daily_drag   = (1 - 0.01) ** (1 / 252)
-    spy_ret      = df_spy["spy"].pct_change().fillna(0)
-    synth_ret    = (spy_ret * 3 * daily_drag).fillna(0)
-    first_real   = df_real["price"].iloc[0]
-    synth_prices = (1 + synth_ret).cumprod()
-    synth_prices = synth_prices * (first_real / synth_prices.iloc[-1])
-
-    df_synth = pd.DataFrame({"price": synth_prices}, index=df_spy.index)
-    df = pd.concat([df_synth, df_real])
-    df = df[~df.index.duplicated(keep="last")].sort_index().dropna()
-    return df
+    df_real = df_real[~df_real.index.duplicated(keep="last")].sort_index().dropna()
+    return df_real
 
 
 def run_backtest(df, initial_capital=100_000):
+    initial_capital = float(initial_capital)   # guard against Streamlit int/str quirks
     prices        = df["price"].values
     dates         = df.index.values
     cash          = initial_capital
@@ -271,17 +259,68 @@ def compute_stats(trades, eq_df, bnh_df, initial_capital):
     }
 
 
-def chart_equity(eq_df, bnh_df):
+def chart_equity(eq_df, bnh_df, trades=None):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=bnh_df["date"], y=bnh_df["bnh"],
         name="BUY & HOLD SPXL", line=dict(color="#333", width=1.5, dash="dot")))
     fig.add_trace(go.Scatter(x=eq_df["date"], y=eq_df["equity"],
         name="ESTRATEGIA RSU", line=dict(color=C_GREEN, width=2),
         fill="tozeroy", fillcolor="rgba(0,255,173,0.04)"))
+
+    # ── Entry & exit markers ──────────────────────────────────────────────────
+    if trades:
+        # Map date → equity value for marker Y positioning
+        eq_map = dict(zip(eq_df["date"], eq_df["equity"]))
+
+        # Exit (take profit) markers
+        exit_dates  = [t["exit_date"] for t in trades]
+        exit_equity = [eq_map.get(t["exit_date"], t["exit_price"]) for t in trades]
+        exit_labels = [f"+{t['gain_pct']:.1f}%" for t in trades]
+        fig.add_trace(go.Scatter(
+            x=exit_dates, y=exit_equity,
+            mode="markers+text",
+            name="TAKE PROFIT",
+            marker=dict(color=C_RED, size=8, symbol="triangle-up",
+                        line=dict(color="#ff000066", width=1)),
+            text=exit_labels,
+            textposition="top center",
+            textfont=dict(family="VT323", size=11, color=C_RED),
+            hovertemplate="<b>SALIDA</b><br>%{x}<br>Ganancia: %{text}<extra></extra>",
+        ))
+
+        # Entry markers — collect all phase entries across trades
+        # We don't have per-phase entry dates in trades dict, so mark cycle start
+        # using a synthetic approach: first date equity dips below previous cycle high
+        entry_dates, entry_equity, entry_labels = [], [], []
+        for t in trades:
+            # Approximate: find equity minimum between prev exit and this exit
+            prev_exit = pd.Timestamp("2000-01-01")
+            subset = eq_df[(eq_df["date"] > prev_exit) & (eq_df["date"] <= t["exit_date"])]
+            if not subset.empty:
+                min_idx  = subset["equity"].idxmin()
+                min_date = subset.loc[min_idx, "date"]
+                min_eq   = subset.loc[min_idx, "equity"]
+                entry_dates.append(min_date)
+                entry_equity.append(min_eq)
+                phases_n = int(t.get("phases_used", 1))
+                entry_labels.append(f"F{phases_n}")
+
+        fig.add_trace(go.Scatter(
+            x=entry_dates, y=entry_equity,
+            mode="markers+text",
+            name="ENTRADAS",
+            marker=dict(color=C_GREEN, size=7, symbol="triangle-down",
+                        line=dict(color="#00ffad44", width=1)),
+            text=entry_labels,
+            textposition="bottom center",
+            textfont=dict(family="VT323", size=11, color=C_GREEN),
+            hovertemplate="<b>ENTRADA</b><br>%{x}<br>Fases: %{text}<extra></extra>",
+        ))
+
     fig.update_layout(**PLOT_LAYOUT,
         title=dict(text="CURVA DE EQUITY // ESTRATEGIA vs BUY & HOLD",
                    font=dict(family="VT323", size=18, color=C_GREEN), x=0.01),
-        yaxis_title="USD", height=380)
+        yaxis_title="USD", height=420)
     return fig
 
 
@@ -448,20 +487,55 @@ def render():
             font-size: 0.82rem; color: #3a3a3a;
             letter-spacing: 3px; margin-bottom: 10px;
         }
-        .main-title {
-            font-family: 'VT323', monospace !important;
-            color: #00ffad;
-            font-size: 3.5rem;
-            font-weight: 400;
-            margin: 0 auto;
+        /* ══ PHOSPHOR TITLE ════════════════════════════ */
+        .phosphor-title-wrap {
+            background: #000;
+            border: 2px solid #00ff4422;
+            border-radius: 6px;
+            padding: 18px 32px 16px;
             display: inline-block;
+            margin: 0 auto 6px;
+            position: relative;
+            box-shadow: 0 0 40px #00ff4408, inset 0 0 30px #00000088;
+        }
+        .phosphor-title-wrap::before {
+            content: "";
+            position: absolute; inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 3px,
+                rgba(0,255,68,0.025) 3px,
+                rgba(0,255,68,0.025) 4px
+            );
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        .phosphor-title {
+            font-family: 'VT323', monospace;
+            font-size: 3.8rem;
+            font-weight: 400;
+            color: #00ff44;
+            letter-spacing: 10px;
             text-transform: uppercase;
-            letter-spacing: 6px;
-            text-shadow: 0 0 20px #00ffad66;
-            line-height: 1.15;
-            border-bottom: 2px solid #00ffad;
-            padding-bottom: 12px;
-            animation: titleFlicker 8s ease-in-out infinite;
+            text-shadow:
+                0 0 4px  #00ff44cc,
+                0 0 10px #00ff4488,
+                0 0 22px #00ff4444,
+                0 0 50px #00ff4411;
+            line-height: 1;
+            display: block;
+            animation: phosphorFlicker 10s ease-in-out infinite;
+        }
+        @keyframes phosphorFlicker {
+            0%, 94%, 100% { opacity: 1; }
+            95%  { opacity: 0.88; }
+            96%  { opacity: 1;    }
+            97%  { opacity: 0.92; }
+        }
+        .main-title {
+            /* kept for legacy refs but hidden — phosphor-title replaces it */
+            display: none;
         }
         .sub-title {
             font-family: 'VT323', monospace;
@@ -918,8 +992,10 @@ def render():
         <div class="header-corner-tr"></div>
         <div class="header-corner-bl"></div>
         <div class="header-corner-br"></div>
-        <div class="header-pre">[SECURE CONNECTION ESTABLISHED // RSU TRADING SYSTEM v4.0]</div>
-        <h1 class="main-title">📈 ESTRATEGIA SPXL</h1>
+        <div class="header-pre">[SECURE CONNECTION ESTABLISHED // RSU TRADING SYSTEM v5.0]</div>
+        <div class="phosphor-title-wrap">
+            <span class="phosphor-title">ESTRATEGIA SPXL</span>
+        </div>
         <div class="sub-title">REDISTRIBUTION STRATEGY RESEARCH UNIT // SISTEMA ACTIVO</div>
         <div class="market-status">
             <div class="{dot_cls}"></div>
@@ -1458,13 +1534,12 @@ def render():
     # TAB 5: BACKTEST
     # ════════════════════════════════════════════
     with tab5:
-        st.markdown('<div class="section-header-bar">▸ BACKTEST ENGINE // SIMULACIÓN 2000-2024</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header-bar">▸ BACKTEST ENGINE // SIMULACIÓN DESDE 2008 (LANZAMIENTO SPXL)</div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="bt-disclaimer">
-            // NOTA METODOLÓGICA: SPXL fue lanzado en 2008. Los datos previos (2000-2008) son
-            sintéticos — calculados replicando los retornos diarios del SPY × 3 con un ajuste de
-            1% anual de coste de apalancamiento. Método estándar académico para backtesting de
-            ETFs apalancados. Los resultados históricos no garantizan rendimientos futuros.
+            // NOTA: SPXL fue lanzado el 05/11/2008. El backtest usa datos reales desde esa fecha.
+            El año de inicio 2010/2015/2020 permiten comparar rendimientos en diferentes ciclos.
+            Los resultados históricos no garantizan rendimientos futuros. Simulación sin comisiones ni slippage.
         </div>""", unsafe_allow_html=True)
 
         with st.spinner("// CARGANDO DATOS HISTÓRICOS..."):
@@ -1476,12 +1551,15 @@ def render():
 
         cfg1, cfg2, _ = st.columns([1, 1, 2])
         with cfg1:
-            bt_capital = st.number_input("Capital inicial ($):", min_value=10_000,
-                                         max_value=10_000_000, value=100_000, step=10_000,
-                                         key="bt_capital")
+            bt_capital = st.number_input(
+                "Capital inicial ($):", min_value=100,
+                value=10_000, step=1_000, key="bt_capital",
+                help="Sin límite máximo. Introduce cualquier cifra.")
         with cfg2:
-            bt_year = st.selectbox("Año de inicio:", [2000, 2005, 2008, 2010, 2015],
-                                   index=0, key="bt_year")
+            bt_year = st.selectbox(
+                "Año de inicio:", [2008, 2010, 2015, 2020],
+                index=0, key="bt_year",
+                help="2008 = datos reales desde lanzamiento de SPXL")
 
         df_bt  = df_hist[df_hist.index.year >= bt_year].copy()
         trades, eq_df, bnh_df = run_backtest(df_bt, bt_capital)
@@ -1552,8 +1630,8 @@ def render():
             st.markdown("<hr>", unsafe_allow_html=True)
 
             # Charts
-            st.markdown('<div class="section-header-bar">▸ CURVA DE EQUITY</div>', unsafe_allow_html=True)
-            st.plotly_chart(chart_equity(eq_df, bnh_df), use_container_width=True)
+            st.markdown('<div class="section-header-bar">▸ CURVA DE EQUITY // PUNTOS DE ENTRADA Y SALIDA</div>', unsafe_allow_html=True)
+            st.plotly_chart(chart_equity(eq_df, bnh_df, trades), use_container_width=True)
 
             st.markdown('<div class="section-header-bar">▸ ANÁLISIS DE DRAWDOWN</div>', unsafe_allow_html=True)
             st.plotly_chart(chart_drawdown(eq_df, bnh_df), use_container_width=True)
@@ -1621,7 +1699,7 @@ def render():
     st.markdown("""
     <div class="footer">
         <p>
-            [END OF TRANSMISSION // RSU TRADING SYSTEM v5.0]<br>
+            [END OF TRANSMISSION // RSU TRADING SYSTEM v6.0]<br>
             [REDISTRIBUTION STRATEGY RESEARCH UNIT // ALL RIGHTS RESERVED]
         </p>
     </div>""", unsafe_allow_html=True)

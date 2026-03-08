@@ -409,6 +409,152 @@ st.markdown("""
     /* ── HIDE RADIO CIRCLE ───────────────────────────────── */
     .stRadio > div > div > div > div { display: none; }
 
+    /* ══════════════════════════════════════════════════════
+       TEMA OSCURO FORZADO — Elimina blancos residuales en
+       tablas, dataframes e inputs nativos de Streamlit
+       ══════════════════════════════════════════════════════ */
+
+    /* Fondo general y texto */
+    html, body, .stApp {
+        background-color: #0c0e12 !important;
+        color: #cccccc !important;
+    }
+
+    /* DataFrames Streamlit (tabla nativa) */
+    [data-testid="stDataFrame"] *,
+    .stDataFrame *,
+    [data-testid="stTable"] *,
+    .stTable * {
+        background-color: transparent !important;
+        color: #cccccc !important;
+    }
+    [data-testid="stDataFrame"] thead th,
+    .stDataFrame thead th {
+        background-color: #11141a !important;
+        color: #00ffad !important;
+        border-bottom: 1px solid #00ffad33 !important;
+        font-family: 'VT323', monospace !important;
+        font-size: 1rem !important;
+        letter-spacing: 1px !important;
+    }
+    [data-testid="stDataFrame"] tbody tr:nth-child(even),
+    .stDataFrame tbody tr:nth-child(even) {
+        background-color: #11141a !important;
+    }
+    [data-testid="stDataFrame"] tbody tr:nth-child(odd),
+    .stDataFrame tbody tr:nth-child(odd) {
+        background-color: #0c0e12 !important;
+    }
+    [data-testid="stDataFrame"] tbody tr:hover td,
+    .stDataFrame tbody tr:hover td {
+        background-color: rgba(0, 255, 173, 0.05) !important;
+        color: #ffffff !important;
+    }
+    [data-testid="stDataFrame"] td,
+    .stDataFrame td {
+        border-color: #1a1e26 !important;
+        color: #cccccc !important;
+    }
+
+    /* Ag-Grid / glide-data-grid (tabla avanzada de Streamlit) */
+    .glide-data-grid-container,
+    .dvn-scroller,
+    .dvn-stack {
+        background: #0c0e12 !important;
+    }
+    .cell-container, .dvn-cell {
+        background: transparent !important;
+        color: #cccccc !important;
+    }
+    .header-cell {
+        background: #11141a !important;
+        color: #00d9ff !important;
+        border-bottom: 1px solid #00d9ff33 !important;
+    }
+    /* Filas alternas en ag-grid */
+    .gdg-style > div:nth-child(even) {
+        background: #11141a !important;
+    }
+
+    /* Inputs, textareas, selectboxes */
+    input, textarea, select,
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stSelectbox"] select {
+        background-color: #11141a !important;
+        color: #cccccc !important;
+        border-color: #2a3040 !important;
+        caret-color: #00ffad !important;
+    }
+    input:focus, textarea:focus {
+        border-color: #00ffad66 !important;
+        box-shadow: 0 0 0 1px #00ffad33 !important;
+        outline: none !important;
+    }
+
+    /* Dropdowns y popups */
+    [data-baseweb="popover"],
+    [data-baseweb="menu"],
+    [data-baseweb="select"] > div,
+    [role="listbox"],
+    [role="option"] {
+        background-color: #11141a !important;
+        color: #cccccc !important;
+        border-color: #2a3040 !important;
+    }
+    [role="option"]:hover {
+        background-color: rgba(0, 255, 173, 0.08) !important;
+        color: #00ffad !important;
+    }
+
+    /* Expanders */
+    [data-testid="stExpander"] {
+        background-color: #11141a !important;
+        border: 1px solid #1a1e26 !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stExpander"] summary {
+        color: #00d9ff !important;
+        font-family: 'VT323', monospace !important;
+        font-size: 1.1rem !important;
+    }
+
+    /* Tooltips */
+    [data-baseweb="tooltip"] > div {
+        background-color: #1a1e26 !important;
+        color: #cccccc !important;
+        border: 1px solid #2a3040 !important;
+    }
+
+    /* Multiselect tags */
+    [data-baseweb="tag"] {
+        background-color: rgba(0, 255, 173, 0.12) !important;
+        color: #00ffad !important;
+        border: 1px solid #00ffad44 !important;
+    }
+
+    /* Progress / spinner */
+    [data-testid="stProgressBar"] > div {
+        background-color: #1a1e26 !important;
+    }
+    [data-testid="stProgressBar"] > div > div {
+        background-color: #00ffad !important;
+    }
+
+    /* Alerts / info boxes */
+    [data-testid="stAlert"] {
+        background-color: #11141a !important;
+        border-color: #2a3040 !important;
+        color: #cccccc !important;
+    }
+
+    /* Ocultar el toggle de tema en el menú de Streamlit */
+    [data-testid="main-menu-list"] li:has(span:contains("Settings")),
+    button[kind="header"] ~ div [data-testid="main-menu-list"] li:nth-child(3) {
+        display: none !important;
+    }
+
     /* ── SCROLLBAR (acento azul) ─────────────────────────── */
     ::-webkit-scrollbar { width: 3px; }
     ::-webkit-scrollbar-track { background: #0c0e12; }
@@ -654,7 +800,7 @@ with st.sidebar:
     menu = st.radio("", [
         "📊 DASHBOARD", "📜 MANIFEST", "♣️ RSU CLUB", "📈 SCANNER RS/RW",
         "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "🎯 CAN SLIM", "🗄️ RSU DB",
-        "📅 EARNINGS", "💼 CARTERA", "📝 TESIS", "🤖 AI REPORT",
+        "🔬 RSU RESEARCH", "💼 CARTERA", "📝 TESIS", "🤖 AI REPORT",
         "🎓 ACADEMY", "🏆 TRADE GRADER", "🚀 SPXL STRATEGY",
         "₿ BTC STRATUM", "🗺️ ROADMAP 2026", "🇺🇸 TRUMP PLAYBOOK",
         "👥 COMUNIDAD", "⚠️ DISCLAIMER"
@@ -678,7 +824,7 @@ modules = {
     "⚡ EMA EDGE":          ema_edge_module,
     "🎯 CAN SLIM":         canslim_module,
     "🗄️ RSU DB":           rsudb_module,
-    "📅 EARNINGS":         earnings_module,
+    "🔬 RSU RESEARCH":         earnings_module,
     "💼 CARTERA":          cartera_module,
     "📝 TESIS":            tesis_module,
     "🤖 AI REPORT":        ia_report_module,
@@ -696,7 +842,5 @@ if menu in modules:
     try:
         modules[menu].render()
     except Exception as e:
-        import traceback
         st.error(f"Error cargando módulo: {e}")
-        st.code(traceback.format_exc(), language="python")
 

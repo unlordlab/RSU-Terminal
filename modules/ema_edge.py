@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -288,6 +289,16 @@ def create_trend_alignment_chart(trends):
 
 def create_volume_heatmap(data, vol_analysis):
     data = flatten_columns(data)
+
+    # ── Normalizar índice: asegurar DatetimeIndex sin tz ──────
+    if not isinstance(data.index, pd.DatetimeIndex):
+        try:
+            data.index = pd.to_datetime(data.index, unit='ms' if data.index.max() > 1e12 else 's')
+        except Exception:
+            data.index = pd.to_datetime(data.index)
+    if hasattr(data.index, 'tz') and data.index.tz is not None:
+        data.index = data.index.tz_localize(None)
+
     recent_data = data.tail(20).copy()
     if 'Volume' not in recent_data.columns:
         fig = go.Figure()
@@ -1411,6 +1422,10 @@ def render():
 
                     st.plotly_chart(create_volume_heatmap(data, vol_analysis), use_container_width=True, key="vol_chart")
 
+                    # Debug de rango de fechas del dataset principal
+                    if show_debug:
+                        st.caption(f"🗓️ Rango de datos: {data.index[0].strftime('%d %b %Y')} → {data.index[-1].strftime('%d %b %Y')} | {len(data)} filas | index type: {type(data.index).__name__} | tz: {getattr(data.index, 'tz', 'None')}")
+
                     # Detalles técnicos
                     with st.expander("// DETALLES TÉCNICOS DEL CÁLCULO", expanded=False):
                         st.subheader("Parámetros Utilizados")
@@ -1475,5 +1490,4 @@ Puntos:   {rsu_data['volume_component']}/20
 
     with tab4:
         render_risks_section()
-
 

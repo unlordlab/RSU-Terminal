@@ -6,12 +6,6 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
-# --- CREDENCIALES DE ALPACA (MOVER A SECRETS) ---
-# Estas deben configurarse en .streamlit/secrets.toml
-ALPACA_API_KEY = st.secrets.get("ALPACA_API_KEY", "PK5F3ZYQ5V5OMMN2XWUB64GB4Q")
-ALPACA_SECRET_KEY = st.secrets.get("ALPACA_SECRET_KEY", "5BsiRC9kqEoi3wWahzKJrLdgGWPvP5vy3gSySSBbitWC")
-ALPACA_BASE_URL = "https://paper-api.alpaca.markets/v2"
-ALPACA_WS_URL = "wss://stream.data.alpaca.markets/v2/iex"
 
 # Configuración de página única
 if 'page_config_set' not in st.session_state:
@@ -21,6 +15,19 @@ if 'page_config_set' not in st.session_state:
 def set_style():
     st.markdown("""
         <style>
+        /* ═══════════════════════════════════════════════════════════
+           TEMA OSCURO FORZADO — Cubre todos los componentes nativos
+           de Streamlit para que ningún usuario vea fondos blancos,
+           independientemente de su tema de sistema operativo.
+           ═══════════════════════════════════════════════════════════ */
+
+        /* ── BASE ────────────────────────────────────────────────── */
+        html, body, .stApp {
+            background-color: #0c0e12 !important;
+            color: #cccccc !important;
+        }
+
+        /* ── SEMÁFORO (componente original conservado) ───────────── */
         .semaforo-luz {
             border-radius: 50%; background-color: #222; border: 4px solid #333;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.5); transition: all 0.3s ease;
@@ -28,19 +35,14 @@ def set_style():
         .luz-roja.luz-on  { background-color: #ff4b4b; box-shadow: 0 0 40px #ff4b4b, inset 0 0 20px rgba(0,0,0,0.2); }
         .luz-ambar.luz-on { background-color: #ffaa00; box-shadow: 0 0 40px #ffaa00, inset 0 0 20px rgba(0,0,0,0.2); }
         .luz-verde.luz-on { background-color: #00ffad; box-shadow: 0 0 40px #00ffad, inset 0 0 20px rgba(0,0,0,0.2); }
-        .stApp { background-color: #0c0e12; color: #e0e0e0; }
-        
-        /* Sidebar - CORREGIDO: sin transformaciones que causen movimiento */
-        [data-testid="stSidebar"] { 
-            background-color: #151921; 
-            border-right: 1px solid #2962ff; 
+
+        /* ── SIDEBAR ─────────────────────────────────────────────── */
+        [data-testid="stSidebar"] {
+            background-color: #11141a !important;
+            border-right: 1px solid #1a1e26 !important;
         }
-        
-        /* ELIMINADO: Estilos de texto que causaban conflictos */
-        /* [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .stSubheader {
-            text-align: center !important; width: 100%;
-        } */
-        
+
+        /* ── COMPONENTES PERSONALIZADOS (conservados) ────────────── */
         .group-container {
             background-color: #11141a; border: 1px solid #2d3439; border-radius: 12px;
             padding: 0px; height: 100%; overflow: hidden; margin-bottom: 20px;
@@ -49,24 +51,204 @@ def set_style():
             background-color: #1a1e26; padding: 12px 20px; border-bottom: 1px solid #2d3439;
             position: relative;
         }
-        .group-title { 
+        .group-title {
             color: #888; font-size: 12px; font-weight: bold; text-transform: uppercase;
             letter-spacing: 1px; margin: 0 !important;
         }
         .group-content { padding: 20px; }
 
-        /* Tooltip mejorado */
+        /* ── TOOLTIP ─────────────────────────────────────────────── */
         .tooltip-container {
             position: absolute; top: 50%; right: 12px; transform: translateY(-50%); cursor: help;
         }
         .tooltip-container .tooltip-text {
             visibility: hidden; width: 260px; background-color: #1e222d; color: #eee;
             text-align: left; padding: 10px 12px; border-radius: 6px; position: absolute;
-            z-index: 999; top: 140%; right: -10px; opacity: 0; transition: opacity 0.3s, visibility 0.3s;
+            z-index: 999; top: 140%; right: -10px; opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
             font-size: 12px; border: 1px solid #444; pointer-events: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
         .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* ══════════════════════════════════════════════════════════
+           DATAFRAMES Y TABLAS — El principal causante de blancos
+           ══════════════════════════════════════════════════════════ */
+
+        /* Contenedor raíz del dataframe */
+        [data-testid="stDataFrame"],
+        [data-testid="stTable"],
+        .stDataFrame,
+        .stTable {
+            background-color: #0c0e12 !important;
+            border: 1px solid #1a1e26 !important;
+            border-radius: 6px !important;
+            overflow: hidden !important;
+        }
+
+        /* Cabeceras */
+        [data-testid="stDataFrame"] thead th,
+        [data-testid="stTable"] thead th,
+        .stDataFrame thead th {
+            background-color: #11141a !important;
+            color: #00ffad !important;
+            border-bottom: 1px solid #00ffad33 !important;
+            border-right: 1px solid #1a1e26 !important;
+            font-family: 'Courier New', monospace !important;
+            font-size: 0.78rem !important;
+            font-weight: bold !important;
+            letter-spacing: 1px !important;
+            text-transform: uppercase !important;
+            padding: 8px 12px !important;
+        }
+
+        /* Celdas */
+        [data-testid="stDataFrame"] tbody td,
+        [data-testid="stTable"] tbody td,
+        .stDataFrame tbody td {
+            background-color: transparent !important;
+            color: #cccccc !important;
+            border-color: #1a1e26 !important;
+            padding: 6px 12px !important;
+        }
+
+        /* Filas alternas */
+        [data-testid="stDataFrame"] tbody tr:nth-child(even) td,
+        .stDataFrame tbody tr:nth-child(even) td {
+            background-color: #11141a !important;
+        }
+        [data-testid="stDataFrame"] tbody tr:nth-child(odd) td,
+        .stDataFrame tbody tr:nth-child(odd) td {
+            background-color: #0c0e12 !important;
+        }
+
+        /* Hover en filas */
+        [data-testid="stDataFrame"] tbody tr:hover td,
+        .stDataFrame tbody tr:hover td {
+            background-color: rgba(0, 255, 173, 0.06) !important;
+            color: #ffffff !important;
+        }
+
+        /* Glide-data-grid (tabla avanzada nueva de Streamlit) */
+        .glide-data-grid-container, .dvn-scroller, .dvn-stack,
+        .gdg-style, .cell-container, .dvn-cell {
+            background-color: #0c0e12 !important;
+            color: #cccccc !important;
+        }
+        .header-cell {
+            background-color: #11141a !important;
+            color: #00d9ff !important;
+            border-bottom: 1px solid #00d9ff33 !important;
+        }
+        /* Canvas del glide-data-grid — forzar fondo oscuro */
+        canvas { background-color: #0c0e12 !important; }
+
+        /* ══════════════════════════════════════════════════════════
+           INPUTS, SELECTS Y DROPDOWNS
+           ══════════════════════════════════════════════════════════ */
+
+        input, textarea, select,
+        [data-testid="stTextInput"] input,
+        [data-testid="stNumberInput"] input,
+        [data-testid="stTextArea"] textarea {
+            background-color: #11141a !important;
+            color: #cccccc !important;
+            border-color: #2a3040 !important;
+            caret-color: #00ffad !important;
+        }
+        input:focus, textarea:focus {
+            border-color: #00ffad55 !important;
+            box-shadow: 0 0 0 1px #00ffad22 !important;
+            outline: none !important;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #444 !important;
+        }
+
+        /* Selectbox / multiselect */
+        [data-baseweb="select"] > div,
+        [data-baseweb="popover"],
+        [data-baseweb="menu"],
+        [role="listbox"] {
+            background-color: #11141a !important;
+            color: #cccccc !important;
+            border-color: #2a3040 !important;
+        }
+        [role="option"] {
+            background-color: #11141a !important;
+            color: #cccccc !important;
+        }
+        [role="option"]:hover,
+        [aria-selected="true"] {
+            background-color: rgba(0, 255, 173, 0.08) !important;
+            color: #00ffad !important;
+        }
+
+        /* Tags del multiselect */
+        [data-baseweb="tag"] {
+            background-color: rgba(0, 255, 173, 0.1) !important;
+            color: #00ffad !important;
+            border: 1px solid #00ffad33 !important;
+        }
+
+        /* ══════════════════════════════════════════════════════════
+           MÉTRICAS
+           ══════════════════════════════════════════════════════════ */
+        [data-testid="stMetric"] {
+            background-color: #11141a !important;
+            border: 1px solid #1a1e26 !important;
+            border-radius: 8px !important;
+            padding: 12px !important;
+        }
+        [data-testid="stMetricLabel"] { color: #666 !important; }
+        [data-testid="stMetricValue"] { color: #ffffff !important; }
+        [data-testid="stMetricDelta"] svg { display: none; }
+
+        /* ══════════════════════════════════════════════════════════
+           EXPANDERS, TABS, ALERTS
+           ══════════════════════════════════════════════════════════ */
+
+        [data-testid="stExpander"] {
+            background-color: #11141a !important;
+            border: 1px solid #1a1e26 !important;
+            border-radius: 6px !important;
+        }
+        [data-testid="stExpander"] summary { color: #00d9ff !important; }
+
+        [data-testid="stTabs"] [role="tablist"] {
+            background-color: transparent !important;
+            border-bottom: 1px solid #1a1e26 !important;
+        }
+        [data-testid="stTabs"] [role="tab"] {
+            color: #555 !important;
+            background-color: transparent !important;
+        }
+        [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+            color: #00ffad !important;
+            border-bottom: 2px solid #00ffad !important;
+        }
+
+        [data-testid="stAlert"] {
+            background-color: #11141a !important;
+            border-color: #2a3040 !important;
+            color: #cccccc !important;
+        }
+
+        /* ── PROGRESS BAR ────────────────────────────────────────── */
+        [data-testid="stProgressBar"] > div {
+            background-color: #1a1e26 !important;
+        }
+        [data-testid="stProgressBar"] > div > div {
+            background-color: #00ffad !important;
+        }
+
+        /* ── TOOLTIPS NATIVOS ────────────────────────────────────── */
+        [data-baseweb="tooltip"] > div {
+            background-color: #1a1e26 !important;
+            color: #cccccc !important;
+            border: 1px solid #2a3040 !important;
+        }
+
         </style>
         """, unsafe_allow_html=True)
 
@@ -198,4 +380,5 @@ def obtener_prompt_github():
     except: 
         return ""
          
+
 

@@ -76,9 +76,16 @@ def calculate_rsi(prices, period=14):
     return 100 - (100 / (1 + rs))
 
 @st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def download_data(symbol, period, interval):
-    """Descarga cacheada con TTL de 5 minutos para evitar re-requests innecesarios."""
+    """Descarga cacheada con TTL 5min. Normaliza índice a DatetimeIndex sin timezone."""
     data = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
+    if not data.empty:
+        if not isinstance(data.index, pd.DatetimeIndex):
+            data.index = pd.to_datetime(data.index)
+        # Quitar tz para evitar fechas incorrectas en strftime (bug yfinance + pandas)
+        if hasattr(data.index, 'tz') and data.index.tz is not None:
+            data.index = data.index.tz_localize(None)
     return data
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -286,27 +293,57 @@ def create_volume_heatmap(data, vol_analysis):
         fig = go.Figure()
         fig.update_layout(**PLOTLY_LAYOUT, title=dict(text="SIN DATOS DE VOLUMEN", font=dict(color="#f23645")))
         return fig
-    volume = ensure_1d_series(recent_data['Volume'])
+
+    volume  = ensure_1d_series(recent_data['Volume'])
     avg_vol = vol_analysis['avg_volume']
-    colors = []
+
+    # Detectar si el índice incluye hora (intradía) o solo fecha (diario)
+    idx = recent_data.index
+    has_time = hasattr(idx[0], 'hour') and (idx[-1] - idx[0]).days < 7
+    if has_time:
+        x_labels = [ts.strftime('%d/%m %H:%M') for ts in idx]
+    else:
+        x_labels = [ts.strftime('%d %b %Y') for ts in idx]
+
+    bar_colors, ratios, ratio_labels = [], [], []
     for vol in volume:
         ratio = vol / avg_vol if avg_vol > 0 else 1
-        colors.append("#00ffad" if ratio > 2 else "#4caf50" if ratio > 1.5 else "#ff9800" if ratio > 1 else "#f23645")
+        ratios.append(ratio)
+        ratio_labels.append(f'{ratio:.2f}x')
+        bar_colors.append(
+            "#00ffad" if ratio > 2 else
+            "#4caf50" if ratio > 1.5 else
+            "#ff9800" if ratio > 1.0 else
+            "#f23645"
+        )
+
     fig = go.Figure(data=[go.Bar(
-        x=recent_data.index.strftime('%m-%d'), y=volume, marker_color=colors,
+        x=x_labels,
+        y=list(volume),
+        marker_color=bar_colors,
         marker_line=dict(color="rgba(0,255,173,0.13)", width=0.5),
-        hovertemplate='Fecha: %{x}<br>Volumen: %{y:,.0f}<br>Ratio: %{text:.2f}x<extra></extra>',
-        text=[v/avg_vol for v in volume]
+        text=ratio_labels,
+        textposition='outside',
+        textfont=dict(color='white', family='Courier New', size=9),
+        hovertemplate='<b>%{x}</b><br>Volumen: %{y:,.0f}<br>Ratio vs avg: %{text}<extra></extra>',
+        cliponaxis=False,
     )])
-    fig.add_hline(y=avg_vol, line_dash="dash", line_color="rgba(0,255,173,0.4)",
-                  annotation_text="AVG", annotation_position="right",
-                  annotation_font=dict(color="#00ffad", family="Courier New"))
+
+    fig.add_hline(
+        y=avg_vol, line_dash="dash", line_color="rgba(0,255,173,0.5)",
+        annotation_text="AVG 20d", annotation_position="top right",
+        annotation_font=dict(color="#00ffad", family="Courier New", size=10)
+    )
+
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title=dict(text="VOLUMEN // GASOLINA DEL MOVIMIENTO", font=dict(color="#00ffad", size=13, family='VT323, monospace')),
-        xaxis=dict(color="white", gridcolor="#1a1e26", tickangle=-45, tickfont=dict(family='Courier New')),
-        yaxis=dict(color="white", gridcolor="#1a1e26", title="", tickfont=dict(family='Courier New')),
-        height=260, margin=dict(l=50, r=50, t=50, b=60), showlegend=False
+        title=dict(text="VOLUMEN // GASOLINA DEL MOVIMIENTO (últimas 20 velas)",
+                   font=dict(color="#00ffad", size=13, family='VT323, monospace')),
+        xaxis=dict(color="white", gridcolor="#1a1e26", tickangle=-45,
+                   tickfont=dict(family='Courier New', size=9)),
+        yaxis=dict(color="white", gridcolor="#1a1e26", title="",
+                   tickfont=dict(family='Courier New')),
+        height=300, margin=dict(l=50, r=60, t=55, b=80), showlegend=False
     )
     return fig
 

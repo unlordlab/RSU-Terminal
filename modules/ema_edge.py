@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -233,57 +232,137 @@ PLOTLY_LAYOUT = dict(
 )
 
 def create_z_score_gauge(z_score):
+    z = float(z_score)
+    z_color = get_z_color(z)
+    # Etiqueta de zona
+    if abs(z) <= 0.5:   zona = "ZONA ÓPTIMA"
+    elif abs(z) <= 1.0: zona = "ZONA FAVORABLE"
+    elif abs(z) <= 2.0: zona = "ALERTA"
+    else:               zona = "EXTREMO — PELIGRO"
+
     fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=float(z_score),
+        mode="gauge+number",
+        value=z,
         domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': "TENSIÓN ELÁSTICA // Z-SCORE", 'font': {'size': 13, 'color': '#00ffad', 'family': 'VT323, monospace'}},
-        number={'font': {'size': 28, 'color': 'white', 'family': 'VT323, monospace'}, 'suffix': "σ"},
-        delta={'reference': 0, 'position': "top"},
+        title={
+            'text': f"TENSIÓN ELÁSTICA // Z-SCORE<br><span style='font-size:14px;color:{z_color}'>{zona}</span>",
+            'font': {'size': 15, 'color': '#00ffad', 'family': 'VT323, monospace'}
+        },
+        number={
+            'font': {'size': 42, 'color': z_color, 'family': 'VT323, monospace'},
+            'suffix': "σ",
+            'valueformat': '.2f'
+        },
         gauge={
-            'axis': {'range': [-3, 3], 'tickwidth': 1, 'tickcolor': "#1a1e26"},
-            'bar': {'color': get_z_color(z_score), 'thickness': 0.75},
+            'axis': {
+                'range': [-3, 3],
+                'tickwidth': 2,
+                'tickcolor': '#aaa',
+                'tickvals': [-3, -2, -1, 0, 1, 2, 3],
+                'ticktext': ['-3σ', '-2σ', '-1σ', '0', '+1σ', '+2σ', '+3σ'],
+                'tickfont': {'color': 'white', 'size': 13, 'family': 'Courier New'},
+            },
+            'bar': {'color': z_color, 'thickness': 0.18},
             'bgcolor': "#0a0c10",
-            'borderwidth': 2,
-            'bordercolor': "rgba(0,255,173,0.2)",
+            'borderwidth': 1,
+            'bordercolor': "rgba(0,255,173,0.15)",
             'steps': [
-                {'range': [-3, -2], 'color': hex_to_rgba("#f23645", 0.15)},
-                {'range': [-2, -1], 'color': hex_to_rgba("#ff9800", 0.15)},
-                {'range': [-1, 1],  'color': hex_to_rgba("#00ffad", 0.12)},
-                {'range': [1, 2],   'color': hex_to_rgba("#ff9800", 0.15)},
-                {'range': [2, 3],   'color': hex_to_rgba("#f23645", 0.15)}
+                {'range': [-3, -2], 'color': 'rgba(242,54,69,0.25)'},
+                {'range': [-2, -1], 'color': 'rgba(255,152,0,0.18)'},
+                {'range': [-1,  1], 'color': 'rgba(0,255,173,0.14)'},
+                {'range': [ 1,  2], 'color': 'rgba(255,152,0,0.18)'},
+                {'range': [ 2,  3], 'color': 'rgba(242,54,69,0.25)'},
             ],
-            'threshold': {'line': {'color': "white", 'width': 3}, 'thickness': 0.8, 'value': float(z_score)}
+            'threshold': {
+                'line': {'color': 'white', 'width': 3},
+                'thickness': 0.85,
+                'value': z
+            }
         }
     ))
-    fig.update_layout(**PLOTLY_LAYOUT, height=280, margin=dict(l=20, r=20, t=55, b=20))
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        height=320,
+        margin=dict(l=30, r=30, t=70, b=10)
+    )
     return fig
 
 def create_trend_alignment_chart(trends):
     timeframes = list(trends.keys())
-    values, colors, labels = [], [], []
+    values, bar_colors, status_labels, weight_labels = [], [], [], []
+
+    TF_WEIGHTS = {'1D': 45, '4H': 30, '1H': 15, '15m': 10}
+
     for tf in timeframes:
         trend = trends.get(tf, {}).get('trend', 'ERROR')
+        w = TF_WEIGHTS.get(tf, 0)
         if trend == 'BULLISH':
-            values.append(1); colors.append("#00ffad"); labels.append("ALCISTA")
+            values.append(1)
+            bar_colors.append('#00ffad')
+            status_labels.append('▲ ALCISTA')
         elif trend == 'BEARISH':
-            values.append(-1); colors.append("#f23645"); labels.append("BAJISTA")
+            values.append(-1)
+            bar_colors.append('#f23645')
+            status_labels.append('▼ BAJISTA')
         else:
-            values.append(0); colors.append("#444"); labels.append("N/A")
+            values.append(0)
+            bar_colors.append('#444455')
+            status_labels.append('— NEUTRO')
+        weight_labels.append(f'{tf}<br><span style="font-size:10px">peso {w}%</span>')
+
+    # Etiquetas combinadas: timeframe + estado + peso
+    hover_texts = [
+        f'<b>{tf}</b><br>Estado: {sl}<br>Peso: {TF_WEIGHTS.get(tf,0)}%'
+        for tf, sl in zip(timeframes, status_labels)
+    ]
+
     fig = go.Figure(data=[go.Bar(
-        x=timeframes, y=values, marker_color=colors,
-        marker_line=dict(color="rgba(0,255,173,0.27)", width=1),
-        text=labels, textposition='outside',
-        textfont=dict(color='white', size=11, family='VT323, monospace')
+        x=timeframes,
+        y=values,
+        marker_color=bar_colors,
+        marker_line=dict(color='rgba(0,255,173,0.3)', width=1),
+        text=status_labels,
+        textposition='inside',
+        insidetextanchor='middle',
+        textfont=dict(color='white', size=13, family='VT323, monospace'),
+        hovertext=hover_texts,
+        hoverinfo='text',
+        width=0.55,
     )])
+
+    # Anotaciones con el peso de cada TF encima/debajo de cada barra
+    for i, (tf, val) in enumerate(zip(timeframes, values)):
+        w = TF_WEIGHTS.get(tf, 0)
+        ypos = 1.35 if val >= 0 else -1.35
+        fig.add_annotation(
+            x=tf, y=ypos,
+            text=f'<b style="color:#00d9ff">peso {w}%</b>',
+            showarrow=False,
+            font=dict(color='#00d9ff', size=11, family='Courier New'),
+            yanchor='middle'
+        )
+
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title=dict(text="ALINEACIÓN MULTI-TIMEFRAME", font=dict(color="#00ffad", size=13, family='VT323, monospace')),
-        xaxis=dict(color="white", gridcolor="#1a1e26", tickfont=dict(family='Courier New')),
-        yaxis=dict(color="white", gridcolor="#1a1e26", range=[-1.6, 1.6],
-                   tickvals=[-1, 0, 1], ticktext=['BAJISTA', 'NEUTRO', 'ALCISTA'],
-                   tickfont=dict(family='Courier New')),
-        height=260, margin=dict(l=50, r=20, t=50, b=40), showlegend=False
+        title=dict(
+            text='ALINEACIÓN MULTI-TIMEFRAME // EMA CROSS',
+            font=dict(color='#00ffad', size=14, family='VT323, monospace')
+        ),
+        xaxis=dict(
+            color='white', gridcolor='#1a1e26',
+            tickfont=dict(family='VT323, monospace', size=18, color='#00ffad'),
+            tickangle=0,
+        ),
+        yaxis=dict(
+            color='white', gridcolor='#1a1e26',
+            range=[-1.75, 1.75],
+            tickvals=[-1, 0, 1],
+            ticktext=['▼ BAJISTA', '— NEUTRO', '▲ ALCISTA'],
+            tickfont=dict(family='Courier New', size=12, color='white'),
+        ),
+        height=320,
+        margin=dict(l=90, r=20, t=55, b=20),
+        showlegend=False,
     )
     return fig
 
@@ -388,18 +467,30 @@ def create_rsu_score_radar(score_components):
 
 def create_price_chart_with_emas(data, symbol):
     data = flatten_columns(data)
-    close = ensure_1d_series(data['Close'])
-    ema_9  = calculate_ema(close, 9)
-    ema_21 = calculate_ema(close, 21)
-    ema_50 = calculate_ema(close, 50)
+    close    = ensure_1d_series(data['Close'])
+    ema_9    = calculate_ema(close, 9)
+    ema_21   = calculate_ema(close, 21)
+    ema_50   = calculate_ema(close, 50)
     z_scores = calculate_z_score(close, ema_21)
+    rsi      = calculate_rsi(close, 14)
+
+    # Valor actual de RSI para anotación
+    rsi_now  = float(rsi.iloc[-1]) if not rsi.empty and not pd.isna(rsi.iloc[-1]) else 50.0
+    rsi_color = ('#f23645' if rsi_now > 70 else '#ff9800' if rsi_now > 60
+                 else '#00ffad' if rsi_now < 40 else '#00d9ff')
 
     fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.06,
-        row_heights=[0.7, 0.3],
-        subplot_titles=(f'{symbol} // ANÁLISIS TÉCNICO', 'Z-SCORE HISTÓRICO')
+        rows=3, cols=1, shared_xaxes=True,
+        vertical_spacing=0.04,
+        row_heights=[0.58, 0.22, 0.20],
+        subplot_titles=(
+            f'{symbol} // ANÁLISIS TÉCNICO',
+            'Z-SCORE HISTÓRICO',
+            f'RSI (14) — ACTUAL: {rsi_now:.1f}'
+        )
     )
 
+    # ── Row 1: Precio + EMAs ──────────────────────────────────
     fig.add_trace(go.Candlestick(
         x=data.index,
         open=ensure_1d_series(data['Open']),
@@ -410,11 +501,14 @@ def create_price_chart_with_emas(data, symbol):
         increasing_fillcolor='rgba(0,255,173,0.6)', decreasing_fillcolor='rgba(242,54,69,0.6)'
     ), row=1, col=1)
 
-    fig.add_trace(go.Scatter(x=data.index, y=ema_9,  line=dict(color='#00d9ff', width=1.5, dash='dot'), name='EMA 9'),  row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=ema_21, line=dict(color='#ff9800', width=1.5), name='EMA 21'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=ema_50, line=dict(color='#9c27b0', width=1.5), name='EMA 50'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=ema_9,
+                             line=dict(color='#00d9ff', width=1.5, dash='dot'), name='EMA 9'),  row=1, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=ema_21,
+                             line=dict(color='#ff9800', width=1.5), name='EMA 21'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=ema_50,
+                             line=dict(color='#9c27b0', width=1.5), name='EMA 50'), row=1, col=1)
 
-    z_color = z_scores.apply(get_z_color)
+    # ── Row 2: Z-Score ────────────────────────────────────────
     fig.add_trace(go.Scatter(
         x=data.index, y=z_scores, mode='lines',
         line=dict(color='#00ffad', width=1.5),
@@ -425,16 +519,66 @@ def create_price_chart_with_emas(data, symbol):
         fig.add_hline(y=level, line_dash="dash", line_color="#333", line_width=1, row=2, col=1)
     fig.add_hline(y=0, line_color="rgba(0,255,173,0.27)", line_width=1.5, row=2, col=1)
 
+    # ── Row 3: RSI ────────────────────────────────────────────
+    # Colorear la línea RSI según zona: rojo >70, naranja 60-70, verde <40, azul resto
+    rsi_line_color = rsi_color
+
+    fig.add_trace(go.Scatter(
+        x=data.index, y=rsi,
+        mode='lines',
+        line=dict(color=rsi_line_color, width=1.8),
+        name=f'RSI {rsi_now:.1f}',
+        fill='tozeroy',
+        fillcolor=f'rgba({int(rsi_line_color[1:3],16)},{int(rsi_line_color[3:5],16)},{int(rsi_line_color[5:7],16)},0.06)',
+        hovertemplate='RSI: %{y:.1f}<extra></extra>'
+    ), row=3, col=1)
+
+    # Zonas de referencia RSI
+    fig.add_hrect(y0=70, y1=100, fillcolor='rgba(242,54,69,0.07)',
+                  line_width=0, row=3, col=1)
+    fig.add_hrect(y0=0,  y1=30,  fillcolor='rgba(0,255,173,0.07)',
+                  line_width=0, row=3, col=1)
+
+    for lvl, clr, lbl, pos in [
+        (70, '#f23645', 'SOBRECOMPRA', 'top right'),
+        (30, '#00ffad', 'SOBREVENTA',  'bottom right'),
+    ]:
+        fig.add_hline(y=lvl, line_dash='dash', line_color=clr,
+                      line_width=1, row=3, col=1,
+                      annotation_text=lbl,
+                      annotation_position=pos,
+                      annotation_font=dict(color=clr, family='Courier New', size=9))
+
+    fig.add_hline(y=50, line_color='rgba(255,255,255,0.15)',
+                  line_width=1, line_dash='dot', row=3, col=1)
+
+    # Anotación con valor actual de RSI al final de la línea
+    fig.add_annotation(
+        x=data.index[-1], y=rsi_now,
+        text=f'<b>{rsi_now:.1f}</b>',
+        font=dict(color=rsi_color, family='Courier New', size=11),
+        bgcolor='rgba(12,14,18,0.85)',
+        bordercolor=rsi_color, borderwidth=1,
+        xanchor='left', yanchor='middle',
+        showarrow=False, row=3, col=1
+    )
+
+    # ── Layout global ─────────────────────────────────────────
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        xaxis_rangeslider_visible=False, height=520,
-        margin=dict(l=50, r=50, t=60, b=40),
-        legend=dict(bgcolor='rgba(12,14,18,0.9)', bordercolor='rgba(0,255,173,0.2)', borderwidth=1,
-                    font=dict(color='white', family='Courier New', size=11))
+        xaxis_rangeslider_visible=False,
+        height=660,
+        margin=dict(l=50, r=70, t=60, b=40),
+        legend=dict(bgcolor='rgba(12,14,18,0.9)', bordercolor='rgba(0,255,173,0.2)',
+                    borderwidth=1, font=dict(color='white', family='Courier New', size=11))
     )
     fig.update_annotations(font=dict(color='#00ffad', family='VT323, monospace', size=14))
     fig.update_xaxes(gridcolor='#1a1e26', color='white')
     fig.update_yaxes(gridcolor='#1a1e26', color='white')
+
+    # RSI y-axis fijo 0-100
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
+
     return fig
 
 # ────────────────────────────────────────────────
@@ -633,31 +777,562 @@ def render_verdict_banner(score_data):
 
 def render_explanation_section():
     st.markdown("""
-    <h2>01 // TENSIÓN ELÁSTICA — Z-SCORE (40 PTS)</h2>
+    <div style="font-family:'VT323',monospace; font-size:0.85rem; color:#555; letter-spacing:3px; margin-bottom:6px;">
+        [RSU EMA EDGE v4.0 // METODOLOGÍA COMPLETA]
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── FILOSOFÍA ───────────────────────────────────────────────
+    st.markdown('<h2>00 // FILOSOFÍA — LA LIGA ELÁSTICA</h2>', unsafe_allow_html=True)
+    st.markdown("""
     <div class="terminal-box">
-        <p>La EMA actúa como una <strong>liga elástica</strong>. El Z-Score mide cuántas desviaciones estándar
-        se ha alejado el precio de esa media. Valores entre <strong>-1σ y +1σ</strong> indican zona de confort
-        estadístico. Valores extremos (&gt;±2σ) sugieren que el precio está sobreextendido y
-        probabilísticamente tenderá a revertir a la media.</p>
+        <p>El precio de un activo se comporta como una <strong>pelota atada a una liga elástica</strong>.
+        La EMA (Media Móvil Exponencial) es el centro de esa liga — el punto de equilibrio natural
+        al que el precio siempre tiende a volver.</p>
+        <p>Cuando el precio se aleja mucho del centro, la liga se estira y ejerce una fuerza de retorno.
+        <strong>EMA Edge mide exactamente eso:</strong> qué tan estirada está la liga y si las condiciones
+        macro (tendencia, volumen, momentum) favorecen el retorno a la media.</p>
+        <p style="color:#00ffad; margin-top:10px;"><strong>El edge no está en predecir. Está en operar cuando la probabilidad es estadísticamente favorable.</strong></p>
     </div>
+    """, unsafe_allow_html=True)
 
-    <h2>02 // ALINEACIÓN MULTI-TIMEFRAME (30 PTS)</h2>
+    # ── SISTEMA DE PUNTUACIÓN ────────────────────────────────────
+    st.markdown('<h2>01 // RSU SCORE — SISTEMA DE PUNTUACIÓN (0-100)</h2>', unsafe_allow_html=True)
+
+    col_score1, col_score2 = st.columns(2)
+    with col_score1:
+        st.markdown("""
+        <div class="terminal-box">
+            <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+                <tr style="color:#00ffad; border-bottom:1px solid #1a1e26;">
+                    <th style="padding:6px 4px; text-align:left;">COMPONENTE</th>
+                    <th style="text-align:center;">MÁX.</th>
+                    <th style="text-align:center;">PESO</th>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px;">Tensión Elástica (Z-Score)</td>
+                    <td style="text-align:center; color:#00ffad;">40 pts</td>
+                    <td style="text-align:center;">40%</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:5px 4px;">Tendencia Multi-Timeframe</td>
+                    <td style="text-align:center; color:#00ffad;">30 pts</td>
+                    <td style="text-align:center;">30%</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px;">Volumen Direccional</td>
+                    <td style="text-align:center; color:#00ffad;">20 pts</td>
+                    <td style="text-align:center;">20%</td>
+                </tr>
+                <tr>
+                    <td style="padding:5px 4px;">RSI Wilder (Momentum)</td>
+                    <td style="text-align:center; color:#00ffad;">10 pts</td>
+                    <td style="text-align:center;">10%</td>
+                </tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_score2:
+        st.markdown("""
+        <div class="terminal-box">
+            <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+                <tr style="color:#00ffad; border-bottom:1px solid #1a1e26;">
+                    <th style="padding:6px 4px; text-align:left;">SCORE</th>
+                    <th style="text-align:left;">GRADO</th>
+                    <th style="text-align:left;">VEREDICTO</th>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px; color:#00ffad;"><b>85 – 100</b></td>
+                    <td>A+</td>
+                    <td style="color:#00ffad;">OPORTUNIDAD ÓPTIMA</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:5px 4px; color:#4caf50;"><b>75 – 84</b></td>
+                    <td>A</td>
+                    <td style="color:#4caf50;">OPORTUNIDAD ÓPTIMA</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px; color:#ff9800;"><b>65 – 74</b></td>
+                    <td>B</td>
+                    <td style="color:#ff9800;">OPORTUNIDAD MODERADA</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:5px 4px; color:#888;"><b>50 – 64</b></td>
+                    <td>C</td>
+                    <td>ESPERAR CONFIRMACIÓN</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px; color:#888;"><b>35 – 49</b></td>
+                    <td>D</td>
+                    <td>ESPERAR CONFIRMACIÓN</td>
+                </tr>
+                <tr>
+                    <td style="padding:5px 4px; color:#f23645;"><b>0 – 34</b></td>
+                    <td>F</td>
+                    <td style="color:#f23645;">ZONA PELIGROSA</td>
+                </tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── INDICADOR 1: Z-SCORE ─────────────────────────────────────
+    st.markdown('<h2>02 // TENSIÓN ELÁSTICA — Z-SCORE (40 PTS)</h2>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="terminal-box">
+        <p>Mide cuántas <strong>desviaciones estándar</strong> se ha alejado el precio de su EMA 21.
+        La versión v4 usa <strong>retornos logarítmicos</strong> para garantizar estacionariedad estadística
+        (los precios absolutos no son comparables entre épocas distintas).</p>
+        <code style="display:block; padding:8px; background:#060810; color:#00ffad; margin:8px 0; font-size:11px; border-left:3px solid #00ffad;">
+        log_returns  = log(Close[t] / Close[t-1])<br>
+        std_returns  = rolling_std(log_returns, window=20)<br>
+        deviation    = (Close - EMA21) / EMA21  <span style="color:#555"># desviación porcentual</span><br>
+        Z-Score      = deviation / std_returns   <span style="color:#555"># en unidades de sigma (σ)</span>
+        </code>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="terminal-box" style="margin-top:8px;">
+        <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+            <tr style="color:#00ffad; border-bottom:1px solid #1a1e26;">
+                <th style="padding:6px 8px; text-align:left;">ZONA Z-SCORE</th>
+                <th style="text-align:center;">PUNTOS</th>
+                <th style="text-align:left;">INTERPRETACIÓN</th>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>|Z| ≤ 0.5σ</b></td>
+                <td style="text-align:center; color:#00ffad;"><b>40/40</b></td>
+                <td>Precio casi en la media. Liga relajada. Momento ideal.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px; color:#4caf50;"><b>0.5 &lt; |Z| ≤ 1.0σ</b></td>
+                <td style="text-align:center; color:#4caf50;"><b>30/40</b></td>
+                <td>Ligera desviación. Aún favorable.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#ff9800;"><b>1.0 &lt; |Z| ≤ 2.0σ</b></td>
+                <td style="text-align:center; color:#ff9800;"><b>15/40</b></td>
+                <td>Precio estirado. Precaución. Riesgo de corrección.</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 8px; color:#f23645;"><b>|Z| &gt; 2.0σ</b></td>
+                <td style="text-align:center; color:#f23645;"><b>0/40</b></td>
+                <td>Extremo estadístico. Alta probabilidad de reversión.</td>
+            </tr>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── INDICADOR 2: MTF ─────────────────────────────────────────
+    st.markdown('<h2>03 // TENDENCIA MULTI-TIMEFRAME (30 PTS)</h2>', unsafe_allow_html=True)
+    st.markdown("""
     <div class="phase-box">
-        <p>Analizamos <strong>4 timeframes simultáneamente</strong> (15m, 1H, 4H, 1D) usando cruces de EMA.
-        Cuando 3 o más timeframes están alineados, la probabilidad de continuación aumenta significativamente.
-        Evita nadar contra la corriente.</p>
+        <p>Analiza <strong>4 timeframes simultáneamente</strong> con cruces de EMA. Los timeframes mayores
+        tienen más peso porque son más fiables y menos ruidosos. Evita nadar contra la corriente del mercado.</p>
+        <code style="display:block; padding:8px; background:#060810; color:#00ffad; margin:8px 0; font-size:11px; border-left:3px solid #00d9ff;">
+        señal BULLISH  = EMA_rápida &gt; EMA_lenta (precio acelerando al alza)<br>
+        señal BEARISH  = EMA_rápida &lt; EMA_lenta (precio frenando o cayendo)<br>
+        <br>
+        weighted_score = Σ( peso_tf × señal_tf )  / Σ( peso_tf )<br>
+        pts = 30 si ≥75% | 20 si ≥50% | 10 si ≥25% | 0 si &lt;25%
+        </code>
     </div>
+    """, unsafe_allow_html=True)
 
-    <h2>03 // VOLUMEN COMO GASOLINA (20 PTS)</h2>
-    <div class="terminal-box" style="border-color:#ff9800;">
-        <p>El volumen es el <strong>combustible</strong> de los movimientos. Un rebote sin volumen es como un coche
-        sin gasolina: no llegará lejos. Ratios <strong>&gt;2x</strong> sugieren participación institucional.</p>
+    st.markdown("""
+    <div class="terminal-box" style="margin-top:8px;">
+        <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+            <tr style="color:#00d9ff; border-bottom:1px solid #1a1e26;">
+                <th style="padding:6px 8px; text-align:left;">TIMEFRAME</th>
+                <th style="text-align:center;">EMA RÁPIDA</th>
+                <th style="text-align:center;">EMA LENTA</th>
+                <th style="text-align:center;">PESO</th>
+                <th style="text-align:left;">RAZÓN</th>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>1D — Diario</b></td>
+                <td style="text-align:center;">EMA 20</td><td style="text-align:center;">EMA 50</td>
+                <td style="text-align:center; color:#00ffad;"><b>45%</b></td>
+                <td>Tendencia principal. La más fiable.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px; color:#4caf50;"><b>4H — 4 Horas</b></td>
+                <td style="text-align:center;">EMA 20</td><td style="text-align:center;">EMA 50</td>
+                <td style="text-align:center; color:#4caf50;"><b>30%</b></td>
+                <td>Tendencia intermedia.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#ff9800;"><b>1H — 1 Hora</b></td>
+                <td style="text-align:center;">EMA 9</td><td style="text-align:center;">EMA 21</td>
+                <td style="text-align:center; color:#ff9800;"><b>15%</b></td>
+                <td>Tendencia corto plazo.</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 8px; color:#888;"><b>15m — 15 Min</b></td>
+                <td style="text-align:center;">EMA 9</td><td style="text-align:center;">EMA 21</td>
+                <td style="text-align:center; color:#888;"><b>10%</b></td>
+                <td>Micro-tendencia. Muy ruidosa.</td>
+            </tr>
+        </table>
     </div>
+    """, unsafe_allow_html=True)
 
-    <h2>04 // RSI — FILTRO DE MOMENTUM (10 PTS)</h2>
+    # ── INDICADOR 3: VOLUMEN ─────────────────────────────────────
+    st.markdown('<h2>04 // VOLUMEN DIRECCIONAL (20 PTS)</h2>', unsafe_allow_html=True)
+    col_v1, col_v2 = st.columns(2)
+    with col_v1:
+        st.markdown("""
+        <div class="terminal-box" style="border-color:#ff9800;">
+            <p><strong>Ratio de volumen</strong> vs media 20 días:</p>
+            <table style="width:100%; font-family:'Courier New'; font-size:11px; border-collapse:collapse;">
+                <tr style="color:#ff9800; border-bottom:1px solid #1a1e26;">
+                    <th style="padding:4px 6px;">RATIO</th><th style="text-align:center;">PTS</th>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;"><td style="padding:4px 6px;">&gt; 2.0x</td><td style="text-align:center; color:#00ffad;"><b>20</b></td></tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;"><td style="padding:4px 6px;">1.5x — 2.0x</td><td style="text-align:center; color:#4caf50;"><b>15</b></td></tr>
+                <tr style="border-bottom:1px solid #1a1e26;"><td style="padding:4px 6px;">1.0x — 1.5x</td><td style="text-align:center; color:#ff9800;"><b>10</b></td></tr>
+                <tr><td style="padding:4px 6px;">&lt; 1.0x</td><td style="text-align:center; color:#f23645;"><b>5</b></td></tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_v2:
+        st.markdown("""
+        <div class="terminal-box" style="border-color:#ff9800;">
+            <p><strong>Presión compradora/vendedora</strong> (últimas 20 velas):</p>
+            <code style="display:block; font-size:10px; color:#00ffad; background:#060810; padding:6px; border-left:3px solid #ff9800; margin:6px 0;">
+            bull_vol = vol de velas donde Close ≥ Open<br>
+            bear_vol = vol de velas donde Close &lt; Open<br>
+            buy_pressure = bull_vol / (bull + bear)
+            </code>
+            <p style="font-size:11px;">
+            <span style="color:#00ffad;">■ COMPRADOR</span> &gt;60% &nbsp;|&nbsp;
+            <span style="color:#888;">■ NEUTRAL</span> 40-60% &nbsp;|&nbsp;
+            <span style="color:#f23645;">■ VENDEDOR</span> &lt;40%
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── INDICADOR 4: RSI ─────────────────────────────────────────
+    st.markdown('<h2>05 // RSI WILDER — MOMENTUM (10 PTS)</h2>', unsafe_allow_html=True)
+    st.markdown("""
     <div class="phase-box" style="border-left-color:#9c27b0;">
-        <p>El RSI evita entradas en zonas de sobrecompra (&gt;70) o sobreventa extrema (&lt;30).
-        Buscamos el <strong>punto dulce entre 40-60</strong> donde el momentum tiene espacio para continuar.</p>
+        <p>Implementación con <strong>suavizado exponencial de Wilder</strong> (EWM, com=13) — idéntico a
+        TradingView y Bloomberg. El RSI simple (rolling mean) produce valores distintos e incompatibles.</p>
+        <code style="display:block; padding:8px; background:#060810; color:#9c27b0; margin:8px 0; font-size:11px; border-left:3px solid #9c27b0;">
+        avg_gain = gain.ewm(com=13, min_periods=14, adjust=False).mean()<br>
+        avg_loss = loss.ewm(com=13, min_periods=14, adjust=False).mean()<br>
+        RSI = 100 - (100 / (1 + avg_gain/avg_loss))
+        </code>
+        <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse; margin-top:8px;">
+            <tr style="color:#9c27b0; border-bottom:1px solid #1a1e26;">
+                <th style="padding:5px 8px;">RSI</th><th>ZONA</th><th>PTS</th><th>INTERPRETACIÓN</th>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>40 – 60</b></td>
+                <td style="color:#00ffad;">ÓPTIMA</td><td style="color:#00ffad;"><b>10/10</b></td>
+                <td>Momentum activo. Espacio para continuar.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px; color:#4caf50;"><b>30-40 / 60-70</b></td>
+                <td style="color:#4caf50;">BUENA</td><td style="color:#4caf50;"><b>7/10</b></td>
+                <td>Momentum algo elevado o debilitado.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#ff9800;"><b>20-30 / 70-80</b></td>
+                <td style="color:#ff9800;">ALERTA</td><td style="color:#ff9800;"><b>4/10</b></td>
+                <td>Sobrecompra/sobreventa. Precaución.</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 8px; color:#f23645;"><b>&lt;20 / &gt;80</b></td>
+                <td style="color:#f23645;">EXTREMO</td><td style="color:#f23645;"><b>0/10</b></td>
+                <td>Momentum agotado. Alto riesgo de giro.</td>
+            </tr>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── ESTRATEGIA SL/TP ─────────────────────────────────────────
+    st.markdown('<h2>06 // ESTRATEGIA — STOP LOSS & TAKE PROFIT</h2>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="terminal-box" style="border-color:#00d9ff;">
+        <p style="color:#00d9ff; font-family:'VT323',monospace; font-size:1.1rem; letter-spacing:2px;">
+            CONDICIONES DE ENTRADA ÓPTIMAS
+        </p>
+        <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+            <tr style="color:#00d9ff; border-bottom:1px solid #1a1e26;">
+                <th style="padding:5px 8px;">FILTRO</th><th>CONDICIÓN</th><th>RAZÓN</th>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>RSU Score</b></td>
+                <td>≥ 75 pts (Grado A)</td><td>Mínimo de calidad de señal</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>Z-Score</b></td>
+                <td>Entre -1σ y +0.5σ</td><td>Liga relajada. No perseguir precio.</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>Tendencia 1D</b></td>
+                <td>BULLISH obligatorio</td><td>No operar contra corriente principal</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px; color:#00ffad;"><b>Presión vol.</b></td>
+                <td>COMPRADOR (&gt;60%)</td><td>Convicción institucional</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 8px; color:#00ffad;"><b>RSI</b></td>
+                <td>Entre 40 y 65</td><td>Momentum activo sin agotamiento</td>
+            </tr>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_sl, col_tp = st.columns(2)
+    with col_sl:
+        st.markdown("""
+        <div class="risk-box" style="border-left-color:#f23645; height:100%;">
+            <p style="color:#f23645; font-family:'VT323',monospace; font-size:1.1rem; letter-spacing:2px;">
+                🛑 STOP LOSS — SALIDA DEFENSIVA
+            </p>
+            <p style="font-size:12px; font-family:'Courier New';">Usar el <strong>más restrictivo</strong> de los tres:</p>
+            <table style="width:100%; font-family:'Courier New'; font-size:11px; border-collapse:collapse;">
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px; color:#f23645;"><b>Por precio</b></td>
+                    <td>-5% a -7% desde entrada</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:5px 4px; color:#f23645;"><b>Por EMA 50</b></td>
+                    <td>Cierre diario bajo EMA 50</td>
+                </tr>
+                <tr>
+                    <td style="padding:5px 4px; color:#f23645;"><b>Por Z-Score</b></td>
+                    <td>Z cae bajo -2σ (tesis rota)</td>
+                </tr>
+            </table>
+            <p style="font-size:10px; color:#888; margin-top:8px; font-family:'Courier New';">
+                El stop de EMA 50 es el más coherente con la herramienta: si el precio cierra
+                por debajo, la estructura alcista está rota.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_tp:
+        st.markdown("""
+        <div class="terminal-box" style="border-color:#00ffad; height:100%;">
+            <p style="color:#00ffad; font-family:'VT323',monospace; font-size:1.1rem; letter-spacing:2px;">
+                🎯 TAKE PROFIT — SALIDA ESCALONADA
+            </p>
+            <table style="width:100%; font-family:'Courier New'; font-size:11px; border-collapse:collapse;">
+                <tr style="color:#00ffad; border-bottom:1px solid #1a1e26;">
+                    <th style="padding:5px 4px;">NIVEL</th><th>CONDICIÓN</th><th>ACCIÓN</th>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:5px 4px; color:#4caf50;"><b>TP1 — 50%</b></td>
+                    <td>Z-Score llega a +1.0σ</td>
+                    <td>Cerrar 50% posición</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:5px 4px; color:#ff9800;"><b>TP2 — 30%</b></td>
+                    <td>Z-Score llega a +1.5σ</td>
+                    <td>Cerrar 30% adicional</td>
+                </tr>
+                <tr>
+                    <td style="padding:5px 4px; color:#f23645;"><b>TP3 — 20%</b></td>
+                    <td>Z &gt; +2σ ó RSI &gt; 75</td>
+                    <td>Cerrar resto. Doble señal agotamiento.</td>
+                </tr>
+            </table>
+            <p style="font-size:10px; color:#888; margin-top:8px; font-family:'Courier New';">
+                La lógica: a medida que el precio se aleja de su media (Z sube),
+                la liga se estira más y el riesgo de reversión aumenta.
+                Recoger beneficios de forma escalonada protege las ganancias.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="highlight-quote" style="margin-top:16px;">
+        RATIO RIESGO/BENEFICIO MÍNIMO: 1:2 — Si el stop es -5%, el objetivo mínimo es +10%
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── CALCULADORA DE POSICIÓN ──────────────────────────────────
+    st.markdown('<h2>07 // CALCULADORA DE POSICIÓN Y RIESGO</h2>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="terminal-box" style="border-color:#ff9800; margin-bottom:12px;">
+        <p style="color:#ff9800; font-family:'VT323',monospace; font-size:1rem; letter-spacing:2px;">
+            REGLA DE ORO: NUNCA ARRIESGAR MÁS DEL 1-2% DEL CAPITAL TOTAL POR OPERACIÓN
+        </p>
+        <p style="font-size:12px; font-family:'Courier New'; color:#aaa;">
+            Introduce los datos para calcular el tamaño óptimo de posición, stop loss exacto y take profits.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    calc_col1, calc_col2, calc_col3 = st.columns(3)
+    with calc_col1:
+        capital = st.number_input("💰 Capital total ($)", min_value=100.0, value=10000.0, step=500.0, key="calc_capital")
+        riesgo_pct = st.slider("⚠️ Riesgo máximo por trade (%)", min_value=0.5, max_value=3.0, value=1.5, step=0.25, key="calc_riesgo")
+    with calc_col2:
+        precio_entrada = st.number_input("📈 Precio de entrada ($)", min_value=0.01, value=150.0, step=1.0, key="calc_precio")
+        sl_pct = st.slider("🛑 Stop Loss (%)", min_value=2.0, max_value=10.0, value=5.0, step=0.5, key="calc_sl")
+    with calc_col3:
+        z_entrada = st.number_input("Z-Score en entrada", min_value=-3.0, max_value=3.0, value=0.2, step=0.1, key="calc_z")
+        st.markdown("<br>", unsafe_allow_html=True)
+        calcular = st.button("// CALCULAR POSICIÓN", use_container_width=True, type="primary", key="calc_btn")
+
+    if calcular:
+        riesgo_dolares = capital * (riesgo_pct / 100)
+        precio_sl      = precio_entrada * (1 - sl_pct / 100)
+        riesgo_por_acc = precio_entrada - precio_sl
+        num_acciones   = int(riesgo_dolares / riesgo_por_acc) if riesgo_por_acc > 0 else 0
+        inversion_total = num_acciones * precio_entrada
+        pct_capital    = (inversion_total / capital) * 100 if capital > 0 else 0
+
+        # Take profits basados en Z-Score
+        # Estimamos el precio para cada nivel de Z usando la misma escala proporcional
+        # TP1: Z actual → +1.0σ, TP2: →+1.5σ, TP3: →+2.0σ
+        # Aproximación: cada 1σ ≈ volatilidad implícita del activo
+        # Usamos retorno esperado del 4% por sigma como heurística conservadora
+        sigma_retorno = 0.04  # 4% por sigma (heurística)
+        delta_z_tp1 = max(0, 1.0  - z_entrada)
+        delta_z_tp2 = max(0, 1.5  - z_entrada)
+        delta_z_tp3 = max(0, 2.0  - z_entrada)
+
+        precio_tp1 = precio_entrada * (1 + delta_z_tp1 * sigma_retorno)
+        precio_tp2 = precio_entrada * (1 + delta_z_tp2 * sigma_retorno)
+        precio_tp3 = precio_entrada * (1 + delta_z_tp3 * sigma_retorno)
+
+        retorno_tp1 = (precio_tp1 - precio_entrada) / precio_entrada * 100
+        retorno_tp2 = (precio_tp2 - precio_entrada) / precio_entrada * 100
+        retorno_tp3 = (precio_tp3 - precio_entrada) / precio_entrada * 100
+
+        # P&L proyectado por nivel
+        pnl_sl  = -riesgo_dolares
+        pnl_tp1 = num_acciones * 0.5  * (precio_tp1 - precio_entrada)
+        pnl_tp2 = num_acciones * 0.3  * (precio_tp2 - precio_entrada)
+        pnl_tp3 = num_acciones * 0.2  * (precio_tp3 - precio_entrada)
+        pnl_total_tp = pnl_tp1 + pnl_tp2 + pnl_tp3
+        ratio_rr = abs(pnl_total_tp / pnl_sl) if pnl_sl != 0 else 0
+
+        rr_color  = "#00ffad" if ratio_rr >= 2 else "#ff9800" if ratio_rr >= 1.5 else "#f23645"
+        cap_color = "#f23645" if pct_capital > 50 else "#ff9800" if pct_capital > 30 else "#00ffad"
+
+        st.markdown(f"""
+        <div class="terminal-box" style="border-color:#00ffad; margin-top:12px;">
+            <div style="font-family:'VT323',monospace; color:#00ffad; font-size:1.2rem; letter-spacing:3px; margin-bottom:12px;">
+                // RESULTADO DEL CÁLCULO
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; margin-bottom:16px;">
+                <div style="background:#060810; padding:12px; border:1px solid #1a1e26; text-align:center;">
+                    <div style="font-family:'Courier New'; font-size:10px; color:#888;">ACCIONES</div>
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#00ffad;">{num_acciones}</div>
+                </div>
+                <div style="background:#060810; padding:12px; border:1px solid #1a1e26; text-align:center;">
+                    <div style="font-family:'Courier New'; font-size:10px; color:#888;">INVERSIÓN TOTAL</div>
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#00d9ff;">${inversion_total:,.0f}</div>
+                    <div style="font-family:'Courier New'; font-size:9px; color:{cap_color};">{pct_capital:.1f}% del capital</div>
+                </div>
+                <div style="background:#060810; padding:12px; border:1px solid #1a1e26; text-align:center;">
+                    <div style="font-family:'Courier New'; font-size:10px; color:#888;">RIESGO MÁXIMO</div>
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#f23645;">-${riesgo_dolares:,.0f}</div>
+                    <div style="font-family:'Courier New'; font-size:9px; color:#888;">{riesgo_pct}% del capital</div>
+                </div>
+                <div style="background:#060810; padding:12px; border:1px solid #1a1e26; text-align:center;">
+                    <div style="font-family:'Courier New'; font-size:10px; color:#888;">RATIO R/B</div>
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:{rr_color};">1:{ratio_rr:.1f}</div>
+                    <div style="font-family:'Courier New'; font-size:9px; color:{rr_color};">{'✓ ACEPTABLE' if ratio_rr >= 2 else '⚠ BAJO'}</div>
+                </div>
+            </div>
+
+            <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+                <tr style="color:#00ffad; border-bottom:1px solid #1a1e26;">
+                    <th style="padding:6px 8px; text-align:left;">NIVEL</th>
+                    <th style="text-align:center;">PRECIO</th>
+                    <th style="text-align:center;">Z-SCORE</th>
+                    <th style="text-align:center;">RETORNO</th>
+                    <th style="text-align:center;">ACCIONES</th>
+                    <th style="text-align:center;">P&L EST.</th>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:6px 8px; color:#00ffad;"><b>Entrada</b></td>
+                    <td style="text-align:center;">${precio_entrada:.2f}</td>
+                    <td style="text-align:center; color:#00ffad;">{z_entrada:+.1f}σ</td>
+                    <td style="text-align:center;">—</td>
+                    <td style="text-align:center;">{num_acciones}</td>
+                    <td style="text-align:center;">—</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:6px 8px; color:#f23645;"><b>🛑 Stop Loss</b></td>
+                    <td style="text-align:center;">${precio_sl:.2f}</td>
+                    <td style="text-align:center; color:#f23645;">tesis rota</td>
+                    <td style="text-align:center; color:#f23645;">-{sl_pct:.1f}%</td>
+                    <td style="text-align:center;">{num_acciones} (cerrar todo)</td>
+                    <td style="text-align:center; color:#f23645;">-${riesgo_dolares:,.0f}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26;">
+                    <td style="padding:6px 8px; color:#4caf50;"><b>🎯 TP1 — 50%</b></td>
+                    <td style="text-align:center;">${precio_tp1:.2f}</td>
+                    <td style="text-align:center; color:#4caf50;">+1.0σ</td>
+                    <td style="text-align:center; color:#4caf50;">+{retorno_tp1:.1f}%</td>
+                    <td style="text-align:center;">{int(num_acciones*0.5)} acc</td>
+                    <td style="text-align:center; color:#4caf50;">+${pnl_tp1:,.0f}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                    <td style="padding:6px 8px; color:#ff9800;"><b>🎯 TP2 — 30%</b></td>
+                    <td style="text-align:center;">${precio_tp2:.2f}</td>
+                    <td style="text-align:center; color:#ff9800;">+1.5σ</td>
+                    <td style="text-align:center; color:#ff9800;">+{retorno_tp2:.1f}%</td>
+                    <td style="text-align:center;">{int(num_acciones*0.3)} acc</td>
+                    <td style="text-align:center; color:#ff9800;">+${pnl_tp2:,.0f}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 8px; color:#f23645;"><b>🎯 TP3 — 20%</b></td>
+                    <td style="text-align:center;">${precio_tp3:.2f}</td>
+                    <td style="text-align:center; color:#f23645;">&gt;+2σ ó RSI&gt;75</td>
+                    <td style="text-align:center; color:#f23645;">+{retorno_tp3:.1f}%</td>
+                    <td style="text-align:center;">{int(num_acciones*0.2)} acc</td>
+                    <td style="text-align:center; color:#f23645;">+${pnl_tp3:,.0f}</td>
+                </tr>
+            </table>
+            <div style="font-family:'Courier New'; font-size:10px; color:#555; margin-top:8px;">
+                * Precios TP estimados con heurística 4%/σ. El Z-Score real varía según volatilidad del activo.
+                Verificar siempre el nivel exacto en el gráfico antes de operar.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── CUÁNDO NO USAR ───────────────────────────────────────────
+    st.markdown('<h2>08 // CUÁNDO NO USAR ESTA HERRAMIENTA</h2>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="risk-box">
+        <table style="width:100%; font-family:'Courier New'; font-size:12px; border-collapse:collapse;">
+            <tr style="color:#f23645; border-bottom:1px solid #1a1e26;">
+                <th style="padding:6px 8px; text-align:left;">SITUACIÓN</th>
+                <th style="text-align:left;">RAZÓN</th>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px;"><b>Earnings próximos (±7 días)</b></td>
+                <td>Un resultado inesperado puede mover ±20% ignorando cualquier señal técnica</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px;"><b>Noticias macro de alto impacto</b></td>
+                <td>FED, guerra, crisis bancaria — el análisis técnico es ciego ante fundamentales</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26;">
+                <td style="padding:5px 8px;"><b>Score &lt; 50 en cualquier timeframe</b></td>
+                <td>Si el sistema no ve condiciones favorables, respetarlo</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1a1e26; background:#0c0e12;">
+                <td style="padding:5px 8px;"><b>Tendencia 1D BEARISH</b></td>
+                <td>No operar contra la corriente principal. Cash es una posición válida.</td>
+            </tr>
+            <tr>
+                <td style="padding:5px 8px;"><b>Scalping &lt; 15 min</b></td>
+                <td>yfinance tiene delay de 15 min en intradía. No usar para ejecución real-time.</td>
+            </tr>
+        </table>
     </div>
 
     <div class="highlight-quote">

@@ -63,6 +63,17 @@ def calculate_z_score(price, ema, std_period=20):
     log_distance = np.log(price / ema)
     return log_distance / std_returns.replace(0, np.nan)
 
+def calculate_rsi(prices, period=14):
+    """RSI con suavizado de Wilder (ewm com=period-1), estándar de la industria."""
+    prices = ensure_1d_series(prices)
+    delta = prices.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.ewm(com=period - 1, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(com=period - 1, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, 1e-10)
+    return 100 - (100 / (1 + rs))
+
 @st.cache_data(ttl=300, show_spinner=False)
 def download_data(symbol, period, interval):
     """Descarga cacheada con TTL 5min. Normaliza índice a DatetimeIndex sin timezone."""

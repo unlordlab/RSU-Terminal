@@ -52,30 +52,17 @@ def calculate_ema(prices, period):
     return prices.ewm(span=period, adjust=False).mean()
 
 def calculate_z_score(price, ema, std_period=20):
-    """Z-Score calculado sobre retornos logarítmicos para estacionariedad.
-    Evita que el std escale con el nivel de precio absoluto."""
+    """Z-Score en espacio logarítmico — numerador y denominador son consistentes.
+    log(Close/EMA21) mide la distancia relativa en el mismo espacio que std_returns."""
     price = ensure_1d_series(price)
     ema   = ensure_1d_series(ema)
-    # Retornos log: estacionarios y comparables entre activos/épocas
+    # Retornos log diarios — estacionarios e independientes del nivel de precio
     log_returns = np.log(price / price.shift(1))
     std_returns = log_returns.rolling(window=std_period).std()
-    # Desviación relativa al precio actual, normalizada por vol de retornos
-    deviation = (price - ema) / ema  # desviación porcentual respecto a la EMA
-    return deviation / std_returns.replace(0, np.nan)
+    # Distancia log entre precio y EMA: misma unidad que std_returns
+    log_distance = np.log(price / ema)
+    return log_distance / std_returns.replace(0, np.nan)
 
-def calculate_rsi(prices, period=14):
-    """RSI con suavizado de Wilder (ewm alpha=1/period), estándar de la industria."""
-    prices = ensure_1d_series(prices)
-    delta = prices.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = -delta.where(delta < 0, 0.0)
-    # Wilder smoothing: alpha = 1/period (equivalente a com=period-1)
-    avg_gain = gain.ewm(com=period - 1, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(com=period - 1, min_periods=period, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, 1e-10)
-    return 100 - (100 / (1 + rs))
-
-@st.cache_data(ttl=300, show_spinner=False)
 @st.cache_data(ttl=300, show_spinner=False)
 def download_data(symbol, period, interval):
     """Descarga cacheada con TTL 5min. Normaliza índice a DatetimeIndex sin timezone."""
@@ -884,10 +871,10 @@ def render_explanation_section():
         La versión v4 usa <strong>retornos logarítmicos</strong> para garantizar estacionariedad estadística
         (los precios absolutos no son comparables entre épocas distintas).</p>
         <code style="display:block; padding:8px; background:#060810; color:#00ffad; margin:8px 0; font-size:11px; border-left:3px solid #00ffad;">
-        log_returns  = log(Close[t] / Close[t-1])<br>
-        std_returns  = rolling_std(log_returns, window=20)<br>
-        deviation    = (Close - EMA21) / EMA21  <span style="color:#555"># desviación porcentual</span><br>
-        Z-Score      = deviation / std_returns   <span style="color:#555"># en unidades de sigma (σ)</span>
+        log_returns  = log(Close[t] / Close[t-1])   <span style="color:#555"># retornos log diarios</span><br>
+        std_returns  = rolling_std(log_returns, window=20)  <span style="color:#555"># volatilidad realizada</span><br>
+        log_distance = log(Close / EMA21)            <span style="color:#555"># distancia log precio↔EMA</span><br>
+        Z-Score      = log_distance / std_returns    <span style="color:#555"># ambos en espacio log — consistente</span>
         </code>
     </div>
     """, unsafe_allow_html=True)
@@ -2165,4 +2152,3 @@ Puntos:   {rsu_data['volume_component']}/20
 
     with tab4:
         render_risks_section()
-

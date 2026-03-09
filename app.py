@@ -83,7 +83,6 @@ st.markdown("""
     /* ── BASE ─────────────────────────────────────────────── */
     html, body, .stApp {
         background-color: #0c0e12 !important;
-        color: #cccccc !important;
     }
 
     /* ── SCANLINES CRT ───────────────────────────────────── */
@@ -93,13 +92,13 @@ st.markdown("""
         top: 0; left: 0;
         width: 100%; height: 100%;
         pointer-events: none;
-        z-index: 9999;
+        z-index: 1;
         background: repeating-linear-gradient(
             to bottom,
             transparent 0px,
             transparent 3px,
-            rgba(0, 0, 0, 0.07) 3px,
-            rgba(0, 0, 0, 0.07) 4px
+            rgba(0, 0, 0, 0.05) 3px,
+            rgba(0, 0, 0, 0.05) 4px
         );
     }
 

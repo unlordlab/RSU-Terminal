@@ -327,40 +327,7 @@ st.markdown("""
         border-color: #f23645 !important; box-shadow: 0 0 10px rgba(242, 54, 69, 0.2) !important;
     }
 
-    /* ══════════════════════════════════════════════════════
-       INPUTS, SELECTS, DROPDOWNS
-       ══════════════════════════════════════════════════════ */
-    input, textarea, select,
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stTextArea"] textarea {
-        background-color: #11141a !important; color: #cccccc !important;
-        border-color: #2a3040 !important; caret-color: #00ffad !important;
-    }
-    input:focus, textarea:focus {
-        border-color: #00ffad55 !important; box-shadow: 0 0 0 1px #00ffad22 !important; outline: none !important;
-    }
-    input::placeholder, textarea::placeholder { color: #444 !important; }
-    [data-baseweb="select"] > div, [data-baseweb="popover"],
-    [data-baseweb="menu"], [role="listbox"] {
-        background-color: #11141a !important; color: #cccccc !important; border-color: #2a3040 !important;
-    }
-    [role="option"] { background-color: #11141a !important; color: #cccccc !important; }
-    [role="option"]:hover, [aria-selected="true"] { background-color: rgba(0, 255, 173, 0.08) !important; color: #00ffad !important; }
-    [data-baseweb="tag"] { background-color: rgba(0, 255, 173, 0.1) !important; color: #00ffad !important; border: 1px solid #00ffad33 !important; }
 
-    /* ══════════════════════════════════════════════════════
-       EXPANDERS, TABS, ALERTS, TOOLTIPS, PROGRESS
-       ══════════════════════════════════════════════════════ */
-    [data-testid="stExpander"] { background-color: #11141a !important; border: 1px solid #1a1e26 !important; border-radius: 6px !important; }
-    [data-testid="stExpander"] summary { color: #00d9ff !important; font-family: 'VT323', monospace !important; font-size: 1.1rem !important; }
-    [data-testid="stTabs"] [role="tablist"] { background-color: transparent !important; border-bottom: 1px solid #1a1e26 !important; }
-    [data-testid="stTabs"] [role="tab"] { color: #555 !important; background-color: transparent !important; }
-    [data-testid="stTabs"] [role="tab"][aria-selected="true"] { color: #00ffad !important; border-bottom: 2px solid #00ffad !important; }
-    [data-testid="stAlert"] { background-color: #11141a !important; border-color: #2a3040 !important; color: #cccccc !important; }
-    [data-baseweb="tooltip"] > div { background-color: #1a1e26 !important; color: #cccccc !important; border: 1px solid #2a3040 !important; }
-    [data-testid="stProgressBar"] > div { background-color: #1a1e26 !important; }
-    [data-testid="stProgressBar"] > div > div { background-color: #00ffad !important; }
 
     /* ── SCROLLBAR ───────────────────────────────────────── */
     ::-webkit-scrollbar { width: 3px; }
@@ -394,7 +361,7 @@ st.markdown("""
 
     .js-plotly-plot, .plotly, [data-testid="stPlotlyChart"] { min-height: 300px; width: 100% !important; }
 
-    [data-testid="stDataFrame"], .stDataFrame { overflow-x: auto !important; max-width: 100%; background-color: transparent !important; }
+    [data-testid="stDataFrame"], .stDataFrame { overflow-x: auto !important; max-width: 100%; }
 
     [data-testid="stTabs"] [role="tab"] { white-space: nowrap; font-size: clamp(0.7rem, 1.2vw, 0.9rem) !important; }
 

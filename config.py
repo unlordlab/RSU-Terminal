@@ -129,19 +129,11 @@ def set_style():
             color: #ffffff !important;
         }
 
-        /* Glide-data-grid (tabla avanzada nueva de Streamlit) */
-        .glide-data-grid-container, .dvn-scroller, .dvn-stack,
-        .gdg-style, .cell-container, .dvn-cell {
-            background-color: #0c0e12 !important;
-            color: #cccccc !important;
+        /* Glide-data-grid: solo el contenedor exterior, nunca tocar canvas */
+        .glide-data-grid-container {
+            border: 1px solid #1a1e26 !important;
+            border-radius: 6px !important;
         }
-        .header-cell {
-            background-color: #11141a !important;
-            color: #00d9ff !important;
-            border-bottom: 1px solid #00d9ff33 !important;
-        }
-        /* Canvas del glide-data-grid — forzar fondo oscuro */
-        canvas { background-color: #0c0e12 !important; }
 
         /* ══════════════════════════════════════════════════════════
            INPUTS, SELECTS Y DROPDOWNS
@@ -380,5 +372,6 @@ def obtener_prompt_github():
     except: 
         return ""
          
+
 
 

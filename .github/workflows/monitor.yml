@@ -8,6 +8,9 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write         # necesario para hacer commit del snapshot
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -20,14 +23,6 @@ jobs:
       - name: Install dependencies
         run: pip install requests pandas
 
-      - name: Download snapshot
-        continue-on-error: true
-        uses: actions/cache@v3
-        with:
-          path: monitor/snapshot.json
-          key: snapshot-${{ github.run_id }}
-          restore-keys: snapshot-
-
       - name: Run monitor
         env:
           URL_CARTERA: ${{ secrets.URL_CARTERA }}
@@ -35,8 +30,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor/monitor.py
 
-      - name: Save snapshot
-        uses: actions/cache/save@v3
-        with:
-          path: monitor/snapshot.json
-          key: snapshot-${{ github.run_id }}
+      - name: Commit snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add monitor/snapshot.json
+          git diff --staged --quiet || git commit -m "chore: update snapshot [skip ci]"
+          git push

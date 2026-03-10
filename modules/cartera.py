@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -360,7 +361,7 @@ def render():
                 </tr>"""
 
             st.markdown(f"""
-            <div class="terminal-box" style="padding:10px 20px;">
+            <div class="terminal-box" style="padding:10px 20px; max-height:400px; overflow-y:auto;">
                 <table class="terminal-table">
                     <thead><tr>
                         <th>Fecha</th><th>Ticker</th><th>P. Compra</th>
@@ -375,43 +376,8 @@ def render():
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        # ── CONCENTRACIÓN DE CARTERA ──────────────────────────────────────
-        st.markdown("<h2>02 // CONCENTRACIÓN DE CARTERA</h2>", unsafe_allow_html=True)
-
-        if not abiertas.empty:
-            conc = (
-                abiertas.groupby("Ticker")["Valor Actual"]
-                .sum()
-                .sort_values(ascending=False)
-                .reset_index()
-            )
-            conc["Pct"] = conc["Valor Actual"] / conc["Valor Actual"].sum() * 100
-            colors = ["#00ffad", "#00d9ff", "#ff9800", "#9c27b0", "#f23645", "#b044ff"]
-
-            bars_html = ""
-            for i, row in conc.iterrows():
-                color = colors[i % len(colors)]
-                bars_html += f"""
-                <div style="margin-bottom:14px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span class="ticker-tag" style="border-color:{color}88; background:{color}22; color:{color};">
-                            {row['Ticker']}
-                        </span>
-                        <span style="font-family:'VT323',monospace; color:{color}; font-size:1.1rem;">
-                            {row['Pct']:.1f}%&nbsp;&nbsp;<span style="color:#666;">${row['Valor Actual']:,.2f}</span>
-                        </span>
-                    </div>
-                    <div class="conc-bar-bg">
-                        <div class="conc-bar-fill" style="width:{row['Pct']:.1f}%; background:{color};"></div>
-                    </div>
-                </div>"""
-
-            st.markdown(f'<div class="terminal-box">{bars_html}</div>', unsafe_allow_html=True)
-
-        st.markdown("<hr>", unsafe_allow_html=True)
-
         # ── ACTIVIDAD RECIENTE ────────────────────────────────────────────
-        st.markdown("<h2>03 // ACTIVIDAD RECIENTE</h2>", unsafe_allow_html=True)
+        st.markdown("<h2>02 // ACTIVIDAD RECIENTE</h2>", unsafe_allow_html=True)
 
         col_izq, col_der = st.columns(2)
 
@@ -429,7 +395,7 @@ def render():
                         <span style="color:#fff;">${row['Precio Compra']:,.2f}</span>
                         <span style="font-family:'VT323',monospace; color:{estado_color}; font-size:0.85rem;">{row['Estado']}</span>
                     </div>"""
-                st.markdown(f'<div class="terminal-box" style="padding:15px;">{rows_html}</div>',
+                st.markdown(f'<div class="terminal-box" style="padding:15px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
                             unsafe_allow_html=True)
 
         with col_der:
@@ -447,7 +413,7 @@ def render():
                         <span class="ticker-tag">{row['Ticker']}</span>
                         <span class="{pnl_cls}">{pnl_sign}{pnl_val:.2f}%</span>
                     </div>"""
-                st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px;">{rows_html}</div>',
+                st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
                             unsafe_allow_html=True)
             else:
                 st.markdown('<div class="phase-box gold"><p>Sin operaciones cerradas aún.</p></div>',
@@ -509,7 +475,7 @@ def render():
                 </tr>"""
 
             st.markdown(f"""
-            <div class="terminal-box" style="padding:10px 20px;">
+            <div class="terminal-box" style="padding:10px 20px; max-height:400px; overflow-y:auto;">
                 <table class="terminal-table">
                     <thead><tr>
                         <th>Fecha</th><th>Ticker</th><th>P. Compra</th>
@@ -524,67 +490,63 @@ def render():
 
         # ── ESTRATEGIA DE CARTERA ─────────────────────────────────────────
         st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("<h2>05 // ESTRATEGIA DE ASIGNACIÓN</h2>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class="terminal-box">
-            <div style="font-family:'VT323',monospace; color:#666; font-size:0.85rem; letter-spacing:2px; margin-bottom:20px;">
+        st.markdown("<h2>04 // ESTRATEGIA DE ASIGNACIÓN</h2>", unsafe_allow_html=True)
+
+        st.markdown(
+            """<div style="font-family:'VT323',monospace; color:#666; font-size:0.85rem;
+                letter-spacing:2px; margin-bottom:16px;">
                 [ALLOCATION_FRAMEWORK_v1.0 // REFERENCIA ESTRATÉGICA — AJUSTAR SEGÚN PERFIL]
-            </div>
+            </div>""",
+            unsafe_allow_html=True
+        )
 
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+        buckets = [
+            ("#00ffad", "#1a6b4a", "40%", "SPXL STRATEGY",
+             "Núcleo de la cartera. Exposición apalancada 3x al S&P 500 mediante SPXL. "
+             "Estrategia de largo plazo orientada a capturar la tendencia estructural alcista "
+             "del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados."),
+            ("#00d9ff", "#1a4a6b", "30%", "RSU STOCKS",
+             "Acciones recibidas como compensación RSU (Restricted Stock Units). "
+             "Se mantienen o liquidan según criterios fiscales y de concentración. "
+             "El objetivo es reducir exposición a un solo empleador diversificando "
+             "progresivamente hacia otros activos del portfolio."),
+            ("#ff9800", "#4a3a1a", "20%", "CRYPTOS",
+             "Asignación especulativa de alta volatilidad. Exposición principalmente "
+             "a BTC y ETH como activos de reserva digital, con posiciones menores "
+             "en altcoins selectivas. Alta asimetría riesgo/recompensa. Gestión "
+             "activa de posición según ciclo de mercado."),
+            ("#b044ff", "#2a1a4a", "10%", "BETA STOCKS",
+             "Selección táctica de acciones de alto beta para capturar movimientos "
+             "de mercado amplificados. Posiciones más activas y de menor duración. "
+             "Complementan el núcleo aportando alfa potencial en fases de expansión."),
+        ]
 
-                <div style="background:#0c0e12; border:1px solid #1a6b4a; border-top:3px solid #00ffad; border-radius:8px; padding:20px;">
-                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#00ffad; margin-bottom:4px;">40%</div>
-                    <div style="font-family:'VT323',monospace; color:#00ffad; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">SPXL STRATEGY</div>
-                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
-                        Núcleo de la cartera. Exposición apalancada 3x al S&P 500 mediante SPXL.
-                        Estrategia de largo plazo orientada a capturar la tendencia estructural alcista
-                        del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados.
-                    </p>
-                </div>
+        cols = st.columns(4)
+        for col, (color, border, pct, title, desc) in zip(cols, buckets):
+            with col:
+                st.markdown(
+                    f'''<div style="background:#0c0e12; border:1px solid {border};
+                        border-top:3px solid {color}; border-radius:8px; padding:20px; height:100%;">
+                        <div style="font-family:'VT323',monospace; font-size:2.4rem;
+                            color:{color}; margin-bottom:4px;">{pct}</div>
+                        <div style="font-family:'VT323',monospace; color:{color};
+                            font-size:1rem; letter-spacing:2px; margin-bottom:12px;">{title}</div>
+                        <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;
+                            margin:0;">{desc}</p>
+                    </div>''',
+                    unsafe_allow_html=True
+                )
 
-                <div style="background:#0c0e12; border:1px solid #1a4a6b; border-top:3px solid #00d9ff; border-radius:8px; padding:20px;">
-                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#00d9ff; margin-bottom:4px;">30%</div>
-                    <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">RSU STOCKS</div>
-                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
-                        Acciones recibidas como compensación RSU (Restricted Stock Units).
-                        Se mantienen o liquidan según criterios fiscales y de concentración.
-                        El objetivo es reducir exposición a un solo empleador diversificando
-                        progresivamente hacia otros activos del portfolio.
-                    </p>
-                </div>
-
-                <div style="background:#0c0e12; border:1px solid #4a3a1a; border-top:3px solid #ff9800; border-radius:8px; padding:20px;">
-                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#ff9800; margin-bottom:4px;">20%</div>
-                    <div style="font-family:'VT323',monospace; color:#ff9800; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">CRYPTOS</div>
-                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
-                        Asignación especulativa de alta volatilidad. Exposición principalmente
-                        a BTC y ETH como activos de reserva digital, con posiciones menores
-                        en altcoins selectivas. Alta asimetría riesgo/recompensa. Gestión
-                        activa de posición según ciclo de mercado.
-                    </p>
-                </div>
-
-                <div style="background:#0c0e12; border:1px solid #2a1a4a; border-top:3px solid #b044ff; border-radius:8px; padding:20px;">
-                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#b044ff; margin-bottom:4px;">10%</div>
-                    <div style="font-family:'VT323',monospace; color:#b044ff; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">BETA STOCKS</div>
-                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
-                        Selección táctica de acciones de alto beta para capturar movimientos
-                        de mercado amplificados. Posiciones más activas y de menor duración.
-                        Complementan el núcleo aportando alfa potencial en fases de expansión.
-                    </p>
-                </div>
-
-            </div>
-
-            <div style="margin-top:20px; padding-top:16px; border-top:1px solid #1a1e26;
-                        font-family:'Courier New',monospace; font-size:0.78rem; color:#555; line-height:1.7;">
-                ⚠ Los porcentajes son orientativos y deben ajustarse según perfil de riesgo, horizonte temporal
-                y circunstancias fiscales individuales. Rebalancear periódicamente cuando algún bucket se desvíe
-                más de ±5% del objetivo. Este framework no constituye asesoramiento financiero.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            """<div style="margin-top:20px; padding:14px 18px; border:1px solid #1a1e26;
+                border-radius:6px; font-family:'Courier New',monospace; font-size:0.78rem;
+                color:#555; line-height:1.7;">
+                &#9888; Los porcentajes son orientativos y deben ajustarse según perfil de riesgo,
+                horizonte temporal y circunstancias fiscales individuales. Rebalancear cuando algún
+                bucket se desvíe más de ±5% del objetivo. Este framework no constituye asesoramiento financiero.
+            </div>""",
+            unsafe_allow_html=True
+        )
 
         # ── FOOTER ───────────────────────────────────────────────────────
         st.markdown(f"""
@@ -607,4 +569,3 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
-

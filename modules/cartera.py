@@ -1,9 +1,47 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from datetime import datetime
+import pytz
+
+# ── Market status helper ──────────────────────────────────────────────────────
+def get_market_status():
+    ny = pytz.timezone("America/New_York")
+    now = datetime.now(ny)
+    weekday = now.weekday()
+    hour = now.hour + now.minute / 60
+    if weekday >= 5:
+        return "CLOSED", "#f23645"
+    if 9.5 <= hour < 16.0:
+        return "OPEN", "#00ffad"
+    if 4.0 <= hour < 9.5 or 16.0 <= hour < 20.0:
+        return "PRE/POST", "#ff9800"
+    return "CLOSED", "#f23645"
+
+# ── CSV loader with cache ─────────────────────────────────────────────────────
+@st.cache_data(ttl=300)
+def load_data(url: str) -> pd.DataFrame:
+    df = pd.read_csv(url).dropna(how="all")
+    df.columns = [c.strip() for c in df.columns]
+    return df
+
+# ── Numeric cleaner ───────────────────────────────────────────────────────────
+def clean_numeric(value):
+    if pd.isna(value):
+        return 0.0
+    val_str = str(value).strip().replace("$", "").replace("%", "").replace(" ", "")
+    if "," in val_str:
+        val_str = val_str.replace(".", "").replace(",", ".")
+    try:
+        return float(val_str)
+    except Exception:
+        return 0.0
+
+# ── Required columns ──────────────────────────────────────────────────────────
+REQUIRED_COLS = {"Ticker", "Estado", "Fecha", "Precio Compra", "Precio Actual", "Inversión", "Valor Actual", "Comisiones"}
 
 def render():
-    # ── CSS: Terminal Hacker Aesthetic (from roadmap_2026) ──────────────────
+    # ── CSS ──────────────────────────────────────────────────────────────────
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
@@ -72,6 +110,14 @@ def render():
             letter-spacing: 1px;
         }
         .metric-value.negative { color: #f23645; }
+        .metric-sub {
+            font-family: 'VT323', monospace;
+            font-size: 1rem;
+            color: #00ffad99;
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+        .metric-sub.negative { color: #f2364599; }
 
         /* Terminal box */
         .terminal-box {
@@ -118,71 +164,128 @@ def render():
         .pnl-pos { color: #00ffad; font-weight: bold; }
         .pnl-neg { color: #f23645; font-weight: bold; }
 
+        /* Custom HTML table */
+        .terminal-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+        .terminal-table th {
+            font-family: 'VT323', monospace;
+            color: #00d9ff;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #00ffad44;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        .terminal-table td {
+            color: #ccc;
+            padding: 9px 12px;
+            border-bottom: 1px solid #1a1e2688;
+        }
+        .terminal-table tr:last-child td { border-bottom: none; }
+        .terminal-table tr:hover td { background: #00ffad08; }
+
+        /* Concentration bar */
+        .conc-bar-bg {
+            background: #1a1e26;
+            border-radius: 4px;
+            height: 10px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .conc-bar-fill {
+            height: 10px;
+            border-radius: 4px;
+        }
+
         ul { list-style: none; padding-left: 0; }
         ul li::before { content: "▸ "; color: #00ffad; font-weight: bold; margin-right: 8px; }
-
-        /* Streamlit dataframe dark override */
-        .stDataFrame { border: 1px solid #00ffad33 !important; border-radius: 8px; overflow: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
-    # ── HEADER ───────────────────────────────────────────────────────────────
-    st.markdown("""
+    # ── Market status + last update ──────────────────────────────────────────
+    mkt_status, mkt_color = get_market_status()
+    last_update = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+    st.markdown(f"""
     <div style="text-align:center; margin-bottom:40px;">
         <div style="font-family:'VT323',monospace; font-size:1rem; color:#666; margin-bottom:10px;">
             [SECURE CONNECTION ESTABLISHED // ENCRYPTION: AES-256]
         </div>
         <h1>💼 CARTERA ESTRATÉGICA RSU</h1>
-        <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1.2rem; letter-spacing:3px;">
-            MONITOR DE POSICIONES // LIVE DATA FEED
+        <div style="display:flex; justify-content:center; align-items:center; gap:30px; flex-wrap:wrap; margin-top:12px;">
+            <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1.2rem; letter-spacing:3px;">
+                MONITOR DE POSICIONES // LIVE DATA FEED
+            </div>
+            <div style="background:{mkt_color}22; border:1px solid {mkt_color}88; border-radius:6px;
+                        padding:4px 16px; font-family:'VT323',monospace; color:{mkt_color};
+                        font-size:1rem; letter-spacing:2px;">
+                ● MKT: {mkt_status}
+            </div>
+            <div style="font-family:'VT323',monospace; color:#444; font-size:0.9rem; letter-spacing:1px;">
+                LAST UPDATE: {last_update}
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     try:
         url = st.secrets["URL_CARTERA"]
-        df = pd.read_csv(f"{url}&cache_bus={pd.Timestamp.now().timestamp()}").dropna(how='all')
-        df.columns = [c.strip() for c in df.columns]
+        df_raw = load_data(url)
 
-        # ── Limpieza numérica ─────────────────────────────────────────────
-        def clean_numeric(value):
-            if pd.isna(value): return 0.0
-            val_str = str(value).strip().replace('$', '').replace('%', '').replace(' ', '')
-            if ',' in val_str:
-                val_str = val_str.replace('.', '').replace(',', '.')
-            try:
-                return float(val_str)
-            except:
-                return 0.0
+        # ── Column validation ─────────────────────────────────────────────
+        missing = REQUIRED_COLS - set(df_raw.columns)
+        if missing:
+            st.markdown(f"""
+            <div class="phase-box red">
+                <p style="color:#f23645 !important;">⚠️ Columnas faltantes en el feed: <strong>{', '.join(missing)}</strong></p>
+                <p>Columnas disponibles: {', '.join(df_raw.columns.tolist())}</p>
+            </div>""", unsafe_allow_html=True)
+            return
 
-        cols_to_fix = ['Precio Compra', 'Precio Actual', 'P&L Terminal (%)', 'Inversión', 'Valor Actual', 'Comisiones']
+        df = df_raw.copy()
+
+        # ── Numeric cleaning (P&L excluded — recalculated fresh below) ───
+        cols_to_fix = ["Precio Compra", "Precio Actual", "Inversión", "Valor Actual", "Comisiones"]
         for col in cols_to_fix:
-            if col in df.columns:
-                df[col] = df[col].apply(clean_numeric)
+            df[col] = df[col].apply(clean_numeric)
 
-        # ── Re-cálculo P&L ────────────────────────────────────────────────
-        df['P&L Terminal (%)'] = df.apply(
-            lambda x: ((x['Precio Actual'] - x['Precio Compra']) / x['Precio Compra'] * 100)
-            if x['Precio Compra'] != 0 else 0, axis=1
+        # ── P&L recalculation ─────────────────────────────────────────────
+        df["P&L Terminal (%)"] = df.apply(
+            lambda x: ((x["Precio Actual"] - x["Precio Compra"]) / x["Precio Compra"] * 100)
+            if x["Precio Compra"] != 0 else 0, axis=1
         )
 
-        # ── Normalización ─────────────────────────────────────────────────
-        df['Estado'] = df['Estado'].astype(str).str.strip().str.upper()
-        df['Ticker'] = df['Ticker'].astype(str).str.strip()
-        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-        df = df.dropna(subset=['Fecha', 'Ticker'])
+        # ── Normalisation ─────────────────────────────────────────────────
+        df["Estado"] = df["Estado"].astype(str).str.strip().str.upper()
+        df["Ticker"] = df["Ticker"].astype(str).str.strip()
+        df["Fecha"]  = pd.to_datetime(df["Fecha"], errors="coerce")
+        df = df.dropna(subset=["Fecha", "Ticker"])
 
-        abiertas = df[df['Estado'] == 'ABIERTA'].copy()
-        cerradas = df[df['Estado'] == 'CERRADA'].copy()
+        abiertas = df[df["Estado"] == "ABIERTA"].copy()
+        cerradas = df[df["Estado"] == "CERRADA"].copy()
 
-        # ── MÉTRICAS ─────────────────────────────────────────────────────
+        # ── Guard: skip rows with zero/invalid investment ─────────────────
+        abiertas = abiertas[abiertas["Inversión"] > 0]
+        cerradas = cerradas[cerradas["Inversión"] > 0]
+
+        # ── MÉTRICAS ──────────────────────────────────────────────────────
         if not abiertas.empty:
-            total_inv   = abiertas['Inversión'].sum()
-            total_val   = abiertas['Valor Actual'].sum()
-            total_comis = abiertas['Comisiones'].sum()
+            total_inv   = abiertas["Inversión"].sum()
+            total_val   = abiertas["Valor Actual"].sum()
+            total_comis = abiertas["Comisiones"].sum()
             pnl_neto    = (total_val - total_inv) - total_comis
+            pnl_pct     = (pnl_neto / total_inv * 100) if total_inv != 0 else 0
             pnl_class   = "negative" if pnl_neto < 0 else ""
             pnl_sign    = "+" if pnl_neto >= 0 else ""
+            pct_sign    = "+" if pnl_pct >= 0 else ""
+            val_pct     = ((total_val - total_inv) / total_inv * 100) if total_inv != 0 else 0
+            val_sign    = "+" if val_pct >= 0 else ""
+            val_class   = "negative" if val_pct < 0 else ""
 
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -190,18 +293,21 @@ def render():
                 <div class="metric-card">
                     <div class="metric-label">▸ Capital Invertido</div>
                     <div class="metric-value">${total_inv:,.2f}</div>
+                    <div class="metric-sub">Base de referencia</div>
                 </div>""", unsafe_allow_html=True)
             with c2:
                 st.markdown(f"""
                 <div class="metric-card">
                     <div class="metric-label">▸ Valor Mercado</div>
                     <div class="metric-value">${total_val:,.2f}</div>
+                    <div class="metric-sub {val_class}">{val_sign}{val_pct:.2f}% vs compra</div>
                 </div>""", unsafe_allow_html=True)
             with c3:
                 st.markdown(f"""
                 <div class="metric-card">
                     <div class="metric-label">▸ P&L Real (Neto)</div>
                     <div class="metric-value {pnl_class}">{pnl_sign}${pnl_neto:,.2f}</div>
+                    <div class="metric-sub {pnl_class}">{pct_sign}{pnl_pct:.2f}% sobre capital</div>
                 </div>""", unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
@@ -210,44 +316,92 @@ def render():
         st.markdown("<h2>01 // POSICIONES ACTIVAS</h2>", unsafe_allow_html=True)
 
         if not abiertas.empty:
-            cols_vista = ['Fecha', 'Ticker', 'Precio Compra', 'Precio Actual', 'P&L Terminal (%)', 'Comentarios']
-            st.dataframe(
-                abiertas[cols_vista].sort_values(by='Fecha', ascending=False)
-                .style.map(
-                    lambda x: f"color: {'#00ffad' if x >= 0 else '#f23645'}",
-                    subset=['P&L Terminal (%)']
-                )
-                .format({
-                    'Precio Compra':    '${:.2f}',
-                    'Precio Actual':    '${:.2f}',
-                    'P&L Terminal (%)': '{:.2f}%',
-                    'Fecha':            lambda x: x.strftime('%d/%m/%Y')
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
+            sorted_ab = abiertas.sort_values(by="Fecha", ascending=False)
+            rows_html = ""
+            for _, row in sorted_ab.iterrows():
+                pnl = row["P&L Terminal (%)"]
+                pnl_cls  = "pnl-pos" if pnl >= 0 else "pnl-neg"
+                pnl_sign = "+" if pnl >= 0 else ""
+                comment  = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
+                rows_html += f"""
+                <tr>
+                    <td style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</td>
+                    <td><span class="ticker-tag">{row['Ticker']}</span></td>
+                    <td>${row['Precio Compra']:,.2f}</td>
+                    <td>${row['Precio Actual']:,.2f}</td>
+                    <td class="{pnl_cls}">{pnl_sign}{pnl:.2f}%</td>
+                    <td style="color:#666; font-size:0.8rem;">{comment}</td>
+                </tr>"""
+
+            st.markdown(f"""
+            <div class="terminal-box" style="padding:10px 20px;">
+                <table class="terminal-table">
+                    <thead><tr>
+                        <th>Fecha</th><th>Ticker</th><th>P. Compra</th>
+                        <th>P. Actual</th><th>P&L %</th><th>Comentarios</th>
+                    </tr></thead>
+                    <tbody>{rows_html}</tbody>
+                </table>
+            </div>""", unsafe_allow_html=True)
         else:
             st.markdown('<div class="phase-box gold"><p>Sin posiciones activas en este momento.</p></div>',
                         unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
+        # ── CONCENTRACIÓN DE CARTERA ──────────────────────────────────────
+        st.markdown("<h2>02 // CONCENTRACIÓN DE CARTERA</h2>", unsafe_allow_html=True)
+
+        if not abiertas.empty:
+            conc = (
+                abiertas.groupby("Ticker")["Valor Actual"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+            conc["Pct"] = conc["Valor Actual"] / conc["Valor Actual"].sum() * 100
+            colors = ["#00ffad", "#00d9ff", "#ff9800", "#9c27b0", "#f23645", "#b044ff"]
+
+            bars_html = ""
+            for i, row in conc.iterrows():
+                color = colors[i % len(colors)]
+                bars_html += f"""
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <span class="ticker-tag" style="border-color:{color}88; background:{color}22; color:{color};">
+                            {row['Ticker']}
+                        </span>
+                        <span style="font-family:'VT323',monospace; color:{color}; font-size:1.1rem;">
+                            {row['Pct']:.1f}%&nbsp;&nbsp;<span style="color:#666;">${row['Valor Actual']:,.2f}</span>
+                        </span>
+                    </div>
+                    <div class="conc-bar-bg">
+                        <div class="conc-bar-fill" style="width:{row['Pct']:.1f}%; background:{color};"></div>
+                    </div>
+                </div>"""
+
+            st.markdown(f'<div class="terminal-box">{bars_html}</div>', unsafe_allow_html=True)
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
         # ── ACTIVIDAD RECIENTE ────────────────────────────────────────────
-        st.markdown("<h2>02 // ACTIVIDAD RECIENTE</h2>", unsafe_allow_html=True)
+        st.markdown("<h2>03 // ACTIVIDAD RECIENTE</h2>", unsafe_allow_html=True)
 
         col_izq, col_der = st.columns(2)
 
         with col_izq:
             st.markdown("<h3>📥 Últimas 5 Entradas</h3>", unsafe_allow_html=True)
-            if not abiertas.empty:
-                ult_compras = abiertas.sort_values(by='Fecha', ascending=False).head(5)
+            all_trades = df.sort_values(by="Fecha", ascending=False).head(5)
+            if not all_trades.empty:
                 rows_html = ""
-                for _, row in ult_compras.iterrows():
+                for _, row in all_trades.iterrows():
+                    estado_color = "#00ffad" if row["Estado"] == "ABIERTA" else "#666"
                     rows_html += f"""
                     <div class="activity-row">
                         <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
                         <span class="ticker-tag">{row['Ticker']}</span>
                         <span style="color:#fff;">${row['Precio Compra']:,.2f}</span>
+                        <span style="font-family:'VT323',monospace; color:{estado_color}; font-size:0.85rem;">{row['Estado']}</span>
                     </div>"""
                 st.markdown(f'<div class="terminal-box" style="padding:15px;">{rows_html}</div>',
                             unsafe_allow_html=True)
@@ -255,13 +409,12 @@ def render():
         with col_der:
             st.markdown("<h3>📤 Últimas 5 Salidas</h3>", unsafe_allow_html=True)
             if not cerradas.empty:
-                ult_ventas = cerradas.sort_values(by='Fecha', ascending=False).head(5)
+                ult_ventas = cerradas.sort_values(by="Fecha", ascending=False).head(5)
                 rows_html = ""
                 for _, row in ult_ventas.iterrows():
-                    pnl_val = row['P&L Terminal (%)']
-                    pnl_cls = "pnl-pos" if pnl_val >= 0 else "pnl-neg"
+                    pnl_val  = row["P&L Terminal (%)"]
+                    pnl_cls  = "pnl-pos" if pnl_val >= 0 else "pnl-neg"
                     pnl_sign = "+" if pnl_val >= 0 else ""
-                    comment = str(row.get('Comentarios', ''))[:30] if 'Comentarios' in row else ''
                     rows_html += f"""
                     <div class="activity-row">
                         <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
@@ -270,14 +423,87 @@ def render():
                     </div>"""
                 st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px;">{rows_html}</div>',
                             unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="phase-box gold"><p>Sin operaciones cerradas aún.</p></div>',
+                            unsafe_allow_html=True)
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # ── HISTORIAL COMPLETO DE CERRADAS ────────────────────────────────
+        st.markdown("<h2>04 // HISTORIAL DE OPERACIONES CERRADAS</h2>", unsafe_allow_html=True)
+
+        if not cerradas.empty:
+            sorted_cl = cerradas.sort_values(by="Fecha", ascending=False)
+            ganadas   = len(cerradas[cerradas["P&L Terminal (%)"] > 0])
+            perdidas  = len(cerradas[cerradas["P&L Terminal (%)"] <= 0])
+            win_rate  = ganadas / len(cerradas) * 100 if len(cerradas) > 0 else 0
+            avg_pnl   = cerradas["P&L Terminal (%)"].mean()
+            avg_sign  = "+" if avg_pnl >= 0 else ""
+            avg_cls   = "negative" if avg_pnl < 0 else ""
+
+            sc1, sc2, sc3 = st.columns(3)
+            with sc1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">▸ Trades Cerrados</div>
+                    <div class="metric-value">{len(cerradas)}</div>
+                    <div class="metric-sub">{ganadas}W / {perdidas}L</div>
+                </div>""", unsafe_allow_html=True)
+            with sc2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">▸ Win Rate</div>
+                    <div class="metric-value">{win_rate:.1f}%</div>
+                    <div class="metric-sub">Operaciones ganadoras</div>
+                </div>""", unsafe_allow_html=True)
+            with sc3:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">▸ P&L Medio</div>
+                    <div class="metric-value {avg_cls}">{avg_sign}{avg_pnl:.2f}%</div>
+                    <div class="metric-sub {avg_cls}">Por operación cerrada</div>
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+
+            rows_html = ""
+            for _, row in sorted_cl.iterrows():
+                pnl      = row["P&L Terminal (%)"]
+                pnl_cls  = "pnl-pos" if pnl >= 0 else "pnl-neg"
+                pnl_sign = "+" if pnl >= 0 else ""
+                comment  = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
+                rows_html += f"""
+                <tr>
+                    <td style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</td>
+                    <td><span class="ticker-tag">{row['Ticker']}</span></td>
+                    <td>${row['Precio Compra']:,.2f}</td>
+                    <td>${row['Precio Actual']:,.2f}</td>
+                    <td class="{pnl_cls}">{pnl_sign}{pnl:.2f}%</td>
+                    <td style="color:#666; font-size:0.8rem;">{comment}</td>
+                </tr>"""
+
+            st.markdown(f"""
+            <div class="terminal-box" style="padding:10px 20px;">
+                <table class="terminal-table">
+                    <thead><tr>
+                        <th>Fecha</th><th>Ticker</th><th>P. Compra</th>
+                        <th>P. Salida</th><th>P&L %</th><th>Comentarios</th>
+                    </tr></thead>
+                    <tbody>{rows_html}</tbody>
+                </table>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="phase-box gold"><p>Sin operaciones cerradas en el historial.</p></div>',
+                        unsafe_allow_html=True)
 
         # ── FOOTER ───────────────────────────────────────────────────────
-        st.markdown("""
+        st.markdown(f"""
         <hr>
-        <div style="text-align:center; padding:20px; border-top:1px solid #1a1e26;">
+        <div style="text-align:center; padding:20px;">
             <p style="font-family:'VT323',monospace; color:#444; font-size:0.9rem;">
-                [END OF TRANSMISSION // CARTERA_RSU_v2.0]<br>
-                [STATUS: LIVE] [DATA: GOOGLE SHEETS FEED]
+                [END OF TRANSMISSION // CARTERA_RSU_v3.0]<br>
+                [STATUS: LIVE] [DATA: GOOGLE SHEETS FEED] [CACHE TTL: 300s]<br>
+                [LAST FETCH: {last_update}]
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -291,3 +517,4 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
+

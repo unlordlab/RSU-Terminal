@@ -373,7 +373,7 @@ def render():
             rows_html = ""
             for _, row in sorted_ab.iterrows():
                 pnl = row["P&L Terminal (%)"]
-                pnl_cls  = "pnl-pos" if pnl >= 0 else "pnl-neg"
+                pnl_color = "#00ffad" if pnl >= 0 else "#f23645"
                 pnl_sign = "+" if pnl >= 0 else ""
                 comment  = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
                 rows_html += f"""
@@ -382,7 +382,7 @@ def render():
                     <td><span class="ticker-tag">{row['Ticker']}</span></td>
                     <td>${row['Precio Compra']:,.2f}</td>
                     <td>${row['Precio Actual']:,.2f}</td>
-                    <td class="{pnl_cls}">{pnl_sign}{pnl:.2f}%</td>
+                    <td style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl:.2f}%</td>
                     <td style="color:#666; font-size:0.8rem;">{comment}</td>
                 </tr>"""
 
@@ -431,13 +431,13 @@ def render():
                 rows_html = ""
                 for _, row in ult_ventas.iterrows():
                     pnl_val  = row["P&L Terminal (%)"]
-                    pnl_cls  = "pnl-pos" if pnl_val >= 0 else "pnl-neg"
+                    pnl_color = "#00ffad" if pnl_val >= 0 else "#f23645"
                     pnl_sign = "+" if pnl_val >= 0 else ""
                     rows_html += f"""
                     <div class="activity-row">
                         <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
                         <span class="ticker-tag">{row['Ticker']}</span>
-                        <span class="{pnl_cls}">{pnl_sign}{pnl_val:.2f}%</span>
+                        <span style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl_val:.2f}%</span>
                     </div>"""
                 st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
                             unsafe_allow_html=True)
@@ -487,7 +487,7 @@ def render():
             rows_html = ""
             for _, row in sorted_cl.iterrows():
                 pnl      = row["P&L Terminal (%)"]
-                pnl_cls  = "pnl-pos" if pnl >= 0 else "pnl-neg"
+                pnl_color = "#00ffad" if pnl >= 0 else "#f23645"
                 pnl_sign = "+" if pnl >= 0 else ""
                 comment  = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
                 rows_html += f"""
@@ -496,7 +496,7 @@ def render():
                     <td><span class="ticker-tag">{row['Ticker']}</span></td>
                     <td>${row['Precio Compra']:,.2f}</td>
                     <td>${row['Precio Actual']:,.2f}</td>
-                    <td class="{pnl_cls}">{pnl_sign}{pnl:.2f}%</td>
+                    <td style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl:.2f}%</td>
                     <td style="color:#666; font-size:0.8rem;">{comment}</td>
                 </tr>"""
 
@@ -532,9 +532,10 @@ def render():
              "Estrategia de largo plazo orientada a capturar la tendencia estructural alcista "
              "del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados."),
             ("RSU Stocks",    30, "#00d9ff", "#1a4a6b",
-             "Acciones en la lista RSU. "
-             "Se mantienen o liquidan según criterios fundamentales y de concentración. "
-             "El objetivo es tener exposición en tematicas y empresas líderes de sectores en crecimiento"),
+             "Acciones recibidas como compensación RSU (Restricted Stock Units). "
+             "Se mantienen o liquidan según criterios fiscales y de concentración. "
+             "El objetivo es reducir exposición a un solo empleador diversificando "
+             "progresivamente hacia otros activos del portfolio."),
             ("Cryptos",       20, "#ff9800", "#4a3a1a",
              "Asignación especulativa de alta volatilidad. Exposición principalmente "
              "a BTC y ETH como activos de reserva digital, con posiciones menores "

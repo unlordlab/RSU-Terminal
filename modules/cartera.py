@@ -532,10 +532,9 @@ def render():
              "Estrategia de largo plazo orientada a capturar la tendencia estructural alcista "
              "del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados."),
             ("RSU Stocks",    30, "#00d9ff", "#1a4a6b",
-             "Acciones recibidas como compensación RSU (Restricted Stock Units). "
-             "Se mantienen o liquidan según criterios fiscales y de concentración. "
-             "El objetivo es reducir exposición a un solo empleador diversificando "
-             "progresivamente hacia otros activos del portfolio."),
+             "Acciones en la lista RSU. "
+             "Se mantienen o liquidan según criterios fundamentales y de concentración. "
+             "El objetivo es tener exposición a tematicas empresas líderes de sectores en crecimiento"),
             ("Cryptos",       20, "#ff9800", "#4a3a1a",
              "Asignación especulativa de alta volatilidad. Exposición principalmente "
              "a BTC y ETH como activos de reserva digital, con posiciones menores "
@@ -641,3 +640,4 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
+

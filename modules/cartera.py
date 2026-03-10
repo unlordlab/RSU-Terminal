@@ -1,9 +1,38 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import pytz
+import plotly.graph_objects as go
+import requests as _requests
+
+# ── Telegram notification helper ────────────────────────────────────────────
+def send_telegram(msg: str):
+    try:
+        token   = st.secrets.get("TELEGRAM_TOKEN", "")
+        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "")
+        if not token or not chat_id:
+            return
+        _requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+            timeout=5
+        )
+    except Exception:
+        pass  # Never break the app over a notification
+
+def check_and_notify(df: pd.DataFrame):
+    tickers_now = set(df[df["Estado"] == "ABIERTA"]["Ticker"].tolist())
+    if "tickers_prev" not in st.session_state:
+        st.session_state.tickers_prev = tickers_now
+        return
+    entradas = tickers_now - st.session_state.tickers_prev
+    salidas  = st.session_state.tickers_prev - tickers_now
+    for t in sorted(entradas):
+        send_telegram(f"🟢 <b>ENTRADA</b>\n📈 Ticker: <code>{t}</code>\n[CARTERA RSU // NUEVA POSICIÓN ABIERTA]")
+    for t in sorted(salidas):
+        send_telegram(f"🔴 <b>SALIDA</b>\n📉 Ticker: <code>{t}</code>\n[CARTERA RSU // POSICIÓN CERRADA]")
+    st.session_state.tickers_prev = tickers_now
 
 # ── Market status helper ──────────────────────────────────────────────────────
 def get_market_status():
@@ -294,6 +323,9 @@ def render():
         abiertas = df[df["Estado"] == "ABIERTA"].copy()
         cerradas = df[df["Estado"] == "CERRADA"].copy()
 
+        # ── Telegram notifications ────────────────────────────────────────
+        check_and_notify(df)
+
         # ── Guard: only filter zero-investment rows if the column parsed correctly
         if "Inversión" in abiertas.columns and abiertas["Inversión"].sum() > 0:
             abiertas = abiertas[abiertas["Inversión"] > 0]
@@ -491,48 +523,94 @@ def render():
         # ── ESTRATEGIA DE CARTERA ─────────────────────────────────────────
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("<h2>04 // ESTRATEGIA DE ASIGNACIÓN</h2>", unsafe_allow_html=True)
-
         st.markdown(
             """<div style="font-family:'VT323',monospace; color:#666; font-size:0.85rem;
-                letter-spacing:2px; margin-bottom:16px;">
+                letter-spacing:2px; margin-bottom:20px;">
                 [ALLOCATION_FRAMEWORK_v1.0 // REFERENCIA ESTRATÉGICA — AJUSTAR SEGÚN PERFIL]
             </div>""",
             unsafe_allow_html=True
         )
 
+        # Donut chart + legend side by side
         buckets = [
-            ("#00ffad", "#1a6b4a", "40%", "SPXL STRATEGY",
+            ("SPXL Strategy", 40, "#00ffad", "#1a6b4a",
              "Núcleo de la cartera. Exposición apalancada 3x al S&P 500 mediante SPXL. "
              "Estrategia de largo plazo orientada a capturar la tendencia estructural alcista "
              "del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados."),
-            ("#00d9ff", "#1a4a6b", "30%", "RSU STOCKS",
+            ("RSU Stocks",    30, "#00d9ff", "#1a4a6b",
              "Acciones recibidas como compensación RSU (Restricted Stock Units). "
              "Se mantienen o liquidan según criterios fiscales y de concentración. "
              "El objetivo es reducir exposición a un solo empleador diversificando "
              "progresivamente hacia otros activos del portfolio."),
-            ("#ff9800", "#4a3a1a", "20%", "CRYPTOS",
+            ("Cryptos",       20, "#ff9800", "#4a3a1a",
              "Asignación especulativa de alta volatilidad. Exposición principalmente "
              "a BTC y ETH como activos de reserva digital, con posiciones menores "
              "en altcoins selectivas. Alta asimetría riesgo/recompensa. Gestión "
              "activa de posición según ciclo de mercado."),
-            ("#b044ff", "#2a1a4a", "10%", "BETA STOCKS",
+            ("Beta Stocks",   10, "#b044ff", "#2a1a4a",
              "Selección táctica de acciones de alto beta para capturar movimientos "
              "de mercado amplificados. Posiciones más activas y de menor duración. "
              "Complementan el núcleo aportando alfa potencial en fases de expansión."),
         ]
 
-        cols = st.columns(4)
-        for col, (color, border, pct, title, desc) in zip(cols, buckets):
-            with col:
+        labels = [b[0] for b in buckets]
+        values = [b[1] for b in buckets]
+        colors = [b[2] for b in buckets]
+
+        fig = go.Figure(go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.55,
+            marker=dict(
+                colors=colors,
+                line=dict(color="#0c0e12", width=3)
+            ),
+            textinfo="percent",
+            textfont=dict(family="VT323, monospace", size=18, color="#0c0e12"),
+            hovertemplate="<b>%{label}</b><br>%{value}%<extra></extra>",
+            sort=False,
+            direction="clockwise",
+        ))
+        fig.add_annotation(
+            text="RSU<br>PORTFOLIO",
+            x=0.5, y=0.5,
+            font=dict(family="VT323, monospace", size=20, color="#00ffad"),
+            showarrow=False
+        )
+        fig.update_layout(
+            paper_bgcolor="#0c0e12",
+            plot_bgcolor="#0c0e12",
+            margin=dict(t=20, b=20, l=20, r=20),
+            height=320,
+            showlegend=False,
+            font=dict(family="VT323, monospace", color="#ccc"),
+        )
+
+        col_chart, col_legend = st.columns([1, 1])
+        with col_chart:
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown(
+                """<div style="text-align:center; font-family:'VT323',monospace;
+                    color:#444; font-size:0.8rem; margin-top:-10px; letter-spacing:2px;">
+                    Estrategia RSU · Asignación objetivo</div>""",
+                unsafe_allow_html=True
+            )
+
+        with col_legend:
+            for (name, pct, color, border, desc) in buckets:
                 st.markdown(
-                    f'''<div style="background:#0c0e12; border:1px solid {border};
-                        border-top:3px solid {color}; border-radius:8px; padding:20px; height:100%;">
-                        <div style="font-family:'VT323',monospace; font-size:2.4rem;
-                            color:{color}; margin-bottom:4px;">{pct}</div>
-                        <div style="font-family:'VT323',monospace; color:{color};
-                            font-size:1rem; letter-spacing:2px; margin-bottom:12px;">{title}</div>
-                        <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;
-                            margin:0;">{desc}</p>
+                    f'''<div style="display:flex; align-items:flex-start; gap:12px;
+                        padding:10px 0; border-bottom:1px solid #1a1e26;">
+                        <div style="min-width:12px; height:12px; background:{color};
+                            border-radius:2px; margin-top:4px;"></div>
+                        <div>
+                            <span style="font-family:'VT323',monospace; color:{color};
+                                font-size:1rem; letter-spacing:1px;">{name}</span>
+                            <span style="font-family:'VT323',monospace; color:{color};
+                                font-size:1.1rem; margin-left:10px;">{pct}%</span>
+                            <p style="font-size:0.78rem; color:#666 !important;
+                                margin:4px 0 0 0; line-height:1.5;">{desc}</p>
+                        </div>
                     </div>''',
                     unsafe_allow_html=True
                 )

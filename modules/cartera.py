@@ -272,12 +272,6 @@ def render():
         cache_key = int(pd.Timestamp.now().timestamp() // 300)
         df_raw = load_data(url, _cache_key=cache_key)
 
-        # ── DEBUG: show raw columns and first row ─────────────────────────
-        with st.expander("🔍 DEBUG — Columnas y datos raw (borrar después)", expanded=True):
-            st.write("**Columnas detectadas:**", df_raw.columns.tolist())
-            st.write("**Primera fila:**")
-            st.dataframe(df_raw.head(2))
-
         # ── Column validation (accent-tolerant) ───────────────────────────
         col_map = {norm_col(c): c for c in df_raw.columns}
         required_norm = {norm_col(r): r for r in REQUIRED_COLS}

@@ -28,7 +28,7 @@ jobs:
           URL_CARTERA: ${{ secrets.URL_CARTERA }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python monitor/monitor.py
+        run: cd monitor && python monitor.py
 
       - name: Commit snapshot
         run: |

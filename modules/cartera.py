@@ -534,7 +534,7 @@ def render():
             ("RSU Stocks",    30, "#00d9ff", "#1a4a6b",
              "Acciones en la lista RSU. "
              "Se mantienen o liquidan según criterios fundamentales y de concentración. "
-             "El objetivo es tener exposición a tematicas empresas líderes de sectores en crecimiento"),
+             "El objetivo es tener exposición en tematicas y empresas líderes de sectores en crecimiento"),
             ("Cryptos",       20, "#ff9800", "#4a3a1a",
              "Asignación especulativa de alta volatilidad. Exposición principalmente "
              "a BTC y ETH como activos de reserva digital, con posiciones menores "
@@ -640,4 +640,5 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
+
 

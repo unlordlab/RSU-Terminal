@@ -242,6 +242,12 @@ def render():
         cache_key = int(pd.Timestamp.now().timestamp() // 300)
         df_raw = load_data(url, _cache_key=cache_key)
 
+        # ── DEBUG: show raw columns and first row ─────────────────────────
+        with st.expander("🔍 DEBUG — Columnas y datos raw (borrar después)", expanded=True):
+            st.write("**Columnas detectadas:**", df_raw.columns.tolist())
+            st.write("**Primera fila:**")
+            st.dataframe(df_raw.head(2))
+
         # ── Column validation (accent-tolerant) ───────────────────────────
         col_map = {norm_col(c): c for c in df_raw.columns}
         required_norm = {norm_col(r): r for r in REQUIRED_COLS}
@@ -516,6 +522,70 @@ def render():
             st.markdown('<div class="phase-box gold"><p>Sin operaciones cerradas en el historial.</p></div>',
                         unsafe_allow_html=True)
 
+        # ── ESTRATEGIA DE CARTERA ─────────────────────────────────────────
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("<h2>05 // ESTRATEGIA DE ASIGNACIÓN</h2>", unsafe_allow_html=True)
+        st.markdown("""
+        <div class="terminal-box">
+            <div style="font-family:'VT323',monospace; color:#666; font-size:0.85rem; letter-spacing:2px; margin-bottom:20px;">
+                [ALLOCATION_FRAMEWORK_v1.0 // REFERENCIA ESTRATÉGICA — AJUSTAR SEGÚN PERFIL]
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+
+                <div style="background:#0c0e12; border:1px solid #1a6b4a; border-top:3px solid #00ffad; border-radius:8px; padding:20px;">
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#00ffad; margin-bottom:4px;">40%</div>
+                    <div style="font-family:'VT323',monospace; color:#00ffad; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">SPXL STRATEGY</div>
+                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
+                        Núcleo de la cartera. Exposición apalancada 3x al S&P 500 mediante SPXL.
+                        Estrategia de largo plazo orientada a capturar la tendencia estructural alcista
+                        del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados.
+                    </p>
+                </div>
+
+                <div style="background:#0c0e12; border:1px solid #1a4a6b; border-top:3px solid #00d9ff; border-radius:8px; padding:20px;">
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#00d9ff; margin-bottom:4px;">30%</div>
+                    <div style="font-family:'VT323',monospace; color:#00d9ff; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">RSU STOCKS</div>
+                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
+                        Acciones recibidas como compensación RSU (Restricted Stock Units).
+                        Se mantienen o liquidan según criterios fiscales y de concentración.
+                        El objetivo es reducir exposición a un solo empleador diversificando
+                        progresivamente hacia otros activos del portfolio.
+                    </p>
+                </div>
+
+                <div style="background:#0c0e12; border:1px solid #4a3a1a; border-top:3px solid #ff9800; border-radius:8px; padding:20px;">
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#ff9800; margin-bottom:4px;">20%</div>
+                    <div style="font-family:'VT323',monospace; color:#ff9800; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">CRYPTOS</div>
+                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
+                        Asignación especulativa de alta volatilidad. Exposición principalmente
+                        a BTC y ETH como activos de reserva digital, con posiciones menores
+                        en altcoins selectivas. Alta asimetría riesgo/recompensa. Gestión
+                        activa de posición según ciclo de mercado.
+                    </p>
+                </div>
+
+                <div style="background:#0c0e12; border:1px solid #2a1a4a; border-top:3px solid #b044ff; border-radius:8px; padding:20px;">
+                    <div style="font-family:'VT323',monospace; font-size:2rem; color:#b044ff; margin-bottom:4px;">10%</div>
+                    <div style="font-family:'VT323',monospace; color:#b044ff; font-size:1.1rem; letter-spacing:2px; margin-bottom:10px;">BETA STOCKS</div>
+                    <p style="font-size:0.82rem; color:#888 !important; line-height:1.6;">
+                        Selección táctica de acciones de alto beta para capturar movimientos
+                        de mercado amplificados. Posiciones más activas y de menor duración.
+                        Complementan el núcleo aportando alfa potencial en fases de expansión.
+                    </p>
+                </div>
+
+            </div>
+
+            <div style="margin-top:20px; padding-top:16px; border-top:1px solid #1a1e26;
+                        font-family:'Courier New',monospace; font-size:0.78rem; color:#555; line-height:1.7;">
+                ⚠ Los porcentajes son orientativos y deben ajustarse según perfil de riesgo, horizonte temporal
+                y circunstancias fiscales individuales. Rebalancear periódicamente cuando algún bucket se desvíe
+                más de ±5% del objetivo. Este framework no constituye asesoramiento financiero.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         # ── FOOTER ───────────────────────────────────────────────────────
         st.markdown(f"""
         <hr>
@@ -537,5 +607,4 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
-
 

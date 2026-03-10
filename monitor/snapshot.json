@@ -1,0 +1,194 @@
+{
+  "NBIS": {
+    "precio_compra": 44.25,
+    "fecha": "11/07/2025"
+  },
+  "HOOD": {
+    "precio_compra": 98.34,
+    "fecha": "11/07/2025"
+  },
+  "RKLB": {
+    "precio_compra": 39.12,
+    "fecha": "11/07/2025"
+  },
+  "KTOS": {
+    "precio_compra": 51.71,
+    "fecha": "11/07/2025"
+  },
+  "LEU": {
+    "precio_compra": 206.4,
+    "fecha": "11/07/2025"
+  },
+  "IBIT": {
+    "precio_compra": 59.0,
+    "fecha": "11/07/2025"
+  },
+  "ITA": {
+    "precio_compra": 189.78,
+    "fecha": "11/07/2025"
+  },
+  "UFO": {
+    "precio_compra": 29.73,
+    "fecha": "11/07/2025"
+  },
+  "NLR": {
+    "precio_compra": 108.17,
+    "fecha": "11/07/2025"
+  },
+  "QQQ": {
+    "precio_compra": 554.2,
+    "fecha": "11/07/2025"
+  },
+  "MAGS": {
+    "precio_compra": 56.24,
+    "fecha": "11/07/2025"
+  },
+  "VOO": {
+    "precio_compra": 573.22,
+    "fecha": "11/07/2025"
+  },
+  "HII": {
+    "precio_compra": 285.0,
+    "fecha": "02/10/2025"
+  },
+  "GLXY": {
+    "precio_compra": 34.6,
+    "fecha": "02/10/2025"
+  },
+  "AVGO": {
+    "precio_compra": 274.38,
+    "fecha": "11/07/2025"
+  },
+  "AVAV": {
+    "precio_compra": 263.8,
+    "fecha": "11/07/2025"
+  },
+  "UUUU": {
+    "precio_compra": 9.19,
+    "fecha": "04/08/2025"
+  },
+  "MELI": {
+    "precio_compra": 2325.0,
+    "fecha": "11/07/2025"
+  },
+  "BWXT": {
+    "precio_compra": 164.81,
+    "fecha": "10/09/2025"
+  },
+  "AMKR": {
+    "precio_compra": 27.57,
+    "fecha": "10/09/2025"
+  },
+  "DOCN": {
+    "precio_compra": 38.2,
+    "fecha": "07/10/2025"
+  },
+  "PRIM": {
+    "precio_compra": 134.1,
+    "fecha": "10/10/2025"
+  },
+  "ENS": {
+    "precio_compra": 123.1,
+    "fecha": "12/10/2025"
+  },
+  "PPTA": {
+    "precio_compra": 24.5,
+    "fecha": "12/10/2025"
+  },
+  "PLPC": {
+    "precio_compra": 218.0,
+    "fecha": "12/10/2025"
+  },
+  "POWL": {
+    "precio_compra": 326.9,
+    "fecha": "12/10/2025"
+  },
+  "UROY": {
+    "precio_compra": 3.91,
+    "fecha": "04/11/2025"
+  },
+  "KOID": {
+    "precio_compra": 30.0,
+    "fecha": "10/11/2025"
+  },
+  "AMZN": {
+    "precio_compra": 245.74,
+    "fecha": "10/11/2025"
+  },
+  "EQT": {
+    "precio_compra": 55.0,
+    "fecha": "10/12/2025"
+  },
+  "GDXJ": {
+    "precio_compra": 109.75,
+    "fecha": "11/12/2025"
+  },
+  "MRCY": {
+    "precio_compra": 75.25,
+    "fecha": "11/12/2025"
+  },
+  "MIR": {
+    "precio_compra": 26.13,
+    "fecha": "12/12/2025"
+  },
+  "VVX": {
+    "precio_compra": 66.0,
+    "fecha": "01/01/2026"
+  },
+  "LTRX": {
+    "precio_compra": 6.4,
+    "fecha": "01/01/2026"
+  },
+  "UMAC": {
+    "precio_compra": 15.75,
+    "fecha": "01/01/2026"
+  },
+  "PLAB": {
+    "precio_compra": 35.78,
+    "fecha": "01/01/2026"
+  },
+  "COHR": {
+    "precio_compra": 204.18,
+    "fecha": "01/01/2026"
+  },
+  "AMPX": {
+    "precio_compra": 11.4,
+    "fecha": "01/01/2026"
+  },
+  "MSTR": {
+    "precio_compra": 108.0,
+    "fecha": "06/02/2026"
+  },
+  "NET": {
+    "precio_compra": 172.0,
+    "fecha": "06/02/2026"
+  },
+  "VRT": {
+    "precio_compra": 250.0,
+    "fecha": "05/03/2026"
+  },
+  "MSFT": {
+    "precio_compra": 408.0,
+    "fecha": "06/03/2026"
+  },
+  "RDDT": {
+    "precio_compra": 140.0,
+    "fecha": "06/03/2026"
+  },
+  "SOFI": {
+    "precio_compra": 18.8,
+    "fecha": "06/03/2026"
+  },
+  "SKYT": {
+    "precio_compra": 29.0,
+    "fecha": "10/03/2026"
+  },
+  "USAR": {
+    "precio_compra": 20.0,
+    "fecha": "10/03/2026"
+  },
+  "BOTZ": {
+    "precio_compra": 36.0,
+    "fecha": "10/03/2026"
+  }
+}

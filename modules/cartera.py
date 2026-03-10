@@ -19,8 +19,8 @@ def get_market_status():
     return "CLOSED", "#f23645"
 
 # ── CSV loader with cache ─────────────────────────────────────────────────────
-@st.cache_data(ttl=300)
-def load_data(url: str) -> pd.DataFrame:
+@st.cache_data(ttl=300, show_spinner=False)
+def load_data(url: str, _cache_key: int = 0) -> pd.DataFrame:
     df = pd.read_csv(url).dropna(how="all")
     df.columns = [c.strip() for c in df.columns]
     return df
@@ -234,25 +234,43 @@ def render():
     """, unsafe_allow_html=True)
 
     try:
-        url = st.secrets["URL_CARTERA"]
-        df_raw = load_data(url)
+        import unicodedata
+        def norm_col(s):
+            return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower().strip()
 
-        # ── Column validation ─────────────────────────────────────────────
-        missing = REQUIRED_COLS - set(df_raw.columns)
-        if missing:
+        url = st.secrets["URL_CARTERA"]
+        cache_key = int(pd.Timestamp.now().timestamp() // 300)
+        df_raw = load_data(url, _cache_key=cache_key)
+
+        # ── Column validation (accent-tolerant) ───────────────────────────
+        col_map = {norm_col(c): c for c in df_raw.columns}
+        required_norm = {norm_col(r): r for r in REQUIRED_COLS}
+        missing_display = [orig for n, orig in required_norm.items() if n not in col_map]
+
+        if missing_display:
             st.markdown(f"""
             <div class="phase-box red">
-                <p style="color:#f23645 !important;">⚠️ Columnas faltantes en el feed: <strong>{', '.join(missing)}</strong></p>
+                <p style="color:#f23645 !important;">&#9888;&#65039; Columnas faltantes en el feed: <strong>{', '.join(missing_display)}</strong></p>
                 <p>Columnas disponibles: {', '.join(df_raw.columns.tolist())}</p>
             </div>""", unsafe_allow_html=True)
             return
 
-        df = df_raw.copy()
+        # Remap column names via accent-normalised match
+        rename = {col_map[n]: orig for n, orig in required_norm.items() if col_map[n] != orig}
+        df = df_raw.rename(columns=rename).copy()
 
         # ── Numeric cleaning (P&L excluded — recalculated fresh below) ───
-        cols_to_fix = ["Precio Compra", "Precio Actual", "Inversión", "Valor Actual", "Comisiones"]
+        cols_to_fix = ["Precio Compra", "Precio Actual", "Inversion", "Valor Actual", "Comisiones"]
+        # Also try accented version
+        inv_col = "Inversión" if "Inversión" in df.columns else "Inversion"
+        cols_to_fix = ["Precio Compra", "Precio Actual", inv_col, "Valor Actual", "Comisiones"]
         for col in cols_to_fix:
-            df[col] = df[col].apply(clean_numeric)
+            if col in df.columns:
+                df[col] = df[col].apply(clean_numeric)
+
+        # Ensure canonical column name
+        if inv_col != "Inversión":
+            df = df.rename(columns={inv_col: "Inversión"})
 
         # ── P&L recalculation ─────────────────────────────────────────────
         df["P&L Terminal (%)"] = df.apply(
@@ -269,9 +287,11 @@ def render():
         abiertas = df[df["Estado"] == "ABIERTA"].copy()
         cerradas = df[df["Estado"] == "CERRADA"].copy()
 
-        # ── Guard: skip rows with zero/invalid investment ─────────────────
-        abiertas = abiertas[abiertas["Inversión"] > 0]
-        cerradas = cerradas[cerradas["Inversión"] > 0]
+        # ── Guard: only filter zero-investment rows if the column parsed correctly
+        if "Inversión" in abiertas.columns and abiertas["Inversión"].sum() > 0:
+            abiertas = abiertas[abiertas["Inversión"] > 0]
+        if "Inversión" in cerradas.columns and cerradas["Inversión"].sum() > 0:
+            cerradas = cerradas[cerradas["Inversión"] > 0]
 
         # ── MÉTRICAS ──────────────────────────────────────────────────────
         if not abiertas.empty:
@@ -517,4 +537,5 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
+
 

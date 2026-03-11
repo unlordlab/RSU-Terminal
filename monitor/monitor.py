@@ -111,8 +111,13 @@ def main():
     entradas = tickers_now  - tickers_prev
     salidas  = tickers_prev - tickers_now
 
+    log(f"Abiertas ahora:    {sorted(tickers_now)}")
+    log(f"Snapshot anterior: {sorted(tickers_prev)}")
+    log(f"Entradas:  {sorted(entradas)}")
+    log(f"Salidas:   {sorted(salidas)}")
+
     if not entradas and not salidas:
-        log(f"Sin cambios. Posiciones abiertas: {sorted(tickers_now)}")
+        log("Sin cambios.")
         save_snapshot(current)
         return
 
@@ -136,7 +141,7 @@ def main():
         info = previous[ticker]
 
         # Buscar P&L en cerradas si está disponible
-        cerrada = df[(df["Estado"] == "CERRADA") & (df["Ticker"] == ticker)]
+        cerrada = df[(df["Estado"] == "CERRADA") & (df["Ticker"].str.strip().str.upper() == ticker.strip().upper())]
         pnl_str = "—"
         if not cerrada.empty and "Precio Actual" in cerrada.columns and "Precio Compra" in cerrada.columns:
             last = cerrada.sort_values("Fecha", ascending=False).iloc[0]

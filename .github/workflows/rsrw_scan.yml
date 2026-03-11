@@ -1,0 +1,33 @@
+# .github/workflows/rsrw_scan.yml
+
+name: RSRW Nightly Scan
+
+on:
+  schedule:
+    - cron: "0 21 * * 1-5"   # 21:00 UTC = 17:00 ET — tras el cierre de NYSE
+  workflow_dispatch:          # Ejecución manual desde la UI si necesitas forzarlo
+
+jobs:
+  compute:
+    name: Compute RS/RW Scores
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install yfinance pandas numpy requests
+
+      - name: Run RSRW compute worker
+        env:
+          GH_GIST_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          RSRW_GIST_ID:  ${{ secrets.RSRW_GIST_ID }}
+        run: python compute_rsrw.py

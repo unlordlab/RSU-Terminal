@@ -638,7 +638,7 @@ def render():
                     height=320,margin=dict(l=0,r=60,b=60,t=20),
                     yaxis=dict(tickformat=".1%",gridcolor="#1a1e26",title="RS 63d"),
                     yaxis2=dict(overlaying="y",side="right",title="Trend",
-                        gridcolor="transparent",tickfont=dict(size=9)),
+                        gridcolor="rgba(0,0,0,0)",tickfont=dict(size=9)),
                     xaxis=dict(tickfont=dict(family="Courier New",size=10)),
                     legend=dict(font=dict(family="Courier New",size=9)))
                 st.plotly_chart(fig_s2, use_container_width=True)

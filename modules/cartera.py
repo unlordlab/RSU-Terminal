@@ -421,7 +421,7 @@ def render():
                         <span style="color:#fff;">${row['Precio Compra']:,.2f}</span>
                         <span style="font-family:'VT323',monospace; color:{estado_color}; font-size:0.85rem;">{row['Estado']}</span>
                     </div>"""
-                st.markdown(f'<div class="terminal-box" style="padding:15px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
+                st.markdown(f'<div class="terminal-box" style="padding:15px; min-height:200px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
                             unsafe_allow_html=True)
 
         with col_der:
@@ -439,7 +439,7 @@ def render():
                         <span class="ticker-tag">{row['Ticker']}</span>
                         <span style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl_val:.2f}%</span>
                     </div>"""
-                st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
+                st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px; min-height:200px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
                             unsafe_allow_html=True)
             else:
                 st.markdown('<div class="phase-box gold"><p>Sin operaciones cerradas aún.</p></div>',
@@ -532,9 +532,10 @@ def render():
              "Estrategia de largo plazo orientada a capturar la tendencia estructural alcista "
              "del índice. Requiere horizonte amplio y tolerancia a drawdowns pronunciados."),
             ("RSU Stocks",    30, "#00d9ff", "#1a4a6b",
-             "Acciones en la lista de RSU."
-             "Se mantienen o liquidan según criterios fundamentales y de concentración. "
-             "El objetivo es tener exposición en empresas líderes y de sectores en crecimiento"),
+             "Acciones recibidas como compensación RSU (Restricted Stock Units). "
+             "Se mantienen o liquidan según criterios fiscales y de concentración. "
+             "El objetivo es reducir exposición a un solo empleador diversificando "
+             "progresivamente hacia otros activos del portfolio."),
             ("Cryptos",       20, "#ff9800", "#4a3a1a",
              "Asignación especulativa de alta volatilidad. Exposición principalmente "
              "a BTC y ETH como activos de reserva digital, con posiciones menores "
@@ -640,6 +641,7 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
+
 
 
 

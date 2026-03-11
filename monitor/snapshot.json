@@ -75,10 +75,6 @@
     "precio_compra": 164.81,
     "fecha": "10/09/2025"
   },
-  "AMKR": {
-    "precio_compra": 27.57,
-    "fecha": "10/09/2025"
-  },
   "DOCN": {
     "precio_compra": 38.2,
     "fecha": "07/10/2025"
@@ -182,5 +178,13 @@
   "BOTZ": {
     "precio_compra": 36.0,
     "fecha": "10/03/2026"
+  },
+  "VLO": {
+    "precio_compra": 224.47,
+    "fecha": "11/03/2026"
+  },
+  "ALAB": {
+    "precio_compra": 126.5,
+    "fecha": "11/03/2026"
   }
 }

@@ -372,19 +372,24 @@ def render():
             sorted_ab = abiertas.sort_values(by="Fecha", ascending=False)
             rows_html = ""
             for _, row in sorted_ab.iterrows():
-                pnl = row["P&L Terminal (%)"]
+                pnl       = row["P&L Terminal (%)"]
                 pnl_color = "#00ffad" if pnl >= 0 else "#f23645"
-                pnl_sign = "+" if pnl >= 0 else ""
-                comment  = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
-                rows_html += f"""
-                <tr>
-                    <td style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</td>
-                    <td><span class="ticker-tag">{row['Ticker']}</span></td>
-                    <td>${row['Precio Compra']:,.2f}</td>
-                    <td>${row['Precio Actual']:,.2f}</td>
-                    <td style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl:.2f}%</td>
-                    <td style="color:#666; font-size:0.8rem;">{comment}</td>
-                </tr>"""
+                pnl_sign  = "+" if pnl >= 0 else ""
+                comment   = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
+                fecha_s   = row["Fecha"].strftime("%d/%m/%Y")
+                ticker_s  = row["Ticker"]
+                compra_s  = f"{row['Precio Compra']:,.2f}"
+                actual_s  = f"{row['Precio Actual']:,.2f}"
+                rows_html += (
+                    f'<tr>'
+                    f'<td style="color:#666;">{fecha_s}</td>'
+                    f'<td><span class="ticker-tag">{ticker_s}</span></td>'
+                    f'<td>${compra_s}</td>'
+                    f'<td>${actual_s}</td>'
+                    f'<td style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl:.2f}%</td>'
+                    f'<td style="color:#666; font-size:0.8rem;">{comment}</td>'
+                    f'</tr>'
+                )
 
             st.markdown(f"""
             <div class="terminal-box" style="padding:10px 20px; max-height:400px; overflow-y:auto;">
@@ -430,12 +435,16 @@ def render():
                 pnl_val   = row["P&L Terminal (%)"]
                 pnl_color = "#00ffad" if pnl_val >= 0 else "#f23645"
                 pnl_sign  = "+" if pnl_val >= 0 else ""
-                salidas_rows += f"""
-                <div class="activity-row">
-                    <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
-                    <span class="ticker-tag">{row['Ticker']}</span>
-                    <span style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl_val:.2f}%</span>
-                </div>"""
+                fecha_s   = row["Fecha"].strftime("%d/%m/%Y")
+                ticker_s  = row["Ticker"]
+                pnl_s     = f"{pnl_sign}{pnl_val:.2f}%"
+                salidas_rows += (
+                    f'<div class="activity-row">'
+                    f'<span style="color:#666;">{fecha_s}</span>'
+                    f'<span class="ticker-tag">{ticker_s}</span>'
+                    f'<span style="color:{pnl_color}; font-weight:bold;">{pnl_s}</span>'
+                    f'</div>'
+                )
         else:
             salidas_rows = '<p style="color:#666;">Sin operaciones cerradas aún.</p>'
 
@@ -501,19 +510,24 @@ def render():
 
             rows_html = ""
             for _, row in sorted_cl.iterrows():
-                pnl      = row["P&L Terminal (%)"]
+                pnl       = row["P&L Terminal (%)"]
                 pnl_color = "#00ffad" if pnl >= 0 else "#f23645"
-                pnl_sign = "+" if pnl >= 0 else ""
-                comment  = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
-                rows_html += f"""
-                <tr>
-                    <td style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</td>
-                    <td><span class="ticker-tag">{row['Ticker']}</span></td>
-                    <td>${row['Precio Compra']:,.2f}</td>
-                    <td>${row['Precio Actual']:,.2f}</td>
-                    <td style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl:.2f}%</td>
-                    <td style="color:#666; font-size:0.8rem;">{comment}</td>
-                </tr>"""
+                pnl_sign  = "+" if pnl >= 0 else ""
+                comment   = str(row.get("Comentarios", ""))[:40] if "Comentarios" in row.index else "—"
+                fecha_s   = row["Fecha"].strftime("%d/%m/%Y")
+                ticker_s  = row["Ticker"]
+                compra_s  = f"{row['Precio Compra']:,.2f}"
+                actual_s  = f"{row['Precio Actual']:,.2f}"
+                rows_html += (
+                    f'<tr>'
+                    f'<td style="color:#666;">{fecha_s}</td>'
+                    f'<td><span class="ticker-tag">{ticker_s}</span></td>'
+                    f'<td>${compra_s}</td>'
+                    f'<td>${actual_s}</td>'
+                    f'<td style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl:.2f}%</td>'
+                    f'<td style="color:#666; font-size:0.8rem;">{comment}</td>'
+                    f'</tr>'
+                )
 
             st.markdown(f"""
             <div class="terminal-box" style="padding:10px 20px; max-height:400px; overflow-y:auto;">
@@ -656,4 +670,5 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
+
 

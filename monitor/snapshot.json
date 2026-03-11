@@ -99,10 +99,6 @@
     "precio_compra": 218.0,
     "fecha": "12/10/2025"
   },
-  "POWL": {
-    "precio_compra": 326.9,
-    "fecha": "12/10/2025"
-  },
   "UROY": {
     "precio_compra": 3.91,
     "fecha": "04/11/2025"
@@ -149,10 +145,6 @@
   },
   "COHR": {
     "precio_compra": 204.18,
-    "fecha": "01/01/2026"
-  },
-  "AMPX": {
-    "precio_compra": 11.4,
     "fecha": "01/01/2026"
   },
   "MSTR": {

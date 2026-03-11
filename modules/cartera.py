@@ -410,13 +410,18 @@ def render():
         entradas_rows = ""
         for _, row in all_trades.iterrows():
             estado_color = "#00ffad" if row["Estado"] == "ABIERTA" else "#666"
-            entradas_rows += f"""
-            <div class="activity-row">
-                <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
-                <span class="ticker-tag">{row['Ticker']}</span>
-                <span style="color:#fff;">${row['Precio Compra']:,.2f}</span>
-                <span style="font-family:'VT323',monospace; color:{estado_color}; font-size:0.85rem;">{row['Estado']}</span>
-            </div>"""
+            fecha_str    = row['Fecha'].strftime('%d/%m/%Y')
+            ticker_str   = row['Ticker']
+            precio_str   = f"${row['Precio Compra']:,.2f}"
+            estado_str   = row['Estado']
+            entradas_rows += (
+                f'<div class="activity-row">'
+                f'<span style="color:#666;">{fecha_str}</span>'
+                f'<span class="ticker-tag">{ticker_str}</span>'
+                f'<span style="color:#fff;">{precio_str}</span>'
+                f'<span style="font-family:VT323,monospace; color:{estado_color}; font-size:0.85rem;">{estado_str}</span>'
+                f'</div>'
+            )
 
         salidas_rows = ""
         if not cerradas.empty:
@@ -437,16 +442,16 @@ def render():
         st.markdown(f"""
         <div style="display:flex; gap:20px; align-items:stretch;">
             <div style="flex:1; display:flex; flex-direction:column;">
-                <div style="font-family:'VT323',monospace; color:#ff9800; font-size:1.3rem;
-                    margin-bottom:10px; letter-spacing:2px;">📥 ÚLTIMAS 5 ENTRADAS</div>
+                <div style="font-family:VT323,monospace; color:#ff9800; font-size:1.3rem;
+                    margin-bottom:10px; letter-spacing:2px;">&#128229; ÚLTIMAS 5 ENTRADAS</div>
                 <div class="terminal-box" style="padding:15px; flex:1;
                     max-height:300px; overflow-y:auto;">
                     {entradas_rows}
                 </div>
             </div>
             <div style="flex:1; display:flex; flex-direction:column;">
-                <div style="font-family:'VT323',monospace; color:#ff9800; font-size:1.3rem;
-                    margin-bottom:10px; letter-spacing:2px;">📤 ÚLTIMAS 5 SALIDAS</div>
+                <div style="font-family:VT323,monospace; color:#ff9800; font-size:1.3rem;
+                    margin-bottom:10px; letter-spacing:2px;">&#128228; ÚLTIMAS 5 SALIDAS</div>
                 <div class="terminal-box" style="padding:15px; flex:1; border-left:3px solid #f23645;
                     max-height:300px; overflow-y:auto;">
                     {salidas_rows}
@@ -651,6 +656,4 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
-
-
 

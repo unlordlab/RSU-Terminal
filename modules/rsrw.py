@@ -300,7 +300,7 @@ def _freshness(meta):
     except: return ts[:16], True
 
 def _mc(value, label, color="white", sub=""):
-    s = f'<div style="font-family:Courier New,monospace;color:{color};font-size:11px;margin-top:5px;letter-spacing:1px;">{sub}</div>' if sub else ""
+    s = f'<div class="metric-sub" style="color:{color};">{sub}</div>' if sub else ""
     return f'<div class="metric-card"><div class="metric-value" style="color:{color};">{value}</div><div class="metric-label">{label}</div>{s}</div>'
 
 def _pct_color(pct):
@@ -341,32 +341,87 @@ def _footer():
 # ─────────────────────────────────────────────────────────────
 CSS = """<style>
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/* ── Base ── */
 .stApp{background:#0c0e12}
 h1,h2,h3,h4,h5,h6{font-family:'VT323',monospace!important;color:#00ffad!important;text-transform:uppercase;letter-spacing:2px}
-h1{font-size:3.5rem!important;text-shadow:0 0 20px #00ffad66;border-bottom:2px solid #00ffad;padding-bottom:15px;margin-bottom:30px!important}
 p,li{font-family:'Courier New',monospace;color:#ccc!important;line-height:1.8;font-size:.95rem}
 strong{color:#00ffad;font-weight:bold}
 ul{list-style:none;padding-left:0}ul li::before{content:"▸ ";color:#00ffad;margin-right:8px}
 hr{border:none;height:1px;background:linear-gradient(90deg,transparent,#00ffad,transparent);margin:40px 0}
-.main-header{text-align:center;margin-bottom:30px;padding:20px 0}
-.main-title{font-family:'VT323',monospace!important;color:#00ffad!important;font-size:3.5rem;text-shadow:0 0 20px #00ffad66;border-bottom:2px solid #00ffad;padding-bottom:15px;margin-bottom:10px;text-transform:uppercase;letter-spacing:3px}
-.main-subtitle{font-family:'Courier New',monospace;color:#00d9ff;font-size:1rem;max-width:700px;margin:0 auto;letter-spacing:3px;text-transform:uppercase}
-.sec-hdr{font-family:'VT323',monospace;color:#00ffad;font-size:1.6rem;text-transform:uppercase;letter-spacing:3px;margin-bottom:15px;border-left:4px solid #00ffad;padding-left:15px}
-.grp-box{border:1px solid #00ffad33;border-radius:8px;overflow:hidden;background:#0c0e12;margin-bottom:20px;box-shadow:0 0 10px #00ffad0a}
-.grp-hdr{background:linear-gradient(135deg,#0c0e12 0%,#1a1e26 100%);padding:12px 20px;border-bottom:1px solid #00ffad33}
-.grp-ttl{font-family:'VT323',monospace!important;color:#00ffad!important;font-size:1.2rem!important;text-transform:uppercase;letter-spacing:2px;margin:0}
-.metric-card{background:linear-gradient(135deg,#0c0e12 0%,#1a1e26 100%);border:1px solid #00ffad33;border-radius:8px;padding:20px 15px;text-align:center;box-shadow:0 0 10px #00ffad0a}
-.metric-value{font-family:'VT323',monospace;font-size:2.2rem;color:white;margin-bottom:5px;letter-spacing:1px}
-.metric-label{font-family:'Courier New',monospace;font-size:.65rem;color:#666;text-transform:uppercase;letter-spacing:2px}
-.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:4px;font-family:'VT323',monospace;font-size:.95rem;text-transform:uppercase;letter-spacing:1px}
-.badge-info{background:rgba(0,217,255,.1);color:#00d9ff;border:1px solid rgba(0,217,255,.3)}
-.badge-pct{background:rgba(0,255,173,.12);color:#00ffad;border:1px solid rgba(0,255,173,.35);font-size:1.1rem}
-.mode-banner{background:linear-gradient(135deg,#0c0e12,#1a1e26);border:1px solid #00d9ff33;border-radius:8px;padding:12px 20px;margin-bottom:20px;font-family:'Courier New',monospace;font-size:12px;color:#888}
-.mode-banner b{color:#00d9ff}
-.method-box{background:linear-gradient(135deg,#0c0e12,#0d1220);border:1px solid #b044ff33;border-radius:8px;padding:16px 20px;margin-bottom:20px;font-family:'Courier New',monospace;font-size:12px;color:#999}
+a{color:#00d9ff!important}
+
+/* ── Scanlines overlay ── */
+.stApp::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,173,0.015) 2px,rgba(0,255,173,0.015) 4px);
+  pointer-events:none;z-index:0}
+
+/* ── Header ── */
+.main-header{text-align:center;margin-bottom:30px;padding:30px 0 20px}
+.main-tag{font-family:'VT323',monospace;font-size:.95rem;color:#444;letter-spacing:3px;margin-bottom:12px}
+.main-title{font-family:'VT323',monospace!important;color:#00ffad!important;font-size:4rem;
+  text-shadow:0 0 30px #00ffad88,0 0 60px #00ffad33;
+  border-bottom:2px solid #00ffad55;padding-bottom:12px;margin-bottom:8px;
+  text-transform:uppercase;letter-spacing:4px}
+.main-subtitle{font-family:'Courier New',monospace;color:#00d9ff;font-size:.85rem;
+  max-width:700px;margin:0 auto;letter-spacing:4px;text-transform:uppercase;opacity:.8}
+
+/* ── Method banner ── */
+.method-box{background:linear-gradient(135deg,#0c0e12,#0d1118);
+  border:1px solid #b044ff44;border-radius:6px;padding:12px 18px;margin-bottom:18px;
+  font-family:'Courier New',monospace;font-size:11px;color:#777;line-height:1.7}
 .method-box b{color:#b044ff}
-.stButton>button[kind="secondary"]{background-color:transparent!important;border:1px solid #00ffad!important;color:#00ffad!important;font-family:'VT323',monospace!important;font-size:1.2rem!important;letter-spacing:3px!important;text-transform:uppercase!important}
-.stButton>button[kind="secondary"]:hover{background-color:rgba(0,255,173,.1)!important;box-shadow:0 0 15px #00ffad33!important}
+.method-box span{color:#00ffad}
+
+/* ── Mode banner ── */
+.mode-banner{background:linear-gradient(135deg,#0c0e12,#111622);border:1px solid #00d9ff22;
+  border-radius:6px;padding:10px 16px;margin-bottom:16px;
+  font-family:'Courier New',monospace;font-size:11px;color:#666}
+.mode-banner b{color:#00d9ff}
+
+/* ── Section headers ── */
+.sec-hdr{font-family:'VT323',monospace;color:#00ffad;font-size:1.5rem;text-transform:uppercase;
+  letter-spacing:3px;margin:0 0 14px;padding-left:14px;
+  border-left:3px solid #00ffad;display:flex;align-items:center;gap:10px}
+
+/* ── Group containers ── */
+.grp-box{border:1px solid #00ffad22;border-radius:6px;overflow:hidden;
+  background:#0c0e12;margin-bottom:18px;box-shadow:0 0 20px #00ffad08}
+.grp-hdr{background:linear-gradient(135deg,#0e1018 0%,#131824 100%);
+  padding:10px 18px;border-bottom:1px solid #00ffad22}
+.grp-ttl{font-family:'VT323',monospace!important;color:#00ffad!important;
+  font-size:1.15rem!important;text-transform:uppercase;letter-spacing:2px;margin:0}
+
+/* ── Metric cards ── */
+.metric-card{background:linear-gradient(135deg,#0e1018 0%,#131824 100%);
+  border:1px solid #00ffad22;border-radius:6px;padding:18px 12px;text-align:center;
+  box-shadow:0 0 12px #00ffad08;transition:border-color .2s}
+.metric-card:hover{border-color:#00ffad55}
+.metric-value{font-family:'VT323',monospace;font-size:2.1rem;color:white;margin-bottom:4px;letter-spacing:1px}
+.metric-label{font-family:'Courier New',monospace;font-size:.6rem;color:#555;
+  text-transform:uppercase;letter-spacing:2px}
+.metric-sub{font-family:'Courier New',monospace;font-size:.65rem;margin-top:4px;letter-spacing:1px}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:4px;
+  font-family:'VT323',monospace;font-size:1rem;text-transform:uppercase;letter-spacing:1px}
+.badge-info{background:rgba(0,217,255,.08);color:#00d9ff;border:1px solid rgba(0,217,255,.25)}
+.badge-ok{background:rgba(0,255,173,.08);color:#00ffad;border:1px solid rgba(0,255,173,.25)}
+
+/* ── Scan button ── */
+.stButton>button[kind="secondary"]{
+  background:linear-gradient(135deg,transparent,rgba(0,255,173,.05))!important;
+  border:1px solid #00ffad88!important;color:#00ffad!important;
+  font-family:'VT323',monospace!important;font-size:1.4rem!important;
+  letter-spacing:4px!important;text-transform:uppercase!important;
+  padding:12px 0!important;transition:all .2s!important}
+.stButton>button[kind="secondary"]:hover{
+  background:linear-gradient(135deg,rgba(0,255,173,.08),rgba(0,255,173,.15))!important;
+  border-color:#00ffad!important;box-shadow:0 0 20px #00ffad44!important;
+  text-shadow:0 0 10px #00ffad!important}
+
+/* ── Dataframe tweaks ── */
+.stDataFrame{border:1px solid #00ffad11!important;border-radius:6px}
 </style>"""
 
 # ─────────────────────────────────────────────────────────────
@@ -376,17 +431,16 @@ def render():
     st.markdown(CSS, unsafe_allow_html=True)
 
     st.markdown("""<div class="main-header">
-        <div style="font-family:'VT323',monospace;font-size:1rem;color:#666;margin-bottom:10px;letter-spacing:2px;">[ANÁLISIS INSTITUCIONAL // S&amp;P 500 UNIVERSE]</div>
-        <div class="main-title">🔍 SCANNER RS/RW PRO</div>
-        <div class="main-subtitle">PERCENTILE RELATIVE STRENGTH // SECTOR ROTATION</div>
+        <div class="main-tag">[ANÁLISIS INSTITUCIONAL // S&amp;P 500 UNIVERSE]</div>
+        <div style="font-size:3rem;margin-bottom:4px;">🔍</div>
+        <div class="main-title">SCANNER RS/RW PRO</div>
+        <div class="main-subtitle">PERCENTILE RELATIVE STRENGTH // ROTACIÓN SECTORIAL</div>
     </div>""", unsafe_allow_html=True)
 
-    # Banner de metodología
     st.markdown("""<div class="method-box">
-        <b>METODOLOGÍA v4.0</b> — RS Score convertido a <b>Percentil 0-99</b> dentro del universo S&P 500 ·
-        Períodos <b>21d · 63d · 126d</b> (pesos 20/35/45%) ·
-        <b>EMA-suavizado</b> para eliminar spikes de earnings ·
-        <b>RS Momentum</b> indica si la fuerza relativa está acelerando o frenando
+        <b>METODOLOGÍA v4.0</b> — RS Score → <span>Percentil 0-99</span> dentro del universo S&amp;P 500 ·
+        Períodos <span>21d · 63d · 126d</span> (pesos 20/35/45% — el largo plazo domina) ·
+        <b>EMA-suavizado</b> elimina spikes de earnings · <b>RS Momentum</b> detecta aceleración/freno
     </div>""", unsafe_allow_html=True)
 
     if "rsrw_show" not in st.session_state:
@@ -430,20 +484,29 @@ def render():
                 freshness   = f"hace {int(age_mins)} min"
                 fc, fi      = C_CYAN, "◉"
 
-    # ── Badge + Botón (siempre visibles) ──────────────────────
+    # ── En modo Gist con datos, mostrar automáticamente ───────
+    if gist_mode and not results.empty:
+        st.session_state["rsrw_show"] = True
+
     scored  = meta.get("tickers_scored", len(results))
     version = meta.get("version","4.0")
-    method  = meta.get("methodology","")
 
+    # Badge estado — solo si hay datos
     if not results.empty:
-        st.markdown(f"""<div style="text-align:center;margin-bottom:10px;">
+        st.markdown(f"""<div style="text-align:center;margin-bottom:16px;">
             <span class="badge badge-info">▸ {scored} TICKERS &nbsp;|&nbsp; {len(sector_data)} SECTORES &nbsp;|&nbsp; {source_label} v{version}</span>
             &nbsp;&nbsp;<span style="font-family:'Courier New',monospace;font-size:12px;color:{fc};">{fi} {freshness}</span>
         </div>""", unsafe_allow_html=True)
 
+    # Botón siempre visible
     _, col_btn, _ = st.columns([1,2,1])
     with col_btn:
-        lbl = "🔄 Refrescar" if (not results.empty and gist_mode) else ("🔄 Actualizar Scan" if not results.empty else "🔍 Ejecutar Scanner")
+        if results.empty:
+            lbl = "🔍 EJECUTAR SCANNER"
+        elif gist_mode:
+            lbl = "🔄 REFRESCAR DATOS"
+        else:
+            lbl = "🔄 ACTUALIZAR SCAN"
         run_btn = st.button(lbl, use_container_width=True, type="secondary")
 
     if run_btn:
@@ -463,13 +526,16 @@ def render():
                 st.session_state["rsrw_show"] = True
                 st.rerun()
 
+    # Sin datos: guía y parar
     if results.empty:
+        st.markdown("<br>", unsafe_allow_html=True)
         _render_guide()
         _footer()
         return
 
-    if not st.session_state.get("rsrw_show", False):
-        st.info("⬆️ Pulsa el botón para ver los resultados del scanner.")
+    # Modo on-demand sin scan ejecutado aún
+    if not gist_mode and not st.session_state.get("rsrw_show", False):
+        st.info("⬆️ Pulsa el botón para ejecutar el scanner.")
         _render_guide()
         _footer()
         return

@@ -479,7 +479,7 @@ def render():
             ganadas   = len(cerradas[cerradas["P&L Terminal (%)"] > 0])
             perdidas  = len(cerradas[cerradas["P&L Terminal (%)"] <= 0])
             win_rate  = ganadas / len(cerradas) * 100 if len(cerradas) > 0 else 0
-            avg_pnl   = cerradas["P&L Terminal (%)"].mean()
+            avg_pnl   = cerradas["P&L Terminal (%)"].sum()
             avg_sign  = "+" if avg_pnl >= 0 else ""
             avg_cls   = "negative" if avg_pnl < 0 else ""
 
@@ -501,9 +501,9 @@ def render():
             with sc3:
                 st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-label">▸ P&L Medio</div>
+                    <div class="metric-label">▸ P&L Total</div>
                     <div class="metric-value {avg_cls}">{avg_sign}{avg_pnl:.2f}%</div>
-                    <div class="metric-sub {avg_cls}">Por operación cerrada</div>
+                    <div class="metric-sub {avg_cls}">Suma de operaciones cerradas</div>
                 </div>""", unsafe_allow_html=True)
 
             st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)

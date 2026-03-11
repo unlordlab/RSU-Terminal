@@ -260,3 +260,47 @@
 2026-03-10 04:33:48,458 [INFO] Completo: 72 candidatos
 2026-03-10 04:33:48,472 [INFO] Guardado: data/scan_cache.json
 2026-03-10 04:33:48,472 [INFO] Tiempo: 5.9 min — OK
+2026-03-11 04:28:21,911 [INFO] ============================================================
+2026-03-11 04:28:21,912 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-11 04:28 UTC
+2026-03-11 04:28:22,019 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-11 04:28:22,020 [INFO] Universo: 480 tickers
+2026-03-11 04:28:22,020 [INFO] PASO 1/4 — Historico batch...
+2026-03-11 04:28:22,022 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-03-11 04:28:24,962 [INFO]   Batch 1 — 50 descargados
+2026-03-11 04:28:27,674 [INFO]   Batch 2 — 100 descargados
+2026-03-11 04:28:30,603 [INFO]   Batch 3 — 150 descargados
+2026-03-11 04:28:33,437 [INFO]   Batch 4 — 200 descargados
+2026-03-11 04:28:36,213 [INFO]   Batch 5 — 250 descargados
+2026-03-11 04:28:38,948 [INFO]   Batch 6 — 300 descargados
+2026-03-11 04:28:41,556 [INFO]   Batch 7 — 350 descargados
+2026-03-11 04:28:44,399 [INFO]   Batch 8 — 400 descargados
+2026-03-11 04:28:47,086 [INFO]   Batch 9 — 450 descargados
+2026-03-11 04:28:48,837 [INFO]   Batch 10 — 480 descargados
+2026-03-11 04:28:48,837 [INFO] PASO 2/4 — Info fundamental...
+2026-03-11 04:29:18,255 [INFO]   Info: 50/480
+2026-03-11 04:29:49,020 [INFO]   Info: 100/480
+2026-03-11 04:30:20,148 [INFO]   Info: 150/480
+2026-03-11 04:30:51,032 [INFO]   Info: 200/480
+2026-03-11 04:31:22,555 [INFO]   Info: 250/480
+2026-03-11 04:31:53,713 [INFO]   Info: 300/480
+2026-03-11 04:32:24,913 [INFO]   Info: 350/480
+2026-03-11 04:32:56,352 [INFO]   Info: 400/480
+2026-03-11 04:33:28,657 [INFO]   Info: 450/480
+2026-03-11 04:33:48,814 [INFO]   480 tickers
+2026-03-11 04:33:48,814 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-11 04:33:48,901 [INFO]   466 tickers
+2026-03-11 04:33:48,901 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-11 04:33:49,796 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-03-11 04:33:49,796 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-11 04:33:49,964 [INFO]   50/466 — candidatos: 8
+2026-03-11 04:33:50,130 [INFO]   100/466 — candidatos: 13
+2026-03-11 04:33:50,297 [INFO]   150/466 — candidatos: 20
+2026-03-11 04:33:50,462 [INFO]   200/466 — candidatos: 29
+2026-03-11 04:33:50,626 [INFO]   250/466 — candidatos: 38
+2026-03-11 04:33:50,791 [INFO]   300/466 — candidatos: 47
+2026-03-11 04:33:50,956 [INFO]   350/466 — candidatos: 55
+2026-03-11 04:33:51,122 [INFO]   400/466 — candidatos: 63
+2026-03-11 04:33:51,286 [INFO]   450/466 — candidatos: 69
+2026-03-11 04:33:51,339 [INFO] Completo: 70 candidatos
+2026-03-11 04:33:51,377 [INFO] Guardado: data/scan_cache.json
+2026-03-11 04:33:51,377 [INFO] Tiempo: 5.5 min — OK

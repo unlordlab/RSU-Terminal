@@ -666,11 +666,11 @@ def render():
             else:             mom_colors.append(C_ORANGE)
 
         fig_b = go.Figure()
-        fig_b.add_hline(y=80, line_dash="dot", line_color="#00ffad44", line_width=1,
-            annotation_text="Umbral PCT 80", annotation_font_color="#00ffad44",
+        fig_b.add_hline(y=80, line_dash="dot", line_color="rgba(0,255,173,0.27)", line_width=1,
+            annotation_text="Umbral PCT 80", annotation_font_color="rgba(0,255,173,0.27)",
             annotation_font_size=10)
-        fig_b.add_hline(y=50, line_dash="dot", line_color="#33333388", line_width=1)
-        fig_b.add_vline(x=1.5, line_dash="dot", line_color="#33333388", line_width=1)
+        fig_b.add_hline(y=50, line_dash="dot", line_color="rgba(51,51,51,0.53)", line_width=1)
+        fig_b.add_vline(x=1.5, line_dash="dot", line_color="rgba(51,51,51,0.53)", line_width=1)
 
         # Cuadrante prime (PCT>80, RVOL>1.5)
         fig_b.add_shape(type="rect", x0=1.5, x1=bdf["RVOL"].max()*1.1,

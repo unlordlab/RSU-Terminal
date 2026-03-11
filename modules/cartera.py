@@ -405,45 +405,55 @@ def render():
         # ── ACTIVIDAD RECIENTE ────────────────────────────────────────────
         st.markdown("<h2>02 // ACTIVIDAD RECIENTE</h2>", unsafe_allow_html=True)
 
-        col_izq, col_der = st.columns(2)
+        # Build both panels as a single HTML block so flexbox can equalise heights
+        all_trades = df.sort_values(by="Fecha", ascending=False).head(5)
+        entradas_rows = ""
+        for _, row in all_trades.iterrows():
+            estado_color = "#00ffad" if row["Estado"] == "ABIERTA" else "#666"
+            entradas_rows += f"""
+            <div class="activity-row">
+                <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
+                <span class="ticker-tag">{row['Ticker']}</span>
+                <span style="color:#fff;">${row['Precio Compra']:,.2f}</span>
+                <span style="font-family:'VT323',monospace; color:{estado_color}; font-size:0.85rem;">{row['Estado']}</span>
+            </div>"""
 
-        with col_izq:
-            st.markdown("<h3>📥 Últimas 5 Entradas</h3>", unsafe_allow_html=True)
-            all_trades = df.sort_values(by="Fecha", ascending=False).head(5)
-            if not all_trades.empty:
-                rows_html = ""
-                for _, row in all_trades.iterrows():
-                    estado_color = "#00ffad" if row["Estado"] == "ABIERTA" else "#666"
-                    rows_html += f"""
-                    <div class="activity-row">
-                        <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
-                        <span class="ticker-tag">{row['Ticker']}</span>
-                        <span style="color:#fff;">${row['Precio Compra']:,.2f}</span>
-                        <span style="font-family:'VT323',monospace; color:{estado_color}; font-size:0.85rem;">{row['Estado']}</span>
-                    </div>"""
-                st.markdown(f'<div class="terminal-box" style="padding:15px; min-height:200px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
-                            unsafe_allow_html=True)
+        salidas_rows = ""
+        if not cerradas.empty:
+            ult_ventas = cerradas.sort_values(by="Fecha", ascending=False).head(5)
+            for _, row in ult_ventas.iterrows():
+                pnl_val   = row["P&L Terminal (%)"]
+                pnl_color = "#00ffad" if pnl_val >= 0 else "#f23645"
+                pnl_sign  = "+" if pnl_val >= 0 else ""
+                salidas_rows += f"""
+                <div class="activity-row">
+                    <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
+                    <span class="ticker-tag">{row['Ticker']}</span>
+                    <span style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl_val:.2f}%</span>
+                </div>"""
+        else:
+            salidas_rows = '<p style="color:#666;">Sin operaciones cerradas aún.</p>'
 
-        with col_der:
-            st.markdown("<h3>📤 Últimas 5 Salidas</h3>", unsafe_allow_html=True)
-            if not cerradas.empty:
-                ult_ventas = cerradas.sort_values(by="Fecha", ascending=False).head(5)
-                rows_html = ""
-                for _, row in ult_ventas.iterrows():
-                    pnl_val  = row["P&L Terminal (%)"]
-                    pnl_color = "#00ffad" if pnl_val >= 0 else "#f23645"
-                    pnl_sign = "+" if pnl_val >= 0 else ""
-                    rows_html += f"""
-                    <div class="activity-row">
-                        <span style="color:#666;">{row['Fecha'].strftime('%d/%m/%Y')}</span>
-                        <span class="ticker-tag">{row['Ticker']}</span>
-                        <span style="color:{pnl_color}; font-weight:bold;">{pnl_sign}{pnl_val:.2f}%</span>
-                    </div>"""
-                st.markdown(f'<div class="terminal-box phase-box red" style="padding:15px; min-height:200px; max-height:300px; overflow-y:auto;">{rows_html}</div>',
-                            unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="phase-box gold"><p>Sin operaciones cerradas aún.</p></div>',
-                            unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="display:flex; gap:20px; align-items:stretch;">
+            <div style="flex:1; display:flex; flex-direction:column;">
+                <div style="font-family:'VT323',monospace; color:#ff9800; font-size:1.3rem;
+                    margin-bottom:10px; letter-spacing:2px;">📥 ÚLTIMAS 5 ENTRADAS</div>
+                <div class="terminal-box" style="padding:15px; flex:1;
+                    max-height:300px; overflow-y:auto;">
+                    {entradas_rows}
+                </div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column;">
+                <div style="font-family:'VT323',monospace; color:#ff9800; font-size:1.3rem;
+                    margin-bottom:10px; letter-spacing:2px;">📤 ÚLTIMAS 5 SALIDAS</div>
+                <div class="terminal-box" style="padding:15px; flex:1; border-left:3px solid #f23645;
+                    max-height:300px; overflow-y:auto;">
+                    {salidas_rows}
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -641,7 +651,6 @@ def render():
             <p style="color:#ccc !important;">{e}</p>
         </div>
         """, unsafe_allow_html=True)
-
 
 
 

@@ -190,9 +190,5 @@
   "URG": {
     "precio_compra": 1.58,
     "fecha": "12/03/2026"
-  },
-  "CLSK": {
-    "precio_compra": 9.4,
-    "fecha": "12/03/2026"
   }
 }

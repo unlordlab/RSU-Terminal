@@ -186,5 +186,9 @@
   "ALAB": {
     "precio_compra": 126.45,
     "fecha": "11/03/2026"
+  },
+  "URG": {
+    "precio_compra": 1.58,
+    "fecha": "12/03/2026"
   }
 }

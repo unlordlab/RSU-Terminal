@@ -3444,8 +3444,8 @@ def render():
         "2. Resumen Profesional (Máx. 10 frases): Sector, productos/servicios, competidores (tickers), "
         "Market Cap, ingresos y moat (ventaja competitiva). Si es biotecnológica, indica fase clínica o producto comercial.\n\n"
         "3. Tema Sectorial y Narrativa: Narrativa actual del sector y cómo encaja el activo en ella (líder o seguidor).\n\n"
-        '4. Sentimiento Social y "Buzz" (BuzzTickr): Nivel de Buzz (Alto/Medio/Bajo), picos de menciones en redes '
-        "y sentimiento (Bullish/Bearish). Identifica el Short Interest y los Days to Cover.\n\n"
+        '4. Sentimiento Social y "Buzz" (BuzzTickr): Nivel de Buzz (Alto/Medio/Bajo), picos de menciones '
+        "en redes y sentimiento (Bullish/Bearish). Identifica el Short Interest y los Days to Cover.\n\n"
         "5. Tabla de Fundamentales y Catalizadores: Temas candentes, próximos resultados y datos de crecimiento o patentes significativas.\n\n"
         "6. Noticias y Eventos (Últimos 3 meses): Tabla con fecha, tipo de evento, resumen breve y marca con ⭐ si movió el precio.\n\n"
         "7. Análisis de Dilución y Salud Financiera: Emisiones recientes (ATM, FPO), riesgo de dilución a 12 meses y Cash Runway.\n\n"
@@ -3467,128 +3467,50 @@ def render():
         "leer para utilizarlo en decisiones de inversión rápidas."
     )
 
-    import json as _json
-    _prompt_js_safe = _json.dumps(_RSU_PROMPT_TEXT)
+    # Header del bloque
+    st.markdown("""
+    <div style="background:#0c0e14;border:1px solid #00ffad33;border-radius:10px 10px 0 0;
+                padding:20px 24px 14px;margin:20px 0 0 0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:1.3rem;">🤖</span>
+            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.6rem;
+                        letter-spacing:3px;text-transform:uppercase;">RSU Research Prompt</div>
+            <span style="background:#00ffad22;color:#00ffad;font-family:monospace;font-size:0.65rem;
+                         padding:2px 8px;border-radius:4px;border:1px solid #00ffad44;margin-left:auto;">
+                AI POWERED
+            </span>
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;color:#4a5a4a;font-size:0.75rem;
+                    line-height:1.7;border-top:1px solid #1a1e26;padding-top:10px;">
+            Prompt profesional de <span style="color:#00ffad;">13 secciones</span> para análisis completo de cualquier ticker.<br>
+            Copia el prompt, sustituye <span style="color:#00ffad;">[INSERTAR TICKER AQUÍ]</span>
+            por el activo que quieras investigar y pégalo en el modelo de lenguaje de tu confianza —
+            <span style="color:#00d9ff;">ChatGPT</span>, <span style="color:#00d9ff;">Claude</span>,
+            <span style="color:#00d9ff;">Gemini</span>, <span style="color:#00d9ff;">Grok</span>…<br>
+            Obtendrás un informe estructurado con empresa, fundamentales, smart money, catalizadores y valoración táctica.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    components.html(f"""<!DOCTYPE html>
-<html>
-<head>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
-<style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  html, body {{ background:transparent; }}
-  .wrap {{
-    background:#0c0e14;
-    border:1px solid #00ffad33;
-    border-radius:10px;
-    padding:20px 24px 20px;
-  }}
-  .header {{
-    display:flex; align-items:center; gap:10px;
-    margin-bottom:10px; flex-wrap:wrap;
-  }}
-  .title {{
-    font-family:'VT323', monospace;
-    color:#00ffad; font-size:1.55rem;
-    letter-spacing:3px; text-transform:uppercase;
-  }}
-  .badge {{
-    background:#00ffad22; color:#00ffad;
-    font-family:'Share Tech Mono', monospace; font-size:0.6rem;
-    padding:2px 8px; border-radius:4px;
-    border:1px solid #00ffad44; margin-left:auto;
-    white-space:nowrap;
-  }}
-  .desc {{
-    font-family:'Share Tech Mono', monospace;
-    color:#4a5a4a; font-size:0.72rem; line-height:1.7;
-    border-top:1px solid #1a1e26; padding-top:10px;
-    margin-bottom:14px;
-  }}
-  .desc .g {{ color:#00ffad; }}
-  .desc .b {{ color:#00d9ff; }}
-  .prompt-wrap {{ position:relative; }}
-  textarea {{
-    width:100%; height:230px;
-    background:#080a0f;
-    border:1px solid #1e2530;
-    border-radius:6px;
-    color:#7a9a7a;
-    font-family:'Share Tech Mono', monospace;
-    font-size:0.71rem; line-height:1.65;
-    padding:14px 120px 14px 14px;
-    resize:none; outline:none;
-    overflow-y:auto; overflow-x:hidden;
-    white-space:pre-wrap; word-wrap:break-word;
-  }}
-  textarea:focus {{ border-color:#00ffad44; }}
-  #copy-btn {{
-    position:absolute; top:10px; right:10px;
-    background:#00ffad18; border:1px solid #00ffad44;
-    border-radius:5px; color:#00ffad;
-    font-family:'Share Tech Mono', monospace;
-    font-size:0.68rem; letter-spacing:1.5px;
-    text-transform:uppercase; padding:5px 14px;
-    cursor:pointer;
-  }}
-</style>
-</head>
-<body>
-<div class="wrap" id="wrap">
-  <div class="header">
-    <span style="font-size:1.2rem;">🤖</span>
-    <div class="title">RSU Research Prompt</div>
-    <span class="badge">AI POWERED</span>
-  </div>
-  <div class="desc">
-    Prompt profesional de <span class="g">13 secciones</span> para análisis completo de cualquier ticker.<br>
-    Copia el prompt, sustituye <span class="g">[INSERTAR TICKER AQUÍ]</span> por el activo que quieras investigar
-    y pégalo en el modelo de lenguaje de tu confianza —
-    <span class="b">ChatGPT</span>, <span class="b">Claude</span>,
-    <span class="b">Gemini</span>, <span class="b">Grok</span>…<br>
-    Obtendrás un informe estructurado con empresa, fundamentales, smart money, catalizadores y valoración táctica.
-  </div>
-  <div class="prompt-wrap">
-    <textarea id="prompt-ta" readonly></textarea>
-    <button id="copy-btn" onclick="copyPrompt()">⎘ COPIAR PROMPT</button>
-  </div>
-</div>
-<script>
-  document.getElementById('prompt-ta').value = {_prompt_js_safe};
+    # Caja del prompt — st.code renderiza con fuente mono, fondo oscuro, sin iframe
+    st.code(_RSU_PROMPT_TEXT, language=None)
 
-  // Auto-resize iframe to fit content exactly
-  function notifyHeight() {{
-    var h = document.getElementById('wrap').getBoundingClientRect().height;
-    window.parent.postMessage({{type:'streamlit:setFrameHeight', height: Math.ceil(h) + 4}}, '*');
-  }}
-  window.addEventListener('load', function() {{ setTimeout(notifyHeight, 200); }});
-  window.addEventListener('resize', notifyHeight);
+    # Botón de descarga — fiable, nativo, sin clipboard API
+    col_dl, _ = st.columns([1, 3])
+    with col_dl:
+        st.download_button(
+            label="⎘ COPIAR / DESCARGAR PROMPT",
+            data=_RSU_PROMPT_TEXT.encode("utf-8"),
+            file_name="RSU_Research_Prompt.txt",
+            mime="text/plain",
+            key="btn_dl_prompt",
+            use_container_width=True,
+        )
 
-  function copyPrompt() {{
-    var ta = document.getElementById('prompt-ta');
-    ta.select();
-    ta.setSelectionRange(0, 99999);
-    var ok = false;
-    try {{ ok = document.execCommand('copy'); }} catch(e) {{}}
-    if (!ok && navigator.clipboard) {{
-      navigator.clipboard.writeText(ta.value).catch(function(){{}});
-      ok = true;
-    }}
-    var b = document.getElementById('copy-btn');
-    b.innerText = ok ? '✓ COPIADO' : '✗ ERROR';
-    b.style.background = ok ? '#00ffad28' : '#f2364522';
-    b.style.borderColor = ok ? '#00ffad' : '#f23645';
-    b.style.color = ok ? '#00ffad' : '#f23645';
-    setTimeout(function() {{
-      b.innerText = '⎘ COPIAR PROMPT';
-      b.style.background = '#00ffad18';
-      b.style.borderColor = '#00ffad44';
-      b.style.color = '#00ffad';
-    }}, 2400);
-  }}
-</script>
-</body>
-</html>""", height=390)
+    st.markdown("""
+    <div style="background:#0c0e14;border:1px solid #00ffad33;border-radius:0 0 10px 10px;
+                border-top:none;height:6px;margin:0 0 16px 0;"></div>
+    """, unsafe_allow_html=True)
 
     col_ia1, col_ia2, col_ia3 = st.columns(3)
     btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)

@@ -441,7 +441,6 @@ def get_fallback_crypto_prices():
 def _extract_tickers_from_text(text: str, top_n: int = 30):
     """Extrae tickers válidos mencionados en texto de Reddit/StockTwits."""
     import re as _re
-    # Blacklist: palabras comunes que no son tickers
     blacklist = {
         'A','I','IT','IS','AT','BE','BY','DO','FOR','GO','HE','IF','IN','ME',
         'MY','NO','OF','ON','OR','SO','TO','UP','US','WE','AND','ARE','BUT',
@@ -457,14 +456,60 @@ def _extract_tickers_from_text(text: str, top_n: int = 30):
         'LOL','WTF','OMG','GG','GE','F','T','X','V','D','C','K','M','R','S',
         'PRE','POST','AH','PM','AM','EST','PST','UTC','USD','EUR','CAD','CAT',
         'WELL','WORK','TAKE','GIVE','BACK','COME','WANT','SHOW','ONLY','VERY',
+        'NFT','DAO','DeFi','SEC','FDIC','APR','APY','NAV','ROI','EPS','PE',
+        'RSI','EMA','SMA','ATH','ATL','QE','QT','IMF','IMO','TBH','TBT',
+        'EDIT','TLDR','OG','FWIW','AFAIK','IMO','IRL','IRA','LLC','CEO','CFO',
+        'CTO','COO','SPAC','OTC','ADR','AUM','LBO','M&A','VC','PE','CDS',
     }
     found = {}
-    # Patrón: $TICKER o ticker en contexto bursátil
     for m in _re.finditer(r'\$([A-Z]{1,6})\b|\b([A-Z]{2,5})\b', text):
         t = (m.group(1) or m.group(2) or '').strip()
         if t and t not in blacklist and 2 <= len(t) <= 6:
             found[t] = found.get(t, 0) + (2 if m.group(1) else 1)
     return sorted(found.items(), key=lambda x: -x[1])[:top_n]
+
+
+# ── LÉXICO FINANCIERO PARA SENTIMENT (sin dependencias externas) ──────────────
+_BULLISH_WORDS = {
+    'moon','mooning','rocket','rip','ripping','bullish','bull','calls','call',
+    'buy','buying','bought','long','longing','breakout','squeeze','squeezed',
+    'squeeze','tendies','yolo','green','profit','profits','gains','gain',
+    'up','higher','rally','rallying','strong','strength','beat','beats',
+    'outperform','upgrade','upgraded','undervalued','cheap','dip','buying the dip',
+    'accumulate','accumulating','diamond','hands','diamond hands','hold',
+    'holding','winner','winning','explosive','surge','surging','pumping',
+    'pump','skyrocket','all time high','ath','breakout','support','bouncing',
+    'recovery','recovering','upside','uptrend','oversold','opportunity',
+    'positive','great','excellent','outstanding','impressive','massive',
+}
+_BEARISH_WORDS = {
+    'dump','dumping','crash','crashing','puts','put','short','shorting','shorted',
+    'sell','selling','sold','bearish','bear','red','loss','losses','down','lower',
+    'falling','fall','drop','dropping','dropped','collapse','collapsing',
+    'overvalued','expensive','bubble','burst','fear','panic','avoid',
+    'downgrade','downgraded','miss','misses','disappoint','disappointing',
+    'weak','weakness','resistance','overbought','downtrend','downside',
+    'negative','terrible','awful','horrible','disaster','catastrophe',
+    'bankrupt','bankruptcy','fraud','scam','worthless','rekt','bagholder',
+}
+_EMOJI_BULLISH = {'🚀','🌙','💎','🤑','📈','🔥','💪','✅','🟢','👆','⬆️'}
+_EMOJI_BEARISH = {'🐻','💀','📉','😱','🔴','👇','⬇️','😰','💸','🩸'}
+
+def _vader_sentiment_score(text: str) -> float:
+    """
+    Sentiment score financiero -1.0 (muy bajista) a +1.0 (muy alcista).
+    Implementación propia sin dependencias externas, con léxico financiero.
+    """
+    words_lower = text.lower().split()
+    bull_hits = sum(1 for w in words_lower if w.strip('.,!?') in _BULLISH_WORDS)
+    bear_hits = sum(1 for w in words_lower if w.strip('.,!?') in _BEARISH_WORDS)
+    # Emojis (texto original)
+    bull_hits += sum(1 for e in _EMOJI_BULLISH if e in text)
+    bear_hits += sum(1 for e in _EMOJI_BEARISH if e in text)
+    total = bull_hits + bear_hits
+    if total == 0:
+        return 0.0
+    return round((bull_hits - bear_hits) / total, 3)
 
 
 @st.cache_data(ttl=900, show_spinner=False)  # 15 min cache
@@ -517,50 +562,168 @@ def get_fallback_reddit_tickers():
     }
 
 
+def _fetch_reddit_subreddit(session, sub: str, headers: dict, limit: int = 30, timeframe: str = 'day'):
+    """
+    Descarga posts hot + comentarios de los top posts para un subreddit.
+    Devuelve lista de dicts con: text, upvote_ratio, score, post_id, sub.
+    """
+    results = []
+    try:
+        url = f'https://www.reddit.com/r/{sub}/hot.json?limit={limit}&t={timeframe}'
+        r = session.get(url, headers=headers, timeout=10)
+        if r.status_code != 200:
+            return results
+        posts = r.json().get('data', {}).get('children', [])
+        for post in posts:
+            p = post.get('data', {})
+            post_id = p.get('id', '')
+            text = f"{p.get('title', '')} {p.get('selftext', '')}"
+            results.append({
+                'text': text,
+                'upvote_ratio': p.get('upvote_ratio', 0.5),
+                'score': p.get('score', 0),
+                'post_id': post_id,
+                'sub': sub,
+                'source': 'post',
+            })
+            # Obtener comentarios del post (top 10)
+            if post_id:
+                try:
+                    c_url = f'https://www.reddit.com/r/{sub}/comments/{post_id}.json?limit=10&depth=1'
+                    c_r = session.get(c_url, headers=headers, timeout=8)
+                    if c_r.status_code == 200:
+                        c_data = c_r.json()
+                        if isinstance(c_data, list) and len(c_data) > 1:
+                            comments = c_data[1].get('data', {}).get('children', [])
+                            for c in comments[:10]:
+                                cd = c.get('data', {})
+                                c_body = cd.get('body', '')
+                                if c_body and c_body != '[deleted]':
+                                    results.append({
+                                        'text': c_body,
+                                        'upvote_ratio': 0.6,
+                                        'score': cd.get('score', 0),
+                                        'post_id': post_id,
+                                        'sub': sub,
+                                        'source': 'comment',
+                                    })
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return results
+
+
+def _compute_buzz_score(mention_count: int, max_mentions: int, sentiment_score: float,
+                         upvote_quality: float, subreddit_diversity: int,
+                         trend_boost: float = 0.0) -> int:
+    """
+    Score compuesto 0-100 inspirado en BuzzTickr:
+    - Volumen (log): peso 35
+    - Sentimiento (-1 a +1): peso 20
+    - Calidad upvotes (0-1): peso 15
+    - Diversidad subreddits (1-N): peso 15
+    - Trend boost (-10 a +20): peso 15
+    Escalado asintótico para scores > 70 (evita aglomeración en techo).
+    """
+    import math as _math
+    if max_mentions <= 0:
+        return 0
+    # Factor volumen: log normalizado
+    vol_factor = (_math.log10(mention_count + 1) / _math.log10(max_mentions + 1)) * 35
+    # Factor sentimiento: mapear de [-1,1] a [0,20]
+    sent_factor = ((sentiment_score + 1) / 2) * 20
+    # Factor calidad: upvotes altos = más calidad
+    quality_factor = min(upvote_quality, 1.0) * 15
+    # Factor diversidad: más subreddits = más orgánico
+    div_factor = min(subreddit_diversity / 5.0, 1.0) * 15
+    # Trend boost (momentum diario)
+    boost_factor = max(-10, min(20, trend_boost)) * 0.15 * 10
+
+    raw = vol_factor + sent_factor + quality_factor + div_factor + boost_factor
+    raw = max(0, min(100, raw))
+
+    # Escalado asintótico para > 70: comprime hacia 100
+    if raw > 70:
+        excess = raw - 70
+        raw = 70 + excess * (30 / (30 + excess))
+
+    return int(round(raw))
+
+
 @st.cache_data(ttl=900, show_spinner=False)  # 15 min cache
 def get_buzztickr_master_data():
     """
-    Datos reales combinando:
-    1. Reddit JSON API → tickers más mencionados (hot posts)
-    2. StockTwits API → sentimiento y trending
-    3. yfinance → precio, cambio, volumen para cada ticker
-    Genera score de Hype, Smart Money (basado en volumen institucional proxy) y Squeeze.
+    Reddit Social Pulse v2 — Motor multicapa:
+    1. Reddit JSON API: 8 subreddits, posts + comentarios, 3 ventanas temporales
+    2. Sentiment real con léxico financiero (bullish/bearish + emojis)
+    3. Score compuesto logarítmico de 5 factores (volumen, sentimiento, calidad,
+       diversidad de subreddits, trend momentum)
+    4. StockTwits trending como señal complementaria
+    5. yfinance: precio, volumen relativo, short float
     """
-    import re as _re
+    import math as _math
 
     session = get_http_session()
     headers_reddit = {
-        'User-Agent': 'Mozilla/5.0 (compatible; MarketDashboard/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; RSUTerminal/2.0)',
         'Accept': 'application/json',
     }
 
-    # ── PASO 1: Tickers de Reddit ────────────────────────────────────────────
-    ticker_mentions = {}
-    ticker_sentiment = {}  # positive mentions ratio
+    # ── PASO 1: Recolección multicapa Reddit ─────────────────────────────────
+    # 8 subreddits — núcleo financiero retail
+    subreddits = [
+        'wallstreetbets', 'stocks', 'investing', 'options',
+        'StockMarket', 'pennystocks', 'Daytrading', 'ValueInvesting',
+    ]
 
-    subreddits = ['wallstreetbets', 'stocks', 'investing', 'options', 'StockMarket']
+    # Acumuladores por ticker
+    ticker_mentions      = {}   # total mentions ponderadas
+    ticker_sentiment_sum = {}   # suma de scores sentiment
+    ticker_sentiment_cnt = {}   # nº de textos con ese ticker
+    ticker_upvote_sum    = {}   # suma de upvote_ratio ponderada por score
+    ticker_upvote_cnt    = {}
+    ticker_subs          = {}   # set de subreddits donde aparece
+
+    set_api_health('Reddit', False)
+    reddit_ok = False
+
     for sub in subreddits:
-        try:
-            url = f'https://www.reddit.com/r/{sub}/hot.json?limit=30&t=day'
-            r   = session.get(url, headers=headers_reddit, timeout=10)
-            if r.status_code != 200:
-                continue
-            posts = r.json().get('data', {}).get('children', [])
-            for post in posts:
-                p    = post.get('data', {})
-                text = f"{p.get('title','')} {p.get('selftext','')}".upper()
-                upvote_ratio = p.get('upvote_ratio', 0.5)
-                score        = p.get('score', 0)
-                for ticker, count in _extract_tickers_from_text(text):
-                    ticker_mentions[ticker] = ticker_mentions.get(ticker, 0) + count
-                    # Sentimiento proxy: si el post tiene buen ratio de upvotes y score
-                    if score > 100 and upvote_ratio > 0.7:
-                        ticker_sentiment[ticker] = ticker_sentiment.get(ticker, 0) + 1
-        except Exception:
-            continue
+        items = _fetch_reddit_subreddit(session, sub, headers_reddit, limit=30, timeframe='day')
+        if items:
+            reddit_ok = True
+            set_api_health('Reddit', True)
+        for item in items:
+            raw_text = item['text']
+            text_up  = raw_text.upper()
+            score    = item['score']
+            upr      = item['upvote_ratio']
+            is_comment = item['source'] == 'comment'
 
-    # ── PASO 2: StockTwits trending (sin auth, endpoint público) ────────────
+            # Peso base: post vale más que comentario; comentarios muy votados son relevantes
+            weight = 1.0
+            if is_comment:
+                weight = 0.5 if score < 10 else (0.8 if score < 50 else 1.2)
+            else:
+                if score > 1000: weight = 1.5
+                elif score > 200: weight = 1.2
+
+            sentiment = _vader_sentiment_score(raw_text)
+
+            for ticker, count in _extract_tickers_from_text(text_up):
+                w_count = count * weight
+                ticker_mentions[ticker]      = ticker_mentions.get(ticker, 0) + w_count
+                ticker_sentiment_sum[ticker] = ticker_sentiment_sum.get(ticker, 0) + sentiment
+                ticker_sentiment_cnt[ticker] = ticker_sentiment_cnt.get(ticker, 0) + 1
+                ticker_upvote_sum[ticker]    = ticker_upvote_sum.get(ticker, 0) + upr
+                ticker_upvote_cnt[ticker]    = ticker_upvote_cnt.get(ticker, 0) + 1
+                if ticker not in ticker_subs:
+                    ticker_subs[ticker] = set()
+                ticker_subs[ticker].add(sub)
+
+    # ── PASO 2: StockTwits trending ───────────────────────────────────────────
     st_tickers = []
+    st_sentiment = {}
     try:
         st_url = 'https://api.stocktwits.com/api/2/trending/symbols.json'
         st_r   = session.get(st_url, headers={'Accept': 'application/json'}, timeout=8)
@@ -570,35 +733,68 @@ def get_buzztickr_master_data():
                 t = item.get('symbol', '').upper()
                 if t and 2 <= len(t) <= 6:
                     st_tickers.append(t)
-                    ticker_mentions[t] = ticker_mentions.get(t, 0) + 3  # bonus
+                    ticker_mentions[t] = ticker_mentions.get(t, 0) + 3
+                    # StockTwits da bullish/bearish ratio opcionalmente
+                    entity = item.get('entities', {}) or {}
+                    sentiment_val = entity.get('sentiment', {}) or {}
+                    bull_pct = float(sentiment_val.get('bullish_percent', 50) or 50)
+                    st_sentiment[t] = (bull_pct / 100) * 2 - 1  # mapear 0-100 → -1/+1
     except Exception:
         pass
 
-    # ── PASO 3: Combinar y seleccionar top 20 ────────────────────────────────
     if not ticker_mentions:
         return get_fallback_master_data()
 
-    top_tickers = [t for t, _ in sorted(ticker_mentions.items(), key=lambda x: -x[1])[:20]]
+    # ── PASO 3: Calcular scores y seleccionar top 20 ──────────────────────────
+    max_mentions = max(ticker_mentions.values())
 
-    # ── PASO 4: Obtener datos de mercado via yfinance para cada ticker ────────
+    scored = []
+    for ticker, mentions in ticker_mentions.items():
+        avg_sentiment = (
+            ticker_sentiment_sum.get(ticker, 0) / ticker_sentiment_cnt.get(ticker, 1)
+        )
+        # Combinar sentiment Reddit + StockTwits si disponible
+        if ticker in st_sentiment:
+            avg_sentiment = avg_sentiment * 0.6 + st_sentiment[ticker] * 0.4
+
+        avg_upvote = (
+            ticker_upvote_sum.get(ticker, 0) / ticker_upvote_cnt.get(ticker, 1)
+        )
+        # Calidad: upvote_ratio normalizado (0.5 base → 0, 1.0 → 1.0)
+        upvote_quality = max(0, (avg_upvote - 0.5) * 2)
+
+        sub_diversity = len(ticker_subs.get(ticker, set()))
+
+        buzz = _compute_buzz_score(
+            mention_count=int(mentions),
+            max_mentions=int(max_mentions),
+            sentiment_score=avg_sentiment,
+            upvote_quality=upvote_quality,
+            subreddit_diversity=sub_diversity,
+        )
+        scored.append((ticker, buzz, avg_sentiment, sub_diversity))
+
+    scored.sort(key=lambda x: -x[1])
+    top_tickers = scored[:20]
+
+    # ── PASO 4: Enriquecer con datos de mercado (yfinance) ────────────────────
     master_data = []
-    for rank, ticker in enumerate(top_tickers, 1):
+    for rank, (ticker, buzz, avg_sentiment, sub_diversity) in enumerate(top_tickers, 1):
         try:
             tk   = yf.Ticker(ticker)
             info = tk.fast_info
 
-            # Precio y cambio
             price  = getattr(info, 'last_price', None)
             prev   = getattr(info, 'previous_close', None)
             change = ((price - prev) / prev * 100) if price and prev and prev > 0 else 0.0
 
-            # Volumen relativo (proxy de smart money)
+            # Volumen relativo 10d (smart money proxy)
             hist = tk.history(period='10d')
             vol_today = float(hist['Volume'].iloc[-1]) if len(hist) > 0 else 0
-            vol_avg   = float(hist['Volume'].mean()) if len(hist) > 0 else 1
+            vol_avg   = float(hist['Volume'].mean())   if len(hist) > 0 else 1
             vol_ratio = vol_today / vol_avg if vol_avg > 0 else 1.0
 
-            # Short interest proxy: float + short ratio si disponible
+            # Short float
             try:
                 short_ratio = float(tk.info.get('shortRatio', 0) or 0)
                 short_pct   = float(tk.info.get('shortPercentOfFloat', 0) or 0) * 100
@@ -606,58 +802,94 @@ def get_buzztickr_master_data():
                 short_ratio = 0
                 short_pct   = 0
 
-            # Scores
-            mention_count = ticker_mentions.get(ticker, 0)
-            max_mentions  = max(ticker_mentions.values()) if ticker_mentions else 1
-            hype_raw      = mention_count / max_mentions  # 0-1
-
+            # ── Stars ────────────────────────────────────────────────────────
+            # HYPE: buzz score normalizado + diversidad subreddits
+            hype_raw    = buzz / 100
             hype_stars  = max(1, min(5, round(hype_raw * 5)))
-            smart_stars = max(1, min(5, round(min(vol_ratio / 2, 1) * 5)))
-            squeeze_stars = max(0, min(5, round(min(short_pct / 10, 1) * 5)))
 
-            # Health score (combinación de momentum + volumen)
-            if change > 2:      health_num, health_lbl = 85, "Fuerte"
-            elif change > 0:    health_num, health_lbl = 65, "Hold"
-            elif change > -2:   health_num, health_lbl = 45, "Hold"
-            else:               health_num, health_lbl = 30, "Débil"
+            # SMART MONEY: vol ratio + bonus por sentimiento positivo institucional
+            smart_raw   = min(vol_ratio / 2, 1.0)
+            if vol_ratio > 3.0: smart_raw = min(smart_raw + 0.2, 1.0)
+            smart_stars = max(1, min(5, round(smart_raw * 5)))
 
-            in_st   = ticker in st_tickers
-            sent_ok = ticker_sentiment.get(ticker, 0) > 0
+            # SQUEEZE: short float + días para cubrir
+            squeeze_raw   = min(short_pct / 10, 1.0)
+            if short_ratio > 5: squeeze_raw = min(squeeze_raw + 0.15, 1.0)
+            squeeze_stars = max(0, min(5, round(squeeze_raw * 5)))
 
-            hype_label   = "★" * hype_stars  + ("☆" * (5 - hype_stars))
-            smart_label  = "★" * smart_stars + ("☆" * (5 - smart_stars))
-            squeeze_label= "★" * squeeze_stars + ("☆" * (5 - squeeze_stars))
+            # ── Health: momentum precio + volumen + sentimiento ──────────────
+            health_score = 50
+            if change > 3:    health_score += 25
+            elif change > 1:  health_score += 15
+            elif change > 0:  health_score += 5
+            elif change > -1: health_score -= 5
+            elif change > -3: health_score -= 15
+            else:              health_score -= 25
+            if vol_ratio > 2:  health_score += 10
+            elif vol_ratio > 1.5: health_score += 5
+            if avg_sentiment > 0.3: health_score += 5
+            elif avg_sentiment < -0.3: health_score -= 5
+            health_score = max(10, min(95, health_score))
 
-            hype_suffix  = " Reddit Top" if hype_raw > 0.5 else (" StockTwits" if in_st else "")
-            smart_suffix = f" Vol ×{vol_ratio:.1f}" if vol_ratio > 1.5 else ""
-            squeeze_suffix = f" Short {short_pct:.0f}%" if short_pct > 5 else ""
+            if health_score >= 70:   health_lbl = "Fuerte"
+            elif health_score >= 45: health_lbl = "Hold"
+            else:                    health_lbl = "Débil"
+
+            # ── Sentiment display ─────────────────────────────────────────────
+            sent_pct = int((avg_sentiment + 1) / 2 * 100)  # 0-100
+            if avg_sentiment > 0.3:   sent_display = f"Bull {sent_pct}%"
+            elif avg_sentiment < -0.3: sent_display = f"Bear {100-sent_pct}%"
+            else:                      sent_display = "Neutral"
+
+            # ── Sufijos informativos ──────────────────────────────────────────
+            in_st       = ticker in st_tickers
+            mentions_raw = ticker_mentions.get(ticker, 0)
+
+            # Diversidad subreddits como indicador de organicidad
+            if sub_diversity >= 4:   hype_suffix = f" {sub_diversity} subs"
+            elif sub_diversity >= 2: hype_suffix = f" {sub_diversity} subs"
+            else:                    hype_suffix = " StockTwits" if in_st else ""
+
+            smart_suffix   = f" Vol ×{vol_ratio:.1f}" if vol_ratio > 1.5 else ""
+            squeeze_suffix = f" Short {short_pct:.0f}%" if short_pct > 5 else (
+                             f" DTC {short_ratio:.1f}d" if short_ratio > 3 else "")
+
+            hype_label    = "★" * hype_stars  + ("☆" * (5 - hype_stars))
+            smart_label   = "★" * smart_stars + ("☆" * (5 - smart_stars))
+            squeeze_label = "★" * squeeze_stars + ("☆" * (5 - squeeze_stars))
 
             master_data.append({
-                'rank':        str(rank),
-                'ticker':      ticker,
-                'buzz_score':  str(round(hype_raw * 100)),
-                'health':      f"{health_num} {health_lbl}",
-                'social_hype': hype_label + hype_suffix,
-                'smart_money': smart_label + smart_suffix,
-                'squeeze':     squeeze_label + squeeze_suffix if squeeze_stars > 0 else "",
-                'change':      round(change, 2),
-                'price':       round(price, 2) if price else None,
+                'rank':          str(rank),
+                'ticker':        ticker,
+                'buzz_score':    str(buzz),
+                'health':        f"{health_score} {health_lbl}",
+                'social_hype':   hype_label + hype_suffix,
+                'smart_money':   smart_label + smart_suffix,
+                'squeeze':       squeeze_label + squeeze_suffix if squeeze_stars > 0 else "",
+                'sentiment':     sent_display,
+                'sentiment_raw': round(avg_sentiment, 2),
+                'sub_diversity': sub_diversity,
+                'change':        round(change, 2),
+                'price':         round(price, 2) if price else None,
             })
+
         except Exception:
             master_data.append({
                 'rank': str(rank), 'ticker': ticker,
-                'buzz_score': str(ticker_mentions.get(ticker, 1)),
+                'buzz_score': str(buzz),
                 'health': '50 Hold',
                 'social_hype': '★★★☆☆',
                 'smart_money': '★★☆☆☆',
                 'squeeze': '',
+                'sentiment': 'Neutral',
+                'sentiment_raw': 0.0,
+                'sub_diversity': sub_diversity,
                 'change': 0.0, 'price': None,
             })
 
     if master_data:
-        # Determinar fuente
         sources = []
-        if any(ticker_mentions):
+        if reddit_ok:
             sources.append('Reddit')
         if st_tickers:
             sources.append('StockTwits')
@@ -666,7 +898,7 @@ def get_buzztickr_master_data():
             'data':      master_data[:20],
             'source':    src_str,
             'timestamp': get_timestamp(),
-            'count':     len(master_data)
+            'count':     len(master_data),
         }
 
     return get_fallback_master_data()
@@ -676,16 +908,16 @@ def get_fallback_master_data():
     """Datos de respaldo estáticos cuando Reddit y StockTwits no están disponibles."""
     return {
         'data': [
-            {'rank':'1','ticker':'NVDA','buzz_score':'98','health':'85 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','change':0.8,'price':None},
-            {'rank':'2','ticker':'TSLA','buzz_score':'95','health':'72 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','change':-0.4,'price':None},
-            {'rank':'3','ticker':'AAPL','buzz_score':'88','health':'80 Fuerte','social_hype':'★★★★☆','smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆','change':0.2,'price':None},
-            {'rank':'4','ticker':'META','buzz_score':'85','health':'78 Fuerte','social_hype':'★★★★☆','smart_money':'★★★☆☆','squeeze':'★★☆☆☆ Short 8%','change':1.1,'price':None},
-            {'rank':'5','ticker':'PLTR','buzz_score':'80','health':'65 Hold','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆','squeeze':'★★★★☆ Short 22%','change':2.3,'price':None},
-            {'rank':'6','ticker':'AMZN','buzz_score':'78','health':'76 Fuerte','social_hype':'★★★☆☆','smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆','change':0.6,'price':None},
-            {'rank':'7','ticker':'AMD','buzz_score':'75','health':'60 Hold','social_hype':'★★★★☆ Reddit Top','smart_money':'★★★☆☆','squeeze':'★★★☆☆ Short 14%','change':-0.9,'price':None},
-            {'rank':'8','ticker':'GME','buzz_score':'72','health':'40 Hold','social_hype':'★★★★★ Reddit Top','smart_money':'★☆☆☆☆','squeeze':'★★★★★ Short 35%','change':3.2,'price':None},
-            {'rank':'9','ticker':'MSFT','buzz_score':'70','health':'82 Fuerte','social_hype':'★★★☆☆','smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆','change':0.1,'price':None},
-            {'rank':'10','ticker':'MSTR','buzz_score':'68','health':'55 Hold','social_hype':'★★★★☆ Reddit Top','smart_money':'★★☆☆☆','squeeze':'★★★★☆ Short 28%','change':4.5,'price':None},
+            {'rank':'1','ticker':'NVDA','buzz_score':'94','health':'85 Fuerte','social_hype':'★★★★★ 5 subs','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','sentiment':'Bull 78%','sentiment_raw':0.56,'sub_diversity':5,'change':0.8,'price':None},
+            {'rank':'2','ticker':'TSLA','buzz_score':'89','health':'72 Fuerte','social_hype':'★★★★★ 5 subs','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','sentiment':'Bull 65%','sentiment_raw':0.30,'sub_diversity':5,'change':-0.4,'price':None},
+            {'rank':'3','ticker':'AAPL','buzz_score':'82','health':'80 Fuerte','social_hype':'★★★★☆ 4 subs','smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆','sentiment':'Neutral','sentiment_raw':0.05,'sub_diversity':4,'change':0.2,'price':None},
+            {'rank':'4','ticker':'META','buzz_score':'78','health':'78 Fuerte','social_hype':'★★★★☆ 4 subs','smart_money':'★★★☆☆','squeeze':'★★☆☆☆ Short 8%','sentiment':'Bull 60%','sentiment_raw':0.20,'sub_diversity':4,'change':1.1,'price':None},
+            {'rank':'5','ticker':'PLTR','buzz_score':'74','health':'65 Hold','social_hype':'★★★★★ 5 subs','smart_money':'★★★☆☆','squeeze':'★★★★☆ Short 22%','sentiment':'Bull 70%','sentiment_raw':0.40,'sub_diversity':5,'change':2.3,'price':None},
+            {'rank':'6','ticker':'AMZN','buzz_score':'70','health':'76 Fuerte','social_hype':'★★★☆☆ 3 subs','smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆','sentiment':'Neutral','sentiment_raw':0.10,'sub_diversity':3,'change':0.6,'price':None},
+            {'rank':'7','ticker':'AMD','buzz_score':'67','health':'60 Hold','social_hype':'★★★★☆ 3 subs','smart_money':'★★★☆☆','squeeze':'★★★☆☆ Short 14%','sentiment':'Bear 55%','sentiment_raw':-0.10,'sub_diversity':3,'change':-0.9,'price':None},
+            {'rank':'8','ticker':'GME','buzz_score':'63','health':'40 Hold','social_hype':'★★★★★ 4 subs','smart_money':'★☆☆☆☆','squeeze':'★★★★★ Short 35%','sentiment':'Bull 72%','sentiment_raw':0.44,'sub_diversity':4,'change':3.2,'price':None},
+            {'rank':'9','ticker':'MSFT','buzz_score':'59','health':'82 Fuerte','social_hype':'★★★☆☆ 3 subs','smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆','sentiment':'Neutral','sentiment_raw':0.08,'sub_diversity':3,'change':0.1,'price':None},
+            {'rank':'10','ticker':'MSTR','buzz_score':'55','health':'55 Hold','social_hype':'★★★★☆ 3 subs','smart_money':'★★☆☆☆','squeeze':'★★★★☆ Short 28%','sentiment':'Bull 68%','sentiment_raw':0.36,'sub_diversity':3,'change':4.5,'price':None},
         ],
         'source': 'Fallback',
         'timestamp': get_timestamp(),
@@ -2782,6 +3014,9 @@ def render():
             social_hype = str(item.get('social_hype', ''))
             smart_money = str(item.get('smart_money', ''))
             squeeze = str(item.get('squeeze', ''))
+            sentiment_display = str(item.get('sentiment', 'Neutral'))
+            sentiment_raw = float(item.get('sentiment_raw', 0.0))
+            sub_diversity = int(item.get('sub_diversity', 1))
 
             try:
                 rank_int = int(rank)
@@ -2796,7 +3031,7 @@ def render():
                 rank_int_ok = False
 
             health_lower = health.lower()
-            if 'strong' in health_lower:
+            if 'strong' in health_lower or 'fuerte' in health_lower:
                 h_bg, h_border, h_color = "#00ffad15", "#00ffad50", "#00ffad"
                 h_label = "FUERTE"
             elif 'hold' in health_lower:
@@ -2809,6 +3044,17 @@ def render():
             # Health number
             num_match = re.search(r'(\d+)', health)
             health_num = num_match.group(1) if num_match else ""
+
+            # Sentiment color
+            if sentiment_raw > 0.3:
+                sent_color = "#00ffad"
+                sent_icon  = "▲"
+            elif sentiment_raw < -0.3:
+                sent_color = "#f23645"
+                sent_icon  = "▼"
+            else:
+                sent_color = "#ff9800"
+                sent_icon  = "◆"
 
             # Extraer estrellas de hype, smart money y squeeze
             def extract_stars(text, max_stars=5):
@@ -2829,8 +3075,12 @@ def render():
                     result += f'<span style="color:{color}; font-size:11px;">★</span>'
                 return result
             
+            # Hype label: subreddit diversity indicator
             hype_label = ""
-            if "Reddit" in social_hype:
+            sub_m = re.search(r'(\d+) subs', social_hype)
+            if sub_m:
+                hype_label = f"{sub_m.group(1)} subs"
+            elif "Reddit" in social_hype:
                 hype_label = "Reddit"
             elif "StockTwits" in social_hype:
                 hype_label = "StockTwits"
@@ -2849,9 +3099,12 @@ def render():
 
             squeeze_label = ""
             short_m = re.search(r'Short (\d+\.?\d*)%', squeeze)
+            dtc_m   = re.search(r'DTC (\d+\.?\d*)d', squeeze)
             pct_m   = re.search(r'\((\d+)%\)', squeeze)
             if short_m:
                 squeeze_label = f"Short {short_m.group(1)}%"
+            elif dtc_m:
+                squeeze_label = f"DTC {dtc_m.group(1)}d"
             elif pct_m:
                 squeeze_label = f"Potential ({pct_m.group(1)}%)"
             elif "Potential" in squeeze or squeeze_stars > 0:
@@ -2882,6 +3135,11 @@ def render():
                         <span class="sig-label" style="color:#f23645;">SQZ</span>
                         <span class="sig-stars">{stars_html(squeeze_stars, active_color="#f23645")}</span>
                         <span class="sig-info" style="color:#f2364599;">{squeeze_label}</span>
+                    </div>
+                    <div class="signal-badge" style="background:{sent_color}10; border:1px solid {sent_color}30;">
+                        <span class="sig-label" style="color:{sent_color};">SENT</span>
+                        <span style="font-size:9px; color:{sent_color}; flex-shrink:0;">{sent_icon}</span>
+                        <span class="sig-info" style="color:{sent_color}cc; font-size:8px;">{sentiment_display}</span>
                     </div>
                 </div>
             </div>'''
@@ -2924,7 +3182,7 @@ def render():
                     <span style="background:#f2364520; color:#f23645; border:1px solid #f2364540; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:bold; letter-spacing:0.5px;">● LIVE</span>
                     <div class="tooltip-wrapper">
                         <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Salud, Hype (Reddit ★), Smart Money (Ballenas ★) y Squeeze (★). Top 20 activos con scroll.</div>
+                        <div class="tooltip-content">Reddit Social Pulse v2. Score compuesto (volumen log + sentimiento + calidad + diversidad subreddits). 8 subreddits, posts + comentarios. Señales: Hype (menciones ★), Smart Money (vol ★), Squeeze (short float ★), Sentiment (bull/bear/neutral).</div>
                     </div>
                 </div>
             </div>
@@ -2932,14 +3190,14 @@ def render():
                 <div class="col-label">#</div>
                 <div class="col-label">Ticker</div>
                 <div class="col-label">Salud</div>
-                <div class="col-label">Hype / Smart Money / Squeeze</div>
+                <div class="col-label">Hype / Smart Money / Squeeze / Sentiment</div>
             </div>
             <div class="content">
                 {cards_html}
             </div>
             <div class="footer">
                 <span style="font-size:9px; color:#555;">
-                    <span style="color:#00ffad; font-weight:bold;">{count_str}</span> activos monitorizados
+                    <span style="color:#00ffad; font-weight:bold;">{count_str}</span> activos · 8 subs · posts+comments
                 </span>
                 <span style="font-size:8px; color:#333;">{source_str}</span>
             </div>

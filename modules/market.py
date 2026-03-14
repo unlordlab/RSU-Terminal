@@ -519,27 +519,18 @@ def get_fallback_reddit_tickers():
 
 @st.cache_data(ttl=900, show_spinner=False)
 def get_buzztickr_master_data(timeframe: str = 'day'):
-    """
-    Reddit Social Pulse v3:
-    1. Reddit JSON API — 5 subreddits, ventana configurable (day/week/month)
-    2. StockTwits trending
-    3. Insider Buying — OpenInsider (Form 4, últimos 7d), sin API key
-    4. Capitol Trades — actividad política (capitoltrades.com), sin API key
-    5. yfinance — precio, volumen relativo, short float
-    """
+    """Reddit Social Pulse v3: Reddit + StockTwits + Insider + Capitol + yfinance."""
     session = get_http_session()
     headers_reddit = {
         'User-Agent': 'Mozilla/5.0 (compatible; MarketDashboard/1.0)',
         'Accept': 'application/json',
     }
 
-    # ── PASO 1: Reddit ────────────────────────────────────────────────────────
     ticker_mentions  = {}
     ticker_sentiment = {}
     reddit_ok = False
 
-    subreddits = ['wallstreetbets', 'stocks', 'investing', 'options', 'StockMarket']
-    for sub in subreddits:
+    for sub in ['wallstreetbets', 'stocks', 'investing', 'options', 'StockMarket']:
         try:
             url = f'https://www.reddit.com/r/{sub}/hot.json?limit=30&t={timeframe}'
             r   = session.get(url, headers=headers_reddit, timeout=10)
@@ -547,24 +538,22 @@ def get_buzztickr_master_data(timeframe: str = 'day'):
             if r.status_code != 200:
                 continue
             reddit_ok = True
-            posts = r.json().get('data', {}).get('children', [])
-            for post in posts:
-                p            = post.get('data', {})
-                text         = f"{p.get('title','')} {p.get('selftext','')}".upper()
-                upvote_ratio = p.get('upvote_ratio', 0.5)
-                score        = p.get('score', 0)
+            for post in r.json().get('data', {}).get('children', []):
+                p    = post.get('data', {})
+                text = f"{p.get('title','')} {p.get('selftext','')}".upper()
+                upr  = p.get('upvote_ratio', 0.5)
+                scr  = p.get('score', 0)
                 for ticker, count in _extract_tickers_from_text(text):
                     ticker_mentions[ticker] = ticker_mentions.get(ticker, 0) + count
-                    if score > 100 and upvote_ratio > 0.7:
+                    if scr > 100 and upr > 0.7:
                         ticker_sentiment[ticker] = ticker_sentiment.get(ticker, 0) + 1
         except Exception:
             continue
 
-    # ── PASO 2: StockTwits ────────────────────────────────────────────────────
     st_tickers = []
     try:
-        st_url = 'https://api.stocktwits.com/api/2/trending/symbols.json'
-        st_r   = session.get(st_url, headers={'Accept': 'application/json'}, timeout=8)
+        st_r = session.get('https://api.stocktwits.com/api/2/trending/symbols.json',
+                           headers={'Accept': 'application/json'}, timeout=8)
         if st_r.status_code == 200:
             for item in st_r.json().get('symbols', [])[:20]:
                 t = item.get('symbol', '').upper()
@@ -579,25 +568,21 @@ def get_buzztickr_master_data(timeframe: str = 'day'):
 
     top_tickers = [t for t, _ in sorted(ticker_mentions.items(), key=lambda x: -x[1])[:20]]
 
-    # ── PASO 3: Capitol Trades ────────────────────────────────────────────────
     try:
         capitol_tickers = get_capitol_trades_tickers()
     except Exception:
         capitol_tickers = set()
 
-    # ── PASO 4: Insider Buying en paralelo ────────────────────────────────────
     try:
         insider_data = get_insider_buying_batch(tuple(top_tickers))
     except Exception:
         insider_data = {}
 
-    # ── PASO 5: Datos de mercado + scores ────────────────────────────────────
     master_data = []
     for rank, ticker in enumerate(top_tickers, 1):
         try:
             tk   = yf.Ticker(ticker)
             info = tk.fast_info
-
             price  = getattr(info, 'last_price', None)
             prev   = getattr(info, 'previous_close', None)
             change = ((price - prev) / prev * 100) if price and prev and prev > 0 else 0.0
@@ -626,8 +611,7 @@ def get_buzztickr_master_data(timeframe: str = 'day'):
 
             hype_stars    = max(1, min(5, round(hype_raw * 5)))
             smart_raw     = min(vol_ratio / 2, 1.0)
-            if has_insider:
-                smart_raw = min(smart_raw + 0.3, 1.0)
+            if has_insider: smart_raw = min(smart_raw + 0.3, 1.0)
             smart_stars   = max(1, min(5, round(smart_raw * 5)))
             squeeze_stars = max(0, min(5, round(min(short_pct / 10, 1) * 5)))
 
@@ -668,13 +652,10 @@ def get_buzztickr_master_data(timeframe: str = 'day'):
             master_data.append({
                 'rank': str(rank), 'ticker': ticker,
                 'buzz_score': str(ticker_mentions.get(ticker, 1)),
-                'health': '50 Hold',
-                'social_hype': '★★★☆☆',
-                'smart_money': '★★☆☆☆',
-                'squeeze': '',
+                'health': '50 Hold', 'social_hype': '★★★☆☆',
+                'smart_money': '★★☆☆☆', 'squeeze': '',
                 'has_insider': False, 'insider_val': 0.0, 'insider_cnt': 0,
-                'has_capitol': False,
-                'change': 0.0, 'price': None,
+                'has_capitol': False, 'change': 0.0, 'price': None,
             })
 
     if master_data:
@@ -684,13 +665,9 @@ def get_buzztickr_master_data(timeframe: str = 'day'):
         if any(d.get('has_insider') for d in master_data): sources.append('Insider')
         if any(d.get('has_capitol') for d in master_data): sources.append('Capitol')
         return {
-            'data':      master_data[:20],
-            'source':    ' + '.join(sources) if sources else 'Reddit',
-            'timeframe': timeframe,
-            'timestamp': get_timestamp(),
-            'count':     len(master_data),
+            'data': master_data[:20], 'source': ' + '.join(sources) if sources else 'Reddit',
+            'timeframe': timeframe, 'timestamp': get_timestamp(), 'count': len(master_data),
         }
-
     return get_fallback_master_data()
 
 
@@ -698,32 +675,25 @@ def get_fallback_master_data():
     """Datos de respaldo estáticos cuando Reddit y StockTwits no están disponibles."""
     return {
         'data': [
-            {'rank':'1', 'ticker':'NVDA', 'buzz_score':'98','health':'85 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.8, 'price':None},
-            {'rank':'2', 'ticker':'TSLA', 'buzz_score':'95','health':'72 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':-0.4,'price':None},
-            {'rank':'3', 'ticker':'AAPL', 'buzz_score':'88','health':'80 Fuerte','social_hype':'★★★★☆',           'smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆',            'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.2, 'price':None},
-            {'rank':'4', 'ticker':'META', 'buzz_score':'85','health':'78 Fuerte','social_hype':'★★★★☆',           'smart_money':'★★★☆☆',          'squeeze':'★★☆☆☆ Short 8%',  'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':1.1, 'price':None},
-            {'rank':'5', 'ticker':'PLTR', 'buzz_score':'80','health':'65 Hold',  'social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆',          'squeeze':'★★★★☆ Short 22%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':2.3, 'price':None},
-            {'rank':'6', 'ticker':'AMZN', 'buzz_score':'78','health':'76 Fuerte','social_hype':'★★★☆☆',           'smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆',            'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.6, 'price':None},
-            {'rank':'7', 'ticker':'AMD',  'buzz_score':'75','health':'60 Hold',  'social_hype':'★★★★☆ Reddit Top','smart_money':'★★★☆☆',          'squeeze':'★★★☆☆ Short 14%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':-0.9,'price':None},
-            {'rank':'8', 'ticker':'GME',  'buzz_score':'72','health':'40 Hold',  'social_hype':'★★★★★ Reddit Top','smart_money':'★☆☆☆☆',          'squeeze':'★★★★★ Short 35%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':3.2, 'price':None},
-            {'rank':'9', 'ticker':'MSFT', 'buzz_score':'70','health':'82 Fuerte','social_hype':'★★★☆☆',           'smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆',            'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.1, 'price':None},
-            {'rank':'10','ticker':'MSTR', 'buzz_score':'68','health':'55 Hold',  'social_hype':'★★★★☆ Reddit Top','smart_money':'★★☆☆☆',          'squeeze':'★★★★☆ Short 28%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':4.5, 'price':None},
+            {'rank':'1', 'ticker':'NVDA','buzz_score':'98','health':'85 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.8, 'price':None},
+            {'rank':'2', 'ticker':'TSLA','buzz_score':'95','health':'72 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':-0.4,'price':None},
+            {'rank':'3', 'ticker':'AAPL','buzz_score':'88','health':'80 Fuerte','social_hype':'★★★★☆',           'smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆',           'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.2, 'price':None},
+            {'rank':'4', 'ticker':'META','buzz_score':'85','health':'78 Fuerte','social_hype':'★★★★☆',           'smart_money':'★★★☆☆',         'squeeze':'★★☆☆☆ Short 8%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':1.1, 'price':None},
+            {'rank':'5', 'ticker':'PLTR','buzz_score':'80','health':'65 Hold',  'social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆',         'squeeze':'★★★★☆ Short 22%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':2.3, 'price':None},
+            {'rank':'6', 'ticker':'AMZN','buzz_score':'78','health':'76 Fuerte','social_hype':'★★★☆☆',           'smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆',           'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.6, 'price':None},
+            {'rank':'7', 'ticker':'AMD', 'buzz_score':'75','health':'60 Hold',  'social_hype':'★★★★☆ Reddit Top','smart_money':'★★★☆☆',         'squeeze':'★★★☆☆ Short 14%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':-0.9,'price':None},
+            {'rank':'8', 'ticker':'GME', 'buzz_score':'72','health':'40 Hold',  'social_hype':'★★★★★ Reddit Top','smart_money':'★☆☆☆☆',         'squeeze':'★★★★★ Short 35%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':3.2, 'price':None},
+            {'rank':'9', 'ticker':'MSFT','buzz_score':'70','health':'82 Fuerte','social_hype':'★★★☆☆',           'smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆',           'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.1, 'price':None},
+            {'rank':'10','ticker':'MSTR','buzz_score':'68','health':'55 Hold',  'social_hype':'★★★★☆ Reddit Top','smart_money':'★★☆☆☆',         'squeeze':'★★★★☆ Short 28%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':4.5, 'price':None},
         ],
-        'source': 'Fallback',
-        'timeframe': 'day',
-        'timestamp': get_timestamp(),
-        'count': 10
+        'source': 'Fallback', 'timeframe': 'day', 'timestamp': get_timestamp(), 'count': 10
     }
 
 
-# ── INSIDER BUYING — OpenInsider scraping (sin API key) ──────────────────────
+# ── INSIDER BUYING — OpenInsider scraping, sin API key ───────────────────────
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_insider_buying(ticker: str) -> dict:
-    """
-    Scraping de openinsider.com — compras de insiders (Form 4) últimos 7 días.
-    Devuelve: {'has_buying': bool, 'count': int, 'total_value': float, 'names': [str]}
-    """
     result = {'has_buying': False, 'count': 0, 'total_value': 0.0, 'names': []}
     try:
         session = get_http_session()
@@ -762,7 +732,6 @@ def get_insider_buying(ticker: str) -> dict:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_insider_buying_batch(tickers: tuple) -> dict:
-    """Obtiene insider buying para una lista de tickers en paralelo."""
     results = {}
     def _fetch(t):
         return t, get_insider_buying(t)
@@ -781,10 +750,6 @@ def get_insider_buying_batch(tickers: tuple) -> dict:
 
 @st.cache_data(ttl=7200, show_spinner=False)
 def get_capitol_trades_tickers() -> set:
-    """
-    Scraping de capitoltrades.com/trades — tickers con actividad política reciente.
-    Devuelve set de tickers en mayúsculas.
-    """
     found = set()
     session = get_http_session()
     headers = {
@@ -2886,25 +2851,12 @@ def render():
 
     # === REDDIT SOCIAL PULSE - MASTER BUZZ v3 ===
     with col3:
-        # ── Selector de ventana temporal ─────────────────────────────────────
-        _tf_key = 'reddit_pulse_timeframe'
+        # Leer timeframe del session_state (sin botones Streamlit)
+        _tf_key = 'reddit_tf'
         if _tf_key not in st.session_state:
             st.session_state[_tf_key] = 'day'
+        _selected_tf  = st.session_state[_tf_key]
 
-        _tf_cols = st.columns(3)
-        for _i, (_tf_val, _tf_lbl) in enumerate([('day','Daily'),('week','Weekly'),('month','Monthly')]):
-            with _tf_cols[_i]:
-                _active = st.session_state[_tf_key] == _tf_val
-                if st.button(
-                    _tf_lbl,
-                    key=f'tf_{_tf_val}',
-                    use_container_width=True,
-                    type='primary' if _active else 'secondary'
-                ):
-                    st.session_state[_tf_key] = _tf_val
-                    st.rerun()
-
-        _selected_tf = st.session_state[_tf_key]
         master_data   = get_buzztickr_master_data(timeframe=_selected_tf)
         buzz_items    = master_data.get('data', [])
         timestamp_str = master_data.get('timestamp', get_timestamp())
@@ -2912,21 +2864,19 @@ def render():
         count_str     = master_data.get('count', 0)
         tf_label      = {'day': 'DAILY', 'week': 'WEEKLY', 'month': 'MONTHLY'}.get(_selected_tf, 'DAILY')
 
-        # ── Helpers inline ────────────────────────────────────────────────────
-        def _extract_stars(txt, mx=5):
+        # ── Helpers ───────────────────────────────────────────────────────────
+        def _ext_stars(txt, mx=5):
             n = txt.count('★') or txt.count('*')
             return min(n, mx)
 
-        def _stars_html(n, mx=5, ac="#ffd700", ic="#2a3050"):
+        def _stars_html(n, mx=5, ac='#ffd700', ic='#1e2a3a'):
             return ''.join(
-                f'<span style="color:{ac if i < n else ic};font-size:10px;line-height:1;">★</span>'
+                f'<span style="color:{ac if i < n else ic};font-size:10px;">★</span>'
                 for i in range(mx)
             )
 
         # ── Construir filas ───────────────────────────────────────────────────
-        # Diseño compacto: 1 fila = rank + ticker/score + health + 3 mini-señales
-        # Badges insider/capitol van inline dentro de la fila (no ocupan altura extra)
-        rows_html = ""
+        rows_html = ''
         n_insider = 0
         n_capitol = 0
 
@@ -2949,87 +2899,116 @@ def render():
             # Rank badge
             try:
                 ri = int(rank)
-                if ri == 1:   rb, rc = "linear-gradient(135deg,#f23645,#c62828)", "#fff"
-                elif ri == 2: rb, rc = "linear-gradient(135deg,#ff9800,#e65100)", "#fff"
-                elif ri == 3: rb, rc = "linear-gradient(135deg,#ffd700,#f9a825)", "#111"
-                else:         rb, rc = "#1a1e26", "#666"
+                if ri == 1:   rb, rc = 'linear-gradient(135deg,#f23645,#c62828)', '#fff'
+                elif ri == 2: rb, rc = 'linear-gradient(135deg,#ff9800,#e65100)', '#fff'
+                elif ri == 3: rb, rc = 'linear-gradient(135deg,#ffd700,#f9a825)', '#111'
+                else:         rb, rc = '#1a1e26', '#666'
             except Exception:
-                rb, rc = "#1a1e26", "#666"
+                rb, rc = '#1a1e26', '#666'
 
             # Health
             hl = health.lower()
             if 'fuerte' in hl or 'strong' in hl:
-                hbg, hbr, hcl, hlbl = "#00ffad15", "#00ffad50", "#00ffad", "↑"
+                hbg, hbr, hcl, hlbl = '#00ffad15', '#00ffad55', '#00ffad', 'FUERTE'
             elif 'hold' in hl:
-                hbg, hbr, hcl, hlbl = "#ff980015", "#ff980050", "#ff9800", "→"
+                hbg, hbr, hcl, hlbl = '#ff980015', '#ff980055', '#ff9800', 'HOLD'
             else:
-                hbg, hbr, hcl, hlbl = "#f2364515", "#f2364550", "#f23645", "↓"
-            nm = re.search(r'(\d+)', health)
-            hnum = nm.group(1) if nm else ""
+                hbg, hbr, hcl, hlbl = '#f2364515', '#f2364555', '#f23645', 'DÉBIL'
+            nm   = re.search(r'(\d+)', health)
+            hnum = nm.group(1) if nm else ''
 
             # Stars
-            hs = _extract_stars(social_hype)
-            ss = _extract_stars(smart_money)
-            qs = _extract_stars(squeeze)
+            hs = _ext_stars(social_hype)
+            ss = _ext_stars(smart_money)
+            qs = _ext_stars(squeeze)
 
-            # Smart label
+            # Hype suffix
+            if 'Reddit' in social_hype:       hype_info = 'Reddit'
+            elif 'StockTwits' in social_hype: hype_info = 'StockTwits'
+            elif hs > 0:                      hype_info = 'Social'
+            else:                             hype_info = ''
+
+            # Smart suffix
             vm = re.search(r'Vol [x×](\d+\.?\d*)', smart_money)
-            sl = f"×{vm.group(1)}" if vm else ("INS" if has_insider else "")
+            if vm:                      smart_info = f'Vol ×{vm.group(1)}'
+            elif has_insider:           smart_info = f'Insider ×{insider_cnt}' if insider_cnt else 'Insider'
+            elif 'Ballenas' in smart_money or 'Whales' in smart_money: smart_info = 'Ballenas'
+            elif ss > 0:                smart_info = 'Institucional'
+            else:                       smart_info = ''
 
-            # Squeeze label
+            # Squeeze suffix
             shm = re.search(r'Short (\d+\.?\d*)%', squeeze)
-            ql  = f"{shm.group(1)}%" if shm else ""
+            dtm = re.search(r'DTC (\d+\.?\d*)d', squeeze)
+            if shm:    sqz_info = f'Short {shm.group(1)}%'
+            elif dtm:  sqz_info = f'DTC {dtm.group(1)}d'
+            elif qs>0: sqz_info = 'Potential'
+            else:      sqz_info = ''
 
-            # Alert pills (inline, muy compactos)
-            alert_html = ""
+            # Insider badge (solo si hay compra)
             if has_insider:
-                iv_str = (f"${insider_val/1e6:.1f}M" if insider_val >= 1e6
-                          else f"${insider_val/1e3:.0f}K" if insider_val >= 1e3 else f"×{insider_cnt}")
-                alert_html += (
-                    f'<span style="background:#7c3aed22;border:1px solid #7c3aed55;'
-                    f'color:#a78bfa;font-size:7px;font-weight:800;padding:1px 4px;'
-                    f'border-radius:3px;white-space:nowrap;">🏦 {iv_str}</span> '
+                iv_str = (f'${insider_val/1e6:.1f}M' if insider_val >= 1e6
+                          else f'${insider_val/1e3:.0f}K' if insider_val >= 1e3
+                          else f'×{insider_cnt}')
+                insider_badge = (
+                    f'<span style="background:#7c3aed22;border:1px solid #7c3aed55;color:#a78bfa;'
+                    f'font-size:7px;font-weight:800;padding:1px 5px;border-radius:3px;'
+                    f'white-space:nowrap;letter-spacing:0.3px;">🏦 INSIDER {iv_str}</span>'
                 )
-            if has_capitol:
-                alert_html += (
-                    f'<span style="background:#0e749022;border:1px solid #06b6d455;'
-                    f'color:#22d3ee;font-size:7px;font-weight:800;padding:1px 4px;'
-                    f'border-radius:3px;white-space:nowrap;">🏛️ GOVT</span>'
-                )
+            else:
+                insider_badge = ''
+
+            # Capitol badge
+            capitol_badge = (
+                '<span style="background:#0e749022;border:1px solid #06b6d455;color:#22d3ee;'
+                'font-size:7px;font-weight:800;padding:1px 5px;border-radius:3px;'
+                'white-space:nowrap;letter-spacing:0.3px;">🏛️ GOVT</span>'
+            ) if has_capitol else ''
+
+            alert_row = f'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;">{insider_badge}{capitol_badge}</div>' if (insider_badge or capitol_badge) else ''
 
             rows_html += f'''
-<div class="br">
-  <div class="rk" style="background:{rb};color:{rc};">{rank}</div>
-  <div class="tc">
-    <div class="tn">${ticker}</div>
-    <div class="ts">SCR:{buzz_score}</div>
+<div class="brow">
+  <div class="brk" style="background:{rb};color:{rc};">{rank}</div>
+  <div class="btc">
+    <div class="btn">${ticker}</div>
+    <div class="bts">SCR:{buzz_score}</div>
   </div>
-  <div class="hc" style="background:{hbg};border:1px solid {hbr};color:{hcl};">
-    <span style="font-size:10px;font-weight:800;">{hnum}</span>
-    <span style="font-size:7px;">{hlbl}</span>
+  <div class="bhc" style="background:{hbg};border:1px solid {hbr};color:{hcl};">
+    <div style="font-size:11px;font-weight:900;line-height:1;">{hnum}</div>
+    <div style="font-size:7px;font-weight:700;letter-spacing:0.3px;">{hlbl}</div>
   </div>
-  <div class="sc">
-    <div class="sb" style="background:#ffd70012;border:1px solid #ffd70030;">
-      <span class="sl" style="color:#ffd700;">H</span>{_stars_html(hs,ac="#ffd700")}
+  <div class="bsc">
+    <div class="bsb" style="background:#ffd70014;border:1px solid #ffd70030;">
+      <span class="bsl" style="color:#ffd700;">HYPE</span>
+      <span class="bss">{_stars_html(hs, ac='#ffd700')}</span>
+      <span class="bsi" style="color:#ffd70099;">{hype_info}</span>
     </div>
-    <div class="sb" style="background:#00ffad12;border:1px solid #00ffad30;">
-      <span class="sl" style="color:#00ffad;">S</span>{_stars_html(ss,ac="#00ffad")}
-      {f'<span style="color:#00ffad99;font-size:7px;margin-left:2px;">{sl}</span>' if sl else ''}
+    <div class="bsb" style="background:#00ffad14;border:1px solid #00ffad30;">
+      <span class="bsl" style="color:#00ffad;">SMART</span>
+      <span class="bss">{_stars_html(ss, ac='#00ffad')}</span>
+      <span class="bsi" style="color:#00ffad99;">{smart_info}</span>
     </div>
-    <div class="sb" style="background:#f2364512;border:1px solid #f2364530;">
-      <span class="sl" style="color:#f23645;">Q</span>{_stars_html(qs,ac="#f23645")}
-      {f'<span style="color:#f2364599;font-size:7px;margin-left:2px;">{ql}</span>' if ql else ''}
+    <div class="bsb" style="background:#f2364514;border:1px solid #f2364530;">
+      <span class="bsl" style="color:#f23645;">SQZ</span>
+      <span class="bss">{_stars_html(qs, ac='#f23645')}</span>
+      <span class="bsi" style="color:#f2364599;">{sqz_info}</span>
     </div>
-    {f'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:1px;">{alert_html}</div>' if alert_html else ''}
+    {alert_row}
   </div>
 </div>'''
 
-        # Alertas en header
-        alerts_header = ""
+        # Alertas resumen header
+        alerts_hdr = ''
         if n_insider:
-            alerts_header += f'<span style="color:#a78bfa;font-size:8px;font-weight:700;margin-right:6px;">🏦 {n_insider} insider</span>'
+            alerts_hdr += f'<span style="color:#a78bfa;font-size:8px;font-weight:700;margin-right:6px;">🏦 {n_insider} insider</span>'
         if n_capitol:
-            alerts_header += f'<span style="color:#22d3ee;font-size:8px;font-weight:700;">🏛️ {n_capitol} govt</span>'
+            alerts_hdr += f'<span style="color:#22d3ee;font-size:8px;font-weight:700;">🏛️ {n_capitol} govt</span>'
+
+        # Tabs HTML para selector timeframe (sin Streamlit, comunicación via query_params futura)
+        # Por ahora muestra el timeframe activo como badge, el cambio se hace recargando
+        tab_day   = 'tab-active' if _selected_tf == 'day'   else 'tab-inactive'
+        tab_week  = 'tab-active' if _selected_tf == 'week'  else 'tab-inactive'
+        tab_month = 'tab-active' if _selected_tf == 'month' else 'tab-inactive'
 
         buzz_html_full = f'''<!DOCTYPE html><html><head>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3037,24 +3016,31 @@ def render():
 <style>
 *{{margin:0;padding:0;box-sizing:border-box;}}
 body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#11141a;}}
-.wrap{{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;width:100%;height:370px;display:flex;flex-direction:column;box-shadow:0 0 20px #00ffad08;}}
-.hdr{{background:#0c0e12;padding:7px 10px;border-bottom:1px solid #00ffad22;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
-.ttl{{color:#00ffad;font-size:16px;font-weight:normal;text-transform:uppercase;letter-spacing:2px;font-family:'VT323','Share Tech Mono',monospace;text-shadow:0 0 8px #00ffad44;}}
-.chead{{display:grid;grid-template-columns:20px 44px 28px 1fr;gap:2px;padding:3px 8px;background:#0c0e12;border-bottom:1px solid #1a1e2660;flex-shrink:0;}}
-.clbl{{font-size:6px;font-weight:bold;color:#2a3f5f;text-transform:uppercase;letter-spacing:0.5px;}}
+.wrap{{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;width:100%;height:420px;display:flex;flex-direction:column;box-shadow:0 0 20px #00ffad08;}}
+.hdr{{background:#0c0e12;padding:8px 12px;border-bottom:1px solid #00ffad22;display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;}}
+.ttl{{color:#00ffad;font-size:17px;font-weight:normal;text-transform:uppercase;letter-spacing:2px;font-family:'VT323','Share Tech Mono',monospace;text-shadow:0 0 8px #00ffad44;line-height:1.1;}}
+.tabs{{display:flex;gap:3px;margin-top:4px;}}
+.tab-active{{background:#00ffad;color:#0c0e12;border:none;border-radius:3px;padding:2px 8px;font-size:8px;font-weight:900;cursor:default;font-family:'Courier New',monospace;letter-spacing:0.5px;}}
+.tab-inactive{{background:#1a1e26;color:#444;border:1px solid #2a2e36;border-radius:3px;padding:2px 8px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Courier New',monospace;letter-spacing:0.5px;transition:all 0.15s;}}
+.tab-inactive:hover{{background:#2a2e36;color:#888;}}
+.hdr-right{{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:8px;}}
+.chead{{display:grid;grid-template-columns:22px 48px 38px 1fr;gap:2px;padding:3px 10px;background:#0c0e12;border-bottom:1px solid #1a1e2660;flex-shrink:0;}}
+.clbl{{font-size:6.5px;font-weight:bold;color:#2a3f5f;text-transform:uppercase;letter-spacing:0.5px;}}
 .body{{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#1a1e26 transparent;}}
-.br{{display:grid;grid-template-columns:20px 44px 28px 1fr;gap:2px;padding:3px 8px;border-bottom:1px solid #1a1e2630;align-items:start;}}
-.br:hover{{background:#ffffff04;}}
-.rk{{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:8px;flex-shrink:0;margin-top:2px;}}
-.tc{{display:flex;flex-direction:column;padding-top:1px;}}
-.tn{{color:#00ffad;font-weight:bold;font-size:10px;line-height:1.2;}}
-.ts{{color:#333;font-size:6px;}}
-.hc{{padding:2px 1px;border-radius:3px;font-size:9px;font-weight:bold;text-align:center;line-height:1.1;margin-top:1px;display:flex;flex-direction:column;align-items:center;}}
-.sc{{display:flex;flex-direction:column;gap:1px;width:100%;}}
-.sb{{display:flex;align-items:center;border-radius:3px;padding:1px 4px;gap:2px;}}
-.sl{{font-size:7px;font-weight:900;min-width:8px;flex-shrink:0;}}
-.ftr{{background:#0c0e12;border-top:1px solid #1a1e26;padding:3px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
-.upd{{text-align:center;color:#444;font-size:8px;padding:3px 0;font-family:'Courier New',monospace;border-top:1px solid #1a1e26;background:#0c0e12;flex-shrink:0;}}
+.brow{{display:grid;grid-template-columns:22px 48px 38px 1fr;gap:2px;padding:4px 10px;border-bottom:1px solid #1a1e2628;align-items:start;}}
+.brow:hover{{background:#ffffff04;}}
+.brk{{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:8px;flex-shrink:0;margin-top:3px;}}
+.btc{{display:flex;flex-direction:column;padding-top:2px;}}
+.btn{{color:#00ffad;font-weight:bold;font-size:11px;line-height:1.2;}}
+.bts{{color:#333;font-size:6.5px;}}
+.bhc{{padding:3px 2px;border-radius:4px;font-weight:bold;text-align:center;line-height:1.2;margin-top:1px;}}
+.bsc{{display:flex;flex-direction:column;gap:2px;width:100%;}}
+.bsb{{display:flex;align-items:center;border-radius:3px;padding:2px 5px;gap:3px;}}
+.bsl{{font-size:8px;font-weight:900;min-width:34px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;}}
+.bss{{font-size:10px;flex-shrink:0;letter-spacing:0.5px;}}
+.bsi{{font-size:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}}
+.ftr{{background:#0c0e12;border-top:1px solid #1a1e26;padding:4px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
+.upd{{text-align:center;color:#444;font-size:8.5px;padding:4px 0;font-family:'Courier New',monospace;border-top:1px solid #1a1e26;background:#0c0e12;flex-shrink:0;}}
 .tipw{{position:static;display:inline-block;}}
 .tipb{{width:18px;height:18px;border-radius:50%;background:#1a1e26;border:1px solid #2a2e36;display:flex;align-items:center;justify-content:center;color:#555;font-size:9px;cursor:help;}}
 .tipc{{display:none;position:fixed;width:280px;background:#1e222d;color:#eee;padding:12px;border-radius:10px;z-index:99999;font-size:11px;border:2px solid #00ffad;box-shadow:0 15px 40px rgba(0,0,0,0.9);line-height:1.5;left:50%;top:50%;transform:translate(-50%,-50%);}}
@@ -3064,14 +3050,24 @@ body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   <div class="hdr">
     <div>
       <div class="ttl">Reddit Social Pulse</div>
-      <div style="margin-top:1px;">{alerts_header}</div>
+      <div class="tabs">
+        <span class="{tab_day}">Daily</span>
+        <span class="{tab_week}">Weekly</span>
+        <span class="{tab_month}">Monthly</span>
+      </div>
+      {f'<div style="margin-top:3px;">{alerts_hdr}</div>' if alerts_hdr else ''}
     </div>
-    <div style="display:flex;align-items:center;gap:4px;">
-      <span style="background:#00ffad18;color:#00ffad;border:1px solid #00ffad33;padding:1px 5px;border-radius:3px;font-size:7px;font-weight:bold;">{tf_label}</span>
-      <span style="background:#f2364520;color:#f23645;border:1px solid #f2364540;padding:1px 5px;border-radius:3px;font-size:7px;font-weight:bold;">● LIVE</span>
+    <div class="hdr-right">
+      <span style="background:#f2364520;color:#f23645;border:1px solid #f2364540;padding:2px 6px;border-radius:3px;font-size:8px;font-weight:bold;">● LIVE</span>
       <div class="tipw">
         <div class="tipb">?</div>
-        <div class="tipc">Reddit Social Pulse v3. Score: menciones × 5 subreddits + StockTwits. H=Hype (social), S=Smart Money (vol+insider), Q=Squeeze (short float). 🏦 Insider Buy (Form 4 / OpenInsider), 🏛️ Govt Trade (Capitol Trades). Selector Daily / Weekly / Monthly. Top 20 activos con scroll.</div>
+        <div class="tipc">Reddit Social Pulse v3 — 5 subreddits + StockTwits.<br><br>
+          <b>HYPE</b>: menciones en Reddit/StockTwits (★★★★★)<br>
+          <b>SMART</b>: volumen relativo + insider buying Form 4<br>
+          <b>SQZ</b>: short float % (squeeze potential)<br>
+          <b>🏦 INSIDER</b>: compras ejecutivos (OpenInsider, 7d)<br>
+          <b>🏛️ GOVT</b>: trades políticos (Capitol Trades)<br><br>
+          Top 20 activos · scroll · {tf_label}</div>
       </div>
     </div>
   </div>
@@ -3079,12 +3075,12 @@ body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     <div class="clbl">#</div>
     <div class="clbl">Ticker</div>
     <div class="clbl">Salud</div>
-    <div class="clbl">H · S · Q · Alertas</div>
+    <div class="clbl">HYPE / SMART MONEY / SQUEEZE</div>
   </div>
   <div class="body">{rows_html}</div>
   <div class="ftr">
-    <span style="font-size:8px;color:#555;"><span style="color:#00ffad;font-weight:bold;">{count_str}</span> activos · {tf_label}</span>
-    <span style="font-size:7px;color:#2a2e36;">{source_str}</span>
+    <span style="font-size:8.5px;color:#555;"><span style="color:#00ffad;font-weight:bold;">{count_str}</span> activos · {tf_label}</span>
+    <span style="font-size:7.5px;color:#2a2e36;">{source_str}</span>
   </div>
   <div class="upd">Actualizado: {timestamp_str} · {source_str}</div>
 </div>
@@ -4415,4 +4411,3 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             '</div>',
             unsafe_allow_html=True
         )
-

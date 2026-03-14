@@ -3535,7 +3535,7 @@ pre {{
   </div>
   <div class="prompt-box">
     <pre id="prompt-pre"></pre>
-    <button id="copy-btn" onclick="copyPrompt()">⎘ DESCARGAR PROMPT</button>
+    <button id="copy-btn" onclick="copyPrompt()">⎘ COPIAR PROMPT</button>
   </div>
 </div>
 <script>

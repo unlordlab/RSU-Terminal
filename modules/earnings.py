@@ -3470,118 +3470,117 @@ def render():
     import json as _json
     _prompt_js_safe = _json.dumps(_RSU_PROMPT_TEXT)
 
-    components.html(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
-    <style>
-      * {{ margin:0; padding:0; box-sizing:border-box; }}
-      body {{ background:transparent; }}
-      .wrap {{
-        background:#0c0e14;
-        border:1px solid #00ffad33;
-        border-radius:10px;
-        padding:20px 24px 18px;
-        font-family:'Share Tech Mono', monospace;
-      }}
-      .header {{
-        display:flex; align-items:center; gap:10px;
-        margin-bottom:10px; flex-wrap:wrap;
-      }}
-      .title {{
-        font-family:'VT323', monospace;
-        color:#00ffad; font-size:1.55rem;
-        letter-spacing:3px; text-transform:uppercase;
-      }}
-      .badge {{
-        background:#00ffad22; color:#00ffad;
-        font-family:'Share Tech Mono', monospace; font-size:0.6rem;
-        padding:2px 8px; border-radius:4px;
-        border:1px solid #00ffad44; margin-left:auto;
-        white-space:nowrap;
-      }}
-      .desc {{
-        font-family:'Share Tech Mono', monospace;
-        color:#4a5a4a; font-size:0.72rem; line-height:1.6;
-        border-top:1px solid #1a1e26; padding-top:10px;
-        margin-bottom:12px;
-      }}
-      .desc .hi {{ color:#00ffad; }}
-      .desc .hi2 {{ color:#00d9ff; }}
-      .desc .hi3 {{ color:#ff9800; }}
-      .prompt-wrap {{ position:relative; }}
-      textarea {{
-        width:100%; height:220px;
-        background:#080a0f;
-        border:1px solid #1e2530;
-        border-radius:6px;
-        color:#7a9a7a;
-        font-family:'Share Tech Mono', monospace;
-        font-size:0.71rem; line-height:1.65;
-        padding:14px 14px 14px 14px;
-        resize:none; outline:none;
-        white-space:pre;
-      }}
-      textarea:focus {{ border-color:#00ffad44; }}
-      #copy-btn {{
-        position:absolute; top:10px; right:10px;
-        background:#00ffad18; border:1px solid #00ffad44;
-        border-radius:5px; color:#00ffad;
-        font-family:'Share Tech Mono', monospace;
-        font-size:0.68rem; letter-spacing:1.5px;
-        text-transform:uppercase; padding:5px 14px;
-        cursor:pointer; transition:all 0.2s;
-      }}
-      #copy-btn:hover {{ background:#00ffad30; }}
-    </style>
-    </head>
-    <body>
-    <div class="wrap">
-      <div class="header">
-        <span style="font-size:1.2rem;">🤖</span>
-        <div class="title">RSU Research Prompt</div>
-        <span class="badge">AI POWERED</span>
-      </div>
-      <div class="desc">
-        Prompt de 13 secciones para análisis profesional. Cópialo, sustituye
-        <span class="hi">[INSERTAR TICKER AQUÍ]</span> y pégalo en el LLM de tu confianza.<br>
-        <span class="hi">⚡ Rápido</span> — Snapshot ejecutivo: precio, valoración, catalizadores y riesgo en segundos.&nbsp;&nbsp;
-        <span class="hi2">📋 Completo</span> — Informe de 11 secciones: empresa, fundamentales, técnico, smart money y perspectivas.&nbsp;&nbsp;
-        <span class="hi3">🔍 Grok</span> — Investigación en tiempo real vía xAI.
-      </div>
-      <div class="prompt-wrap">
-        <textarea id="prompt-ta" readonly>{_RSU_PROMPT_TEXT}</textarea>
-        <button id="copy-btn" onclick="copyPrompt()">⎘ COPIAR PROMPT</button>
-      </div>
-    </div>
-    <script>
-    function copyPrompt() {{
-      var ta = document.getElementById('prompt-ta');
-      ta.select();
-      ta.setSelectionRange(0, 99999);
-      var ok = false;
-      try {{ ok = document.execCommand('copy'); }} catch(e) {{}}
-      if (!ok && navigator.clipboard) {{
-        navigator.clipboard.writeText({_prompt_js_safe}).catch(function(){{}});
-        ok = true;
-      }}
-      var b = document.getElementById('copy-btn');
-      b.innerText = ok ? '✓ COPIADO' : '✗ ERROR';
-      b.style.background = ok ? '#00ffad28' : '#f2364522';
-      b.style.borderColor = ok ? '#00ffad' : '#f23645';
-      b.style.color = ok ? '#00ffad' : '#f23645';
-      setTimeout(function() {{
-        b.innerText = '⎘ COPIAR PROMPT';
-        b.style.background = '#00ffad18';
-        b.style.borderColor = '#00ffad44';
-        b.style.color = '#00ffad';
-      }}, 2400);
+    components.html(f"""<!DOCTYPE html>
+<html>
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  html, body {{ background:transparent; overflow:hidden; }}
+  .wrap {{
+    background:#0c0e14;
+    border:1px solid #00ffad33;
+    border-radius:10px;
+    padding:20px 24px 20px;
+  }}
+  .header {{
+    display:flex; align-items:center; gap:10px;
+    margin-bottom:10px; flex-wrap:wrap;
+  }}
+  .title {{
+    font-family:'VT323', monospace;
+    color:#00ffad; font-size:1.55rem;
+    letter-spacing:3px; text-transform:uppercase;
+  }}
+  .badge {{
+    background:#00ffad22; color:#00ffad;
+    font-family:'Share Tech Mono', monospace; font-size:0.6rem;
+    padding:2px 8px; border-radius:4px;
+    border:1px solid #00ffad44; margin-left:auto;
+    white-space:nowrap;
+  }}
+  .desc {{
+    font-family:'Share Tech Mono', monospace;
+    color:#4a5a4a; font-size:0.72rem; line-height:1.7;
+    border-top:1px solid #1a1e26; padding-top:10px;
+    margin-bottom:14px;
+  }}
+  .desc .g {{ color:#00ffad; }}
+  .desc .b {{ color:#00d9ff; }}
+  .desc .o {{ color:#ff9800; }}
+  .prompt-wrap {{ position:relative; }}
+  textarea {{
+    width:100%; height:230px;
+    background:#080a0f;
+    border:1px solid #1e2530;
+    border-radius:6px;
+    color:#7a9a7a;
+    font-family:'Share Tech Mono', monospace;
+    font-size:0.71rem; line-height:1.65;
+    padding:14px 120px 14px 14px;
+    resize:none; outline:none;
+    overflow-y:auto; overflow-x:hidden;
+    white-space:pre-wrap; word-wrap:break-word;
+  }}
+  textarea:focus {{ border-color:#00ffad44; }}
+  #copy-btn {{
+    position:absolute; top:10px; right:10px;
+    background:#00ffad18; border:1px solid #00ffad44;
+    border-radius:5px; color:#00ffad;
+    font-family:'Share Tech Mono', monospace;
+    font-size:0.68rem; letter-spacing:1.5px;
+    text-transform:uppercase; padding:5px 14px;
+    cursor:pointer;
+  }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <span style="font-size:1.2rem;">🤖</span>
+    <div class="title">RSU Research Prompt</div>
+    <span class="badge">AI POWERED</span>
+  </div>
+  <div class="desc">
+    Prompt profesional de <span class="g">13 secciones</span> para análisis completo de cualquier ticker.<br>
+    Copia el prompt, sustituye <span class="g">[INSERTAR TICKER AQUÍ]</span> por el activo que quieras investigar
+    y pégalo en el modelo de lenguaje de tu confianza — <span class="b">ChatGPT</span>, <span class="b">Claude</span>, <span class="b">Gemini</span>, <span class="o">Grok</span>…<br>
+    Obtendrás un informe estructurado con empresa, fundamentales, smart money, catalizadores y valoración táctica.
+  </div>
+  <div class="prompt-wrap">
+    <textarea id="prompt-ta" readonly></textarea>
+    <button id="copy-btn" onclick="copyPrompt()">⎘ COPIAR PROMPT</button>
+  </div>
+</div>
+<script>
+  // Set prompt text via JS to avoid any HTML escaping issues
+  document.getElementById('prompt-ta').value = {_prompt_js_safe};
+
+  function copyPrompt() {{
+    var ta = document.getElementById('prompt-ta');
+    ta.select();
+    ta.setSelectionRange(0, 99999);
+    var ok = false;
+    try {{ ok = document.execCommand('copy'); }} catch(e) {{}}
+    if (!ok && navigator.clipboard) {{
+      navigator.clipboard.writeText(ta.value).catch(function(){{}});
+      ok = true;
     }}
-    </script>
-    </body>
-    </html>
-    """, height=370)
+    var b = document.getElementById('copy-btn');
+    b.innerText = ok ? '✓ COPIADO' : '✗ ERROR';
+    b.style.background = ok ? '#00ffad28' : '#f2364522';
+    b.style.borderColor = ok ? '#00ffad' : '#f23645';
+    b.style.color = ok ? '#00ffad' : '#f23645';
+    setTimeout(function() {{
+      b.innerText = '⎘ COPIAR PROMPT';
+      b.style.background = '#00ffad18';
+      b.style.borderColor = '#00ffad44';
+      b.style.color = '#00ffad';
+    }}, 2400);
+  }}
+</script>
+</body>
+</html>""", height=390)
 
     col_ia1, col_ia2, col_ia3 = st.columns(3)
     btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)

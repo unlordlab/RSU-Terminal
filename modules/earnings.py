@@ -3476,7 +3476,7 @@ def render():
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
 <style>
   * {{ margin:0; padding:0; box-sizing:border-box; }}
-  html, body {{ background:transparent; overflow:hidden; }}
+  html, body {{ background:transparent; }}
   .wrap {{
     background:#0c0e14;
     border:1px solid #00ffad33;
@@ -3507,7 +3507,6 @@ def render():
   }}
   .desc .g {{ color:#00ffad; }}
   .desc .b {{ color:#00d9ff; }}
-  .desc .o {{ color:#ff9800; }}
   .prompt-wrap {{ position:relative; }}
   textarea {{
     width:100%; height:230px;
@@ -3535,7 +3534,7 @@ def render():
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
   <div class="header">
     <span style="font-size:1.2rem;">🤖</span>
     <div class="title">RSU Research Prompt</div>
@@ -3544,7 +3543,9 @@ def render():
   <div class="desc">
     Prompt profesional de <span class="g">13 secciones</span> para análisis completo de cualquier ticker.<br>
     Copia el prompt, sustituye <span class="g">[INSERTAR TICKER AQUÍ]</span> por el activo que quieras investigar
-    y pégalo en el modelo de lenguaje de tu confianza — <span class="b">ChatGPT</span>, <span class="b">Claude</span>, <span class="b">Gemini</span>, <span class="o">Grok</span>…<br>
+    y pégalo en el modelo de lenguaje de tu confianza —
+    <span class="b">ChatGPT</span>, <span class="b">Claude</span>,
+    <span class="b">Gemini</span>, <span class="b">Grok</span>…<br>
     Obtendrás un informe estructurado con empresa, fundamentales, smart money, catalizadores y valoración táctica.
   </div>
   <div class="prompt-wrap">
@@ -3553,8 +3554,15 @@ def render():
   </div>
 </div>
 <script>
-  // Set prompt text via JS to avoid any HTML escaping issues
   document.getElementById('prompt-ta').value = {_prompt_js_safe};
+
+  // Auto-resize iframe to fit content exactly
+  function notifyHeight() {{
+    var h = document.getElementById('wrap').getBoundingClientRect().height;
+    window.parent.postMessage({{type:'streamlit:setFrameHeight', height: Math.ceil(h) + 4}}, '*');
+  }}
+  window.addEventListener('load', function() {{ setTimeout(notifyHeight, 200); }});
+  window.addEventListener('resize', notifyHeight);
 
   function copyPrompt() {{
     var ta = document.getElementById('prompt-ta');

@@ -3437,6 +3437,7 @@ def render():
 """
 
     # ── RSU Research Prompt ──
+    import json as _json
     _RSU_PROMPT_TEXT = (
         "Por favor, analiza el ticker [INSERTAR TICKER AQUÍ] y proporciona la siguiente "
         "información de forma concisa y claramente organizada:\n\n"
@@ -3466,51 +3467,105 @@ def render():
         "(ventas, guidance, asociaciones, buzz social). Responde con un estilo claro, conciso y fácil de "
         "leer para utilizarlo en decisiones de inversión rápidas."
     )
+    _pjs = _json.dumps(_RSU_PROMPT_TEXT)
 
-    # Header del bloque
-    st.markdown("""
-    <div style="background:#0c0e14;border:1px solid #00ffad33;border-radius:10px 10px 0 0;
-                padding:20px 24px 14px;margin:20px 0 0 0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span style="font-size:1.3rem;">🤖</span>
-            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.6rem;
-                        letter-spacing:3px;text-transform:uppercase;">RSU Research Prompt</div>
-            <span style="background:#00ffad22;color:#00ffad;font-family:monospace;font-size:0.65rem;
-                         padding:2px 8px;border-radius:4px;border:1px solid #00ffad44;margin-left:auto;">
-                AI POWERED
-            </span>
-        </div>
-        <div style="font-family:'Share Tech Mono',monospace;color:#4a5a4a;font-size:0.75rem;
-                    line-height:1.7;border-top:1px solid #1a1e26;padding-top:10px;">
-            Prompt profesional de <span style="color:#00ffad;">13 secciones</span> para análisis completo de cualquier ticker.<br>
-            Copia el prompt, sustituye <span style="color:#00ffad;">[INSERTAR TICKER AQUÍ]</span>
-            por el activo que quieras investigar y pégalo en el modelo de lenguaje de tu confianza —
-            <span style="color:#00d9ff;">ChatGPT</span>, <span style="color:#00d9ff;">Claude</span>,
-            <span style="color:#00d9ff;">Gemini</span>, <span style="color:#00d9ff;">Grok</span>…<br>
-            Obtendrás un informe estructurado con empresa, fundamentales, smart money, catalizadores y valoración táctica.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    components.html(f"""<!DOCTYPE html>
+<html>
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+html, body {{ background:transparent; overflow-x:hidden; }}
+.wrap {{
+  background:#0c0e14; border:1px solid #00ffad33;
+  border-radius:10px; padding:20px 24px 20px;
+}}
+.header {{
+  display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;
+}}
+.title {{
+  font-family:'VT323',monospace; color:#00ffad;
+  font-size:1.55rem; letter-spacing:3px; text-transform:uppercase;
+}}
+.badge {{
+  background:#00ffad22; color:#00ffad; font-family:'Share Tech Mono',monospace;
+  font-size:0.6rem; padding:2px 8px; border-radius:4px;
+  border:1px solid #00ffad44; margin-left:auto; white-space:nowrap;
+}}
+.desc {{
+  font-family:'Share Tech Mono',monospace; color:#4a5a4a;
+  font-size:0.72rem; line-height:1.7;
+  border-top:1px solid #1a1e26; padding-top:10px; margin-bottom:14px;
+}}
+.g {{ color:#00ffad; }}
+.b {{ color:#00d9ff; }}
+.prompt-box {{
+  position:relative; background:#080a0f;
+  border:1px solid #1e2530; border-radius:6px;
+  padding:16px 16px 16px 16px;
+}}
+pre {{
+  font-family:'Share Tech Mono',monospace; font-size:0.71rem;
+  color:#7a9a7a; line-height:1.7; white-space:pre-wrap;
+  word-break:break-word; margin:0;
+}}
+#copy-btn {{
+  position:absolute; top:10px; right:10px;
+  background:#00ffad18; border:1px solid #00ffad44; border-radius:5px;
+  color:#00ffad; font-family:'Share Tech Mono',monospace;
+  font-size:0.68rem; letter-spacing:1.5px; text-transform:uppercase;
+  padding:5px 14px; cursor:pointer;
+}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <span style="font-size:1.2rem;">🤖</span>
+    <div class="title">RSU Research Prompt</div>
+    <span class="badge">AI POWERED</span>
+  </div>
+  <div class="desc">
+    Prompt profesional de <span class="g">13 secciones</span> para análisis completo de cualquier ticker.<br>
+    Copia el prompt, sustituye <span class="g">[INSERTAR TICKER AQUÍ]</span> por el activo que quieras investigar
+    y pégalo en el modelo de lenguaje de tu confianza —
+    <span class="b">ChatGPT</span>, <span class="b">Claude</span>,
+    <span class="b">Gemini</span>, <span class="b">Grok</span>…<br>
+    Obtendrás un informe estructurado con empresa, fundamentales, smart money, catalizadores y valoración táctica.
+  </div>
+  <div class="prompt-box">
+    <pre id="prompt-pre"></pre>
+    <button id="copy-btn" onclick="copyPrompt()">⎘ DESCARGAR PROMPT</button>
+  </div>
+</div>
+<script>
+  var txt = {_pjs};
+  document.getElementById('prompt-pre').textContent = txt;
 
-    # Caja del prompt — st.code renderiza con fuente mono, fondo oscuro, sin iframe
-    st.code(_RSU_PROMPT_TEXT, language=None)
-
-    # Botón de descarga — fiable, nativo, sin clipboard API
-    col_dl, _ = st.columns([1, 3])
-    with col_dl:
-        st.download_button(
-            label="⎘ COPIAR / DESCARGAR PROMPT",
-            data=_RSU_PROMPT_TEXT.encode("utf-8"),
-            file_name="RSU_Research_Prompt.txt",
-            mime="text/plain",
-            key="btn_dl_prompt",
-            use_container_width=True,
-        )
-
-    st.markdown("""
-    <div style="background:#0c0e14;border:1px solid #00ffad33;border-radius:0 0 10px 10px;
-                border-top:none;height:6px;margin:0 0 16px 0;"></div>
-    """, unsafe_allow_html=True)
+  function copyPrompt() {{
+    var ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, 99999);
+    var ok = false;
+    try {{ ok = document.execCommand('copy'); }} catch(e) {{}}
+    document.body.removeChild(ta);
+    if (!ok && navigator.clipboard) {{
+      navigator.clipboard.writeText(txt).then(function(){{ok=true;}}).catch(function(){{}});
+      ok = true;
+    }}
+    var b = document.getElementById('copy-btn');
+    b.innerText = '✓ COPIADO';
+    b.style.background='#00ffad28'; b.style.borderColor='#00ffad'; b.style.color='#00ffad';
+    setTimeout(function(){{
+      b.innerText='⎘ DESCARGAR PROMPT';
+      b.style.background='#00ffad18'; b.style.borderColor='#00ffad44'; b.style.color='#00ffad';
+    }}, 2400);
+  }}
+</script>
+</body>
+</html>""", height=780, scrolling=False)
 
     col_ia1, col_ia2, col_ia3 = st.columns(3)
     btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)

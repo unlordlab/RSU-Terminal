@@ -312,19 +312,10 @@ def get_economic_calendar():
     if not events:
         events = get_forexfactory_calendar()
     
-    # Deduplicar por (fecha, hora, nombre) — Investing.com a veces entrega la misma
-    # fila con distintos IDs internos generando duplicados visuales
     if events:
-        seen = set()
-        deduped = []
-        for ev in events:
-            key = (str(ev['date'])[:16], ev['time'], ev['event'][:30])
-            if key not in seen:
-                seen.add(key)
-                deduped.append(ev)
-        deduped.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
-        return deduped[:25]
-
+        events.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
+        return events[:25]
+    
     return get_fallback_economic_calendar()
 
 def get_forexfactory_calendar():
@@ -526,88 +517,96 @@ def get_fallback_reddit_tickers():
     }
 
 
-@st.cache_data(ttl=900, show_spinner=False)  # 15 min cache
-def get_buzztickr_master_data():
+@st.cache_data(ttl=900, show_spinner=False)
+def get_buzztickr_master_data(timeframe: str = 'day'):
     """
-    Datos reales combinando:
-    1. Reddit JSON API → tickers más mencionados (hot posts)
-    2. StockTwits API → sentimiento y trending
-    3. yfinance → precio, cambio, volumen para cada ticker
-    Genera score de Hype, Smart Money (basado en volumen institucional proxy) y Squeeze.
+    Reddit Social Pulse v3:
+    1. Reddit JSON API — 5 subreddits, ventana configurable (day/week/month)
+    2. StockTwits trending
+    3. Insider Buying — OpenInsider (Form 4, últimos 7d), sin API key
+    4. Capitol Trades — actividad política (capitoltrades.com), sin API key
+    5. yfinance — precio, volumen relativo, short float
     """
-    import re as _re
-
     session = get_http_session()
     headers_reddit = {
         'User-Agent': 'Mozilla/5.0 (compatible; MarketDashboard/1.0)',
         'Accept': 'application/json',
     }
 
-    # ── PASO 1: Tickers de Reddit ────────────────────────────────────────────
-    ticker_mentions = {}
-    ticker_sentiment = {}  # positive mentions ratio
+    # ── PASO 1: Reddit ────────────────────────────────────────────────────────
+    ticker_mentions  = {}
+    ticker_sentiment = {}
+    reddit_ok = False
 
     subreddits = ['wallstreetbets', 'stocks', 'investing', 'options', 'StockMarket']
     for sub in subreddits:
         try:
-            url = f'https://www.reddit.com/r/{sub}/hot.json?limit=30&t=day'
+            url = f'https://www.reddit.com/r/{sub}/hot.json?limit=30&t={timeframe}'
             r   = session.get(url, headers=headers_reddit, timeout=10)
+            set_api_health('Reddit', r.status_code == 200)
             if r.status_code != 200:
                 continue
+            reddit_ok = True
             posts = r.json().get('data', {}).get('children', [])
             for post in posts:
-                p    = post.get('data', {})
-                text = f"{p.get('title','')} {p.get('selftext','')}".upper()
+                p            = post.get('data', {})
+                text         = f"{p.get('title','')} {p.get('selftext','')}".upper()
                 upvote_ratio = p.get('upvote_ratio', 0.5)
                 score        = p.get('score', 0)
                 for ticker, count in _extract_tickers_from_text(text):
                     ticker_mentions[ticker] = ticker_mentions.get(ticker, 0) + count
-                    # Sentimiento proxy: si el post tiene buen ratio de upvotes y score
                     if score > 100 and upvote_ratio > 0.7:
                         ticker_sentiment[ticker] = ticker_sentiment.get(ticker, 0) + 1
         except Exception:
             continue
 
-    # ── PASO 2: StockTwits trending (sin auth, endpoint público) ────────────
+    # ── PASO 2: StockTwits ────────────────────────────────────────────────────
     st_tickers = []
     try:
         st_url = 'https://api.stocktwits.com/api/2/trending/symbols.json'
         st_r   = session.get(st_url, headers={'Accept': 'application/json'}, timeout=8)
         if st_r.status_code == 200:
-            st_data = st_r.json().get('symbols', [])
-            for item in st_data[:20]:
+            for item in st_r.json().get('symbols', [])[:20]:
                 t = item.get('symbol', '').upper()
                 if t and 2 <= len(t) <= 6:
                     st_tickers.append(t)
-                    ticker_mentions[t] = ticker_mentions.get(t, 0) + 3  # bonus
+                    ticker_mentions[t] = ticker_mentions.get(t, 0) + 3
     except Exception:
         pass
 
-    # ── PASO 3: Combinar y seleccionar top 20 ────────────────────────────────
     if not ticker_mentions:
         return get_fallback_master_data()
 
     top_tickers = [t for t, _ in sorted(ticker_mentions.items(), key=lambda x: -x[1])[:20]]
 
-    # ── PASO 4: Obtener datos de mercado via yfinance para cada ticker ────────
+    # ── PASO 3: Capitol Trades ────────────────────────────────────────────────
+    try:
+        capitol_tickers = get_capitol_trades_tickers()
+    except Exception:
+        capitol_tickers = set()
+
+    # ── PASO 4: Insider Buying en paralelo ────────────────────────────────────
+    try:
+        insider_data = get_insider_buying_batch(tuple(top_tickers))
+    except Exception:
+        insider_data = {}
+
+    # ── PASO 5: Datos de mercado + scores ────────────────────────────────────
     master_data = []
     for rank, ticker in enumerate(top_tickers, 1):
         try:
             tk   = yf.Ticker(ticker)
             info = tk.fast_info
 
-            # Precio y cambio
             price  = getattr(info, 'last_price', None)
             prev   = getattr(info, 'previous_close', None)
             change = ((price - prev) / prev * 100) if price and prev and prev > 0 else 0.0
 
-            # Volumen relativo (proxy de smart money)
-            hist = tk.history(period='10d')
+            hist      = tk.history(period='10d')
             vol_today = float(hist['Volume'].iloc[-1]) if len(hist) > 0 else 0
-            vol_avg   = float(hist['Volume'].mean()) if len(hist) > 0 else 1
+            vol_avg   = float(hist['Volume'].mean())   if len(hist) > 0 else 1
             vol_ratio = vol_today / vol_avg if vol_avg > 0 else 1.0
 
-            # Short interest proxy: float + short ratio si disponible
             try:
                 short_ratio = float(tk.info.get('shortRatio', 0) or 0)
                 short_pct   = float(tk.info.get('shortPercentOfFloat', 0) or 0) * 100
@@ -615,31 +614,40 @@ def get_buzztickr_master_data():
                 short_ratio = 0
                 short_pct   = 0
 
-            # Scores
+            ins         = insider_data.get(ticker, {})
+            has_insider = ins.get('has_buying', False)
+            insider_cnt = ins.get('count', 0)
+            insider_val = ins.get('total_value', 0.0)
+            has_capitol = ticker in capitol_tickers
+
             mention_count = ticker_mentions.get(ticker, 0)
             max_mentions  = max(ticker_mentions.values()) if ticker_mentions else 1
-            hype_raw      = mention_count / max_mentions  # 0-1
+            hype_raw      = mention_count / max_mentions
 
-            hype_stars  = max(1, min(5, round(hype_raw * 5)))
-            smart_stars = max(1, min(5, round(min(vol_ratio / 2, 1) * 5)))
+            hype_stars    = max(1, min(5, round(hype_raw * 5)))
+            smart_raw     = min(vol_ratio / 2, 1.0)
+            if has_insider:
+                smart_raw = min(smart_raw + 0.3, 1.0)
+            smart_stars   = max(1, min(5, round(smart_raw * 5)))
             squeeze_stars = max(0, min(5, round(min(short_pct / 10, 1) * 5)))
 
-            # Health score (combinación de momentum + volumen)
             if change > 2:      health_num, health_lbl = 85, "Fuerte"
             elif change > 0:    health_num, health_lbl = 65, "Hold"
             elif change > -2:   health_num, health_lbl = 45, "Hold"
             else:               health_num, health_lbl = 30, "Débil"
 
-            in_st   = ticker in st_tickers
-            sent_ok = ticker_sentiment.get(ticker, 0) > 0
+            in_st = ticker in st_tickers
 
-            hype_label   = "★" * hype_stars  + ("☆" * (5 - hype_stars))
-            smart_label  = "★" * smart_stars + ("☆" * (5 - smart_stars))
-            squeeze_label= "★" * squeeze_stars + ("☆" * (5 - squeeze_stars))
+            hype_label    = "★" * hype_stars   + "☆" * (5 - hype_stars)
+            smart_label   = "★" * smart_stars  + "☆" * (5 - smart_stars)
+            squeeze_label = "★" * squeeze_stars + "☆" * (5 - squeeze_stars)
 
-            hype_suffix  = " Reddit Top" if hype_raw > 0.5 else (" StockTwits" if in_st else "")
-            smart_suffix = f" Vol ×{vol_ratio:.1f}" if vol_ratio > 1.5 else ""
-            squeeze_suffix = f" Short {short_pct:.0f}%" if short_pct > 5 else ""
+            hype_suffix    = " Reddit Top" if hype_raw > 0.5 else (" StockTwits" if in_st else "")
+            smart_suffix   = f" Vol ×{vol_ratio:.1f}" if vol_ratio > 1.5 else ""
+            if has_insider:
+                smart_suffix += f" +Insider×{insider_cnt}" if insider_cnt > 0 else " +Insider"
+            squeeze_suffix = f" Short {short_pct:.0f}%" if short_pct > 5 else (
+                             f" DTC {short_ratio:.1f}d" if short_ratio > 3 else "")
 
             master_data.append({
                 'rank':        str(rank),
@@ -649,6 +657,10 @@ def get_buzztickr_master_data():
                 'social_hype': hype_label + hype_suffix,
                 'smart_money': smart_label + smart_suffix,
                 'squeeze':     squeeze_label + squeeze_suffix if squeeze_stars > 0 else "",
+                'has_insider': has_insider,
+                'insider_val': insider_val,
+                'insider_cnt': insider_cnt,
+                'has_capitol': has_capitol,
                 'change':      round(change, 2),
                 'price':       round(price, 2) if price else None,
             })
@@ -660,22 +672,23 @@ def get_buzztickr_master_data():
                 'social_hype': '★★★☆☆',
                 'smart_money': '★★☆☆☆',
                 'squeeze': '',
+                'has_insider': False, 'insider_val': 0.0, 'insider_cnt': 0,
+                'has_capitol': False,
                 'change': 0.0, 'price': None,
             })
 
     if master_data:
-        # Determinar fuente
         sources = []
-        if any(ticker_mentions):
-            sources.append('Reddit')
-        if st_tickers:
-            sources.append('StockTwits')
-        src_str = ' + '.join(sources) if sources else 'Reddit'
+        if reddit_ok:        sources.append('Reddit')
+        if st_tickers:       sources.append('StockTwits')
+        if any(d.get('has_insider') for d in master_data): sources.append('Insider')
+        if any(d.get('has_capitol') for d in master_data): sources.append('Capitol')
         return {
             'data':      master_data[:20],
-            'source':    src_str,
+            'source':    ' + '.join(sources) if sources else 'Reddit',
+            'timeframe': timeframe,
             'timestamp': get_timestamp(),
-            'count':     len(master_data)
+            'count':     len(master_data),
         }
 
     return get_fallback_master_data()
@@ -685,21 +698,119 @@ def get_fallback_master_data():
     """Datos de respaldo estáticos cuando Reddit y StockTwits no están disponibles."""
     return {
         'data': [
-            {'rank':'1','ticker':'NVDA','buzz_score':'98','health':'85 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','change':0.8,'price':None},
-            {'rank':'2','ticker':'TSLA','buzz_score':'95','health':'72 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','change':-0.4,'price':None},
-            {'rank':'3','ticker':'AAPL','buzz_score':'88','health':'80 Fuerte','social_hype':'★★★★☆','smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆','change':0.2,'price':None},
-            {'rank':'4','ticker':'META','buzz_score':'85','health':'78 Fuerte','social_hype':'★★★★☆','smart_money':'★★★☆☆','squeeze':'★★☆☆☆ Short 8%','change':1.1,'price':None},
-            {'rank':'5','ticker':'PLTR','buzz_score':'80','health':'65 Hold','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆','squeeze':'★★★★☆ Short 22%','change':2.3,'price':None},
-            {'rank':'6','ticker':'AMZN','buzz_score':'78','health':'76 Fuerte','social_hype':'★★★☆☆','smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆','change':0.6,'price':None},
-            {'rank':'7','ticker':'AMD','buzz_score':'75','health':'60 Hold','social_hype':'★★★★☆ Reddit Top','smart_money':'★★★☆☆','squeeze':'★★★☆☆ Short 14%','change':-0.9,'price':None},
-            {'rank':'8','ticker':'GME','buzz_score':'72','health':'40 Hold','social_hype':'★★★★★ Reddit Top','smart_money':'★☆☆☆☆','squeeze':'★★★★★ Short 35%','change':3.2,'price':None},
-            {'rank':'9','ticker':'MSFT','buzz_score':'70','health':'82 Fuerte','social_hype':'★★★☆☆','smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆','change':0.1,'price':None},
-            {'rank':'10','ticker':'MSTR','buzz_score':'68','health':'55 Hold','social_hype':'★★★★☆ Reddit Top','smart_money':'★★☆☆☆','squeeze':'★★★★☆ Short 28%','change':4.5,'price':None},
+            {'rank':'1', 'ticker':'NVDA', 'buzz_score':'98','health':'85 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★★☆ Vol ×2.3','squeeze':'★★★☆☆ Short 12%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.8, 'price':None},
+            {'rank':'2', 'ticker':'TSLA', 'buzz_score':'95','health':'72 Fuerte','social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆ Vol ×1.8','squeeze':'★★★★☆ Short 18%','has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':-0.4,'price':None},
+            {'rank':'3', 'ticker':'AAPL', 'buzz_score':'88','health':'80 Fuerte','social_hype':'★★★★☆',           'smart_money':'★★★★☆ Vol ×1.5','squeeze':'★☆☆☆☆',            'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.2, 'price':None},
+            {'rank':'4', 'ticker':'META', 'buzz_score':'85','health':'78 Fuerte','social_hype':'★★★★☆',           'smart_money':'★★★☆☆',          'squeeze':'★★☆☆☆ Short 8%',  'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':1.1, 'price':None},
+            {'rank':'5', 'ticker':'PLTR', 'buzz_score':'80','health':'65 Hold',  'social_hype':'★★★★★ Reddit Top','smart_money':'★★★☆☆',          'squeeze':'★★★★☆ Short 22%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':2.3, 'price':None},
+            {'rank':'6', 'ticker':'AMZN', 'buzz_score':'78','health':'76 Fuerte','social_hype':'★★★☆☆',           'smart_money':'★★★★☆ Vol ×1.4','squeeze':'★☆☆☆☆',            'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.6, 'price':None},
+            {'rank':'7', 'ticker':'AMD',  'buzz_score':'75','health':'60 Hold',  'social_hype':'★★★★☆ Reddit Top','smart_money':'★★★☆☆',          'squeeze':'★★★☆☆ Short 14%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':-0.9,'price':None},
+            {'rank':'8', 'ticker':'GME',  'buzz_score':'72','health':'40 Hold',  'social_hype':'★★★★★ Reddit Top','smart_money':'★☆☆☆☆',          'squeeze':'★★★★★ Short 35%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':3.2, 'price':None},
+            {'rank':'9', 'ticker':'MSFT', 'buzz_score':'70','health':'82 Fuerte','social_hype':'★★★☆☆',           'smart_money':'★★★★★ Vol ×1.9','squeeze':'★☆☆☆☆',            'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':0.1, 'price':None},
+            {'rank':'10','ticker':'MSTR', 'buzz_score':'68','health':'55 Hold',  'social_hype':'★★★★☆ Reddit Top','smart_money':'★★☆☆☆',          'squeeze':'★★★★☆ Short 28%', 'has_insider':False,'insider_val':0.0,'insider_cnt':0,'has_capitol':False,'change':4.5, 'price':None},
         ],
         'source': 'Fallback',
+        'timeframe': 'day',
         'timestamp': get_timestamp(),
         'count': 10
     }
+
+
+# ── INSIDER BUYING — OpenInsider scraping (sin API key) ──────────────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_insider_buying(ticker: str) -> dict:
+    """
+    Scraping de openinsider.com — compras de insiders (Form 4) últimos 7 días.
+    Devuelve: {'has_buying': bool, 'count': int, 'total_value': float, 'names': [str]}
+    """
+    result = {'has_buying': False, 'count': 0, 'total_value': 0.0, 'names': []}
+    try:
+        session = get_http_session()
+        url = (
+            f'http://openinsider.com/screener?s={ticker}&o=&pl=&ph=&ls=&lp=&nh=&nl='
+            f'&fd=7&td=0&tdd=&isoDateFrom=&isoDateTo=&ownershipType=D%2BO'
+            f'&type=P%25&action=1'
+        )
+        r = session.get(url, timeout=8, headers={'Accept': 'text/html'})
+        if r.status_code != 200:
+            return result
+        soup = BeautifulSoup(r.text, 'html.parser')
+        table = soup.find('table', {'class': 'tinytable'})
+        if not table:
+            return result
+        rows = table.find_all('tr')[1:]
+        names, total = [], 0.0
+        for row in rows[:5]:
+            cols = row.find_all('td')
+            if len(cols) < 12:
+                continue
+            name_td  = cols[5].get_text(strip=True)
+            value_td = cols[11].get_text(strip=True).replace(',', '').replace('$', '').replace('+', '')
+            try:
+                total += float(value_td)
+            except Exception:
+                pass
+            if name_td and name_td not in names:
+                names.append(name_td)
+        if names:
+            result = {'has_buying': True, 'count': len(names), 'total_value': total, 'names': names}
+    except Exception:
+        pass
+    return result
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_insider_buying_batch(tickers: tuple) -> dict:
+    """Obtiene insider buying para una lista de tickers en paralelo."""
+    results = {}
+    def _fetch(t):
+        return t, get_insider_buying(t)
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {ex.submit(_fetch, t): t for t in tickers}
+        for f in as_completed(futures):
+            try:
+                ticker, data = f.result(timeout=12)
+                results[ticker] = data
+            except Exception:
+                results[futures[f]] = {'has_buying': False, 'count': 0, 'total_value': 0.0, 'names': []}
+    return results
+
+
+# ── CAPITOL TRADES — scraping sin API key ────────────────────────────────────
+
+@st.cache_data(ttl=7200, show_spinner=False)
+def get_capitol_trades_tickers() -> set:
+    """
+    Scraping de capitoltrades.com/trades — tickers con actividad política reciente.
+    Devuelve set de tickers en mayúsculas.
+    """
+    found = set()
+    session = get_http_session()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (compatible; RSUTerminal/2.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    for page in (1, 2):
+        try:
+            r = session.get(
+                f'https://www.capitoltrades.com/trades?page={page}',
+                headers=headers, timeout=10
+            )
+            if r.status_code != 200:
+                continue
+            soup = BeautifulSoup(r.text, 'html.parser')
+            for el in soup.find_all(['td', 'span', 'a']):
+                txt     = el.get_text(strip=True).upper()
+                classes = ' '.join(el.get('class', []))
+                if 'ticker' in classes.lower() or el.name == 'td':
+                    m = re.match(r'^([A-Z]{2,5})$', txt)
+                    if m:
+                        found.add(m.group(1))
+        except Exception:
+            continue
+    return found
 
 
 def get_financial_ticker_data():
@@ -908,172 +1019,114 @@ def get_fallback_sectors(timeframe="1D"):
 
 @st.cache_data(ttl=300)
 def get_vix_term_structure():
-    """
-    VIX Term Structure con datos reales:
-    - Spot: ^VIX (yfinance)
-    - Futuros aproximados: VIX1D, VVIX, VXX, UVXY + fórmulas de roll yield
-    - Meses 1-8: interpolados desde VIX spot + VXX roll yield real
-    Si los futuros no están disponibles, la curva se calcula desde
-    el roll yield implícito de VXX vs VIX para que sea coherente con la realidad.
-    """
     try:
-        # ── SPOT VIX (siempre disponible) ─────────────────────────────────────
-        vix = yf.Ticker("^VIX")
-        vix_hist = vix.history(period="5d")
-        if len(vix_hist) >= 3:
-            current_spot = float(vix_hist['Close'].iloc[-1])
-            prev_spot    = float(vix_hist['Close'].iloc[-2])
-            spot_2days   = float(vix_hist['Close'].iloc[-3])
-        else:
-            current_spot, prev_spot, spot_2days = 20.0, 20.0, 20.0
-
-        # ── ROLL YIELD real via VXX ───────────────────────────────────────────
-        # VXX mantiene una mezcla de futuros front-month y second-month.
-        # Su relación con ^VIX refleja la contango/backwardation real del mercado.
-        roll_yield_monthly = 0.0
+        # VIX Spot real
         try:
-            vxx = yf.Ticker("VXX")
-            vxx_h = vxx.history(period="21d")
-            if len(vxx_h) >= 15:
-                # Roll yield mensual estimado: variación de VXX ajustada por VIX
-                vxx_now   = float(vxx_h['Close'].iloc[-1])
-                vxx_1m    = float(vxx_h['Close'].iloc[0])
-                vix_1m    = float(vix_hist['Close'].iloc[0]) if len(vix_hist) > 0 else current_spot
-                # Ajuste: si VIX subió, VXX debería haber subido también
-                vix_ratio = current_spot / vix_1m if vix_1m > 0 else 1.0
-                vxx_adj   = vxx_now / (vxx_1m * vix_ratio) if (vxx_1m * vix_ratio) > 0 else 1.0
-                # Roll yield mensual = exceso de decay de VXX relativo a VIX
-                roll_yield_monthly = (vxx_adj - 1.0) * 100  # % mensual
-                # Acotar a rango razonable [-5%, +3%]
-                roll_yield_monthly = max(-5.0, min(3.0, roll_yield_monthly))
-        except Exception:
-            # Fallback conservador: contango suave si VIX < 20, backwardation si >= 20
-            roll_yield_monthly = -1.5 if current_spot < 20 else 0.8
+            vix = yf.Ticker("^VIX")
+            vix_hist = vix.history(period="5d")
+            if len(vix_hist) >= 3:
+                current_spot = float(vix_hist['Close'].iloc[-1])
+                prev_spot = float(vix_hist['Close'].iloc[-2])
+                spot_2days = float(vix_hist['Close'].iloc[-3])
+            else:
+                current_spot, prev_spot, spot_2days = 17.45, 17.36, 20.37
+        except:
+            current_spot, prev_spot, spot_2days = 17.45, 17.36, 20.37
 
-        # ── VIX9D si está disponible (proxy muy corto plazo) ──────────────────
-        vix9d = None
-        try:
-            v9d = yf.Ticker("^VIX9D")
-            v9d_h = v9d.history(period="2d")
-            if len(v9d_h) >= 1:
-                vix9d = float(v9d_h['Close'].iloc[-1])
-        except Exception:
-            pass
-
-        # ── VIX3M (3 meses) si disponible ────────────────────────────────────
-        vix3m = None
-        try:
-            v3m = yf.Ticker("^VIX3M")
-            v3m_h = v3m.history(period="2d")
-            if len(v3m_h) >= 1:
-                vix3m = float(v3m_h['Close'].iloc[-1])
-        except Exception:
-            pass
-
-        # ── VIX6M si disponible ───────────────────────────────────────────────
-        vix6m = None
-        try:
-            v6m = yf.Ticker("^VIX6M")
-            v6m_h = v6m.history(period="2d")
-            if len(v6m_h) >= 1:
-                vix6m = float(v6m_h['Close'].iloc[-1])
-        except Exception:
-            pass
-
-        # ── Construir curva de 8 puntos ───────────────────────────────────────
+        # Intentar obtener futuros VIX reales (VX1-VX8 en CBOE via yfinance)
+        # Los futuros VIX tienen símbolos como VXH25, VXJ25, etc. en yfinance
         now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
+        month_codes = ['F','G','H','J','K','M','N','Q','U','V','X','Z']
         month_names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-
-        # Puntos ancla reales disponibles
-        # m0 = spot, m3 = VIX3M, m6 = VIX6M; el resto se interpola con roll yield
-        anchor = {0: current_spot}
-        if vix3m is not None:
-            anchor[3] = vix3m
-        if vix6m is not None:
-            anchor[6] = vix6m
-
+        
         vix_futures = []
-        for i in range(8):
-            m   = (now.month - 1 + i) % 12
-            y   = now.year + ((now.month - 1 + i) // 12)
-            label = f"{month_names[m]} {y}"
+        vix_futures.append({'month': f"{month_names[now.month-1]} {now.year}", 
+                            'current': round(current_spot, 2), 
+                            'previous': round(prev_spot, 2), 
+                            'two_days': round(spot_2days, 2)})
+        
+        # Intentar obtener futuros reales
+        futures_obtained = False
+        future_vals = []
+        # Intentar varios formatos de símbolo de futuros VIX
+        for i in range(1, 8):
+            m = (now.month - 1 + i) % 12
+            y = now.year + ((now.month - 1 + i) // 12)
+            code = month_codes[m]
+            yr2 = str(y)[-2:]
+            # Probar múltiples formatos que yfinance puede reconocer
+            syms_to_try = [f"VX{code}{yr2}.CF", f"/VX{code}{yr2}", f"VX{code}{yr2}=F"]
+            val, prev_val = None, None
+            for sym in syms_to_try:
+                try:
+                    t = yf.Ticker(sym)
+                    h = t.history(period="2d")
+                    if len(h) >= 1:
+                        val = float(h['Close'].iloc[-1])
+                        prev_val = float(h['Close'].iloc[-2]) if len(h) >= 2 else val
+                        break
+                except:
+                    continue
+            if val is not None:
+                vix_futures.append({
+                    'month': f"{month_names[m]} {y}",
+                    'current': round(val, 2),
+                    'previous': round(prev_val, 2),
+                    'two_days': round(prev_val * 0.99, 2)
+                })
+                future_vals.append(val)
+                futures_obtained = True
 
-            # Valor actual: interpolar entre anclas o extrapolar con roll yield
-            if i in anchor:
-                cur = anchor[i]
-            else:
-                # Encontrar anclas más cercanas
-                prev_anchor = max((k for k in anchor if k <= i), default=0)
-                next_anchor = min((k for k in anchor if k >= i), default=None)
-                if next_anchor is not None and next_anchor != prev_anchor:
-                    # Interpolación lineal entre anclas
-                    frac = (i - prev_anchor) / (next_anchor - prev_anchor)
-                    cur  = anchor[prev_anchor] + frac * (anchor[next_anchor] - anchor[prev_anchor])
+        # Si no obtuvimos futuros reales, simular curva realista
+        if not futures_obtained or len(vix_futures) < 4:
+            vix_futures = []
+            is_contango = current_spot < 20
+            for i in range(8):
+                m = (now.month - 1 + i) % 12
+                y = now.year + ((now.month - 1 + i) // 12)
+                if is_contango:
+                    cur = current_spot + (i * 0.9) + (i * i * 0.08)
+                    prv = prev_spot + (i * 0.85) + (i * i * 0.07)
+                    td = spot_2days + (i * 0.5) + (i * i * 0.05)
                 else:
-                    # Extrapolación con roll yield mensual
-                    steps = i - prev_anchor
-                    # Roll yield compuesto: cada mes de contango = -roll_yield % sobre el valor
-                    decay = (1 + roll_yield_monthly / 100) ** steps
-                    cur   = anchor[prev_anchor] * decay
+                    cur = max(current_spot - (i * 0.3), 12)
+                    prv = max(prev_spot - (i * 0.25), 12)
+                    td = max(spot_2days - (i * 0.2), 12)
+                vix_futures.append({
+                    'month': f"{month_names[m]} {y}",
+                    'current': round(cur, 2),
+                    'previous': round(prv, 2),
+                    'two_days': round(td, 2)
+                })
 
-            cur = max(10.0, round(cur, 2))
-
-            # Valores históricos (ayer y anteayer) — escalar proporcionalmente
-            if current_spot > 0:
-                prv = round(cur * (prev_spot  / current_spot), 2)
-                td  = round(cur * (spot_2days / current_spot), 2)
-            else:
-                prv = cur
-                td  = cur
-
-            vix_futures.append({
-                'month':    label,
-                'current':  cur,
-                'previous': max(10.0, prv),
-                'two_days': max(10.0, td),
-            })
-
-        # ── Estado: Contango / Backwardation ─────────────────────────────────
-        far_val = vix_futures[-1]['current']
-        if far_val > vix_futures[0]['current'] * 1.01:   # >1% más alto = contango
-            state       = "Contango"
-            state_desc  = "Mercados calmados — Favorable para comprar caídas"
+        # Determinar estado
+        if len(vix_futures) >= 2 and vix_futures[-1]['current'] > vix_futures[0]['current']:
+            state = "Contango"
+            state_desc = "Mercados calmados - Favorable para comprar caídas"
             state_color = "#00ffad"
-            explanation = ("<b>Contango:</b> Futuros > Spot. "
-                          "El mercado espera que la volatilidad baje con el tiempo. "
-                          "Estado normal en mercados tranquilos. "
-                          f"Roll yield mensual estimado: {roll_yield_monthly:+.1f}%.")
-        elif far_val < vix_futures[0]['current'] * 0.99:  # >1% más bajo = backwardation
-            state       = "Backwardation"
-            state_desc  = "Estrés de mercado detectado — Precaución"
-            state_color = "#f23645"
-            explanation = ("<b>Backwardation:</b> Futuros < Spot. "
-                          "El mercado espera más volatilidad inmediata. "
-                          "Señal de miedo inmediato. "
-                          f"Roll yield mensual estimado: {roll_yield_monthly:+.1f}%.")
+            explanation = ("<b>Contango:</b> Precio Futuros > Spot. "
+                         "El mercado espera que la volatilidad baje con el tiempo. "
+                         "Estado normal en mercados tranquilos.")
         else:
-            state       = "Flat"
-            state_desc  = "Curva plana — Incertidumbre equilibrada"
-            state_color = "#ff9800"
-            explanation = ("<b>Flat:</b> Futuros ≈ Spot. "
-                          "Mercado en transición, sin sesgo claro. "
-                          f"Roll yield mensual estimado: {roll_yield_monthly:+.1f}%.")
+            state = "Backwardation"
+            state_desc = "Estrés de mercado detectado - Precaución"
+            state_color = "#f23645"
+            explanation = ("<b>Backwardation:</b> Precio Futuros < Spot. "
+                         "El mercado espera más volatilidad. "
+                         "Señal de miedo inmediato.")
 
         return {
-            'data':          vix_futures,
-            'current_spot':  current_spot,
-            'prev_spot':     prev_spot,
-            'spot_2days':    spot_2days,
-            'state':         state,
-            'state_desc':    state_desc,
-            'state_color':   state_color,
-            'explanation':   explanation,
-            'is_contango':   state == "Contango",
-            'roll_yield':    roll_yield_monthly,
-            'vix3m':         vix3m,
-            'vix6m':         vix6m,
+            'data': vix_futures,
+            'current_spot': current_spot,
+            'prev_spot': prev_spot,
+            'spot_2days': spot_2days,
+            'state': state,
+            'state_desc': state_desc,
+            'state_color': state_color,
+            'explanation': explanation,
+            'is_contango': state == "Contango"
         }
-    except Exception:
+    except Exception as e:
         return get_fallback_vix_structure()
 
 def get_fallback_vix_structure():
@@ -2831,189 +2884,212 @@ def render():
         </body></html>'''
         components.html(cal_full_html, height=420, scrolling=False)
 
-    # === REDDIT SOCIAL PULSE - MASTER BUZZ ===
+    # === REDDIT SOCIAL PULSE - MASTER BUZZ v3 ===
     with col3:
-        master_data = get_buzztickr_master_data()
-        buzz_items = master_data.get('data', [])
+        # ── Selector de ventana temporal ─────────────────────────────────────
+        _tf_key = 'reddit_pulse_timeframe'
+        if _tf_key not in st.session_state:
+            st.session_state[_tf_key] = 'day'
+
+        _tf_cols = st.columns(3)
+        for _i, (_tf_val, _tf_lbl) in enumerate([('day','Daily'),('week','Weekly'),('month','Monthly')]):
+            with _tf_cols[_i]:
+                _active = st.session_state[_tf_key] == _tf_val
+                if st.button(
+                    _tf_lbl,
+                    key=f'tf_{_tf_val}',
+                    use_container_width=True,
+                    type='primary' if _active else 'secondary'
+                ):
+                    st.session_state[_tf_key] = _tf_val
+                    st.rerun()
+
+        _selected_tf = st.session_state[_tf_key]
+        master_data   = get_buzztickr_master_data(timeframe=_selected_tf)
+        buzz_items    = master_data.get('data', [])
         timestamp_str = master_data.get('timestamp', get_timestamp())
-        source_str = master_data.get('source', 'API')
-        count_str = master_data.get('count', 0)
-        
-        # Cards visuales en lugar de tabla
-        cards_html = ""
-        for item in buzz_items[:20]:  # 20 activos con scroll
-            rank = str(item.get('rank', '-'))
-            ticker = str(item.get('ticker', '-'))
-            buzz_score = str(item.get('buzz_score', '-'))
-            health = str(item.get('health', '-'))
+        source_str    = master_data.get('source', 'API')
+        count_str     = master_data.get('count', 0)
+        tf_label      = {'day': 'DAILY', 'week': 'WEEKLY', 'month': 'MONTHLY'}.get(_selected_tf, 'DAILY')
+
+        # ── Helpers inline ────────────────────────────────────────────────────
+        def _extract_stars(txt, mx=5):
+            n = txt.count('★') or txt.count('*')
+            return min(n, mx)
+
+        def _stars_html(n, mx=5, ac="#ffd700", ic="#2a3050"):
+            return ''.join(
+                f'<span style="color:{ac if i < n else ic};font-size:10px;line-height:1;">★</span>'
+                for i in range(mx)
+            )
+
+        # ── Construir filas ───────────────────────────────────────────────────
+        # Diseño compacto: 1 fila = rank + ticker/score + health + 3 mini-señales
+        # Badges insider/capitol van inline dentro de la fila (no ocupan altura extra)
+        rows_html = ""
+        n_insider = 0
+        n_capitol = 0
+
+        for item in buzz_items[:20]:
+            rank        = str(item.get('rank', '-'))
+            ticker      = str(item.get('ticker', '-'))
+            buzz_score  = str(item.get('buzz_score', '-'))
+            health      = str(item.get('health', '-'))
             social_hype = str(item.get('social_hype', ''))
             smart_money = str(item.get('smart_money', ''))
-            squeeze = str(item.get('squeeze', ''))
+            squeeze     = str(item.get('squeeze', ''))
+            has_insider = bool(item.get('has_insider', False))
+            insider_val = float(item.get('insider_val', 0.0))
+            insider_cnt = int(item.get('insider_cnt', 0))
+            has_capitol = bool(item.get('has_capitol', False))
 
+            if has_insider: n_insider += 1
+            if has_capitol: n_capitol += 1
+
+            # Rank badge
             try:
-                rank_int = int(rank)
-                if rank_int == 1:   rank_bg, rank_color = "linear-gradient(135deg,#f23645,#c62828)", "white"
-                elif rank_int == 2: rank_bg, rank_color = "linear-gradient(135deg,#ff9800,#e65100)", "white"
-                elif rank_int == 3: rank_bg, rank_color = "linear-gradient(135deg,#ffd700,#f9a825)", "#111"
-                else:               rank_bg, rank_color = "#1a1e26", "#888"
-                rank_int_ok = True
-            except:
-                rank_bg, rank_color = "#1a1e26", "#888"
-                rank_int = 99
-                rank_int_ok = False
+                ri = int(rank)
+                if ri == 1:   rb, rc = "linear-gradient(135deg,#f23645,#c62828)", "#fff"
+                elif ri == 2: rb, rc = "linear-gradient(135deg,#ff9800,#e65100)", "#fff"
+                elif ri == 3: rb, rc = "linear-gradient(135deg,#ffd700,#f9a825)", "#111"
+                else:         rb, rc = "#1a1e26", "#666"
+            except Exception:
+                rb, rc = "#1a1e26", "#666"
 
-            health_lower = health.lower()
-            if 'strong' in health_lower:
-                h_bg, h_border, h_color = "#00ffad15", "#00ffad50", "#00ffad"
-                h_label = "FUERTE"
-            elif 'hold' in health_lower:
-                h_bg, h_border, h_color = "#ff980015", "#ff980050", "#ff9800"
-                h_label = "HOLD"
+            # Health
+            hl = health.lower()
+            if 'fuerte' in hl or 'strong' in hl:
+                hbg, hbr, hcl, hlbl = "#00ffad15", "#00ffad50", "#00ffad", "↑"
+            elif 'hold' in hl:
+                hbg, hbr, hcl, hlbl = "#ff980015", "#ff980050", "#ff9800", "→"
             else:
-                h_bg, h_border, h_color = "#f2364515", "#f2364550", "#f23645"
-                h_label = "DÉBIL"
+                hbg, hbr, hcl, hlbl = "#f2364515", "#f2364550", "#f23645", "↓"
+            nm = re.search(r'(\d+)', health)
+            hnum = nm.group(1) if nm else ""
 
-            # Health number
-            num_match = re.search(r'(\d+)', health)
-            health_num = num_match.group(1) if num_match else ""
+            # Stars
+            hs = _extract_stars(social_hype)
+            ss = _extract_stars(smart_money)
+            qs = _extract_stars(squeeze)
 
-            # Extraer estrellas de hype, smart money y squeeze
-            def extract_stars(text, max_stars=5):
-                """Extrae el número de estrellas del texto BuzzTickr"""
-                star_count = text.count('★')
-                if star_count == 0:
-                    star_count = text.count('*')
-                return min(star_count, max_stars)
-            
-            hype_stars = extract_stars(social_hype)
-            smart_stars = extract_stars(smart_money)
-            squeeze_stars = extract_stars(squeeze)
-            
-            def stars_html(n, max_n=5, active_color="#ffd700", inactive_color="#2a3f5f"):
-                result = ""
-                for i in range(max_n):
-                    color = active_color if i < n else inactive_color
-                    result += f'<span style="color:{color}; font-size:11px;">★</span>'
-                return result
-            
-            hype_label = ""
-            if "Reddit" in social_hype:
-                hype_label = "Reddit"
-            elif "StockTwits" in social_hype:
-                hype_label = "StockTwits"
-            elif hype_stars > 0:
-                hype_label = "Social"
+            # Smart label
+            vm = re.search(r'Vol [x×](\d+\.?\d*)', smart_money)
+            sl = f"×{vm.group(1)}" if vm else ("INS" if has_insider else "")
 
-            smart_label = ""
-            vol_m = re.search(r'Vol [x×](\d+\.?\d*)', smart_money)
-            whale_m = re.search(r'>(\d+)%', smart_money)
-            if vol_m:
-                smart_label = f"Vol ×{vol_m.group(1)}"
-            elif "Whales" in smart_money or "Ballenas" in smart_money:
-                smart_label = f"Ballenas >{whale_m.group(1)}%" if whale_m else "Ballenas"
-            elif smart_stars > 0:
-                smart_label = "Institucional"
+            # Squeeze label
+            shm = re.search(r'Short (\d+\.?\d*)%', squeeze)
+            ql  = f"{shm.group(1)}%" if shm else ""
 
-            squeeze_label = ""
-            short_m = re.search(r'Short (\d+\.?\d*)%', squeeze)
-            pct_m   = re.search(r'\((\d+)%\)', squeeze)
-            if short_m:
-                squeeze_label = f"Short {short_m.group(1)}%"
-            elif pct_m:
-                squeeze_label = f"Potential ({pct_m.group(1)}%)"
-            elif "Potential" in squeeze or squeeze_stars > 0:
-                squeeze_label = "Potential"
+            # Alert pills (inline, muy compactos)
+            alert_html = ""
+            if has_insider:
+                iv_str = (f"${insider_val/1e6:.1f}M" if insider_val >= 1e6
+                          else f"${insider_val/1e3:.0f}K" if insider_val >= 1e3 else f"×{insider_cnt}")
+                alert_html += (
+                    f'<span style="background:#7c3aed22;border:1px solid #7c3aed55;'
+                    f'color:#a78bfa;font-size:7px;font-weight:800;padding:1px 4px;'
+                    f'border-radius:3px;white-space:nowrap;">🏦 {iv_str}</span> '
+                )
+            if has_capitol:
+                alert_html += (
+                    f'<span style="background:#0e749022;border:1px solid #06b6d455;'
+                    f'color:#22d3ee;font-size:7px;font-weight:800;padding:1px 4px;'
+                    f'border-radius:3px;white-space:nowrap;">🏛️ GOVT</span>'
+                )
 
-            cards_html += f'''
-            <div class="buzz-row">
-                <div class="buzz-rank" style="background:{rank_bg}; color:{rank_color};">{rank}</div>
-                <div class="buzz-ticker-col">
-                    <div class="buzz-ticker">${ticker}</div>
-                    <div class="buzz-score">SCR:{buzz_score}</div>
-                </div>
-                <div class="buzz-health" style="background:{h_bg}; border:1px solid {h_border}; color:{h_color};">
-                    {health_num or ""}<br><span style="font-size:8px;">{h_label}</span>
-                </div>
-                <div class="buzz-signals-col">
-                    <div class="signal-badge" style="background:#ffd70014; border:1px solid #ffd70033;">
-                        <span class="sig-label" style="color:#ffd700;">HYPE</span>
-                        <span class="sig-stars">{stars_html(hype_stars, active_color="#ffd700")}</span>
-                        <span class="sig-info" style="color:#ffd70099;">{hype_label}</span>
-                    </div>
-                    <div class="signal-badge" style="background:#00ffad14; border:1px solid #00ffad33;">
-                        <span class="sig-label" style="color:#00ffad;">SMART</span>
-                        <span class="sig-stars">{stars_html(smart_stars, active_color="#00ffad")}</span>
-                        <span class="sig-info" style="color:#00ffad99;">{smart_label}</span>
-                    </div>
-                    <div class="signal-badge" style="background:#f2364514; border:1px solid #f2364533;">
-                        <span class="sig-label" style="color:#f23645;">SQZ</span>
-                        <span class="sig-stars">{stars_html(squeeze_stars, active_color="#f23645")}</span>
-                        <span class="sig-info" style="color:#f2364599;">{squeeze_label}</span>
-                    </div>
-                </div>
-            </div>'''
+            rows_html += f'''
+<div class="br">
+  <div class="rk" style="background:{rb};color:{rc};">{rank}</div>
+  <div class="tc">
+    <div class="tn">${ticker}</div>
+    <div class="ts">SCR:{buzz_score}</div>
+  </div>
+  <div class="hc" style="background:{hbg};border:1px solid {hbr};color:{hcl};">
+    <span style="font-size:10px;font-weight:800;">{hnum}</span>
+    <span style="font-size:7px;">{hlbl}</span>
+  </div>
+  <div class="sc">
+    <div class="sb" style="background:#ffd70012;border:1px solid #ffd70030;">
+      <span class="sl" style="color:#ffd700;">H</span>{_stars_html(hs,ac="#ffd700")}
+    </div>
+    <div class="sb" style="background:#00ffad12;border:1px solid #00ffad30;">
+      <span class="sl" style="color:#00ffad;">S</span>{_stars_html(ss,ac="#00ffad")}
+      {f'<span style="color:#00ffad99;font-size:7px;margin-left:2px;">{sl}</span>' if sl else ''}
+    </div>
+    <div class="sb" style="background:#f2364512;border:1px solid #f2364530;">
+      <span class="sl" style="color:#f23645;">Q</span>{_stars_html(qs,ac="#f23645")}
+      {f'<span style="color:#f2364599;font-size:7px;margin-left:2px;">{ql}</span>' if ql else ''}
+    </div>
+    {f'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:1px;">{alert_html}</div>' if alert_html else ''}
+  </div>
+</div>'''
+
+        # Alertas en header
+        alerts_header = ""
+        if n_insider:
+            alerts_header += f'<span style="color:#a78bfa;font-size:8px;font-weight:700;margin-right:6px;">🏦 {n_insider} insider</span>'
+        if n_capitol:
+            alerts_header += f'<span style="color:#22d3ee;font-size:8px;font-weight:700;">🏛️ {n_capitol} govt</span>'
 
         buzz_html_full = f'''<!DOCTYPE html><html><head>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-        <style>
-        * {{ margin:0; padding:0; box-sizing:border-box; }}
-        body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#11141a; }}
-        .container {{ border:1px solid #00ffad22; border-radius:10px; overflow:hidden; background:#11141a; width:100%; height:420px; display:flex; flex-direction:column; box-shadow:0 0 20px #00ffad08; }}
-        .header {{ background:#0c0e12; padding:10px 12px; border-bottom:1px solid #00ffad22; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
-        .col-head {{ display:grid; grid-template-columns:24px 50px 40px 1fr; gap:3px; padding:4px 8px; background:#0c0e12; border-bottom:2px solid #1a1e26; }}
-        .col-label {{ font-size:7px; font-weight:bold; color:#3a4f6f; text-transform:uppercase; letter-spacing:0.8px; }}
-        .content {{ flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1e26 transparent; }}
-        .buzz-row {{ display:grid; grid-template-columns:24px 50px 40px 1fr; gap:3px; padding:4px 8px; border-bottom:1px solid #1a1e2640; align-items:center; }}
-        .buzz-row:hover {{ background:#ffffff05; }}
-        .buzz-rank {{ width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:9px; flex-shrink:0; }}
-        .buzz-ticker-col {{ display:flex; flex-direction:column; }}
-        .buzz-ticker {{ color:#00ffad; font-weight:bold; font-size:11px; }}
-        .buzz-score {{ color:#444; font-size:7px; }}
-        .buzz-health {{ padding:3px 2px; border-radius:4px; font-size:10px; font-weight:bold; text-align:center; line-height:1.2; }}
-        .buzz-signals-col {{ display:flex; flex-direction:column; gap:2px; width:100%; }}
-        .signal-badge {{ display:flex; align-items:center; border-radius:4px; padding:2px 5px; gap:4px; width:100%; }}
-        .sig-label {{ font-size:8px; font-weight:900; min-width:32px; text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0; }}
-        .sig-stars {{ font-size:11px; flex-shrink:0; letter-spacing:1px; }}
-        .sig-info {{ font-size:8px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }}
-        .footer {{ background:#0c0e12; border-top:1px solid #1a1e26; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }}
-        .update-timestamp {{ text-align:center; color:#555; font-size:10px; padding:5px 0; font-family:'Courier New',monospace; border-top:1px solid #1a1e26; background:#0c0e12; flex-shrink:0; }}
-        .tooltip-wrapper {{ position:static; display:inline-block; }}
-        .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #333; display:flex; align-items:center; justify-content:center; color:#666; font-size:11px; cursor:help; }}
-        .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
-        .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
-        </style></head><body>
-        <div class="container">
-            <div class="header">
-                <div class="title">Reddit Social Pulse</div>
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <span style="background:#f2364520; color:#f23645; border:1px solid #f2364540; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:bold; letter-spacing:0.5px;">● LIVE</span>
-                    <div class="tooltip-wrapper">
-                        <div class="tooltip-btn">?</div>
-                        <div class="tooltip-content">Master Buzz BuzzTickr. Rank, Ticker, Salud, Hype (Reddit ★), Smart Money (Ballenas ★) y Squeeze (★). Top 20 activos con scroll.</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-head">
-                <div class="col-label">#</div>
-                <div class="col-label">Ticker</div>
-                <div class="col-label">Salud</div>
-                <div class="col-label">Hype / Smart Money / Squeeze</div>
-            </div>
-            <div class="content">
-                {cards_html}
-            </div>
-            <div class="footer">
-                <span style="font-size:9px; color:#555;">
-                    <span style="color:#00ffad; font-weight:bold;">{count_str}</span> activos monitorizados
-                </span>
-                <span style="font-size:8px; color:#333;">{source_str}</span>
-            </div>
-            <div class="update-timestamp">Actualizado: {timestamp_str} • {source_str}</div>
-        </div>
-        </body></html>'''
-        
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#11141a;}}
+.wrap{{border:1px solid #00ffad22;border-radius:10px;overflow:hidden;background:#11141a;width:100%;height:370px;display:flex;flex-direction:column;box-shadow:0 0 20px #00ffad08;}}
+.hdr{{background:#0c0e12;padding:7px 10px;border-bottom:1px solid #00ffad22;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
+.ttl{{color:#00ffad;font-size:16px;font-weight:normal;text-transform:uppercase;letter-spacing:2px;font-family:'VT323','Share Tech Mono',monospace;text-shadow:0 0 8px #00ffad44;}}
+.chead{{display:grid;grid-template-columns:20px 44px 28px 1fr;gap:2px;padding:3px 8px;background:#0c0e12;border-bottom:1px solid #1a1e2660;flex-shrink:0;}}
+.clbl{{font-size:6px;font-weight:bold;color:#2a3f5f;text-transform:uppercase;letter-spacing:0.5px;}}
+.body{{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#1a1e26 transparent;}}
+.br{{display:grid;grid-template-columns:20px 44px 28px 1fr;gap:2px;padding:3px 8px;border-bottom:1px solid #1a1e2630;align-items:start;}}
+.br:hover{{background:#ffffff04;}}
+.rk{{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:8px;flex-shrink:0;margin-top:2px;}}
+.tc{{display:flex;flex-direction:column;padding-top:1px;}}
+.tn{{color:#00ffad;font-weight:bold;font-size:10px;line-height:1.2;}}
+.ts{{color:#333;font-size:6px;}}
+.hc{{padding:2px 1px;border-radius:3px;font-size:9px;font-weight:bold;text-align:center;line-height:1.1;margin-top:1px;display:flex;flex-direction:column;align-items:center;}}
+.sc{{display:flex;flex-direction:column;gap:1px;width:100%;}}
+.sb{{display:flex;align-items:center;border-radius:3px;padding:1px 4px;gap:2px;}}
+.sl{{font-size:7px;font-weight:900;min-width:8px;flex-shrink:0;}}
+.ftr{{background:#0c0e12;border-top:1px solid #1a1e26;padding:3px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}}
+.upd{{text-align:center;color:#444;font-size:8px;padding:3px 0;font-family:'Courier New',monospace;border-top:1px solid #1a1e26;background:#0c0e12;flex-shrink:0;}}
+.tipw{{position:static;display:inline-block;}}
+.tipb{{width:18px;height:18px;border-radius:50%;background:#1a1e26;border:1px solid #2a2e36;display:flex;align-items:center;justify-content:center;color:#555;font-size:9px;cursor:help;}}
+.tipc{{display:none;position:fixed;width:280px;background:#1e222d;color:#eee;padding:12px;border-radius:10px;z-index:99999;font-size:11px;border:2px solid #00ffad;box-shadow:0 15px 40px rgba(0,0,0,0.9);line-height:1.5;left:50%;top:50%;transform:translate(-50%,-50%);}}
+.tipw:hover .tipc{{display:block;}}
+</style></head><body>
+<div class="wrap">
+  <div class="hdr">
+    <div>
+      <div class="ttl">Reddit Social Pulse</div>
+      <div style="margin-top:1px;">{alerts_header}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <span style="background:#00ffad18;color:#00ffad;border:1px solid #00ffad33;padding:1px 5px;border-radius:3px;font-size:7px;font-weight:bold;">{tf_label}</span>
+      <span style="background:#f2364520;color:#f23645;border:1px solid #f2364540;padding:1px 5px;border-radius:3px;font-size:7px;font-weight:bold;">● LIVE</span>
+      <div class="tipw">
+        <div class="tipb">?</div>
+        <div class="tipc">Reddit Social Pulse v3. Score: menciones × 5 subreddits + StockTwits. H=Hype (social), S=Smart Money (vol+insider), Q=Squeeze (short float). 🏦 Insider Buy (Form 4 / OpenInsider), 🏛️ Govt Trade (Capitol Trades). Selector Daily / Weekly / Monthly. Top 20 activos con scroll.</div>
+      </div>
+    </div>
+  </div>
+  <div class="chead">
+    <div class="clbl">#</div>
+    <div class="clbl">Ticker</div>
+    <div class="clbl">Salud</div>
+    <div class="clbl">H · S · Q · Alertas</div>
+  </div>
+  <div class="body">{rows_html}</div>
+  <div class="ftr">
+    <span style="font-size:8px;color:#555;"><span style="color:#00ffad;font-weight:bold;">{count_str}</span> activos · {tf_label}</span>
+    <span style="font-size:7px;color:#2a2e36;">{source_str}</span>
+  </div>
+  <div class="upd">Actualizado: {timestamp_str} · {source_str}</div>
+</div>
+</body></html>'''
+
         components.html(buzz_html_full, height=420, scrolling=False)
 
 
@@ -3141,38 +3217,6 @@ def render():
 
     # EARNINGS CALENDAR MEJORADO
     with f3c1:
-        news = fetch_finnhub_news()
-        news_items_html = []
-        for item in news[:8]:
-            safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
-            news_item = (
-                '<div style="padding: 8px 12px; border-bottom: 1px solid #1a1e26;">'
-                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;">'
-                '<span style="color:#888;font-size:0.7rem;font-family:monospace;">' + item['time'] + '</span>'
-                '<span style="padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; background-color:' + item['color'] + '22;color:' + item['color'] + ';">' + item['impact'] + '</span>'
-                '</div>'
-                '<div style="color:white;font-size:0.8rem;line-height:1.2;margin-bottom:4px;">' + safe_title + '</div>'
-                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Leer más</a>'
-                '</div>'
-            )
-            news_items_html.append(news_item)
-        news_content = "".join(news_items_html)
-
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Noticias de Alto Impacto</div>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Noticias financieras de alto impacto vía Finnhub API. Titulares traducidos al castellano.</div>
-                </div>
-            </div>
-            <div class="module-content" style="padding: 0; overflow-y: auto;">{news_content}</div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with f3c2:
         earnings = get_earnings_calendar()
         
         earn_html = ""
@@ -3236,7 +3280,7 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
-    with f3c3:
+    with f3c2:
         insiders = get_insider_trading()
         insider_html = ""
         for item in insiders:
@@ -3277,241 +3321,43 @@ def render():
         </div>
         ''', unsafe_allow_html=True)
 
+    with f3c3:
+        news = fetch_finnhub_news()
+        news_items_html = []
+        for item in news[:8]:
+            safe_title = item['title'].replace('"', '&quot;').replace("'", '&#39;')
+            news_item = (
+                '<div style="padding: 8px 12px; border-bottom: 1px solid #1a1e26;">'
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;">'
+                '<span style="color:#888;font-size:0.7rem;font-family:monospace;">' + item['time'] + '</span>'
+                '<span style="padding: 1px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: bold; background-color:' + item['color'] + '22;color:' + item['color'] + ';">' + item['impact'] + '</span>'
+                '</div>'
+                '<div style="color:white;font-size:0.8rem;line-height:1.2;margin-bottom:4px;">' + safe_title + '</div>'
+                '<a href="' + item['link'] + '" target="_blank" style="color: #00ffad; text-decoration: none; font-size: 0.75rem;">→ Leer más</a>'
+                '</div>'
+            )
+            news_items_html.append(news_item)
+        news_content = "".join(news_items_html)
+
+        st.markdown(f'''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Noticias de Alto Impacto</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Noticias financieras de alto impacto vía Finnhub API. Titulares traducidos al castellano.</div>
+                </div>
+            </div>
+            <div class="module-content" style="padding: 0; overflow-y: auto;">{news_content}</div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
     # FILA 4
     st.write("")
     f4c1, f4c2, f4c3 = st.columns(3)
 
     with f4c1:
-        fed = get_fed_liquidity()
-        color = fed['color']
-        status = fed['status']
-        
-        # Generar sparkline del balance histórico
-        hist = fed.get('history', [])
-        if len(hist) >= 4:
-            W_f, H_f = 300, 55
-            pad_f = {'l': 5, 'r': 5, 't': 5, 'b': 5}
-            h_vals = [v for _, v in hist]
-            mn_f, mx_f = min(h_vals), max(h_vals)
-            rng_f = mx_f - mn_f if mx_f != mn_f else 0.1
-            n_f = len(h_vals)
-            pts_f = []
-            area_f = [f"{pad_f['l']},{H_f - pad_f['b']}"]
-            for i, v in enumerate(h_vals):
-                x = pad_f['l'] + i * (W_f - pad_f['l'] - pad_f['r']) / (n_f - 1)
-                y = H_f - pad_f['b'] - ((v - mn_f) / rng_f) * (H_f - pad_f['t'] - pad_f['b'])
-                pts_f.append(f"{x:.1f},{y:.1f}")
-                area_f.append(f"{x:.1f},{y:.1f}")
-            area_f.append(f"{W_f - pad_f['r']},{H_f - pad_f['b']}")
-            sparkline_fed = f'''<svg width="100%" height="{H_f}" viewBox="0 0 {W_f} {H_f}">
-                <polygon points="{" ".join(area_f)}" fill="{color}15"/>
-                <polyline points="{" ".join(pts_f)}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>'''
-        else:
-            sparkline_fed = '<div style="color:#555; font-size:9px; text-align:center; padding:10px;">Sin historial</div>'
-        
-        # Determinar postura monetaria
-        ff_rate = fed.get('fed_rate')
-        if ff_rate is not None:
-            if ff_rate >= 4.5:
-                postura, postura_color = "RESTRICTIVA", "#f23645"
-            elif ff_rate >= 3.0:
-                postura, postura_color = "NEUTRAL", "#ff9800"
-            else:
-                postura, postura_color = "EXPANSIVA", "#00ffad"
-        else:
-            postura, postura_color = "N/D", "#888"
-        
-        w_change_num = fed.get('weekly_change_num', 0) or 0
-        w_change_color = "#00ffad" if w_change_num > 0 else ("#f23645" if w_change_num < 0 else "#888")
-        
-        fed_html = f'''<div style="display:flex; flex-direction:column; height:100%; gap:6px;">
-            <!-- Status principal -->
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:1.6rem; font-weight:bold; color:{color}; line-height:1;">{status}</div>
-                    <div style="font-size:9px; color:#888; margin-top:2px;">{fed['desc']}</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:1.4rem; font-weight:bold; color:white;">{fed['total']}</div>
-                    <div style="font-size:8px; color:#555;">Balance total WALCL</div>
-                </div>
-            </div>
-            <!-- Cambio semanal -->
-            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#888; font-size:9px;">Δ Semanal</span>
-                <span style="color:{w_change_color}; font-size:10px; font-weight:bold;">{fed.get('weekly_change', 'N/D')}</span>
-            </div>
-            <!-- Desglose activos -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
-                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:5px; padding:5px 8px; text-align:center;">
-                    <div style="font-size:8px; color:#555; margin-bottom:2px;">TREASURIES</div>
-                    <div style="font-size:11px; color:#3b82f6; font-weight:bold;">{fed['treasuries']}</div>
-                </div>
-                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:5px; padding:5px 8px; text-align:center;">
-                    <div style="font-size:8px; color:#555; margin-bottom:2px;">MBS</div>
-                    <div style="font-size:11px; color:#a78bfa; font-weight:bold;">{fed['mbs']}</div>
-                </div>
-            </div>
-            <!-- Liquidez neta -->
-            <div style="background:{'#00ffad10' if (fed.get('net_liquidity_num') or 0) > 0 else '#f2364510'}; border:1px solid {'#00ffad30' if (fed.get('net_liquidity_num') or 0) > 0 else '#f2364530'}; border-radius:6px; padding:6px 10px;">
-                <div style="font-size:8px; color:#888; margin-bottom:2px;">Liquidez Neta = Balance − TGA − RRP</div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:12px; font-weight:bold; color:white;">{fed['net_liquidity']}</div>
-                    <div style="font-size:8px; color:#555;">TGA:{fed['tga']} | RRP:{fed['rrp']}</div>
-                </div>
-            </div>
-            <!-- Tipo de interés -->
-            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#888; font-size:9px;">Fed Funds Rate</span>
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-size:12px; font-weight:bold; color:white;">{f"{ff_rate:.2f}%" if ff_rate else "N/D"}</span>
-                    <span style="background:{postura_color}22; color:{postura_color}; border:1px solid {postura_color}44; padding:1px 6px; border-radius:3px; font-size:8px; font-weight:bold;">{postura}</span>
-                </div>
-            </div>
-            <!-- Sparkline balance -->
-            <div>
-                <div style="font-size:8px; color:#555; margin-bottom:2px;">Balance últimas 20 semanas</div>
-                {sparkline_fed}
-            </div>
-        </div>'''
-
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Política de Liquidez FED</div>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Balance de la Reserva Federal via FRED. Incluye desglose Treasuries/MBS, Liquidez Neta (Balance−TGA−RRP), cambio semanal y tipo de interés. Requiere FRED_API_KEY.</div>
-                </div>
-            </div>
-            <div class="module-content" style="padding: 10px;">{fed_html}</div>
-            <div class="update-timestamp">Actualizado: {fed['date']} • FRED</div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with f4c2:
-        # Yield Curve: 2Y vs 10Y
-        try:
-            tnx = yf.Ticker("^TNX")  # 10Y
-            irx = yf.Ticker("^IRX")  # 13-week; usaremos ^TYX como 30Y y FVX como 5Y
-            tyx2y = yf.Ticker("^FVX") # 5Y proxy; mejor usar directo
-            # 2Y via FRED o yfinance - usar DGS2 proxy
-            t2y_ticker = yf.Ticker("^IRX")  # 3 month
-            
-            tnx_hist = tnx.history(period="1y")
-            # 2Y Treasury: usar símbolo alternativo
-            t2y_ticker2 = yf.Ticker("SHY")  # 1-3Y Treasury ETF como proxy
-            t2y_hist = t2y_ticker2.history(period="1y")
-            
-            y10 = float(tnx_hist['Close'].iloc[-1]) if len(tnx_hist) > 0 else 4.0
-            y10_prev = float(tnx_hist['Close'].iloc[-2]) if len(tnx_hist) > 1 else y10
-            
-            # Intentar obtener 2Y real
-            try:
-                twoy = yf.Ticker("^UST2Y")
-                twoy_hist = twoy.history(period="5d")
-                if len(twoy_hist) > 0:
-                    y2 = float(twoy_hist['Close'].iloc[-1])
-                else:
-                    raise Exception("no data")
-            except:
-                # Fallback: estimar 2Y ~ IRX (3M) + spread
-                irx_h = yf.Ticker("^IRX").history(period="5d")
-                y2 = float(irx_h['Close'].iloc[-1]) * 0.01 * 10 if len(irx_h) > 0 else y10 * 0.9
-                if y2 > y10 * 1.5 or y2 < 0.5:
-                    y2 = y10 - 0.5  # estimación razonable
-            
-            spread = y10 - y2
-            spread_pct = spread * 100  # en puntos básicos
-            is_inverted = spread < 0
-            
-            # Historial del spread (proxy)
-            y10_vals = [float(v) for v in tnx_hist['Close'].values[-90:]]
-            # Generar historial spread sintético
-            spread_history = []
-            for i, y10v in enumerate(y10_vals):
-                sp = y10v - y2 + (i - len(y10_vals)) * 0.005  # tendencia aproximada
-                spread_history.append(sp)
-            
-        except Exception as e:
-            y10, y2, spread = 4.0, 4.5, -0.5
-            is_inverted = True
-            spread_history = [-0.5] * 30
-        
-        spread_color = "#f23645" if is_inverted else "#00ffad"
-        status_text = "⚠ INVERTIDA" if is_inverted else "✓ NORMAL"
-        status_bg = "#f2364515" if is_inverted else "#00ffad15"
-        
-        # Generar mini sparkline del spread histórico
-        W_sp, H_sp = 300, 60
-        pad_sp = 5
-        if len(spread_history) >= 2:
-            mn_sp, mx_sp = min(spread_history), max(spread_history)
-            rng_sp = mx_sp - mn_sp if mx_sp != mn_sp else 0.1
-            n_sp = len(spread_history)
-            sp_pts = []
-            for i, sv in enumerate(spread_history):
-                x = pad_sp + i * (W_sp - 2*pad_sp) / (n_sp - 1)
-                y = H_sp - pad_sp - ((sv - mn_sp) / rng_sp) * (H_sp - 2*pad_sp)
-                sp_pts.append(f"{x:.1f},{y:.1f}")
-            # Línea cero
-            zero_y = H_sp - pad_sp - ((0 - mn_sp) / rng_sp) * (H_sp - 2*pad_sp) if mn_sp <= 0 <= mx_sp else H_sp/2
-            sparkline_svg = f'''<svg width="100%" height="{H_sp}" viewBox="0 0 {W_sp} {H_sp}">
-                <line x1="{pad_sp}" y1="{zero_y:.1f}" x2="{W_sp-pad_sp}" y2="{zero_y:.1f}" stroke="#f23645" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.6"/>
-                <text x="{W_sp-pad_sp}" y="{zero_y-2:.1f}" text-anchor="end" fill="#f2364588" font-size="7">0</text>
-                <polyline points="{" ".join(sp_pts)}" fill="none" stroke="{spread_color}" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>'''
-        else:
-            sparkline_svg = ""
-        
-        tnx_html = f'''<div style="display:flex; flex-direction:column; height:100%; gap:8px;">
-            <!-- Header datos -->
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                    <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Rendimiento Bono 10Y</div>
-                    <div style="font-size:2rem; font-weight:bold; color:white; line-height:1.1;">{y10:.2f}%</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Bono 2Y</div>
-                    <div style="font-size:2rem; font-weight:bold; color:#aaa; line-height:1.1;">{y2:.2f}%</div>
-                </div>
-            </div>
-            <!-- Spread badge -->
-            <div style="background:{status_bg}; border:1px solid {spread_color}33; border-radius:8px; padding:10px 14px; text-align:center;">
-                <div style="font-size:11px; color:#888; margin-bottom:4px;">Spread 10Y-2Y</div>
-                <div style="font-size:1.6rem; font-weight:bold; color:{spread_color}; line-height:1;">{spread:+.2f}%</div>
-                <div style="font-size:9px; font-weight:bold; color:{spread_color}; margin-top:4px; letter-spacing:0.5px;">{status_text}</div>
-            </div>
-            <!-- Explicación -->
-            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 10px;">
-                <div style="font-size:9px; color:#888; line-height:1.5;">
-                    {"⚠ <span style='color:#f23645;'>Curva invertida:</span> El bono corto (2Y) rinde más que el largo (10Y). Históricamente precede a recesiones en 6-18 meses." if is_inverted else "✓ <span style='color:#00ffad;'>Curva normal:</span> Los bonos largos rinden más, reflejando expectativas de crecimiento económico saludable."}
-                </div>
-            </div>
-            <!-- Sparkline histórico del spread -->
-            <div>
-                <div style="font-size:8px; color:#555; margin-bottom:3px;">Evolución del spread (90 días)</div>
-                {sparkline_svg}
-            </div>
-        </div>'''
-
-        st.markdown(f'''
-        <div class="module-container">
-            <div class="module-header">
-                <div class="module-title">Curva de Tipos 2Y vs 10Y</div>
-                <div class="tooltip-wrapper">
-                    <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">Diferencial entre el bono del Tesoro a 10 años y el de 2 años. Una curva invertida (2Y &gt; 10Y) es señal histórica de recesión.</div>
-                </div>
-            </div>
-            <div class="module-content" style="padding: 12px;">{tnx_html}</div>
-            <div class="update-timestamp">Actualizado: {get_timestamp()} • US Treasury via yfinance</div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-
-    with f4c3:
         # VIX con gráfico diario y niveles 20/25
         try:
             vix_ticker = yf.Ticker("^VIX")
@@ -3643,80 +3489,242 @@ def render():
         </body></html>'''
         components.html(vix_full_html, height=420, scrolling=False)
 
+    with f4c2:
+        fed = get_fed_liquidity()
+        color = fed['color']
+        status = fed['status']
+        
+        # Generar sparkline del balance histórico
+        hist = fed.get('history', [])
+        if len(hist) >= 4:
+            W_f, H_f = 300, 55
+            pad_f = {'l': 5, 'r': 5, 't': 5, 'b': 5}
+            h_vals = [v for _, v in hist]
+            mn_f, mx_f = min(h_vals), max(h_vals)
+            rng_f = mx_f - mn_f if mx_f != mn_f else 0.1
+            n_f = len(h_vals)
+            pts_f = []
+            area_f = [f"{pad_f['l']},{H_f - pad_f['b']}"]
+            for i, v in enumerate(h_vals):
+                x = pad_f['l'] + i * (W_f - pad_f['l'] - pad_f['r']) / (n_f - 1)
+                y = H_f - pad_f['b'] - ((v - mn_f) / rng_f) * (H_f - pad_f['t'] - pad_f['b'])
+                pts_f.append(f"{x:.1f},{y:.1f}")
+                area_f.append(f"{x:.1f},{y:.1f}")
+            area_f.append(f"{W_f - pad_f['r']},{H_f - pad_f['b']}")
+            sparkline_fed = f'''<svg width="100%" height="{H_f}" viewBox="0 0 {W_f} {H_f}">
+                <polygon points="{" ".join(area_f)}" fill="{color}15"/>
+                <polyline points="{" ".join(pts_f)}" fill="none" stroke="{color}" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>'''
+        else:
+            sparkline_fed = '<div style="color:#555; font-size:9px; text-align:center; padding:10px;">Sin historial</div>'
+        
+        # Determinar postura monetaria
+        ff_rate = fed.get('fed_rate')
+        if ff_rate is not None:
+            if ff_rate >= 4.5:
+                postura, postura_color = "RESTRICTIVA", "#f23645"
+            elif ff_rate >= 3.0:
+                postura, postura_color = "NEUTRAL", "#ff9800"
+            else:
+                postura, postura_color = "EXPANSIVA", "#00ffad"
+        else:
+            postura, postura_color = "N/D", "#888"
+        
+        w_change_num = fed.get('weekly_change_num', 0) or 0
+        w_change_color = "#00ffad" if w_change_num > 0 else ("#f23645" if w_change_num < 0 else "#888")
+        
+        fed_html = f'''<div style="display:flex; flex-direction:column; height:100%; gap:6px;">
+            <!-- Status principal -->
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:1.6rem; font-weight:bold; color:{color}; line-height:1;">{status}</div>
+                    <div style="font-size:9px; color:#888; margin-top:2px;">{fed['desc']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:1.4rem; font-weight:bold; color:white;">{fed['total']}</div>
+                    <div style="font-size:8px; color:#555;">Balance total WALCL</div>
+                </div>
+            </div>
+            <!-- Cambio semanal -->
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:9px;">Δ Semanal</span>
+                <span style="color:{w_change_color}; font-size:10px; font-weight:bold;">{fed.get('weekly_change', 'N/D')}</span>
+            </div>
+            <!-- Desglose activos -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:5px; padding:5px 8px; text-align:center;">
+                    <div style="font-size:8px; color:#555; margin-bottom:2px;">TREASURIES</div>
+                    <div style="font-size:11px; color:#3b82f6; font-weight:bold;">{fed['treasuries']}</div>
+                </div>
+                <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:5px; padding:5px 8px; text-align:center;">
+                    <div style="font-size:8px; color:#555; margin-bottom:2px;">MBS</div>
+                    <div style="font-size:11px; color:#a78bfa; font-weight:bold;">{fed['mbs']}</div>
+                </div>
+            </div>
+            <!-- Liquidez neta -->
+            <div style="background:{'#00ffad10' if (fed.get('net_liquidity_num') or 0) > 0 else '#f2364510'}; border:1px solid {'#00ffad30' if (fed.get('net_liquidity_num') or 0) > 0 else '#f2364530'}; border-radius:6px; padding:6px 10px;">
+                <div style="font-size:8px; color:#888; margin-bottom:2px;">Liquidez Neta = Balance − TGA − RRP</div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:12px; font-weight:bold; color:white;">{fed['net_liquidity']}</div>
+                    <div style="font-size:8px; color:#555;">TGA:{fed['tga']} | RRP:{fed['rrp']}</div>
+                </div>
+            </div>
+            <!-- Tipo de interés -->
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#888; font-size:9px;">Fed Funds Rate</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; font-weight:bold; color:white;">{f"{ff_rate:.2f}%" if ff_rate else "N/D"}</span>
+                    <span style="background:{postura_color}22; color:{postura_color}; border:1px solid {postura_color}44; padding:1px 6px; border-radius:3px; font-size:8px; font-weight:bold;">{postura}</span>
+                </div>
+            </div>
+            <!-- Sparkline balance -->
+            <div>
+                <div style="font-size:8px; color:#555; margin-bottom:2px;">Balance últimas 20 semanas</div>
+                {sparkline_fed}
+            </div>
+        </div>'''
+
+        st.markdown(f'''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Política de Liquidez FED</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Balance de la Reserva Federal via FRED. Incluye desglose Treasuries/MBS, Liquidez Neta (Balance−TGA−RRP), cambio semanal y tipo de interés. Requiere FRED_API_KEY.</div>
+                </div>
+            </div>
+            <div class="module-content" style="padding: 10px;">{fed_html}</div>
+            <div class="update-timestamp">Actualizado: {fed['date']} • FRED</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with f4c3:
+        # Yield Curve: 2Y vs 10Y
+        try:
+            tnx = yf.Ticker("^TNX")  # 10Y
+            irx = yf.Ticker("^IRX")  # 13-week; usaremos ^TYX como 30Y y FVX como 5Y
+            tyx2y = yf.Ticker("^FVX") # 5Y proxy; mejor usar directo
+            # 2Y via FRED o yfinance - usar DGS2 proxy
+            t2y_ticker = yf.Ticker("^IRX")  # 3 month
+            
+            tnx_hist = tnx.history(period="1y")
+            # 2Y Treasury: usar símbolo alternativo
+            t2y_ticker2 = yf.Ticker("SHY")  # 1-3Y Treasury ETF como proxy
+            t2y_hist = t2y_ticker2.history(period="1y")
+            
+            y10 = float(tnx_hist['Close'].iloc[-1]) if len(tnx_hist) > 0 else 4.0
+            y10_prev = float(tnx_hist['Close'].iloc[-2]) if len(tnx_hist) > 1 else y10
+            
+            # Intentar obtener 2Y real
+            try:
+                twoy = yf.Ticker("^UST2Y")
+                twoy_hist = twoy.history(period="5d")
+                if len(twoy_hist) > 0:
+                    y2 = float(twoy_hist['Close'].iloc[-1])
+                else:
+                    raise Exception("no data")
+            except:
+                # Fallback: estimar 2Y ~ IRX (3M) + spread
+                irx_h = yf.Ticker("^IRX").history(period="5d")
+                y2 = float(irx_h['Close'].iloc[-1]) * 0.01 * 10 if len(irx_h) > 0 else y10 * 0.9
+                if y2 > y10 * 1.5 or y2 < 0.5:
+                    y2 = y10 - 0.5  # estimación razonable
+            
+            spread = y10 - y2
+            spread_pct = spread * 100  # en puntos básicos
+            is_inverted = spread < 0
+            
+            # Historial del spread (proxy)
+            y10_vals = [float(v) for v in tnx_hist['Close'].values[-90:]]
+            # Generar historial spread sintético
+            spread_history = []
+            for i, y10v in enumerate(y10_vals):
+                sp = y10v - y2 + (i - len(y10_vals)) * 0.005  # tendencia aproximada
+                spread_history.append(sp)
+            
+        except Exception as e:
+            y10, y2, spread = 4.0, 4.5, -0.5
+            is_inverted = True
+            spread_history = [-0.5] * 30
+        
+        spread_color = "#f23645" if is_inverted else "#00ffad"
+        status_text = "⚠ INVERTIDA" if is_inverted else "✓ NORMAL"
+        status_bg = "#f2364515" if is_inverted else "#00ffad15"
+        
+        # Generar mini sparkline del spread histórico
+        W_sp, H_sp = 300, 60
+        pad_sp = 5
+        if len(spread_history) >= 2:
+            mn_sp, mx_sp = min(spread_history), max(spread_history)
+            rng_sp = mx_sp - mn_sp if mx_sp != mn_sp else 0.1
+            n_sp = len(spread_history)
+            sp_pts = []
+            for i, sv in enumerate(spread_history):
+                x = pad_sp + i * (W_sp - 2*pad_sp) / (n_sp - 1)
+                y = H_sp - pad_sp - ((sv - mn_sp) / rng_sp) * (H_sp - 2*pad_sp)
+                sp_pts.append(f"{x:.1f},{y:.1f}")
+            # Línea cero
+            zero_y = H_sp - pad_sp - ((0 - mn_sp) / rng_sp) * (H_sp - 2*pad_sp) if mn_sp <= 0 <= mx_sp else H_sp/2
+            sparkline_svg = f'''<svg width="100%" height="{H_sp}" viewBox="0 0 {W_sp} {H_sp}">
+                <line x1="{pad_sp}" y1="{zero_y:.1f}" x2="{W_sp-pad_sp}" y2="{zero_y:.1f}" stroke="#f23645" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.6"/>
+                <text x="{W_sp-pad_sp}" y="{zero_y-2:.1f}" text-anchor="end" fill="#f2364588" font-size="7">0</text>
+                <polyline points="{" ".join(sp_pts)}" fill="none" stroke="{spread_color}" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>'''
+        else:
+            sparkline_svg = ""
+        
+        tnx_html = f'''<div style="display:flex; flex-direction:column; height:100%; gap:8px;">
+            <!-- Header datos -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Rendimiento Bono 10Y</div>
+                    <div style="font-size:2rem; font-weight:bold; color:white; line-height:1.1;">{y10:.2f}%</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Bono 2Y</div>
+                    <div style="font-size:2rem; font-weight:bold; color:#aaa; line-height:1.1;">{y2:.2f}%</div>
+                </div>
+            </div>
+            <!-- Spread badge -->
+            <div style="background:{status_bg}; border:1px solid {spread_color}33; border-radius:8px; padding:10px 14px; text-align:center;">
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">Spread 10Y-2Y</div>
+                <div style="font-size:1.6rem; font-weight:bold; color:{spread_color}; line-height:1;">{spread:+.2f}%</div>
+                <div style="font-size:9px; font-weight:bold; color:{spread_color}; margin-top:4px; letter-spacing:0.5px;">{status_text}</div>
+            </div>
+            <!-- Explicación -->
+            <div style="background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px 10px;">
+                <div style="font-size:9px; color:#888; line-height:1.5;">
+                    {"⚠ <span style='color:#f23645;'>Curva invertida:</span> El bono corto (2Y) rinde más que el largo (10Y). Históricamente precede a recesiones en 6-18 meses." if is_inverted else "✓ <span style='color:#00ffad;'>Curva normal:</span> Los bonos largos rinden más, reflejando expectativas de crecimiento económico saludable."}
+                </div>
+            </div>
+            <!-- Sparkline histórico del spread -->
+            <div>
+                <div style="font-size:8px; color:#555; margin-bottom:3px;">Evolución del spread (90 días)</div>
+                {sparkline_svg}
+            </div>
+        </div>'''
+
+        st.markdown(f'''
+        <div class="module-container">
+            <div class="module-header">
+                <div class="module-title">Curva de Tipos 2Y vs 10Y</div>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-btn">?</div>
+                    <div class="tooltip-content">Diferencial entre el bono del Tesoro a 10 años y el de 2 años. Una curva invertida (2Y &gt; 10Y) es señal histórica de recesión.</div>
+                </div>
+            </div>
+            <div class="module-content" style="padding: 12px;">{tnx_html}</div>
+            <div class="update-timestamp">Actualizado: {get_timestamp()} • US Treasury via yfinance</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+
     # FILA 5 - Módulos HTML (altura aumentada a 420px en CSS)
     st.write("")
     f5c1, f5c2, f5c3 = st.columns(3)
 
     # Market Breadth
     with f5c1:
-        vix_data = get_vix_term_structure()
-        state_color = vix_data['state_color']
-        state_bg = f"{state_color}15"
-        chart_html = generate_vix_chart_html(vix_data)
-        tooltip_text = f"VIX Term Structure: {vix_data['state']}. {vix_data['explanation']}"
-        data_points = vix_data['data']
-        slope_pct = ((data_points[-1]['current'] - data_points[0]['current']) / data_points[0]['current']) * 100 if len(data_points) >= 2 else 0
-        timestamp_str = get_timestamp()
-
-        vix_html_full = f"""
-<!DOCTYPE html><html><head>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-        <style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
-.header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
-.title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
-.state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
-.tooltip-wrapper {{ position: static; display: inline-block; }}
-.tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
-.tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
-.tooltip-wrapper:hover .tooltip-content {{ display: block; }}
-.content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
-.spot-box {{ display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }}
-.spot-label {{ color: #888; font-size: 10px; font-weight: 500; }}
-.spot-value {{ color: white; font-size: 20px; font-weight: bold; }}
-.spot-change {{ color: {state_color}; font-size: 10px; font-weight: bold; margin-top: 2px; }}
-.chart-wrapper {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 8px; }}
-.insight-box {{ background: {state_bg}; border: 1px solid {state_color}22; border-radius: 6px; padding: 8px 10px; }}
-.insight-title {{ color: {state_color}; font-weight: bold; font-size: 11px; margin-bottom: 2px; }}
-.insight-desc {{ color: #aaa; font-size: 10px; line-height: 1.3; }}
-.update-timestamp {{ text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }}
-</style></head><body>
-<div class="container">
-    <div class="header">
-        <div class="title">VIX Term Structure</div>
-        <span class="state-badge">{vix_data['state']}</span>
-        <div class="tooltip-wrapper">
-            <div class="tooltip-btn">?</div>
-            <div class="tooltip-content">{tooltip_text}</div>
-        </div>
-    </div>
-    <div class="content">
-        <div class="spot-box">
-            <div>
-                <div class="spot-label">VIX Spot</div>
-                <div class="spot-change">{slope_pct:+.1f}% vs Far Month</div>
-            </div>
-            <div class="spot-value">{vix_data['current_spot']:.2f}</div>
-        </div>
-        <div class="chart-wrapper">
-            {chart_html}
-        </div>
-        <div class="insight-box">
-            <div class="insight-title">● {vix_data['state']}</div>
-            <div class="insight-desc">{vix_data['state_desc']}</div>
-        </div>
-    </div>
-    <div class="update-timestamp">Actualizado: {timestamp_str}</div>
-</div>
-</body></html>
-"""
-        components.html(vix_html_full, height=420, scrolling=False)
-
-    # Crypto Pulse
-    with f5c2:
         breadth = get_market_breadth()
         trend_color = "#00ffad" if breadth['trend'] == 'ALCISTA' else "#f23645"
         strength_color = "#00ffad" if breadth['strength'] == 'FUERTE' else "#ff9800"
@@ -3850,6 +3858,74 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
 
 
     # VIX Term Structure
+    with f5c2:
+        vix_data = get_vix_term_structure()
+        state_color = vix_data['state_color']
+        state_bg = f"{state_color}15"
+        chart_html = generate_vix_chart_html(vix_data)
+        tooltip_text = f"VIX Term Structure: {vix_data['state']}. {vix_data['explanation']}"
+        data_points = vix_data['data']
+        slope_pct = ((data_points[-1]['current'] - data_points[0]['current']) / data_points[0]['current']) * 100 if len(data_points) >= 2 else 0
+        timestamp_str = get_timestamp()
+
+        vix_html_full = f"""
+<!DOCTYPE html><html><head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+        <style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+.container {{ border: 1px solid #1a1e26; border-radius: 10px; overflow: hidden; background: #11141a; width: 100%; height: 420px; display: flex; flex-direction: column; }}
+.header {{ background: #0c0e12; padding: 10px 12px; border-bottom: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }}
+.title {{ color:#00ffad; font-size:18px; font-weight:normal; text-transform:uppercase; letter-spacing:2px; font-family:'VT323','Share Tech Mono','Courier New',monospace; text-shadow:0 0 10px #00ffad44; }}
+.state-badge {{ background: {state_bg}; color: {state_color}; padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; border: 1px solid {state_color}33; position: absolute; left: 50%; transform: translateX(-50%); }}
+.tooltip-wrapper {{ position: static; display: inline-block; }}
+.tooltip-btn {{ width: 22px; height: 22px; border-radius: 50%; background: #1a1e26; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; font-weight: bold; cursor: help; }}
+.tooltip-content {{ display: none; position: fixed; width: 300px; background-color: #1e222d; color: #eee; text-align: left; padding: 15px; border-radius: 10px; z-index: 99999; font-size: 12px; border: 2px solid #3b82f6; box-shadow: 0 15px 40px rgba(0,0,0,0.9); line-height: 1.5; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: normal; word-wrap: break-word; }}
+.tooltip-wrapper:hover .tooltip-content {{ display: block; }}
+.content {{ background: #11141a; flex: 1; overflow-y: auto; padding: 10px; }}
+.spot-box {{ display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #0c0e12 0%, #1a1e26 100%); border: 1px solid #2a3f5f; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }}
+.spot-label {{ color: #888; font-size: 10px; font-weight: 500; }}
+.spot-value {{ color: white; font-size: 20px; font-weight: bold; }}
+.spot-change {{ color: {state_color}; font-size: 10px; font-weight: bold; margin-top: 2px; }}
+.chart-wrapper {{ background: #0c0e12; border: 1px solid #1a1e26; border-radius: 6px; padding: 8px; margin-bottom: 8px; }}
+.insight-box {{ background: {state_bg}; border: 1px solid {state_color}22; border-radius: 6px; padding: 8px 10px; }}
+.insight-title {{ color: {state_color}; font-weight: bold; font-size: 11px; margin-bottom: 2px; }}
+.insight-desc {{ color: #aaa; font-size: 10px; line-height: 1.3; }}
+.update-timestamp {{ text-align: center; color: #555; font-size: 10px; padding: 6px 0; font-family: 'Courier New', monospace; border-top: 1px solid #1a1e26; background: #0c0e12; flex-shrink: 0; }}
+</style></head><body>
+<div class="container">
+    <div class="header">
+        <div class="title">VIX Term Structure</div>
+        <span class="state-badge">{vix_data['state']}</span>
+        <div class="tooltip-wrapper">
+            <div class="tooltip-btn">?</div>
+            <div class="tooltip-content">{tooltip_text}</div>
+        </div>
+    </div>
+    <div class="content">
+        <div class="spot-box">
+            <div>
+                <div class="spot-label">VIX Spot</div>
+                <div class="spot-change">{slope_pct:+.1f}% vs Far Month</div>
+            </div>
+            <div class="spot-value">{vix_data['current_spot']:.2f}</div>
+        </div>
+        <div class="chart-wrapper">
+            {chart_html}
+        </div>
+        <div class="insight-box">
+            <div class="insight-title">● {vix_data['state']}</div>
+            <div class="insight-desc">{vix_data['state_desc']}</div>
+        </div>
+    </div>
+    <div class="update-timestamp">Actualizado: {timestamp_str}</div>
+</div>
+</body></html>
+"""
+        components.html(vix_html_full, height=420, scrolling=False)
+
+    # Crypto Pulse
     with f5c3:
         try:
             cryptos = get_crypto_prices()
@@ -4339,5 +4415,4 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
             '</div>',
             unsafe_allow_html=True
         )
-
 

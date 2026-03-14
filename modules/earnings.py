@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import streamlit.components.v1 as components
@@ -3437,26 +3438,99 @@ def render():
 """
 
     # ── IA Section ──
-    st.markdown("""
-    <div style="background:#0c0e14;border:1px solid #00ffad33;border-radius:10px;
-                padding:20px 24px 16px;margin:20px 0 12px 0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span style="font-size:1.4rem;">🤖</span>
-            <div style="font-family:VT323,monospace;color:#00ffad;font-size:1.6rem;
+    # ── RSU Research Prompt (caja con botón copiar) ──
+    _RSU_PROMPT_TEXT = (
+        "Por favor, analiza el ticker [INSERTAR TICKER AQUÍ] y proporciona la siguiente "
+        "información de forma concisa y claramente organizada:\n\n"
+        "1. Explicación para 12 años: Tres puntos breves sobre qué hace la empresa y una analogía útil.\n"
+        "2. Resumen Profesional (Máx. 10 frases): Sector, productos/servicios, competidores (tickers), "
+        "Market Cap, ingresos y moat (ventaja competitiva). Si es biotecnológica, indica fase clínica o producto comercial.\n"
+        "3. Tema Sectorial y Narrativa: Narrativa actual del sector y cómo encaja el activo en ella (líder o seguidor).\n"
+        "4. Sentimiento Social y \"Buzz\" (BuzzTickr): Nivel de Buzz (Alto/Medio/Bajo), picos de menciones en redes "
+        "y sentimiento (Bullish/Bearish). Identifica el Short Interest y los Days to Cover.\n"
+        "5. Tabla de Fundamentales y Catalizadores: Temas candentes, próximos resultados y datos de crecimiento o patentes significativas.\n"
+        "6. Noticias y Eventos (Últimos 3 meses): Tabla con fecha, tipo de evento, resumen breve y marca con ⭐ si movió el precio.\n"
+        "7. Análisis de Dilución y Salud Financiera: Emisiones recientes (ATM, FPO), riesgo de dilución a 12 meses y Cash Runway.\n"
+        "8. Dinero Inteligente y Macro (Flujo de Caja): Movimientos recientes de insiders e instituciones. "
+        "Correlación con su referente (Beta) y volumen anómalo o actividad en Dark Pools en los últimos 10 días.\n"
+        "9. Comparativa y Tendencia: Rendimiento relativo vs. competidores y sector en el último mes.\n"
+        "10. Próximos 30 días: Catalizadores específicos con fechas confirmadas o estimadas.\n"
+        "11. Precios Objetivo de Analistas: Tabla con firma, nuevo target, target anterior y rating.\n"
+        "12. ESCENARIO DE TESIS FALLIDA (Bear Case): ¿Cuál es la amenaza número 1 o el riesgo oculto "
+        "que podría invalidar la tesis alcista y causar una caída severa?\n"
+        "13. VALORACIÓN TÁCTICA: ¿Esperar a una corrección o comprar ahora? Analiza si el activo está "
+        "sobrecomprado o infravalorado:\n"
+        "   • Métricas Técnicas: RSI y distancia respecto a la media de 50/200 días.\n"
+        "   • Métricas de Valoración: P/E o P/S respecto a la media de su sector.\n"
+        "   • Extensión del Buzz: Si el sentimiento social es demasiado eufórico (peligro) o hay miedo (oportunidad).\n"
+        "   • Conclusión Final: Recomendación clara: entrar de golpe, DCA (compras escalonadas) o esperar a un retroceso del X%.\n\n"
+        "Instrucción final: Céntrate en las razones por las que la acción puede tener un gran movimiento "
+        "(ventas, guidance, asociaciones, buzz social). Responde con un estilo claro, conciso y fácil de "
+        "leer para utilizarlo en decisiones de inversión rápidas."
+    )
+
+    import json as _json
+    _prompt_js = _json.dumps(_RSU_PROMPT_TEXT)  # safely escaped for JS
+
+    components.html(f"""
+    <div style="background:#080a0f;border:1px solid #00d9ff22;border-radius:10px;
+                padding:20px 24px 18px;margin:20px 0 8px 0;font-family:Inter,sans-serif;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+            <span style="font-size:1.1rem;">📋</span>
+            <div style="font-family:VT323,monospace;color:#00d9ff;font-size:1.4rem;
                         letter-spacing:3px;text-transform:uppercase;">RSU Research Prompt</div>
-            <span style="background:#00ffad22;color:#00ffad;font-family:monospace;font-size:0.65rem;
-                         padding:2px 8px;border-radius:4px;border:1px solid #00ffad44;margin-left:auto;">
-                AI POWERED
+            <span style="background:#00d9ff18;color:#00d9ff;font-family:monospace;font-size:0.62rem;
+                         padding:2px 8px;border-radius:4px;border:1px solid #00d9ff33;margin-left:auto;
+                         white-space:nowrap;">
+                USAR EN CUALQUIER LLM
             </span>
         </div>
-        <div style="font-family:Inter,sans-serif;color:#555;font-size:0.83rem;line-height:1.7;
-                    border-top:1px solid #1a1e26;padding-top:10px;">
-            <strong style="color:#00ffad;">⚡ Rápido</strong> — Snapshot ejecutivo: precio, valoración, catalizadores y riesgo en segundos.<br>
-            <strong style="color:#00d9ff;">📋 Completo</strong> — Informe de 11 secciones: empresa, fundamentales, técnico, smart money y perspectivas.<br>
-            <strong style="color:#ff9800;">🔍 Grok</strong> — Investigación en tiempo real: noticias, insiders, catalizadores y movimientos sectoriales vía xAI.
+        <div style="color:#556;font-size:0.79rem;line-height:1.65;
+                    border-bottom:1px solid #1a1e26;padding-bottom:12px;margin-bottom:14px;">
+            Prompt profesional de 13 secciones para analizar cualquier ticker.
+            Cópialo, sustituye <span style="color:#00ffad;font-family:monospace;">[INSERTAR TICKER AQUÍ]</span>
+            por el activo que quieras investigar y pégalo en el modelo de lenguaje de tu confianza
+            (ChatGPT, Claude, Gemini, Grok…). Obtendrás un informe estructurado listo para
+            tomar decisiones de inversión rápidas.
+        </div>
+        <div style="position:relative;">
+            <pre id="rsu-prompt-pre"
+                 style="background:#0c0e14;border:1px solid #1a1e26;border-radius:6px;
+                        padding:14px 16px 14px 16px;font-family:'Courier New',monospace;
+                        font-size:0.72rem;color:#8899aa;line-height:1.6;
+                        white-space:pre-wrap;word-break:break-word;
+                        max-height:180px;overflow-y:auto;margin:0;padding-right:130px;">{html.escape(_RSU_PROMPT_TEXT)}</pre>
+            <button id="rsu-copy-btn"
+                onclick="(function(){{
+                    var txt = {_prompt_js};
+                    navigator.clipboard.writeText(txt).then(function(){{
+                        var b = document.getElementById('rsu-copy-btn');
+                        b.innerText = '✓ COPIADO';
+                        b.style.background = '#00ffad22';
+                        b.style.borderColor = '#00ffad';
+                        b.style.color = '#00ffad';
+                        setTimeout(function(){{
+                            b.innerText = '⎘ COPIAR PROMPT';
+                            b.style.background = '#00d9ff15';
+                            b.style.borderColor = '#00d9ff44';
+                            b.style.color = '#00d9ff';
+                        }}, 2200);
+                    }}).catch(function(){{
+                        var b = document.getElementById('rsu-copy-btn');
+                        b.innerText = '✗ ERROR';
+                        b.style.color = '#f23645';
+                    }});
+                }})()"
+                style="position:absolute;top:10px;right:10px;
+                       background:#00d9ff15;border:1px solid #00d9ff44;border-radius:5px;
+                       color:#00d9ff;font-family:monospace;font-size:0.68rem;
+                       letter-spacing:1.5px;text-transform:uppercase;
+                       padding:5px 12px;cursor:pointer;">
+                ⎘ COPIAR PROMPT
+            </button>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """, height=330)
 
     st.markdown("""
     <div style="display:flex;gap:10px;align-items:center;margin:4px 0 8px 0;">
@@ -3470,85 +3544,6 @@ def render():
     btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)
     btn_completo = col_ia2.button("📋 INFORME COMPLETO (11s)",   key="btn_completo", use_container_width=True)
     btn_grok     = col_ia3.button("🔍 GROK — INVESTIGACIÓN xAI", key="btn_grok",     use_container_width=True)
-
-    # ── RSU Research Prompt Box ──
-    RSU_RESEARCH_PROMPT = """Por favor, analiza el ticker [INSERTAR TICKER AQUÍ] y proporciona la siguiente información de forma concisa y claramente organizada:
-
-1. Explicación para 12 años: Tres puntos breves sobre qué hace la empresa y una analogía útil.
-2. Resumen Profesional (Máx. 10 frases): Sector, productos/servicios, competidores (tickers), Market Cap, ingresos y moat (ventaja competitiva). Si es biotecnológica, indica fase clínica o producto comercial.
-3. Tema Sectorial y Narrativa: Narrativa actual del sector y cómo encaja el activo en ella (líder o seguidor).
-4. Sentimiento Social y "Buzz" (BuzzTickr): Nivel de Buzz (Alto/Medio/Bajo), picos de menciones en redes y sentimiento (Bullish/Bearish). Identifica el Short Interest y los Days to Cover.
-5. Tabla de Fundamentales y Catalizadores: Temas candentes, próximos resultados y datos de crecimiento o patentes significativas.
-6. Noticias y Eventos (Últimos 3 meses): Tabla con fecha, tipo de evento, resumen breve y marca con ⭐ si movió el precio.
-7. Análisis de Dilución y Salud Financiera: Emisiones recientes (ATM, FPO), riesgo de dilución a 12 meses y Cash Runway.
-8. Dinero Inteligente y Macro (Flujo de Caja): Movimientos recientes de insiders e instituciones. Correlación con su referente (Beta) y volumen anómalo o actividad en Dark Pools en los últimos 10 días.
-9. Comparativa y Tendencia: Rendimiento relativo vs. competidores y sector en el último mes.
-10. Próximos 30 días: Catalizadores específicos con fechas confirmadas o estimadas.
-11. Precios Objetivo de Analistas: Tabla con firma, nuevo target, target anterior y rating.
-12. ESCENARIO DE TESIS FALLIDA (Bear Case): ¿Cuál es la amenaza número 1 o el riesgo oculto que podría invalidar la tesis alcista y causar una caída severa?
-13. VALORACIÓN TÁCTICA: ¿Esperar a una corrección o comprar ahora? Analiza si el activo está sobrecomprado o infravalorado:
-   • Métricas Técnicas: RSI y distancia respecto a la media de 50/200 días.
-   • Métricas de Valoración: P/E o P/S respecto a la media de su sector.
-   • Extensión del Buzz: Si el sentimiento social es demasiado eufórico (peligro) o hay miedo (oportunidad).
-   • Conclusión Final: Recomendación clara: entrar de golpe, DCA (compras escalonadas) o esperar a un retroceso del X%.
-
-Instrucción final: Céntrate en las razones por las que la acción puede tener un gran movimiento (ventas, guidance, asociaciones, buzz social). Responde con un estilo claro, conciso y fácil de leer para utilizarlo en decisiones de inversión rápidas."""
-
-    prompt_escaped = RSU_RESEARCH_PROMPT.replace('`', '\\`').replace('\\', '\\\\').replace('\n', '\\n')
-
-    st.markdown(f"""
-    <div style="background:#080a0f;border:1px solid #00d9ff22;border-radius:10px;
-                padding:20px 24px;margin:18px 0 8px 0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-            <span style="font-size:1.1rem;">📋</span>
-            <div style="font-family:VT323,monospace;color:#00d9ff;font-size:1.3rem;
-                        letter-spacing:3px;text-transform:uppercase;">RSU Research Prompt</div>
-            <span style="background:#00d9ff18;color:#00d9ff;font-family:monospace;font-size:0.62rem;
-                         padding:2px 8px;border-radius:4px;border:1px solid #00d9ff33;margin-left:auto;
-                         white-space:nowrap;">
-                COPIAR Y USAR EN CUALQUIER LLM
-            </span>
-        </div>
-        <div style="font-family:Inter,sans-serif;color:#555;font-size:0.8rem;line-height:1.65;
-                    border-bottom:1px solid #1a1e26;padding-bottom:12px;margin-bottom:14px;">
-            Este prompt está diseñado para obtener un análisis profesional completo de cualquier ticker.
-            Cópialo, sustituye <span style="color:#00ffad;font-family:monospace;">[INSERTAR TICKER AQUÍ]</span>
-            por el activo que quieras investigar y pégalo en el modelo de lenguaje de tu confianza
-            (ChatGPT, Claude, Gemini, Grok…). Obtendrás un informe estructurado en 13 secciones
-            listo para tomar decisiones de inversión rápidas.
-        </div>
-        <div style="position:relative;">
-            <pre id="rsu-prompt-box" style="background:#0c0e14;border:1px solid #1a1e26;border-radius:6px;
-                padding:14px 16px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;
-                color:#8899aa;line-height:1.6;white-space:pre-wrap;word-break:break-word;
-                max-height:180px;overflow-y:auto;margin:0;">{RSU_RESEARCH_PROMPT}</pre>
-            <button id="rsu-copy-btn"
-                onclick="(function(){{
-                    var txt = `{prompt_escaped}`.replace(/\\\\n/g,'\\n').replace(/\\\\\\\\/g,'\\\\');
-                    navigator.clipboard.writeText(txt).then(function(){{
-                        var b = document.getElementById('rsu-copy-btn');
-                        b.innerText = '✓ COPIADO';
-                        b.style.background = '#00ffad22';
-                        b.style.borderColor = '#00ffad';
-                        b.style.color = '#00ffad';
-                        setTimeout(function(){{
-                            b.innerText = '⎘ COPIAR PROMPT';
-                            b.style.background = '#00d9ff15';
-                            b.style.borderColor = '#00d9ff44';
-                            b.style.color = '#00d9ff';
-                        }}, 2000);
-                    }});
-                }})()"
-                style="position:absolute;top:10px;right:10px;background:#00d9ff15;
-                       border:1px solid #00d9ff44;border-radius:5px;color:#00d9ff;
-                       font-family:'Space Grotesk',sans-serif;font-size:0.68rem;
-                       letter-spacing:1.5px;text-transform:uppercase;padding:5px 12px;
-                       cursor:pointer;transition:all 0.2s;">
-                ⎘ COPIAR PROMPT
-            </button>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
     model_ia, modelo_nombre, error_ia = get_ia_model()
 
@@ -3710,5 +3705,3 @@ Instrucción final: Céntrate en las razones por las que la acción puede tener 
 
 if __name__ == "__main__":
     render()
-
-

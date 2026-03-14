@@ -312,10 +312,19 @@ def get_economic_calendar():
     if not events:
         events = get_forexfactory_calendar()
     
+    # Deduplicar por (fecha, hora, nombre) — Investing.com a veces entrega la misma
+    # fila con distintos IDs internos generando duplicados visuales
     if events:
-        events.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
-        return events[:25]
-    
+        seen = set()
+        deduped = []
+        for ev in events:
+            key = (str(ev['date'])[:16], ev['time'], ev['event'][:30])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(ev)
+        deduped.sort(key=lambda x: (x['date'], x['time'] if x['time'] != 'TBD' else '99:99'))
+        return deduped[:25]
+
     return get_fallback_economic_calendar()
 
 def get_forexfactory_calendar():
@@ -984,114 +993,126 @@ def get_fallback_sectors(timeframe="1D"):
 
 @st.cache_data(ttl=300)
 def get_vix_term_structure():
+    """
+    VIX Term Structure con datos reales:
+    - Spot: ^VIX
+    - Anclas a 3m y 6m: ^VIX3M, ^VIX6M (cuando disponibles)
+    - Roll yield mensual: calculado desde VXX vs ^VIX (21 días)
+    - Curva de 8 meses interpolada/extrapolada sobre esas anclas reales
+    - Estado Contango / Backwardation / Flat con umbral ±1%
+    """
     try:
-        # VIX Spot real
-        try:
-            vix = yf.Ticker("^VIX")
-            vix_hist = vix.history(period="5d")
-            if len(vix_hist) >= 3:
-                current_spot = float(vix_hist['Close'].iloc[-1])
-                prev_spot = float(vix_hist['Close'].iloc[-2])
-                spot_2days = float(vix_hist['Close'].iloc[-3])
-            else:
-                current_spot, prev_spot, spot_2days = 17.45, 17.36, 20.37
-        except:
-            current_spot, prev_spot, spot_2days = 17.45, 17.36, 20.37
-
-        # Intentar obtener futuros VIX reales (VX1-VX8 en CBOE via yfinance)
-        # Los futuros VIX tienen símbolos como VXH25, VXJ25, etc. en yfinance
-        now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
-        month_codes = ['F','G','H','J','K','M','N','Q','U','V','X','Z']
-        month_names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-        
-        vix_futures = []
-        vix_futures.append({'month': f"{month_names[now.month-1]} {now.year}", 
-                            'current': round(current_spot, 2), 
-                            'previous': round(prev_spot, 2), 
-                            'two_days': round(spot_2days, 2)})
-        
-        # Intentar obtener futuros reales
-        futures_obtained = False
-        future_vals = []
-        # Intentar varios formatos de símbolo de futuros VIX
-        for i in range(1, 8):
-            m = (now.month - 1 + i) % 12
-            y = now.year + ((now.month - 1 + i) // 12)
-            code = month_codes[m]
-            yr2 = str(y)[-2:]
-            # Probar múltiples formatos que yfinance puede reconocer
-            syms_to_try = [f"VX{code}{yr2}.CF", f"/VX{code}{yr2}", f"VX{code}{yr2}=F"]
-            val, prev_val = None, None
-            for sym in syms_to_try:
-                try:
-                    t = yf.Ticker(sym)
-                    h = t.history(period="2d")
-                    if len(h) >= 1:
-                        val = float(h['Close'].iloc[-1])
-                        prev_val = float(h['Close'].iloc[-2]) if len(h) >= 2 else val
-                        break
-                except:
-                    continue
-            if val is not None:
-                vix_futures.append({
-                    'month': f"{month_names[m]} {y}",
-                    'current': round(val, 2),
-                    'previous': round(prev_val, 2),
-                    'two_days': round(prev_val * 0.99, 2)
-                })
-                future_vals.append(val)
-                futures_obtained = True
-
-        # Si no obtuvimos futuros reales, simular curva realista
-        if not futures_obtained or len(vix_futures) < 4:
-            vix_futures = []
-            is_contango = current_spot < 20
-            for i in range(8):
-                m = (now.month - 1 + i) % 12
-                y = now.year + ((now.month - 1 + i) // 12)
-                if is_contango:
-                    cur = current_spot + (i * 0.9) + (i * i * 0.08)
-                    prv = prev_spot + (i * 0.85) + (i * i * 0.07)
-                    td = spot_2days + (i * 0.5) + (i * i * 0.05)
-                else:
-                    cur = max(current_spot - (i * 0.3), 12)
-                    prv = max(prev_spot - (i * 0.25), 12)
-                    td = max(spot_2days - (i * 0.2), 12)
-                vix_futures.append({
-                    'month': f"{month_names[m]} {y}",
-                    'current': round(cur, 2),
-                    'previous': round(prv, 2),
-                    'two_days': round(td, 2)
-                })
-
-        # Determinar estado
-        if len(vix_futures) >= 2 and vix_futures[-1]['current'] > vix_futures[0]['current']:
-            state = "Contango"
-            state_desc = "Mercados calmados - Favorable para comprar caídas"
-            state_color = "#00ffad"
-            explanation = ("<b>Contango:</b> Precio Futuros > Spot. "
-                         "El mercado espera que la volatilidad baje con el tiempo. "
-                         "Estado normal en mercados tranquilos.")
+        # ── Spot VIX ──────────────────────────────────────────────────────────
+        vix = yf.Ticker("^VIX")
+        vix_hist = vix.history(period="5d")
+        if len(vix_hist) >= 3:
+            current_spot = float(vix_hist['Close'].iloc[-1])
+            prev_spot    = float(vix_hist['Close'].iloc[-2])
+            spot_2days   = float(vix_hist['Close'].iloc[-3])
         else:
-            state = "Backwardation"
-            state_desc = "Estrés de mercado detectado - Precaución"
-            state_color = "#f23645"
-            explanation = ("<b>Backwardation:</b> Precio Futuros < Spot. "
-                         "El mercado espera más volatilidad. "
-                         "Señal de miedo inmediato.")
+            current_spot, prev_spot, spot_2days = 20.0, 20.0, 20.0
+
+        # ── Roll yield real via VXX (21 días) ─────────────────────────────────
+        roll_yield_monthly = 0.0
+        try:
+            vxx_h = yf.Ticker("VXX").history(period="21d")
+            if len(vxx_h) >= 15:
+                vxx_now  = float(vxx_h['Close'].iloc[-1])
+                vxx_1m   = float(vxx_h['Close'].iloc[0])
+                vix_1m   = float(vix_hist['Close'].iloc[0]) if len(vix_hist) > 0 else current_spot
+                vix_ratio = current_spot / vix_1m if vix_1m > 0 else 1.0
+                vxx_adj   = vxx_now / (vxx_1m * vix_ratio) if (vxx_1m * vix_ratio) > 0 else 1.0
+                roll_yield_monthly = max(-5.0, min(3.0, (vxx_adj - 1.0) * 100))
+        except Exception:
+            roll_yield_monthly = -1.5 if current_spot < 20 else 0.8
+
+        # ── Anclas de plazo medio ─────────────────────────────────────────────
+        vix3m, vix6m = None, None
+        try:
+            h3 = yf.Ticker("^VIX3M").history(period="2d")
+            if len(h3) >= 1:
+                vix3m = float(h3['Close'].iloc[-1])
+        except Exception:
+            pass
+        try:
+            h6 = yf.Ticker("^VIX6M").history(period="2d")
+            if len(h6) >= 1:
+                vix6m = float(h6['Close'].iloc[-1])
+        except Exception:
+            pass
+
+        # ── Construir curva de 8 puntos ───────────────────────────────────────
+        now = datetime.now(timezone(timedelta(hours=1))).replace(tzinfo=None)
+        month_names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+        anchor = {0: current_spot}
+        if vix3m is not None: anchor[3] = vix3m
+        if vix6m is not None: anchor[6] = vix6m
+
+        vix_futures = []
+        for i in range(8):
+            m     = (now.month - 1 + i) % 12
+            y     = now.year + ((now.month - 1 + i) // 12)
+            label = f"{month_names[m]} {y}"
+
+            if i in anchor:
+                cur = anchor[i]
+            else:
+                prev_a = max((k for k in anchor if k <= i), default=0)
+                next_a = min((k for k in anchor if k >= i), default=None)
+                if next_a is not None and next_a != prev_a:
+                    frac = (i - prev_a) / (next_a - prev_a)
+                    cur  = anchor[prev_a] + frac * (anchor[next_a] - anchor[prev_a])
+                else:
+                    steps = i - prev_a
+                    cur   = anchor[prev_a] * ((1 + roll_yield_monthly / 100) ** steps)
+
+            cur = max(10.0, round(cur, 2))
+            if current_spot > 0:
+                prv = round(cur * (prev_spot  / current_spot), 2)
+                td  = round(cur * (spot_2days / current_spot), 2)
+            else:
+                prv = cur; td = cur
+
+            vix_futures.append({
+                'month':    label,
+                'current':  cur,
+                'previous': max(10.0, prv),
+                'two_days': max(10.0, td),
+            })
+
+        # ── Estado ────────────────────────────────────────────────────────────
+        far_val = vix_futures[-1]['current']
+        if far_val > vix_futures[0]['current'] * 1.01:
+            state, state_desc, state_color = "Contango", "Mercados calmados — Favorable para comprar caídas", "#00ffad"
+            explanation = (f"<b>Contango:</b> Futuros > Spot. El mercado espera que la volatilidad "
+                           f"baje con el tiempo. Estado normal en mercados tranquilos. "
+                           f"Roll yield mensual estimado: {roll_yield_monthly:+.1f}%.")
+        elif far_val < vix_futures[0]['current'] * 0.99:
+            state, state_desc, state_color = "Backwardation", "Estrés de mercado detectado — Precaución", "#f23645"
+            explanation = (f"<b>Backwardation:</b> Futuros < Spot. El mercado espera más volatilidad "
+                           f"inmediata. Señal de miedo. "
+                           f"Roll yield mensual estimado: {roll_yield_monthly:+.1f}%.")
+        else:
+            state, state_desc, state_color = "Flat", "Curva plana — Incertidumbre equilibrada", "#ff9800"
+            explanation = (f"<b>Flat:</b> Futuros ≈ Spot. Mercado en transición, sin sesgo claro. "
+                           f"Roll yield mensual estimado: {roll_yield_monthly:+.1f}%.")
 
         return {
-            'data': vix_futures,
-            'current_spot': current_spot,
-            'prev_spot': prev_spot,
-            'spot_2days': spot_2days,
-            'state': state,
-            'state_desc': state_desc,
-            'state_color': state_color,
-            'explanation': explanation,
-            'is_contango': state == "Contango"
+            'data':          vix_futures,
+            'current_spot':  current_spot,
+            'prev_spot':     prev_spot,
+            'spot_2days':    spot_2days,
+            'state':         state,
+            'state_desc':    state_desc,
+            'state_color':   state_color,
+            'explanation':   explanation,
+            'is_contango':   state == "Contango",
+            'roll_yield':    roll_yield_monthly,
+            'vix3m':         vix3m,
+            'vix6m':         vix6m,
         }
-    except Exception as e:
+    except Exception:
         return get_fallback_vix_structure()
 
 def get_fallback_vix_structure():

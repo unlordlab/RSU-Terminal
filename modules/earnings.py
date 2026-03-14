@@ -3475,10 +3475,10 @@ def render():
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
-html, body {{ background:transparent; overflow-x:hidden; }}
+html, body {{ background:transparent; overflow-x:hidden; overflow-y:hidden; }}
 .wrap {{
   background:#0c0e14; border:1px solid #00ffad33;
-  border-radius:10px; padding:20px 24px 20px;
+  border-radius:10px; padding:20px 24px 24px;
 }}
 .header {{
   display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;
@@ -3506,8 +3506,8 @@ html, body {{ background:transparent; overflow-x:hidden; }}
 }}
 pre {{
   font-family:'Share Tech Mono',monospace; font-size:0.71rem;
-  color:#7a9a7a; line-height:1.7; white-space:pre-wrap;
-  word-break:break-word; margin:0;
+  color:#7a9a7a; line-height:1.8; white-space:pre-wrap;
+  word-break:break-word; margin:0; padding-right:140px;
 }}
 #copy-btn {{
   position:absolute; top:10px; right:10px;
@@ -3519,7 +3519,7 @@ pre {{
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
   <div class="header">
     <span style="font-size:1.2rem;">🤖</span>
     <div class="title">RSU Research Prompt</div>
@@ -3542,6 +3542,18 @@ pre {{
   var txt = {_pjs};
   document.getElementById('prompt-pre').textContent = txt;
 
+  // Tell Streamlit the exact height of our content
+  function sendHeight() {{
+    var h = document.getElementById('wrap').scrollHeight + 8;
+    window.parent.postMessage({{isStreamlitMessage: true, type: 'streamlit:setFrameHeight', height: h}}, '*');
+  }}
+  // Fire multiple times to handle font loading delay
+  sendHeight();
+  setTimeout(sendHeight, 300);
+  setTimeout(sendHeight, 800);
+  setTimeout(sendHeight, 1500);
+  document.fonts.ready.then(sendHeight);
+
   function copyPrompt() {{
     var ta = document.createElement('textarea');
     ta.value = txt;
@@ -3552,7 +3564,7 @@ pre {{
     try {{ ok = document.execCommand('copy'); }} catch(e) {{}}
     document.body.removeChild(ta);
     if (!ok && navigator.clipboard) {{
-      navigator.clipboard.writeText(txt).then(function(){{ok=true;}}).catch(function(){{}});
+      navigator.clipboard.writeText(txt).catch(function(){{}});
       ok = true;
     }}
     var b = document.getElementById('copy-btn');
@@ -3565,7 +3577,7 @@ pre {{
   }}
 </script>
 </body>
-</html>""", height=780, scrolling=False)
+</html>""", height=1050, scrolling=False)
 
     col_ia1, col_ia2, col_ia3 = st.columns(3)
     btn_rapido   = col_ia1.button("⚡ ANÁLISIS RÁPIDO",          key="btn_rapido",   use_container_width=True)

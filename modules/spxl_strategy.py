@@ -287,10 +287,10 @@ def run_backtest(df, initial_capital=100_000):
                     cash         += trim2_qty * price
                     runner_shares -= trim2_qty
                     trim_stage    = 2
-                    trades.append(_make_trade(date, price, runner_cost, trim2_qty, phases_at_entry, "C-TRIM2", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, trim2_qty, phases_at_entry, "C-TRIM2", cycle_entry_date, ref_price=first_sell_px))
                 elif price <= runner_cost:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "C-BE1", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "C-BE1", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
 
@@ -299,12 +299,12 @@ def run_backtest(df, initial_capital=100_000):
                 rg_from_sell = (price - first_sell_px) / first_sell_px
                 if rg_from_sell >= CFG["sell_c_final_tp"]:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "C-FINAL", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "C-FINAL", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
                 elif price <= runner_cost:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "C-BE2", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "C-BE2", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
 
@@ -330,19 +330,19 @@ def run_backtest(df, initial_capital=100_000):
                 close_target  = first_sell_px * (1 + CFG["sell_b_close_from"])
                 if price >= close_target:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-CLOSE", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-CLOSE", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
                 elif rg_from_entry >= CFG["sell_b_trail_act"]:
                     trail_stop_px = runner_peak * (1 - CFG["sell_b_trail_stop"])
                     if price <= trail_stop_px:
                         cash         += runner_shares * price
-                        trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-TSL", cycle_entry_date))
+                        trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-TSL", cycle_entry_date, ref_price=first_sell_px))
                         runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                         cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
                 elif price <= runner_cost:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-BE", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-BE", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
 
@@ -368,12 +368,12 @@ def run_backtest(df, initial_capital=100_000):
                 trail_stop_px = runner_peak * (1 - CFG["sell_a_trail_stop"])
                 if price >= runner_target:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "A-RUNNER", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "A-RUNNER", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
                 elif price <= trail_stop_px:
                     cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "A-TSL", cycle_entry_date))
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "A-TSL", cycle_entry_date, ref_price=first_sell_px))
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
 
@@ -388,14 +388,21 @@ def run_backtest(df, initial_capital=100_000):
     return trades, pd.DataFrame(equity_curve), pd.DataFrame(bnh_equity)
 
 
-def _make_trade(date, exit_price, avg_cost, qty, phases_used, scenario, entry_date=None):
-    """Helper to build a trade dict."""
+def _make_trade(date, exit_price, avg_cost, qty, phases_used, scenario, entry_date=None, ref_price=None):
+    """
+    Helper to build a trade dict.
+    ref_price: for runner trades, pass first_sell_px so gain_pct reflects
+               runner performance from the separation point, not original avg_cost.
+               avg_cost is still stored for reference.
+    """
+    cost_for_gain = ref_price if ref_price is not None else avg_cost
     return {
         "exit_date":   pd.Timestamp(date),
         "entry_date":  pd.Timestamp(entry_date) if entry_date else None,
         "exit_price":  float(exit_price),
         "avg_cost":    float(avg_cost),
-        "gain_pct":    (float(exit_price) - float(avg_cost)) / float(avg_cost) * 100,
+        "ref_price":   float(cost_for_gain),
+        "gain_pct":    (float(exit_price) - float(cost_for_gain)) / float(cost_for_gain) * 100,
         "profit":      (float(exit_price) - float(avg_cost)) * float(qty),
         "phases_used": int(phases_used),
         "shares":      float(qty),
@@ -1977,7 +1984,7 @@ def render():
             st.markdown("""
             <div class="bt-trade-row bt-trade-header">
                 <span>FECHA SALIDA</span><span>ESCENARIO</span>
-                <span>PRECIO SALIDA</span><span>COSTE MEDIO</span>
+                <span>PRECIO SALIDA</span><span>COSTE / REF</span>
                 <span>GANANCIA</span><span>FASES</span>
             </div>""", unsafe_allow_html=True)
 
@@ -1987,17 +1994,22 @@ def render():
                 "C-TRIM1": C_GREEN, "C-TRIM2":  "#7dff6b", "C-FINAL": C_GREEN,
                 "C-BE1":  "#ff5555","C-BE2":    "#ff5555",
             }
+            # Runner scenarios — show ref_price (first_sell_px) instead of avg_cost
+            runner_scenarios = {"A-RUNNER","A-TSL","B-CLOSE","B-TSL","B-BE","C-TRIM2","C-FINAL","C-BE1","C-BE2"}
             for tr in sorted(trades, key=lambda x: x["exit_date"], reverse=True)[:60]:
                 gc   = C_GREEN if tr["gain_pct"] > 0 else C_RED
                 sc   = tr.get("scenario", "—")
                 scc  = sc_label_colors.get(sc, "#888")
                 dots = tr['phases_used']
+                is_runner = sc in runner_scenarios
+                cost_val  = tr.get("ref_price", tr["avg_cost"]) if is_runner else tr["avg_cost"]
+                cost_lbl  = f'<span style="font-size:.65rem;color:#333;"> REF</span>' if is_runner else ""
                 st.markdown(f"""
                 <div class="bt-trade-row" style="grid-template-columns:1.4fr 1.1fr 1fr 1fr 0.9fr 0.7fr;">
                     <span style="color:#888;">{tr['exit_date'].strftime('%Y-%m-%d')}</span>
                     <span style="color:{scc};font-family:'VT323',monospace;font-size:.95rem;letter-spacing:1px;">{sc}</span>
                     <span style="color:white;font-family:'VT323',monospace;font-size:1rem;">${tr['exit_price']:.2f}</span>
-                    <span style="color:#555;">${tr['avg_cost']:.2f}</span>
+                    <span style="color:#555;">${cost_val:.2f}{cost_lbl}</span>
                     <span style="color:{gc};font-family:'VT323',monospace;font-size:1rem;">{tr['gain_pct']:+.1f}%</span>
                     <span style="color:#00d9ff;">{'▪' * max(1, int(dots))}</span>
                 </div>""", unsafe_allow_html=True)

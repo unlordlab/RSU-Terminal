@@ -491,8 +491,8 @@ def chart_equity(eq_df, bnh_df, trades=None):
     fig.update_layout(**PLOT_LAYOUT,
         title=dict(text="CURVA DE EQUITY // ESTRATEGIA vs BUY & HOLD",
                    font=dict(family="VT323", size=18, color=C_GREEN), x=0.01),
-        xaxis=dict(**PLOT_LAYOUT.get("xaxis", {}), range=[x_min, x_max]),
         yaxis_title="USD", height=420)
+    fig.update_xaxes(range=[x_min, x_max])
     return fig
 
 
@@ -524,8 +524,8 @@ def chart_drawdown(eq_df, bnh_df):
     fig.update_layout(**PLOT_LAYOUT,
         title=dict(text="DRAWDOWN COMPARADO // ESTRATEGIA vs BUY & HOLD",
                    font=dict(family="VT323", size=18, color=C_ORANGE), x=0.01),
-        xaxis=dict(**PLOT_LAYOUT.get("xaxis", {}), range=[x_min, x_max]),
         yaxis_title="%", height=320)
+    fig.update_xaxes(range=[x_min, x_max])
     return fig
 
 

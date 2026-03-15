@@ -1390,25 +1390,48 @@ def render():
                 sim_target = sim_price_f * (1 + CFG["sell_a_tp"])
                 tp_label   = f"+{CFG['sell_a_tp']:.0%} → vender 95%"
 
-            sim_needed   = ((sim_target - data['spxl_price']) / data['spxl_price'] * 100
-                             if data['spxl_price'] > 0 else 0)
-            sim_gain_abs = sim_shares * (sim_target - sim_price_f)
+            sim_needed      = ((sim_target - data['spxl_price']) / data['spxl_price'] * 100
+                                if data['spxl_price'] > 0 else 0)
+            sim_gain_abs    = sim_shares * (sim_target - sim_price_f)
+            sim_gain_on_cap = sim_gain_abs / sim_capital_f * 100   # % sobre capital total
 
             sr1, sr2, sr3, sr4 = st.columns(4)
-            for col, val, lbl in [
-                (sr1, f"${sim_price:.2f}",    "PRECIO ENTRADA"),
-                (sr2, f"${sim_target:.2f}",   f"TARGET ({tp_label})"),
-                (sr3, f"{sim_needed:+.1f}%",  "SPXL NECESITA SUBIR"),
-                (sr4, f"${sim_gain_abs:,.0f}","GANANCIA ESTIMADA"),
+            for col, val, sub, lbl in [
+                (sr1, f"${sim_price:.2f}",
+                      f"Desplegado: ${sim_alloc:,.0f} ({alloc_pcts[sim_fase_idx]:.0%})",
+                      "PRECIO ENTRADA"),
+                (sr2, f"${sim_target:.2f}",
+                      tp_label,
+                      "TARGET"),
+                (sr3, f"{sim_needed:+.1f}%",
+                      "desde precio actual",
+                      "SPXL NECESITA SUBIR"),
+                (sr4, f"${sim_gain_abs:,.0f}",
+                      f"+{sim_gain_on_cap:.1f}% s/ capital total",
+                      "GANANCIA ESTIMADA"),
             ]:
                 with col:
                     color = "#00d9ff" if "GANANCIA" in lbl else "#00ffad" if sim_needed <= 0 else "#ff9800"
                     st.markdown(f"""<div class="sim-box" style="padding:14px;margin:6px 0;">
                         <div class="sim-result-lbl">{lbl}</div>
                         <div class="sim-result-val" style="color:{color};font-size:1.6rem;">{val}</div>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:.65rem;
+                                    color:#333;margin-top:4px;letter-spacing:1px;">{sub}</div>
                     </div>""", unsafe_allow_html=True)
 
-            st.markdown(f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.7rem;color:#333;text-align:center;margin-top:4px;letter-spacing:2px;">// {sc_label}</div>', unsafe_allow_html=True)
+            # Context bar: capital breakdown
+            st.markdown(f"""
+            <div style="display:flex;gap:8px;margin-top:8px;font-family:'Share Tech Mono',monospace;
+                        font-size:.72rem;color:#444;justify-content:center;letter-spacing:1px;">
+                <span>// {sc_label}</span>
+                <span style="color:#1a1e26;">|</span>
+                <span>CAPITAL TOTAL: <span style="color:#888;">${sim_capital_f:,.0f}</span></span>
+                <span style="color:#1a1e26;">|</span>
+                <span>FASE {sim_fase} DESPLIEGA: <span style="color:#00ffad;">${sim_alloc:,.0f}</span>
+                      ({alloc_pcts[sim_fase_idx]:.0%})</span>
+                <span style="color:#1a1e26;">|</span>
+                <span>RETORNO SOBRE DESPLEGADO: <span style="color:#00ffad;">+{(sim_gain_abs/sim_alloc*100) if sim_alloc > 0 else 0:.1f}%</span></span>
+            </div>""", unsafe_allow_html=True)
 
             if sim_needed <= 0:
                 st.markdown('<div class="alert-box alert-buy">✅ PRECIO ACTUAL YA ESTÁ SOBRE EL TARGET — revisa el precio de entrada</div>', unsafe_allow_html=True)

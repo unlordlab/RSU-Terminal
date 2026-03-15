@@ -336,10 +336,11 @@ def run_backtest(df, initial_capital=100_000):
                 elif rg_from_entry >= CFG["sell_b_trail_act"]:
                     trail_stop_px = runner_peak * (1 - CFG["sell_b_trail_stop"])
                     if price <= trail_stop_px:
-                        cash         += runner_shares * price
-                        trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-TSL", cycle_entry_date, ref_price=first_sell_px))
+                        exec_px = trail_stop_px
+                        cash         += runner_shares * exec_px
+                        trades.append(_make_trade(date, exec_px, runner_cost, runner_shares, phases_at_entry, "B-TSL", cycle_entry_date, ref_price=first_sell_px))
                         runner_shares = 0.0; trim_stage = 0; active_scenario = ""
-                        cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
+                        cycle_high = exec_px; phase_entered = [False] * 6; cycle_entry_date = None
                 elif price <= runner_cost:
                     cash         += runner_shares * price
                     trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "B-BE", cycle_entry_date, ref_price=first_sell_px))
@@ -372,8 +373,12 @@ def run_backtest(df, initial_capital=100_000):
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
                 elif price <= trail_stop_px:
-                    cash         += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_at_entry, "A-TSL", cycle_entry_date, ref_price=first_sell_px))
+                    # Use theoretical stop price (not close) to avoid gap distortion
+                    exec_px = trail_stop_px
+                    cash         += runner_shares * exec_px
+                    trades.append(_make_trade(date, exec_px, runner_cost, runner_shares, phases_at_entry, "A-TSL", cycle_entry_date, ref_price=first_sell_px))
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
+                    cycle_high = exec_px; phase_entered = [False] * 6; cycle_entry_date = None
                     runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6; cycle_entry_date = None
 

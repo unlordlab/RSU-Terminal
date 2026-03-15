@@ -426,12 +426,41 @@ def compute_stats(trades, eq_df, bnh_df, initial_capital):
     bnh_cagr     = ((final_bnh / initial_capital) ** (1 / years) - 1) * 100 if years > 0 else 0
     strat_dd     = ((eq_df["equity"] - eq_df["equity"].cummax()) / eq_df["equity"].cummax() * 100).min()
     bnh_dd       = ((bnh_df["bnh"]   - bnh_df["bnh"].cummax())   / bnh_df["bnh"].cummax()   * 100).min()
+
+    # ── Cycle-level stats (group all trades sharing the same entry_date) ─────
+    # This gives meaningful win rate & avg_gain: one cycle = one investment decision.
+    # Cycle profit = sum of (exit_price - avg_cost) * shares across all sub-trades.
+    cycles = t.groupby("entry_date").apply(
+        lambda g: pd.Series({
+            "total_profit":  g["profit"].sum(),
+            "avg_cost":      g["avg_cost"].iloc[0],
+            "phases_used":   g["phases_used"].iloc[0],
+            "exit_date":     g["exit_date"].max(),
+        })
+    ).reset_index()
+
+    # Cycle gain % = total_profit / (avg_cost * total_shares_bought)
+    # Approximate via profit / (avg_cost * total_shares)
+    t_shares = t.groupby("entry_date")["shares"].sum().reset_index(name="total_shares")
+    cycles   = cycles.merge(t_shares, on="entry_date")
+    cycles["cycle_gain_pct"] = (
+        cycles["total_profit"] / (cycles["avg_cost"] * cycles["total_shares"]) * 100
+    )
+
+    n_cycles   = len(cycles)
+    win_rate   = (cycles["cycle_gain_pct"] > 0).mean() * 100
+    avg_gain   = cycles["cycle_gain_pct"].mean()
+    best_cycle = cycles["cycle_gain_pct"].max()
+    worst_cycle= cycles["cycle_gain_pct"].min()
+    avg_phases = cycles["phases_used"].mean()
+
     return {
-        "n_trades":     len(t),
-        "win_rate":     (t["gain_pct"] > 0).mean() * 100,
-        "avg_gain":     t["gain_pct"].mean(),
-        "best_trade":   t["gain_pct"].max(),
-        "worst_trade":  t["gain_pct"].min(),
+        "n_trades":     n_cycles,           # show cycles, not sub-trades
+        "n_subtrades":  len(t),             # total individual trade records
+        "win_rate":     win_rate,
+        "avg_gain":     avg_gain,
+        "best_trade":   best_cycle,
+        "worst_trade":  worst_cycle,
         "total_return": (final_equity - initial_capital) / initial_capital * 100,
         "cagr":         cagr,
         "max_dd":       strat_dd,
@@ -440,7 +469,7 @@ def compute_stats(trades, eq_df, bnh_df, initial_capital):
         "bnh_max_dd":   bnh_dd,
         "final_equity": final_equity,
         "final_bnh":    final_bnh,
-        "avg_phases":   t["phases_used"].mean(),
+        "avg_phases":   avg_phases,
     }
 
 
@@ -1918,7 +1947,7 @@ def render():
                 (r1[2], f"{stats['cagr']:+.1f}%",          "CAGR ANUAL",
                          "bt-positive" if stats['cagr'] > 0 else "bt-negative"),
                 (r1[3], f"{stats['max_dd']:.1f}%",          "MAX DRAWDOWN",  "bt-warning"),
-                (r1[4], f"{stats['n_trades']}",              "OPERACIONES",   "bt-neutral"),
+                (r1[4], f"{stats['n_trades']}",              "CICLOS",        "bt-neutral"),
             ]:
                 with col:
                     st.markdown(f'<div class="bt-stat-card"><div class="bt-stat-label">{lbl}</div><div class="bt-stat-val {cls}">{val}</div></div>', unsafe_allow_html=True)
@@ -1928,15 +1957,22 @@ def render():
             # Row 2
             r2 = st.columns(5)
             for col, val, lbl, cls in [
-                (r2[0], f"{stats['win_rate']:.0f}%",      "WIN RATE",        "bt-positive"),
+                (r2[0], f"{stats['win_rate']:.0f}%",      "WIN RATE CICLOS", "bt-positive"),
                 (r2[1], f"{stats['avg_gain']:+.1f}%",      "GANANCIA MEDIA",  "bt-positive"),
-                (r2[2], f"{stats['best_trade']:+.1f}%",    "MEJOR TRADE",     "bt-positive"),
-                (r2[3], f"{stats['worst_trade']:+.1f}%",   "PEOR TRADE",
+                (r2[2], f"{stats['best_trade']:+.1f}%",    "MEJOR CICLO",     "bt-positive"),
+                (r2[3], f"{stats['worst_trade']:+.1f}%",   "PEOR CICLO",
                          "bt-negative" if stats['worst_trade'] < 0 else "bt-positive"),
                 (r2[4], f"{stats['avg_phases']:.1f}",       "FASES MEDIAS/OP","bt-neutral"),
             ]:
                 with col:
                     st.markdown(f'<div class="bt-stat-card"><div class="bt-stat-label">{lbl}</div><div class="bt-stat-val {cls}">{val}</div></div>', unsafe_allow_html=True)
+
+            st.markdown(f"""
+            <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:#333;
+                        text-align:right;margin-top:4px;letter-spacing:1px;">
+                // CICLOS = grupos de entrada+salida completos &nbsp;|&nbsp;
+                REGISTROS INDIVIDUALES EN TABLA: {stats.get('n_subtrades', stats['n_trades'])}
+            </div>""", unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown('<div class="section-header-bar">▸ COMPARATIVA VS BUY &amp; HOLD SPXL</div>', unsafe_allow_html=True)

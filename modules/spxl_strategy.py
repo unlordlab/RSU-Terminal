@@ -198,36 +198,40 @@ def load_spxl_history():
 
 
 def run_backtest(df, initial_capital=100_000):
-    initial_capital = float(initial_capital)
-    prices        = df["price"].values
-    dates         = df.index.values
-    cash          = initial_capital
-    shares        = 0.0
-    avg_cost      = 0.0
-    cycle_high    = prices[0]
-    phase_entered = [False] * 6
-    trades        = []
-    equity_curve  = []
-    bnh_shares    = (initial_capital * (1 - CFG["reserve_pct"])) / prices[0]
-    bnh_cash      = initial_capital * CFG["reserve_pct"]
-    peak_equity   = initial_capital
+    initial_capital  = float(initial_capital)
+    prices           = df["price"].values
+    dates            = df.index.values
+    cash             = initial_capital
+    shares           = 0.0
+    avg_cost         = 0.0
+    cycle_high       = prices[0]
+    phase_entered    = [False] * 6
+    trades           = []
+    equity_curve     = []
+    bnh_shares       = (initial_capital * (1 - CFG["reserve_pct"])) / prices[0]
+    bnh_cash         = initial_capital * CFG["reserve_pct"]
+    peak_equity      = initial_capital
 
     # Runner tracking (partial exit state)
-    runner_shares  = 0.0   # shares kept after first trim
-    runner_cost    = 0.0   # avg cost of runner
-    runner_peak    = 0.0   # peak price of runner (for trailing stop)
-    first_sell_px  = 0.0   # price of first trim (for scenario B close target)
-    trim_stage     = 0     # 0=none,1=trimmed,2=trimmed2
+    runner_shares    = 0.0   # shares kept after first trim
+    runner_cost      = 0.0   # avg cost of runner (= original avg_cost)
+    runner_peak      = 0.0   # peak price seen after trim (for trailing stop)
+    first_sell_px    = 0.0   # price at first trim (B/C targets measured from here)
+    trim_stage       = 0     # 0=none, 1=first trim done, 2=second trim done
+    active_scenario  = ""    # "B" or "C" — set at first trim, guards runner logic
+    cycle_equity     = initial_capital  # FIX #3: equity at cycle start for compounding
 
     for date, price in zip(dates, prices):
         phases_in = sum(phase_entered)
 
-        # ── Update cycle high when flat ──────────────────────────────────────
+        # ── Update cycle high when fully flat ────────────────────────────────
         if shares == 0 and runner_shares == 0 and price > cycle_high:
             cycle_high    = price
             phase_entered = [False] * 6
+            # FIX #3: snapshot equity at start of new cycle for compounding alloc
+            cycle_equity  = cash
 
-        # ── Compute 6 entry levels ────────────────────────────────────────────
+        # ── Compute 6 entry levels from current cycle high ───────────────────
         lvl = [0.0] * 6
         lvl[0] = cycle_high * (1 - PHASE_DROPS[0])
         for i in range(1, 6):
@@ -236,63 +240,73 @@ def run_backtest(df, initial_capital=100_000):
         # ── Phase entries ─────────────────────────────────────────────────────
         for ph in range(6):
             if not phase_entered[ph] and price <= lvl[ph]:
-                alloc_cash = initial_capital * PHASE_ALLOC[ph]
-                if cash >= alloc_cash:
-                    bought     = alloc_cash / price
-                    total_cost = avg_cost * shares + alloc_cash
-                    shares    += bought
-                    avg_cost   = total_cost / shares if shares > 0 else 0
-                    cash      -= alloc_cash
+                # FIX #3: use cycle_equity (compounding) instead of fixed initial_capital
+                alloc_cash = cycle_equity * PHASE_ALLOC[ph]
+                if cash >= alloc_cash * 0.99:          # 1% tolerance for float rounding
+                    alloc_cash  = min(alloc_cash, cash)
+                    bought      = alloc_cash / price
+                    total_cost  = avg_cost * shares + alloc_cash
+                    shares     += bought
+                    avg_cost    = total_cost / shares if shares > 0 else 0
+                    cash       -= alloc_cash
                     phase_entered[ph] = True
 
         # ── Selling logic (tiered) ────────────────────────────────────────────
-        phases_in = sum(phase_entered)
+        phases_in = sum(phase_entered)   # recount after potential new entries
 
         if shares > 0 and avg_cost > 0:
             gain = (price - avg_cost) / avg_cost
 
-            # ── Scenario C: fully invested (all 6 phases) ─────────────────────
+            # ── Scenario C: fully invested (all 6 phases), no trim yet ────────
             if phases_in == 6 and trim_stage == 0:
                 if gain >= CFG["sell_c_trim1_tp"]:
-                    trim_qty    = shares * CFG["sell_c_trim1_pct"]
-                    cash       += trim_qty * price
+                    trim_qty      = shares * CFG["sell_c_trim1_pct"]
+                    cash         += trim_qty * price
                     runner_shares = shares - trim_qty
                     runner_cost   = avg_cost
                     runner_peak   = price
                     first_sell_px = price
                     shares        = 0.0
                     trim_stage    = 1
+                    active_scenario = "C"
+                    # FIX #1: record the main trim as a trade
+                    trades.append(_make_trade(date, price, avg_cost, trim_qty, phases_in, "C-TRIM1"))
 
-            elif trim_stage == 1 and runner_shares > 0:
+            # ── Scenario C runner: trim_stage 1 ───────────────────────────────
+            elif trim_stage == 1 and active_scenario == "C" and runner_shares > 0:
                 runner_peak = max(runner_peak, price)
-                rg = (price - runner_cost) / runner_cost
-                if rg >= CFG["sell_c_trim2_tp"]:
-                    trim2_qty      = runner_shares * (CFG["sell_c_trim2_pct"] /
-                                                      (1 - CFG["sell_c_trim1_pct"]))
-                    cash          += trim2_qty * price
+                # FIX #5: measure from first_sell_px, not from runner_cost
+                rg_from_sell = (price - first_sell_px) / first_sell_px
+                if rg_from_sell >= CFG["sell_c_trim2_tp"]:
+                    # trim2: sell 15% of original position = 15/35 of remaining runner
+                    trim2_frac    = CFG["sell_c_trim2_pct"] / (1 - CFG["sell_c_trim1_pct"])
+                    trim2_qty     = runner_shares * trim2_frac
+                    cash         += trim2_qty * price
                     runner_shares -= trim2_qty
-                    trim_stage     = 2
-                # Trailing stop at break-even if runner falls back
-                elif price <= runner_cost:
-                    cash          += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-TSL"))
-                    runner_shares  = 0.0; trim_stage = 0
+                    trim_stage    = 2
+                    trades.append(_make_trade(date, price, runner_cost, trim2_qty, phases_in, "C-TRIM2"))
+                elif price <= runner_cost:   # break-even stop
+                    cash         += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-BE1"))
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
 
-            elif trim_stage == 2 and runner_shares > 0:
-                rg = (price - runner_cost) / runner_cost
-                if rg >= CFG["sell_c_final_tp"]:
-                    cash          += runner_shares * price
+            # ── Scenario C runner: trim_stage 2 ───────────────────────────────
+            elif trim_stage == 2 and active_scenario == "C" and runner_shares > 0:
+                # FIX #5: final target also measured from first_sell_px
+                rg_from_sell = (price - first_sell_px) / first_sell_px
+                if rg_from_sell >= CFG["sell_c_final_tp"]:
+                    cash         += runner_shares * price
                     trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-FINAL"))
-                    runner_shares  = 0.0; trim_stage = 0
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
-                elif price <= runner_cost:
-                    cash          += runner_shares * price
-                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-BE"))
-                    runner_shares  = 0.0; trim_stage = 0
+                elif price <= runner_cost:   # break-even stop
+                    cash         += runner_shares * price
+                    trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "C-BE2"))
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
 
-            # ── Scenario B: 4–5 phases ─────────────────────────────────────────
+            # ── Scenario B: 4–5 phases, no trim yet ──────────────────────────
             elif phases_in >= 4 and trim_stage == 0:
                 if gain >= CFG["sell_b_tp"]:
                     main_qty      = shares * (1 - CFG["sell_b_keep"])
@@ -303,32 +317,34 @@ def run_backtest(df, initial_capital=100_000):
                     first_sell_px = price
                     shares        = 0.0
                     trim_stage    = 1
+                    active_scenario = "B"
+                    # FIX #2: record the main sell as a trade
+                    trades.append(_make_trade(date, price, avg_cost, main_qty, phases_in, "B-MAIN"))
 
-            elif trim_stage == 1 and phases_in >= 4 and runner_shares > 0:
-                runner_peak = max(runner_peak, price)
+            # ── Scenario B runner: trim_stage 1 ───────────────────────────────
+            elif trim_stage == 1 and active_scenario == "B" and runner_shares > 0:
+                runner_peak   = max(runner_peak, price)
                 rg_from_entry = (price - runner_cost) / runner_cost
-                # Close target: +10% from first sell price
-                close_target = first_sell_px * (1 + CFG["sell_b_close_from"])
+                close_target  = first_sell_px * (1 + CFG["sell_b_close_from"])
                 if price >= close_target:
-                    cash          += runner_shares * price
+                    cash         += runner_shares * price
                     trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "B-CLOSE"))
-                    runner_shares  = 0.0; trim_stage = 0
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
-                # Trailing stop
                 elif rg_from_entry >= CFG["sell_b_trail_act"]:
                     trail_stop_px = runner_peak * (1 - CFG["sell_b_trail_stop"])
                     if price <= trail_stop_px:
-                        cash          += runner_shares * price
+                        cash         += runner_shares * price
                         trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "B-TSL"))
-                        runner_shares  = 0.0; trim_stage = 0
+                        runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                         cycle_high = price; phase_entered = [False] * 6
                 elif price <= runner_cost:   # break-even stop
-                    cash          += runner_shares * price
+                    cash         += runner_shares * price
                     trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "B-BE"))
-                    runner_shares  = 0.0; trim_stage = 0
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
 
-            # ── Scenario A: ≤3 phases ──────────────────────────────────────────
+            # ── Scenario A: ≤3 phases, no trim yet ────────────────────────────
             elif phases_in <= 3 and trim_stage == 0:
                 if gain >= CFG["sell_a_tp"]:
                     main_qty      = shares * (1 - CFG["sell_a_keep"])
@@ -339,21 +355,23 @@ def run_backtest(df, initial_capital=100_000):
                     first_sell_px = price
                     shares        = 0.0
                     trim_stage    = 1
+                    active_scenario = "A"
                     trades.append(_make_trade(date, price, avg_cost, main_qty, phases_in, "A-MAIN"))
 
-            elif trim_stage == 1 and phases_in <= 3 and runner_shares > 0:
-                runner_peak = max(runner_peak, price)
+            # ── Scenario A runner: trim_stage 1 ───────────────────────────────
+            elif trim_stage == 1 and active_scenario == "A" and runner_shares > 0:
+                runner_peak   = max(runner_peak, price)
                 runner_target = first_sell_px * (1 + CFG["sell_a_runner_tp"])
                 trail_stop_px = runner_peak * (1 - CFG["sell_a_trail_stop"])
                 if price >= runner_target:
                     cash         += runner_shares * price
                     trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "A-RUNNER"))
-                    runner_shares = 0.0; trim_stage = 0
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
                 elif price <= trail_stop_px:
                     cash         += runner_shares * price
                     trades.append(_make_trade(date, price, runner_cost, runner_shares, phases_in, "A-TSL"))
-                    runner_shares = 0.0; trim_stage = 0
+                    runner_shares = 0.0; trim_stage = 0; active_scenario = ""
                     cycle_high = price; phase_entered = [False] * 6
 
         portfolio_val = cash + shares * price + runner_shares * price
@@ -506,8 +524,9 @@ def chart_trades(trades):
     t      = pd.DataFrame(trades).sort_values("exit_date")
     # Color by scenario
     sc_colors = {"A-MAIN": C_GREEN, "A-RUNNER": "#7dff6b", "A-TSL": C_ORANGE,
-                 "B-CLOSE": C_BLUE, "B-TSL": C_ORANGE, "B-BE": "#ff5555",
-                 "C-FINAL": C_GREEN, "C-TSL": C_ORANGE, "C-BE": "#ff5555"}
+                 "B-MAIN": C_BLUE, "B-CLOSE": C_BLUE, "B-TSL": C_ORANGE, "B-BE": "#ff5555",
+                 "C-TRIM1": C_GREEN, "C-TRIM2": "#7dff6b", "C-FINAL": C_GREEN,
+                 "C-TSL": C_ORANGE, "C-BE1": "#ff5555", "C-BE2": "#ff5555"}
     colors = [sc_colors.get(tr.get("scenario",""), C_GREEN if g > 0 else C_RED)
               for tr, g in zip(t.to_dict("records"), t["gain_pct"])]
     labels = [tr.get("scenario","") for tr in t.to_dict("records")]

@@ -1980,52 +1980,106 @@ def get_credit_spreads():
     return {'current': None, 'ok': False, 'history': []}
 
 
-# ── ADVANCE-DECLINE LINE (calculada desde yfinance) ──────────────────────────
+# ── ADVANCE-DECLINE LINE (datos reales NYSE via yfinance) ─────────────────────
 @st.cache_data(ttl=600)
 def get_advance_decline():
     """
-    Aproxima la línea Advance/Decline usando la lista del S&P 500 (muestra).
+    Línea Advance/Decline real del NYSE usando ^ADV y ^DEC de Yahoo Finance.
+    Capa 1: ^ADV / ^DEC  (NYSE advancing/declining issues, datos diarios reales)
+    Capa 2: Fallback sintético basado en SPY si Yahoo no devuelve datos.
     """
+    ad_history = []
+
+    # ── CAPA 1: datos reales NYSE ─────────────────────────────────────────────
     try:
-        # Usamos ETFs sectoriales para aproximar A/D diaria
-        sector_etfs = ['XLK','XLF','XLV','XLE','XLY','XLU','XLI','XLB','XLP','XLRE','XLC']
-        advances, declines = 0, 0
-        ad_history = []
-        
-        spy = yf.Ticker("SPY")
-        spy_hist = spy.history(period="6mo")
-        
-        # Para la línea A/D histórica, usamos componentes del SPY 
-        # como proxy: días en que SPY sube = mayoría avanza
+        adv_hist = yf.Ticker("^ADV").history(period="6mo")
+        dec_hist = yf.Ticker("^DEC").history(period="6mo")
+        spy_hist = yf.Ticker("SPY").history(period="6mo")
+
+        # Alinear por fecha (inner join implícito sobre el índice común)
+        if len(adv_hist) > 20 and len(dec_hist) > 20:
+            # Normalizar índices a fecha sin hora para alinear
+            adv_hist.index = adv_hist.index.normalize()
+            dec_hist.index = dec_hist.index.normalize()
+            spy_hist.index = spy_hist.index.normalize()
+
+            common_dates = adv_hist.index.intersection(dec_hist.index).intersection(spy_hist.index)
+            common_dates = common_dates.sort_values()
+
+            if len(common_dates) > 20:
+                cumulative = 0
+                for dt in common_dates:
+                    adv_val = float(adv_hist.loc[dt, 'Close'])
+                    dec_val = float(dec_hist.loc[dt, 'Close'])
+                    net = adv_val - dec_val
+                    cumulative += net
+                    ad_history.append({
+                        'date': dt.strftime('%Y-%m-%d'),
+                        'ad': cumulative / 1000,       # en miles para escala legible
+                        'adv': int(adv_val),
+                        'dec': int(dec_val),
+                        'net': int(net),
+                        'spy': float(spy_hist.loc[dt, 'Close']),
+                    })
+
+                current = ad_history[-1]
+                set_api_health('AdvDecline', True)
+                return {
+                    'history':      ad_history[-90:],
+                    'current_ad':   current['ad'],
+                    'current_adv':  current['adv'],
+                    'current_dec':  current['dec'],
+                    'current_net':  current['net'],
+                    'spy_current':  current['spy'],
+                    'spy_change':   current['spy'] - ad_history[-2]['spy'] if len(ad_history) >= 2 else 0,
+                    'real_data':    True,
+                    'ok':           True,
+                }
+    except Exception:
+        pass  # cae a la capa 2
+
+    # ── CAPA 2: proxy sintético (fallback) ────────────────────────────────────
+    try:
+        spy_hist = yf.Ticker("SPY").history(period="6mo")
         if len(spy_hist) > 20:
             cumulative = 0
             for i in range(1, len(spy_hist)):
-                day_change = spy_hist['Close'].iloc[i] - spy_hist['Close'].iloc[i-1]
-                # Simular A/D basado en volumen y precio
-                adv = int(250 + (day_change / spy_hist['Close'].iloc[i-1]) * 3000)
+                day_change = spy_hist['Close'].iloc[i] - spy_hist['Close'].iloc[i - 1]
+                adv = int(250 + (day_change / spy_hist['Close'].iloc[i - 1]) * 3000)
                 adv = max(50, min(450, adv))
                 dec = 500 - adv
                 net = adv - dec
                 cumulative += net
-                date_val = spy_hist.index[i]
                 ad_history.append({
-                    'date': date_val.strftime('%Y-%m-%d'),
-                    'ad': cumulative / 1000,  # en miles
-                    'spy': float(spy_hist['Close'].iloc[i])
+                    'date': spy_hist.index[i].strftime('%Y-%m-%d'),
+                    'ad':   cumulative / 1000,
+                    'adv':  adv,
+                    'dec':  dec,
+                    'net':  net,
+                    'spy':  float(spy_hist['Close'].iloc[i]),
                 })
-            
-            current_ad = ad_history[-1]['ad'] if ad_history else 0
+            current = ad_history[-1]
             set_api_health('AdvDecline', True)
             return {
-                'history': ad_history[-90:],  # 90 días
-                'current_ad': current_ad,
-                'spy_current': float(spy_hist['Close'].iloc[-1]),
-                'spy_change': float(spy_hist['Close'].iloc[-1] - spy_hist['Close'].iloc[-2]),
-                'ok': True
+                'history':      ad_history[-90:],
+                'current_ad':   current['ad'],
+                'current_adv':  current['adv'],
+                'current_dec':  current['dec'],
+                'current_net':  current['net'],
+                'spy_current':  current['spy'],
+                'spy_change':   current['spy'] - ad_history[-2]['spy'] if len(ad_history) >= 2 else 0,
+                'real_data':    False,
+                'ok':           True,
             }
-    except Exception as e:
-        set_api_health('AdvDecline', False)
-    return {'history': [], 'current_ad': 0, 'spy_current': 0, 'spy_change': 0, 'ok': False}
+    except Exception:
+        pass
+
+    set_api_health('AdvDecline', False)
+    return {
+        'history': [], 'current_ad': 0, 'current_adv': 0, 'current_dec': 0,
+        'current_net': 0, 'spy_current': 0, 'spy_change': 0,
+        'real_data': False, 'ok': False,
+    }
 
 
 
@@ -4059,71 +4113,87 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         spy_cur = ad_data.get('spy_current', 0)
         spy_chg = ad_data.get('spy_change', 0)
         current_ad_val = ad_data.get('current_ad', 0)
+        current_adv = ad_data.get('current_adv', 0)
+        current_dec = ad_data.get('current_dec', 0)
+        current_net = ad_data.get('current_net', 0)
+        is_real = ad_data.get('real_data', False)
         spy_color = "#00ffad" if spy_chg >= 0 else "#f23645"
+        net_color = "#00ffad" if current_net >= 0 else "#f23645"
+        net_arrow = "&#9650;" if current_net >= 0 else "&#9660;"
+
+        # Badge de fuente de datos
+        if is_real:
+            data_badge = '[NYSE REAL]'
+            data_badge_color = '#00ffad'
+            data_source_note = 'NYSE Advancing/Declining Issues · Yahoo Finance ^ADV ^DEC'
+            tooltip_body = (
+                'Datos reales del NYSE: Advancing Issues (^ADV) y Declining Issues (^DEC) '
+                'via Yahoo Finance. La Linea A/D acumula la diferencia diaria (Adv - Dec) '
+                'de todos los valores del NYSE. Divergencia A/D vs SPY = senal de alerta. '
+                'Actualizado cada 10 min.'
+            )
+        else:
+            data_badge = '[PROXY SPY]'
+            data_badge_color = '#ff9800'
+            data_source_note = 'Proxy sintetico basado en SPY — ^ADV/^DEC no disponibles'
+            tooltip_body = (
+                'PROXY SINTETICO — ^ADV/^DEC no devolvieron datos. '
+                'Se usa SPY como proxy: dias alcistas generan mayoria de avances; '
+                'dias bajistas generan mayoria de declives. '
+                'Para A/D real, Yahoo Finance publica ^ADV y ^DEC normalmente en horario de mercado.'
+            )
 
         # SVG chart for A/D line + SPY
         def _make_ad_chart(history):
             if len(history) < 5:
                 return '<div style="color:#555; text-align:center; padding:20px; font-size:10px;">Sin datos</div>'
-            
+
             W, H = 340, 200
             pad = {'l': 45, 'r': 10, 't': 10, 'b': 30}
-            
+
             spy_vals = [d['spy'] for d in history]
             ad_vals  = [d['ad']  for d in history]
             dates    = [d['date'] for d in history]
-            
+
             def normalize(vals, pad_top, pad_bot, h):
                 mn, mx = min(vals), max(vals)
                 rng = mx - mn if mx != mn else 1
                 return [h - pad_bot - ((v - mn) / rng) * (h - pad_top - pad_bot) for v in vals], mn, mx
-            
+
             spy_ys, spy_mn, spy_mx = normalize(spy_vals, pad['t'], pad['b'] + 90, H)
             ad_ys,  ad_mn,  ad_mx  = normalize(ad_vals,  pad['t'] + 120, pad['b'], H)
-            
+
             n = len(history)
             def pts(ys):
                 return " ".join(f"{pad['l'] + i * (W - pad['l'] - pad['r']) / (n-1):.1f},{y:.1f}" for i, y in enumerate(ys))
-            
+
             spy_pts = pts(spy_ys)
             ad_pts  = pts(ad_ys)
-            
-            # x-axis labels (show ~4) - solo en la parte inferior sin solapar
+
+            # x-axis labels (show ~4)
             x_labels = ""
             step = max(1, n // 4)
             for i in range(0, n, step):
                 x = pad['l'] + i * (W - pad['l'] - pad['r']) / (n - 1)
                 lbl = dates[i][5:]  # MM-DD
                 x_labels += f'<text x="{x:.1f}" y="{H - 3}" text-anchor="middle" fill="#555" font-size="7">{lbl}</text>'
-            
-            # Etiquetas de eje Y a la izquierda sin solapar con la gráfica
-            spy_last_y = spy_ys[-1]
-            ad_last_y = ad_ys[-1]
-            
-            # Etiqueta SPY en el eje Y izquierdo (zona superior)
-            spy_label_y = max(spy_ys[0] + 8, pad['t'] + 5)
-            ad_label_y = min(ad_ys[0] - 3, H - pad['b'] - 5)
-            
-            # Grid line separator
+
             sep_y = pad['t'] + (H - pad['t'] - pad['b']) * 0.48
-            
+
             return f'''<svg width="100%" height="100%" viewBox="0 0 {W} {H}" preserveAspectRatio="xMidYMid meet">
                 <line x1="{pad['l']}" y1="{sep_y:.1f}" x2="{W - pad['r']}" y2="{sep_y:.1f}" stroke="#1a1e26" stroke-width="1" stroke-dasharray="3,3"/>
-                <!-- Etiquetas eje Y izquierdo bien posicionadas -->
                 <text x="{pad['l'] - 3}" y="{pad['t'] + 10}" fill="#3b82f6" font-size="7" text-anchor="end">S&amp;P 500</text>
                 <text x="{pad['l'] - 3}" y="{H - pad['b'] - 10}" fill="#f23645" font-size="7" text-anchor="end">A/D</text>
-                <!-- Y-axis tick values -->
                 <text x="{pad['l'] - 3}" y="{spy_ys[0]:.1f}" fill="#3b82f660" font-size="6" text-anchor="end">{spy_vals[0]:,.0f}</text>
                 <text x="{pad['l'] - 3}" y="{spy_ys[-1]:.1f}" fill="#3b82f6" font-size="6" text-anchor="end">{spy_vals[-1]:,.0f}</text>
                 <text x="{pad['l'] - 3}" y="{ad_ys[-1]:.1f}" fill="#f23645" font-size="6" text-anchor="end">{ad_vals[-1]:,.1f}K</text>
-                <!-- Líneas -->
                 <polyline points="{spy_pts}" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linejoin="round"/>
                 <polyline points="{ad_pts}" fill="none" stroke="#f23645" stroke-width="1.5" stroke-linejoin="round"/>
                 {x_labels}
             </svg>'''
-        
+
         ad_chart_svg = _make_ad_chart(history_ad)
-        
+
         ad_full_html = f'''<!DOCTYPE html><html><head>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -4139,31 +4209,41 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans
         .tooltip-btn {{ width:22px; height:22px; border-radius:50%; background:#1a1e26; border:1px solid #444; display:flex; align-items:center; justify-content:center; color:#888; font-size:12px; font-weight:bold; cursor:help; }}
         .tooltip-content {{ display:none; position:fixed; width:280px; background:#1e222d; color:#eee; padding:12px; border-radius:10px; z-index:99999; font-size:11px; border:2px solid #00ffad; box-shadow:0 15px 40px rgba(0,0,0,0.9),0 0 20px #00ffad22; line-height:1.5; left:50%; top:50%; transform:translate(-50%,-50%); }}
         .tooltip-wrapper:hover .tooltip-content {{ display:block; }}
+        .metric-pill {{ display:inline-flex; align-items:center; gap:4px; background:#0c0e12; border:1px solid #1a1e26; border-radius:4px; padding:2px 7px; font-size:10px; font-family:'Courier New',monospace; }}
         </style></head><body>
         <div class="container">
             <div class="header">
-                <div style="display:flex; flex-direction:column;">
-                    <div class="title">Amplitud: Línea A/D <span style="font-size:11px; color:#ff9800; font-family:'Courier New',monospace;">[SIMULADO]</span></div>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <div class="title">Amplitud: Linea A/D <span style="font-size:10px; color:{data_badge_color}; font-family:Courier New,monospace;">{data_badge}</span></div>
                 </div>
                 <div class="tooltip-wrapper">
                     <div class="tooltip-btn">?</div>
-                    <div class="tooltip-content">⚠ DATO SIMULADO — No son datos reales de NYSE. La línea A/D real requiere datos tick a tick de todos los valores del NYSE (no disponibles gratuitamente). Este módulo genera una aproximación sintética basada en el precio y volumen del SPY: días alcistas del SPY → mayoría de valores avanzan; días bajistas → mayoría declinan. Útil como proxy de tendencia, pero NO debe usarse para decisiones de trading. Para A/D real, usa Bloomberg, FactSet o Barchart.</div>
+                    <div class="tooltip-content">{tooltip_body}</div>
                 </div>
             </div>
             <div class="content">
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                    <div style="font-size:10px; color:#888;">S&P 500: <span style="color:{spy_color}; font-weight:bold;">{spy_cur:,.2f} ({spy_chg:+.2f})</span></div>
-                    <div style="font-size:10px; color:#888;">A/D: <span style="color:#f23645; font-weight:bold;">{current_ad_val:,.1f}K</span></div>
+                <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:6px;">
+                    <div class="metric-pill">
+                        S&amp;P <span style="color:{spy_color}; font-weight:bold;">&nbsp;{spy_cur:,.2f}</span>&nbsp;<span style="color:{spy_color};">({spy_chg:+.2f})</span>
+                    </div>
+                    <div class="metric-pill">
+                        <span style="color:#00ffad;">&#9650;{current_adv:,}</span>
+                        <span style="color:#555;">|</span>
+                        <span style="color:#f23645;">&#9660;{current_dec:,}</span>
+                    </div>
+                    <div class="metric-pill">
+                        Net:&nbsp;<span style="color:{net_color}; font-weight:bold;">{net_arrow}{abs(current_net):,}</span>
+                    </div>
                 </div>
                 <div style="flex:1; background:#0c0e12; border:1px solid #1a1e26; border-radius:6px; padding:8px; overflow:hidden;">
                     {ad_chart_svg}
                 </div>
-                <div style="display:flex; gap:12px; margin-top:8px; font-size:9px; color:#666;">
-                    <span>▬ <span style="color:#3b82f6;">S&P 500</span></span>
-                    <span>▬ <span style="color:#f23645;">Línea A/D</span></span>
+                <div style="display:flex; gap:12px; margin-top:6px; font-size:9px; color:#666;">
+                    <span>&#9135; <span style="color:#3b82f6;">S&amp;P 500</span></span>
+                    <span>&#9135; <span style="color:#f23645;">Linea A/D (acumulada)</span></span>
                 </div>
             </div>
-            <div class="update-timestamp">Actualizado: {ts_ad} • ⚠ PROXY SIMULADO — no son datos NYSE reales</div>
+            <div class="update-timestamp">Actualizado: {ts_ad} &bull; {data_source_note}</div>
         </div>
         </body></html>'''
         components.html(ad_full_html, height=420, scrolling=False)

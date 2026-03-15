@@ -1052,7 +1052,7 @@ def render():
         }
         .bt-trade-row {
             display: grid;
-            grid-template-columns: 1.5fr 1fr 1fr 1fr 0.8fr;
+            grid-template-columns: 1.4fr 1.1fr 1fr 1fr 0.9fr 0.7fr;
             gap: 8px; padding: 10px 14px;
             background: #0c0e12; border: 1px solid #1a1e26;
             border-radius: 4px; margin: 4px 0;
@@ -2046,7 +2046,7 @@ def render():
                 cost_val  = tr.get("ref_price", tr["avg_cost"]) if is_runner else tr["avg_cost"]
                 cost_lbl  = f'<span style="font-size:.65rem;color:#333;"> REF</span>' if is_runner else ""
                 st.markdown(f"""
-                <div class="bt-trade-row" style="grid-template-columns:1.4fr 1.1fr 1fr 1fr 0.9fr 0.7fr;">
+                <div class="bt-trade-row">
                     <span style="color:#888;">{tr['exit_date'].strftime('%Y-%m-%d')}</span>
                     <span style="color:{scc};font-family:'VT323',monospace;font-size:.95rem;letter-spacing:1px;">{sc}</span>
                     <span style="color:white;font-family:'VT323',monospace;font-size:1rem;">${tr['exit_price']:.2f}</span>

@@ -190,5 +190,9 @@
   "URG": {
     "precio_compra": 1.58,
     "fecha": "12/03/2026"
+  },
+  "CRUS": {
+    "precio_compra": 136.76,
+    "fecha": "16/03/2026"
   }
 }

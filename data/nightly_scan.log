@@ -436,3 +436,46 @@
 2026-03-16 05:15:23,490 [INFO] Completo: 69 candidatos
 2026-03-16 05:15:23,507 [INFO] Guardado: data/scan_cache.json
 2026-03-16 05:15:23,507 [INFO] Tiempo: 5.6 min — OK
+2026-03-17 04:47:29,586 [INFO] ============================================================
+2026-03-17 04:47:29,586 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-17 04:47 UTC
+2026-03-17 04:47:29,684 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-17 04:47:29,685 [INFO] Universo: 480 tickers
+2026-03-17 04:47:29,685 [INFO] PASO 1/4 — Historico batch...
+2026-03-17 04:47:32,117 [INFO]   Batch 1 — 50 descargados
+2026-03-17 04:47:34,731 [INFO]   Batch 2 — 100 descargados
+2026-03-17 04:47:36,965 [INFO]   Batch 3 — 150 descargados
+2026-03-17 04:47:40,435 [INFO]   Batch 4 — 200 descargados
+2026-03-17 04:47:45,719 [INFO]   Batch 5 — 250 descargados
+2026-03-17 04:47:50,775 [INFO]   Batch 6 — 300 descargados
+2026-03-17 04:47:55,275 [INFO]   Batch 7 — 350 descargados
+2026-03-17 04:48:01,133 [INFO]   Batch 8 — 400 descargados
+2026-03-17 04:48:06,367 [INFO]   Batch 9 — 450 descargados
+2026-03-17 04:48:08,947 [INFO]   Batch 10 — 480 descargados
+2026-03-17 04:48:08,947 [INFO] PASO 2/4 — Info fundamental...
+2026-03-17 04:48:38,681 [INFO]   Info: 50/480
+2026-03-17 04:49:09,524 [INFO]   Info: 100/480
+2026-03-17 04:49:40,468 [INFO]   Info: 150/480
+2026-03-17 04:50:11,144 [INFO]   Info: 200/480
+2026-03-17 04:50:42,068 [INFO]   Info: 250/480
+2026-03-17 04:51:13,365 [INFO]   Info: 300/480
+2026-03-17 04:51:44,868 [INFO]   Info: 350/480
+2026-03-17 04:52:15,496 [INFO]   Info: 400/480
+2026-03-17 04:52:46,151 [INFO]   Info: 450/480
+2026-03-17 04:53:05,310 [INFO]   480 tickers
+2026-03-17 04:53:05,310 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-17 04:53:05,370 [INFO]   466 tickers
+2026-03-17 04:53:05,370 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-17 04:53:05,943 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-03-17 04:53:05,943 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-17 04:53:06,080 [INFO]   50/466 — candidatos: 8
+2026-03-17 04:53:06,212 [INFO]   100/466 — candidatos: 13
+2026-03-17 04:53:06,344 [INFO]   150/466 — candidatos: 23
+2026-03-17 04:53:06,477 [INFO]   200/466 — candidatos: 30
+2026-03-17 04:53:06,609 [INFO]   250/466 — candidatos: 37
+2026-03-17 04:53:06,742 [INFO]   300/466 — candidatos: 48
+2026-03-17 04:53:06,875 [INFO]   350/466 — candidatos: 55
+2026-03-17 04:53:07,008 [INFO]   400/466 — candidatos: 62
+2026-03-17 04:53:07,139 [INFO]   450/466 — candidatos: 69
+2026-03-17 04:53:07,182 [INFO] Completo: 70 candidatos
+2026-03-17 04:53:07,206 [INFO] Guardado: data/scan_cache.json
+2026-03-17 04:53:07,206 [INFO] Tiempo: 5.6 min — OK

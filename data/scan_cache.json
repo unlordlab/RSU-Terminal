@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-03-19T04:55:31.875088",
+  "generated_at": "2026-03-20T04:48:37.570401",
   "sp500_count": 480,
-  "total_candidates": 71,
+  "total_candidates": 69,
   "market_status": {
     "score": 40,
     "phase": "MARKET IN TRANSITION",
@@ -14,9 +14,9 @@
       "name": "Micron Technology, Inc.",
       "sector": "Technology",
       "industry": "Semiconductors",
-      "market_cap": 519.68,
-      "price": 461.73,
-      "score": 88,
+      "market_cap": 500.03,
+      "price": 444.27,
+      "score": 87,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
@@ -30,8 +30,8 @@
       "scores": {
         "C": 20,
         "A": 15,
-        "N": 15,
-        "S": 8,
+        "N": 12,
+        "S": 10,
         "L": 15,
         "I": 10,
         "M": 5
@@ -40,14 +40,14 @@
         "earnings_growth": 175.4,
         "revenue_growth": 56.7,
         "eps_growth": 180.2,
-        "pct_from_high": -2.04,
-        "volume_ratio": 1.61,
+        "pct_from_high": -5.74,
+        "volume_ratio": 2.02,
         "rs_rating": 99,
         "inst_ownership": 82.64,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 63.91,
-        "price_momentum": 10.63
+        "volatility": 64.06,
+        "price_momentum": 3.76
       },
       "ibd_ratings": {
         "composite": 91,
@@ -55,8 +55,8 @@
         "eps": 99,
         "smr": "A",
         "acc_dis": "B",
-        "atr_percent": 5.33,
-        "pe_ratio": 43.849007,
+        "atr_percent": 5.92,
+        "pe_ratio": 42.190884,
         "roe": 22.55,
         "sales_growth": 56.7
       },
@@ -75,19 +75,343 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 396.9165991210937,
-          "sma_150": 265.72755294799805,
-          "sma_200": 228.2796342086792,
+          "sma_50": 398.93339904785154,
+          "sma_150": 267.8617390950521,
+          "sma_200": 230.01105052947997,
           "high_52w": 471.3399963378906,
-          "low_52w": 61.41883540296099,
-          "distance_from_high": -2.04,
-          "distance_from_low": 651.77
+          "low_52w": 61.41884227019702,
+          "distance_from_high": -5.74,
+          "distance_from_low": 623.34
         }
       },
       "week_52_range": {
         "high": 471.34,
         "low": 61.42,
-        "current_position": 98.0
+        "current_position": 94.3
+      }
+    },
+    {
+      "ticker": "GEV",
+      "name": "GE Vernova Inc.",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "market_cap": 238.05,
+      "price": 877.39,
+      "score": 83,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "B",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 15,
+        "S": 5,
+        "L": 15,
+        "I": 8,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 671.7,
+        "revenue_growth": 3.8,
+        "eps_growth": 657.0,
+        "pct_from_high": -1.9,
+        "volume_ratio": 1.04,
+        "rs_rating": 95,
+        "inst_ownership": 78.75,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 50.8,
+        "price_momentum": 5.73
+      },
+      "ibd_ratings": {
+        "composite": 89,
+        "rs": 95,
+        "eps": 99,
+        "smr": "B",
+        "acc_dis": "C",
+        "atr_percent": 4.37,
+        "pe_ratio": 49.51411,
+        "roe": 42.64,
+        "sales_growth": 3.8
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 770.7948999023438,
+          "sma_150": 664.9730696614583,
+          "sma_200": 637.8014839172363,
+          "high_52w": 894.3891393892101,
+          "low_52w": 251.50579949745145,
+          "distance_from_high": -1.9,
+          "distance_from_low": 248.85
+        }
+      },
+      "week_52_range": {
+        "high": 894.39,
+        "low": 251.51,
+        "current_position": 98.1
+      }
+    },
+    {
+      "ticker": "MPC",
+      "name": "Marathon Petroleum Corporation",
+      "sector": "Energy",
+      "industry": "Oil & Gas Refining & Marketing",
+      "market_cap": 70.88,
+      "price": 235.78,
+      "score": 83,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "B",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 15,
+        "S": 5,
+        "L": 15,
+        "I": 8,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 350.7,
+        "revenue_growth": -1.2,
+        "eps_growth": 313.7,
+        "pct_from_high": -2.96,
+        "volume_ratio": 1.43,
+        "rs_rating": 91,
+        "inst_ownership": 77.18,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 34.95,
+        "price_momentum": 19.83
+      },
+      "ibd_ratings": {
+        "composite": 81,
+        "rs": 91,
+        "eps": 99,
+        "smr": "C",
+        "acc_dis": "C",
+        "atr_percent": 3.77,
+        "pe_ratio": 17.821617,
+        "roe": 24.19,
+        "sales_growth": -1.2
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 196.81805725097655,
+          "sma_150": 187.28663075764973,
+          "sma_200": 182.04577949523926,
+          "high_52w": 242.97999572753906,
+          "low_52w": 112.683054559572,
+          "distance_from_high": -2.96,
+          "distance_from_low": 109.24
+        }
+      },
+      "week_52_range": {
+        "high": 242.98,
+        "low": 112.68,
+        "current_position": 97.0
+      }
+    },
+    {
+      "ticker": "PSX",
+      "name": "Phillips 66",
+      "sector": "Energy",
+      "industry": "Oil & Gas Refining & Marketing",
+      "market_cap": 71.47,
+      "price": 178.34,
+      "score": 83,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "B",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 15,
+        "S": 5,
+        "L": 15,
+        "I": 8,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 242728.4,
+        "revenue_growth": 1.3,
+        "eps_growth": 36225.0,
+        "pct_from_high": -0.37,
+        "volume_ratio": 1.45,
+        "rs_rating": 93,
+        "inst_ownership": 78.47,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 36.29,
+        "price_momentum": 15.45
+      },
+      "ibd_ratings": {
+        "composite": 79,
+        "rs": 93,
+        "eps": 99,
+        "smr": "C",
+        "acc_dis": "C",
+        "atr_percent": 3.26,
+        "pe_ratio": 16.528267,
+        "roe": 15.43,
+        "sales_growth": 1.3
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 153.14643493652343,
+          "sma_150": 138.76411483764647,
+          "sma_200": 134.01367282867432,
+          "high_52w": 179.0,
+          "low_52w": 87.7864834470405,
+          "distance_from_high": -0.37,
+          "distance_from_low": 103.15
+        }
+      },
+      "week_52_range": {
+        "high": 179.0,
+        "low": 87.79,
+        "current_position": 99.6
+      }
+    },
+    {
+      "ticker": "STX",
+      "name": "Seagate Technology Holdings PLC",
+      "sector": "Technology",
+      "industry": "Computer Hardware",
+      "market_cap": 97.36,
+      "price": 434.6,
+      "score": 82,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "B",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 12,
+        "S": 5,
+        "L": 15,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 67.7,
+        "revenue_growth": 21.5,
+        "eps_growth": 76.5,
+        "pct_from_high": -5.49,
+        "volume_ratio": 1.25,
+        "rs_rating": 98,
+        "inst_ownership": 89.81,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 63.3,
+        "price_momentum": 5.71
+      },
+      "ibd_ratings": {
+        "composite": 79,
+        "rs": 98,
+        "eps": 95,
+        "smr": "C",
+        "acc_dis": "C",
+        "atr_percent": 6.05,
+        "pe_ratio": 48.99662,
+        "roe": 0.0,
+        "sales_growth": 21.5
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 384.0152020263672,
+          "sma_150": 286.148774617513,
+          "sma_200": 250.09344696044923,
+          "high_52w": 459.8399963378906,
+          "low_52w": 62.49475762576675,
+          "distance_from_high": -5.49,
+          "distance_from_low": 595.42
+        }
+      },
+      "week_52_range": {
+        "high": 459.84,
+        "low": 62.49,
+        "current_position": 94.5
       }
     },
     {
@@ -95,8 +419,8 @@
       "name": "Targa Resources, Inc.",
       "sector": "Energy",
       "industry": "Oil & Gas Midstream",
-      "market_cap": 50.29,
-      "price": 233.98,
+      "market_cap": 51.49,
+      "price": 239.53,
       "score": 82,
       "ml_probability": 0.5,
       "grades": {
@@ -121,23 +445,23 @@
         "earnings_growth": 74.5,
         "revenue_growth": -7.9,
         "eps_growth": 55.3,
-        "pct_from_high": -6.41,
-        "volume_ratio": 1.09,
-        "rs_rating": 91,
+        "pct_from_high": -4.19,
+        "volume_ratio": 1.47,
+        "rs_rating": 93,
         "inst_ownership": 95.63,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 34.41,
-        "price_momentum": 4.38
+        "volatility": 34.49,
+        "price_momentum": 3.54
       },
       "ibd_ratings": {
-        "composite": 83,
-        "rs": 91,
+        "composite": 84,
+        "rs": 93,
         "eps": 91,
         "smr": "C",
-        "acc_dis": "B",
-        "atr_percent": 2.82,
-        "pe_ratio": 27.559483,
+        "acc_dis": "A",
+        "atr_percent": 2.78,
+        "pe_ratio": 28.246464,
         "roe": 51.38,
         "sales_growth": -7.9
       },
@@ -156,19 +480,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 212.69101440429688,
-          "sma_150": 181.76627583821616,
-          "sma_200": 177.67190711975098,
+          "sma_50": 213.94107116699217,
+          "sma_150": 182.2643593343099,
+          "sma_200": 178.07196075439452,
           "high_52w": 250.0,
-          "low_52w": 142.47817648505955,
-          "distance_from_high": -6.41,
-          "distance_from_low": 64.22
+          "low_52w": 142.47816169120824,
+          "distance_from_high": -4.19,
+          "distance_from_low": 68.12
         }
       },
       "week_52_range": {
         "high": 250.0,
         "low": 142.48,
-        "current_position": 93.6
+        "current_position": 95.8
       }
     },
     {
@@ -176,8 +500,8 @@
       "name": "Valero Energy Corporation",
       "sector": "Energy",
       "industry": "Oil & Gas Refining & Marketing",
-      "market_cap": 72.73,
-      "price": 238.46,
+      "market_cap": 73.83,
+      "price": 242.07,
       "score": 82,
       "ml_probability": 0.5,
       "grades": {
@@ -202,14 +526,14 @@
         "earnings_growth": 317.9,
         "revenue_growth": -2.1,
         "eps_growth": 303.6,
-        "pct_from_high": -1.69,
-        "volume_ratio": 0.96,
+        "pct_from_high": -2.28,
+        "volume_ratio": 0.99,
         "rs_rating": 97,
         "inst_ownership": 87.75,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 38.41,
-        "price_momentum": 19.68
+        "volatility": 38.43,
+        "price_momentum": 20.58
       },
       "ibd_ratings": {
         "composite": 78,
@@ -217,8 +541,8 @@
         "eps": 99,
         "smr": "D",
         "acc_dis": "B",
-        "atr_percent": 3.67,
-        "pe_ratio": 31.54233,
+        "atr_percent": 3.72,
+        "pe_ratio": 31.935358,
         "roe": 8.3,
         "sales_growth": -2.1
       },
@@ -237,35 +561,35 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 200.2106155395508,
-          "sma_150": 175.40262339274088,
-          "sma_200": 165.59658309936523,
-          "high_52w": 242.55979919433594,
-          "low_52w": 96.17292970328542,
-          "distance_from_high": -1.69,
-          "distance_from_low": 147.95
+          "sma_50": 201.50828857421874,
+          "sma_150": 176.11992746988932,
+          "sma_200": 166.17846523284913,
+          "high_52w": 247.72999572753906,
+          "low_52w": 96.17293678409607,
+          "distance_from_high": -2.28,
+          "distance_from_low": 151.7
         }
       },
       "week_52_range": {
-        "high": 242.56,
+        "high": 247.73,
         "low": 96.17,
-        "current_position": 98.3
+        "current_position": 97.7
       }
     },
     {
-      "ticker": "MPC",
-      "name": "Marathon Petroleum Corporation",
+      "ticker": "WMB",
+      "name": "Williams Companies, Inc. (The)",
       "sector": "Energy",
-      "industry": "Oil & Gas Refining & Marketing",
-      "market_cap": 71.01,
-      "price": 236.24,
-      "score": 80,
+      "industry": "Oil & Gas Midstream",
+      "market_cap": 90.47,
+      "price": 74.06,
+      "score": 82,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
         "N": "A",
-        "S": "C",
+        "S": "B",
         "L": "A",
         "I": "A",
         "M": "C"
@@ -274,34 +598,34 @@
         "C": 20,
         "A": 15,
         "N": 15,
-        "S": 2,
-        "L": 15,
-        "I": 8,
+        "S": 5,
+        "L": 12,
+        "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 350.7,
-        "revenue_growth": -1.2,
-        "eps_growth": 313.7,
-        "pct_from_high": -1.06,
-        "volume_ratio": 0.91,
-        "rs_rating": 91,
-        "inst_ownership": 77.18,
+        "earnings_growth": 50.8,
+        "revenue_growth": 8.7,
+        "eps_growth": 51.0,
+        "pct_from_high": -2.96,
+        "volume_ratio": 1.05,
+        "rs_rating": 87,
+        "inst_ownership": 88.97,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 34.98,
-        "price_momentum": 20.24
+        "volatility": 24.73,
+        "price_momentum": 2.21
       },
       "ibd_ratings": {
-        "composite": 81,
-        "rs": 91,
-        "eps": 99,
-        "smr": "C",
+        "composite": 75,
+        "rs": 87,
+        "eps": 90,
+        "smr": "B",
         "acc_dis": "B",
-        "atr_percent": 3.84,
-        "pe_ratio": 17.856388,
-        "roe": 24.19,
-        "sales_growth": -1.2
+        "atr_percent": 2.08,
+        "pe_ratio": 34.607475,
+        "roe": 18.55,
+        "sales_growth": 8.7
       },
       "trend_template": {
         "all_pass": true,
@@ -318,19 +642,100 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 195.49386108398437,
-          "sma_150": 186.77630432128908,
-          "sma_200": 181.6483644104004,
-          "high_52w": 238.77000427246094,
-          "low_52w": 112.683054559572,
-          "distance_from_high": -1.06,
-          "distance_from_low": 109.65
+          "sma_50": 68.6533277130127,
+          "sma_150": 62.2241667175293,
+          "sma_200": 61.10213146209717,
+          "high_52w": 76.32107582338935,
+          "low_52w": 49.94417520352288,
+          "distance_from_high": -2.96,
+          "distance_from_low": 48.29
         }
       },
       "week_52_range": {
-        "high": 238.77,
-        "low": 112.68,
-        "current_position": 98.9
+        "high": 76.32,
+        "low": 49.94,
+        "current_position": 97.0
+      }
+    },
+    {
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "sector": "Technology",
+      "industry": "Semiconductor Equipment & Materials",
+      "market_cap": 283.49,
+      "price": 357.21,
+      "score": 79,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "C",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 12,
+        "S": 2,
+        "L": 15,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 75.2,
+        "revenue_growth": -2.1,
+        "eps_growth": 71.0,
+        "pct_from_high": -9.78,
+        "volume_ratio": 0.97,
+        "rs_rating": 97,
+        "inst_ownership": 85.54,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 48.09,
+        "price_momentum": -4.84
+      },
+      "ibd_ratings": {
+        "composite": 86,
+        "rs": 97,
+        "eps": 94,
+        "smr": "B",
+        "acc_dis": "B",
+        "atr_percent": 4.36,
+        "pe_ratio": 36.63692,
+        "roe": 38.86,
+        "sales_growth": -2.1
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 337.10595153808595,
+          "sma_150": 258.31432169596354,
+          "sma_200": 239.2103762817383,
+          "high_52w": 395.95001220703125,
+          "low_52w": 122.64285447031475,
+          "distance_from_high": -9.78,
+          "distance_from_low": 191.26
+        }
+      },
+      "week_52_range": {
+        "high": 395.95,
+        "low": 122.64,
+        "current_position": 90.2
       }
     },
     {
@@ -338,8 +743,8 @@
       "name": "Edison International",
       "sector": "Utilities",
       "industry": "Utilities - Regulated Electric",
-      "market_cap": 27.96,
-      "price": 72.66,
+      "market_cap": 27.66,
+      "price": 71.89,
       "score": 79,
       "ml_probability": 0.5,
       "grades": {
@@ -364,23 +769,23 @@
         "earnings_growth": 446.3,
         "revenue_growth": 30.8,
         "eps_growth": 443.5,
-        "pct_from_high": -3.76,
-        "volume_ratio": 0.73,
-        "rs_rating": 93,
+        "pct_from_high": -4.78,
+        "volume_ratio": 0.83,
+        "rs_rating": 91,
         "inst_ownership": 93.01,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 28.86,
-        "price_momentum": 0.0
+        "volatility": 28.88,
+        "price_momentum": -2.51
       },
       "ibd_ratings": {
-        "composite": 85,
-        "rs": 93,
+        "composite": 84,
+        "rs": 91,
         "eps": 99,
         "smr": "A",
         "acc_dis": "B",
-        "atr_percent": 2.4,
-        "pe_ratio": 6.2909093,
+        "atr_percent": 2.46,
+        "pe_ratio": 6.224242,
         "roe": 24.1,
         "sales_growth": 30.8
       },
@@ -399,19 +804,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 66.98824005126953,
-          "sma_150": 59.393035888671875,
-          "sma_200": 57.06231374740601,
+          "sma_50": 67.23340003967286,
+          "sma_150": 59.50813351949056,
+          "sma_200": 57.157000427246096,
           "high_52w": 75.5,
-          "low_52w": 45.5967852685907,
-          "distance_from_high": -3.76,
-          "distance_from_low": 59.35
+          "low_52w": 45.596781567869236,
+          "distance_from_high": -4.78,
+          "distance_from_low": 57.66
         }
       },
       "week_52_range": {
         "high": 75.5,
         "low": 45.6,
-        "current_position": 96.2
+        "current_position": 95.2
       }
     },
     {
@@ -419,95 +824,14 @@
       "name": "Jabil Inc.",
       "sector": "Technology",
       "industry": "Electronic Components",
-      "market_cap": 27.63,
-      "price": 258.67,
+      "market_cap": 28.34,
+      "price": 265.31,
       "score": 79,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
         "N": "A",
-        "S": "A",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 12,
-        "N": 12,
-        "S": 8,
-        "L": 12,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 53.4,
-        "revenue_growth": 18.7,
-        "eps_growth": 46.0,
-        "pct_from_high": -8.07,
-        "volume_ratio": 1.89,
-        "rs_rating": 87,
-        "inst_ownership": 97.73,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 41.56,
-        "price_momentum": -1.44
-      },
-      "ibd_ratings": {
-        "composite": 87,
-        "rs": 87,
-        "eps": 88,
-        "smr": "A",
-        "acc_dis": "C",
-        "atr_percent": 4.11,
-        "pe_ratio": 40.480442,
-        "roe": 47.82,
-        "sales_growth": 18.7
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 250.3175079345703,
-          "sma_150": 225.86630015055337,
-          "sma_200": 221.8557578277588,
-          "high_52w": 281.3699951171875,
-          "low_52w": 108.49081127757718,
-          "distance_from_high": -8.07,
-          "distance_from_low": 138.43
-        }
-      },
-      "week_52_range": {
-        "high": 281.37,
-        "low": 108.49,
-        "current_position": 91.9
-      }
-    },
-    {
-      "ticker": "STX",
-      "name": "Seagate Technology Holdings PLC",
-      "sector": "Technology",
-      "industry": "Computer Hardware",
-      "market_cap": 91.13,
-      "price": 406.77,
-      "score": 78,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
         "S": "B",
         "L": "A",
         "I": "A",
@@ -516,35 +840,35 @@
       "scores": {
         "C": 20,
         "A": 15,
-        "N": 8,
+        "N": 12,
         "S": 5,
-        "L": 15,
+        "L": 12,
         "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 67.7,
-        "revenue_growth": 21.5,
-        "eps_growth": 76.5,
-        "pct_from_high": -11.54,
-        "volume_ratio": 1.14,
-        "rs_rating": 98,
-        "inst_ownership": 89.86,
+        "earnings_growth": 96.2,
+        "revenue_growth": 23.1,
+        "eps_growth": 90.6,
+        "pct_from_high": -5.71,
+        "volume_ratio": 1.27,
+        "rs_rating": 87,
+        "inst_ownership": 97.71,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 63.01,
-        "price_momentum": -0.54
+        "volatility": 41.52,
+        "price_momentum": -2.13
       },
       "ibd_ratings": {
-        "composite": 79,
-        "rs": 98,
-        "eps": 95,
-        "smr": "C",
+        "composite": 91,
+        "rs": 87,
+        "eps": 98,
+        "smr": "A",
         "acc_dis": "C",
-        "atr_percent": 5.94,
-        "pe_ratio": 45.859074,
-        "roe": 0.0,
-        "sales_growth": 21.5
+        "atr_percent": 4.12,
+        "pe_ratio": 41.51956,
+        "roe": 59.7,
+        "sales_growth": 23.1
       },
       "trend_template": {
         "all_pass": true,
@@ -561,29 +885,29 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 381.93160217285157,
-          "sma_150": 284.2915586344401,
-          "sma_200": 248.50964225769042,
-          "high_52w": 459.8399963378906,
-          "low_52w": 62.494751136314285,
-          "distance_from_high": -11.54,
-          "distance_from_low": 550.89
+          "sma_50": 251.1375180053711,
+          "sma_150": 226.17607584635417,
+          "sma_200": 222.3431140899658,
+          "high_52w": 281.3699951171875,
+          "low_52w": 108.49081127757718,
+          "distance_from_high": -5.71,
+          "distance_from_low": 144.55
         }
       },
       "week_52_range": {
-        "high": 459.84,
-        "low": 62.49,
-        "current_position": 88.5
+        "high": 281.37,
+        "low": 108.49,
+        "current_position": 94.3
       }
     },
     {
-      "ticker": "GEV",
-      "name": "GE Vernova Inc.",
-      "sector": "Industrials",
-      "industry": "Specialty Industrial Machinery",
-      "market_cap": 232.92,
-      "price": 858.47,
-      "score": 77,
+      "ticker": "KEYS",
+      "name": "Keysight Technologies Inc.",
+      "sector": "Technology",
+      "industry": "Scientific & Technical Instruments",
+      "market_cap": 49.78,
+      "price": 290.21,
+      "score": 79,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
@@ -600,32 +924,32 @@
         "N": 12,
         "S": 2,
         "L": 15,
-        "I": 8,
+        "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 671.7,
-        "revenue_growth": 3.8,
-        "eps_growth": 657.0,
-        "pct_from_high": -4.02,
-        "volume_ratio": 0.94,
-        "rs_rating": 95,
-        "inst_ownership": 78.73,
+        "earnings_growth": 68.0,
+        "revenue_growth": 23.3,
+        "eps_growth": 66.3,
+        "pct_from_high": -8.45,
+        "volume_ratio": 0.74,
+        "rs_rating": 96,
+        "inst_ownership": 94.03,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 50.77,
-        "price_momentum": 2.92
+        "volatility": 40.82,
+        "price_momentum": 19.16
       },
       "ibd_ratings": {
-        "composite": 89,
-        "rs": 95,
-        "eps": 99,
+        "composite": 83,
+        "rs": 96,
+        "eps": 93,
         "smr": "B",
-        "acc_dis": "C",
-        "atr_percent": 4.26,
-        "pe_ratio": 48.555992,
-        "roe": 42.64,
-        "sales_growth": 3.8
+        "acc_dis": "B",
+        "atr_percent": 4.28,
+        "pe_ratio": 51.003513,
+        "roe": 17.22,
+        "sales_growth": 23.3
       },
       "trend_template": {
         "all_pass": true,
@@ -642,19 +966,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 766.9654040527344,
-          "sma_150": 663.3451114908854,
-          "sma_200": 635.8350184631348,
-          "high_52w": 894.3891393892101,
-          "low_52w": 251.50579949745145,
-          "distance_from_high": -4.02,
-          "distance_from_low": 241.33
+          "sma_50": 247.64720001220704,
+          "sma_150": 203.10179992675782,
+          "sma_200": 193.15224998474122,
+          "high_52w": 317.0,
+          "low_52w": 121.43000030517578,
+          "distance_from_high": -8.45,
+          "distance_from_low": 138.99
         }
       },
       "week_52_range": {
-        "high": 894.39,
-        "low": 251.51,
-        "current_position": 96.0
+        "high": 317.0,
+        "low": 121.43,
+        "current_position": 91.5
       }
     },
     {
@@ -662,8 +986,8 @@
       "name": "Lockheed Martin Corporation",
       "sector": "Industrials",
       "industry": "Aerospace & Defense",
-      "market_cap": 148.62,
-      "price": 642.28,
+      "market_cap": 147.52,
+      "price": 637.51,
       "score": 77,
       "ml_probability": 0.5,
       "grades": {
@@ -688,23 +1012,23 @@
         "earnings_growth": 161.0,
         "revenue_growth": 9.1,
         "eps_growth": 155.0,
-        "pct_from_high": -7.18,
-        "volume_ratio": 0.62,
-        "rs_rating": 92,
+        "pct_from_high": -7.87,
+        "volume_ratio": 0.81,
+        "rs_rating": 91,
         "inst_ownership": 75.16,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 27.11,
-        "price_momentum": -3.13
+        "price_momentum": -2.64
       },
       "ibd_ratings": {
         "composite": 90,
-        "rs": 92,
+        "rs": 91,
         "eps": 99,
         "smr": "B",
         "acc_dis": "B",
         "atr_percent": 2.87,
-        "pe_ratio": 29.845726,
+        "pe_ratio": 29.679237,
         "roe": 76.87,
         "sales_growth": 9.1
       },
@@ -723,36 +1047,36 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 617.7720251464843,
-          "sma_150": 518.0110327148437,
-          "sma_200": 499.89304153442384,
+          "sma_50": 620.136162109375,
+          "sma_150": 519.3693131510416,
+          "sma_200": 500.7341062927246,
           "high_52w": 692.0,
-          "low_52w": 401.9534783914636,
-          "distance_from_high": -7.18,
-          "distance_from_low": 59.79
+          "low_52w": 401.953508862233,
+          "distance_from_high": -7.87,
+          "distance_from_low": 58.6
         }
       },
       "week_52_range": {
         "high": 692.0,
         "low": 401.95,
-        "current_position": 92.8
+        "current_position": 92.1
       }
     },
     {
-      "ticker": "PSX",
-      "name": "Phillips 66",
+      "ticker": "EQT",
+      "name": "EQT Corporation",
       "sector": "Energy",
-      "industry": "Oil & Gas Refining & Marketing",
-      "market_cap": 69.22,
-      "price": 172.74,
-      "score": 77,
+      "industry": "Oil & Gas E&P",
+      "market_cap": 40.38,
+      "price": 64.68,
+      "score": 75,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
         "N": "A",
         "S": "B",
-        "L": "A",
+        "L": "B",
         "I": "A",
         "M": "C"
       },
@@ -761,114 +1085,33 @@
         "A": 15,
         "N": 12,
         "S": 5,
-        "L": 12,
-        "I": 8,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 242728.4,
-        "revenue_growth": 1.3,
-        "eps_growth": 36225.0,
-        "pct_from_high": -3.16,
-        "volume_ratio": 1.3,
-        "rs_rating": 90,
-        "inst_ownership": 78.47,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 36.16,
-        "price_momentum": 12.06
-      },
-      "ibd_ratings": {
-        "composite": 78,
-        "rs": 90,
-        "eps": 99,
-        "smr": "C",
-        "acc_dis": "C",
-        "atr_percent": 3.3,
-        "pe_ratio": 15.994445,
-        "roe": 15.43,
-        "sales_growth": 1.3
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 152.2903497314453,
-          "sma_150": 138.3710326131185,
-          "sma_200": 133.6784452056885,
-          "high_52w": 178.3800048828125,
-          "low_52w": 87.7864834470405,
-          "distance_from_high": -3.16,
-          "distance_from_low": 96.77
-        }
-      },
-      "week_52_range": {
-        "high": 178.38,
-        "low": 87.79,
-        "current_position": 96.8
-      }
-    },
-    {
-      "ticker": "CBOE",
-      "name": "Cboe Global Markets, Inc.",
-      "sector": "Financial Services",
-      "industry": "Financial Data & Stock Exchanges",
-      "market_cap": 30.04,
-      "price": 286.97,
-      "score": 76,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 12,
-        "S": 2,
-        "L": 12,
+        "L": 8,
         "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 60.5,
-        "revenue_growth": 8.7,
-        "eps_growth": 59.5,
-        "pct_from_high": -6.12,
-        "volume_ratio": 0.75,
-        "rs_rating": 83,
-        "inst_ownership": 89.36,
+        "earnings_growth": 54.6,
+        "revenue_growth": 26.9,
+        "eps_growth": 61.8,
+        "pct_from_high": -3.68,
+        "volume_ratio": 1.45,
+        "rs_rating": 79,
+        "inst_ownership": 94.64,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 21.79,
-        "price_momentum": 0.53
+        "volatility": 35.66,
+        "price_momentum": 6.91
       },
       "ibd_ratings": {
-        "composite": 76,
-        "rs": 83,
-        "eps": 91,
+        "composite": 73,
+        "rs": 79,
+        "eps": 92,
         "smr": "B",
         "acc_dis": "B",
-        "atr_percent": 2.92,
-        "pe_ratio": 27.540306,
-        "roe": 23.36,
-        "sales_growth": 8.7
+        "atr_percent": 3.25,
+        "pe_ratio": 19.540787,
+        "roe": 9.01,
+        "sales_growth": 26.9
       },
       "trend_template": {
         "all_pass": true,
@@ -885,262 +1128,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 278.65266967773437,
-          "sma_150": 256.3102746582031,
-          "sma_200": 250.8184900665283,
-          "high_52w": 305.67999267578125,
-          "low_52w": 199.8296415200125,
-          "distance_from_high": -6.12,
-          "distance_from_low": 43.61
+          "sma_50": 57.68725646972656,
+          "sma_150": 55.45655975341797,
+          "sma_200": 55.31333896636963,
+          "high_52w": 67.1500015258789,
+          "low_52w": 43.05909267327092,
+          "distance_from_high": -3.68,
+          "distance_from_low": 50.21
         }
       },
       "week_52_range": {
-        "high": 305.68,
-        "low": 199.83,
-        "current_position": 93.9
-      }
-    },
-    {
-      "ticker": "WMB",
-      "name": "Williams Companies, Inc. (The)",
-      "sector": "Energy",
-      "industry": "Oil & Gas Midstream",
-      "market_cap": 88.93,
-      "price": 72.8,
-      "score": 76,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 12,
-        "S": 2,
-        "L": 12,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 50.8,
-        "revenue_growth": 8.7,
-        "eps_growth": 51.0,
-        "pct_from_high": -4.61,
-        "volume_ratio": 0.73,
-        "rs_rating": 86,
-        "inst_ownership": 88.97,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 24.69,
-        "price_momentum": 1.6
-      },
-      "ibd_ratings": {
-        "composite": 75,
-        "rs": 86,
-        "eps": 90,
-        "smr": "B",
-        "acc_dis": "B",
-        "atr_percent": 2.02,
-        "pe_ratio": 34.018692,
-        "roe": 18.55,
-        "sales_growth": 8.7
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 68.35363006591797,
-          "sma_150": 62.10706792195638,
-          "sma_200": 61.028465843200685,
-          "high_52w": 76.32107582338935,
-          "low_52w": 49.94417879079904,
-          "distance_from_high": -4.61,
-          "distance_from_low": 45.76
-        }
-      },
-      "week_52_range": {
-        "high": 76.32,
-        "low": 49.94,
-        "current_position": 95.4
-      }
-    },
-    {
-      "ticker": "AMAT",
-      "name": "Applied Materials, Inc.",
-      "sector": "Technology",
-      "industry": "Semiconductor Equipment & Materials",
-      "market_cap": 277.34,
-      "price": 349.47,
-      "score": 75,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 8,
-        "S": 2,
-        "L": 15,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 75.2,
-        "revenue_growth": -2.1,
-        "eps_growth": 71.0,
-        "pct_from_high": -11.74,
-        "volume_ratio": 0.77,
-        "rs_rating": 97,
-        "inst_ownership": 85.54,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 48.05,
-        "price_momentum": -5.51
-      },
-      "ibd_ratings": {
-        "composite": 86,
-        "rs": 97,
-        "eps": 94,
-        "smr": "B",
-        "acc_dis": "C",
-        "atr_percent": 4.29,
-        "pe_ratio": 35.84308,
-        "roe": 38.86,
-        "sales_growth": -2.1
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 335.87457763671875,
-          "sma_150": 257.1921260579427,
-          "sma_200": 238.2059203338623,
-          "high_52w": 395.95001220703125,
-          "low_52w": 122.64285447031475,
-          "distance_from_high": -11.74,
-          "distance_from_low": 184.95
-        }
-      },
-      "week_52_range": {
-        "high": 395.95,
-        "low": 122.64,
-        "current_position": 88.3
-      }
-    },
-    {
-      "ticker": "KEYS",
-      "name": "Keysight Technologies Inc.",
-      "sector": "Technology",
-      "industry": "Scientific & Technical Instruments",
-      "market_cap": 48.73,
-      "price": 284.12,
-      "score": 75,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 8,
-        "S": 2,
-        "L": 15,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 68.0,
-        "revenue_growth": 23.3,
-        "eps_growth": 66.3,
-        "pct_from_high": -10.37,
-        "volume_ratio": 0.28,
-        "rs_rating": 96,
-        "inst_ownership": 94.03,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 40.78,
-        "price_momentum": 18.61
-      },
-      "ibd_ratings": {
-        "composite": 83,
-        "rs": 96,
-        "eps": 93,
-        "smr": "B",
-        "acc_dis": "B",
-        "atr_percent": 4.2,
-        "pe_ratio": 50.021126,
-        "roe": 17.22,
-        "sales_growth": 23.3
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 246.11580017089844,
-          "sma_150": 202.30186665852864,
-          "sma_200": 192.49300003051758,
-          "high_52w": 317.0,
-          "low_52w": 121.43000030517578,
-          "distance_from_high": -10.37,
-          "distance_from_low": 133.98
-        }
-      },
-      "week_52_range": {
-        "high": 317.0,
-        "low": 121.43,
-        "current_position": 89.6
+        "high": 67.15,
+        "low": 43.06,
+        "current_position": 96.3
       }
     },
     {
@@ -1148,8 +1148,8 @@
       "name": "Tapestry, Inc.",
       "sector": "Consumer Cyclical",
       "industry": "Luxury Goods",
-      "market_cap": 28.71,
-      "price": 140.29,
+      "market_cap": 29.22,
+      "price": 142.8,
       "score": 75,
       "ml_probability": 0.5,
       "grades": {
@@ -1174,14 +1174,14 @@
         "earnings_growth": 94.2,
         "revenue_growth": 14.0,
         "eps_growth": 80.8,
-        "pct_from_high": -13.15,
-        "volume_ratio": 0.56,
+        "pct_from_high": -11.6,
+        "volume_ratio": 0.58,
         "rs_rating": 92,
         "inst_ownership": 98.41,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 42.34,
-        "price_momentum": -7.64
+        "volatility": 42.35,
+        "price_momentum": -8.85
       },
       "ibd_ratings": {
         "composite": 91,
@@ -1189,16 +1189,16 @@
         "eps": 96,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 3.88,
-        "pe_ratio": 54.37597,
+        "atr_percent": 3.8,
+        "pe_ratio": 55.34884,
         "roe": 55.34,
         "sales_growth": 14.0
       },
       "trend_template": {
-        "all_pass": false,
-        "score": 7,
+        "all_pass": true,
+        "score": 8,
         "criteria": {
-          "Precio > SMA 50": false,
+          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -1207,21 +1207,21 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 1/2 Transition",
+        "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 141.9308363342285,
-          "sma_150": 121.33715876261394,
-          "sma_200": 114.51536785125732,
+          "sma_50": 142.13035842895508,
+          "sma_150": 121.53978317260743,
+          "sma_200": 114.84217361450196,
           "high_52w": 161.53692103953628,
           "low_52w": 57.556650528412504,
-          "distance_from_high": -13.15,
-          "distance_from_low": 143.74
+          "distance_from_high": -11.6,
+          "distance_from_low": 148.1
         }
       },
       "week_52_range": {
         "high": 161.54,
         "low": 57.56,
-        "current_position": 86.8
+        "current_position": 88.4
       }
     },
     {
@@ -1229,8 +1229,8 @@
       "name": "Teradyne, Inc.",
       "sector": "Technology",
       "industry": "Semiconductor Equipment & Materials",
-      "market_cap": 46.98,
-      "price": 300.07,
+      "market_cap": 47.34,
+      "price": 302.4,
       "score": 75,
       "ml_probability": 0.5,
       "grades": {
@@ -1255,14 +1255,14 @@
         "earnings_growth": 81.4,
         "revenue_growth": 43.9,
         "eps_growth": 75.9,
-        "pct_from_high": -13.0,
-        "volume_ratio": 0.81,
+        "pct_from_high": -12.33,
+        "volume_ratio": 0.84,
         "rs_rating": 99,
         "inst_ownership": 98.41,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 61.05,
-        "price_momentum": -5.01
+        "volatility": 61.04,
+        "price_momentum": -6.91
       },
       "ibd_ratings": {
         "composite": 88,
@@ -1270,8 +1270,8 @@
         "eps": 95,
         "smr": "A",
         "acc_dis": "B",
-        "atr_percent": 6.43,
-        "pe_ratio": 86.22701,
+        "atr_percent": 6.34,
+        "pe_ratio": 86.89655,
         "roe": 19.73,
         "sales_growth": 43.9
       },
@@ -1290,19 +1290,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 277.45918365478514,
-          "sma_150": 195.51765029907227,
-          "sma_200": 169.86896091461182,
+          "sma_50": 278.9322964477539,
+          "sma_150": 196.77523798624674,
+          "sma_200": 170.98437614440917,
           "high_52w": 344.9200134277344,
           "low_52w": 65.52712625475871,
-          "distance_from_high": -13.0,
-          "distance_from_low": 357.93
+          "distance_from_high": -12.33,
+          "distance_from_low": 361.49
         }
       },
       "week_52_range": {
         "high": 344.92,
         "low": 65.53,
-        "current_position": 87.0
+        "current_position": 87.7
       }
     },
     {
@@ -1310,8 +1310,8 @@
       "name": "Corning Incorporated",
       "sector": "Technology",
       "industry": "Electronic Components",
-      "market_cap": 111.41,
-      "price": 129.86,
+      "market_cap": 114.18,
+      "price": 133.08,
       "score": 73,
       "ml_probability": 0.5,
       "grades": {
@@ -1336,14 +1336,14 @@
         "earnings_growth": 77.4,
         "revenue_growth": 20.4,
         "eps_growth": 74.2,
-        "pct_from_high": -19.74,
-        "volume_ratio": 0.55,
+        "pct_from_high": -17.75,
+        "volume_ratio": 0.59,
         "rs_rating": 98,
         "inst_ownership": 74.89,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 44.91,
-        "price_momentum": 0.09
+        "volatility": 44.96,
+        "price_momentum": -4.43
       },
       "ibd_ratings": {
         "composite": 83,
@@ -1351,8 +1351,8 @@
         "eps": 94,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 6.95,
-        "pe_ratio": 70.96175,
+        "atr_percent": 6.91,
+        "pe_ratio": 72.32609,
         "roe": 14.9,
         "sales_growth": 20.4
       },
@@ -1371,19 +1371,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 119.11863739013671,
-          "sma_150": 93.83472938537598,
-          "sma_200": 83.93436098098755,
+          "sma_50": 119.9985627746582,
+          "sma_150": 94.28773742675781,
+          "sma_200": 84.35188718795776,
           "high_52w": 161.79802104182139,
-          "low_52w": 36.75596700964456,
-          "distance_from_high": -19.74,
-          "distance_from_low": 253.3
+          "low_52w": 36.75597060283714,
+          "distance_from_high": -17.75,
+          "distance_from_low": 262.06
         }
       },
       "week_52_range": {
         "high": 161.8,
         "low": 36.76,
-        "current_position": 80.3
+        "current_position": 82.3
       }
     },
     {
@@ -1391,8 +1391,8 @@
       "name": "Analog Devices, Inc.",
       "sector": "Technology",
       "industry": "Semiconductors",
-      "market_cap": 150.65,
-      "price": 308.59,
+      "market_cap": 151.56,
+      "price": 310.44,
       "score": 72,
       "ml_probability": 0.5,
       "grades": {
@@ -1417,23 +1417,23 @@
         "earnings_growth": 116.7,
         "revenue_growth": 30.4,
         "eps_growth": 112.3,
-        "pct_from_high": -14.77,
-        "volume_ratio": 0.78,
-        "rs_rating": 82,
-        "inst_ownership": 93.47,
+        "pct_from_high": -14.26,
+        "volume_ratio": 0.79,
+        "rs_rating": 84,
+        "inst_ownership": 93.46,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 38.27,
-        "price_momentum": -10.35
+        "volatility": 38.21,
+        "price_momentum": -12.29
       },
       "ibd_ratings": {
         "composite": 79,
-        "rs": 82,
+        "rs": 84,
         "eps": 99,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 3.27,
-        "pe_ratio": 56.518314,
+        "atr_percent": 3.33,
+        "pe_ratio": 56.857143,
         "roe": 7.86,
         "sales_growth": 30.4
       },
@@ -1452,19 +1452,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 320.0371795654297,
-          "sma_150": 272.2484652709961,
-          "sma_200": 261.54518386840823,
+          "sma_50": 320.4054669189453,
+          "sma_150": 272.75056711832684,
+          "sma_200": 262.0363217163086,
           "high_52w": 362.0663306577603,
-          "low_52w": 156.26585095972027,
-          "distance_from_high": -14.77,
-          "distance_from_low": 97.48
+          "low_52w": 156.26586508839333,
+          "distance_from_high": -14.26,
+          "distance_from_low": 98.66
         }
       },
       "week_52_range": {
         "high": 362.07,
         "low": 156.27,
-        "current_position": 85.2
+        "current_position": 85.7
       }
     },
     {
@@ -1472,8 +1472,8 @@
       "name": "Bristol-Myers Squibb Company",
       "sector": "Healthcare",
       "industry": "Drug Manufacturers - General",
-      "market_cap": 120.91,
-      "price": 59.37,
+      "market_cap": 118.34,
+      "price": 58.11,
       "score": 72,
       "ml_probability": 0.5,
       "grades": {
@@ -1498,31 +1498,31 @@
         "earnings_growth": 1392.1,
         "revenue_growth": 1.3,
         "eps_growth": 1409.7,
-        "pct_from_high": -5.6,
-        "volume_ratio": 0.98,
-        "rs_rating": 79,
+        "pct_from_high": -7.6,
+        "volume_ratio": 0.72,
+        "rs_rating": 77,
         "inst_ownership": 83.11,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 28.56,
-        "price_momentum": -1.54
+        "volatility": 28.63,
+        "price_momentum": -4.2
       },
       "ibd_ratings": {
-        "composite": 79,
-        "rs": 79,
+        "composite": 78,
+        "rs": 77,
         "eps": 99,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.21,
-        "pe_ratio": 17.158958,
+        "atr_percent": 2.25,
+        "pe_ratio": 16.794798,
         "roe": 40.44,
         "sales_growth": 1.3
       },
       "trend_template": {
-        "all_pass": true,
-        "score": 8,
+        "all_pass": false,
+        "score": 7,
         "criteria": {
-          "Precio > SMA 50": true,
+          "Precio > SMA 50": false,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -1531,30 +1531,30 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 2 (Advancing)",
+        "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 58.444400024414065,
-          "sma_150": 50.77191650390625,
-          "sma_200": 49.535345191955564,
+          "sma_50": 58.518200073242184,
+          "sma_150": 50.848316777547204,
+          "sma_200": 49.59115907669067,
           "high_52w": 62.88999938964844,
           "low_52w": 41.88259901687058,
-          "distance_from_high": -5.6,
-          "distance_from_low": 41.75
+          "distance_from_high": -7.6,
+          "distance_from_low": 38.74
         }
       },
       "week_52_range": {
         "high": 62.89,
         "low": 41.88,
-        "current_position": 94.4
+        "current_position": 92.4
       }
     },
     {
-      "ticker": "EQT",
-      "name": "EQT Corporation",
-      "sector": "Energy",
-      "industry": "Oil & Gas E&P",
-      "market_cap": 39.65,
-      "price": 63.52,
+      "ticker": "CBOE",
+      "name": "Cboe Global Markets, Inc.",
+      "sector": "Financial Services",
+      "industry": "Financial Data & Stock Exchanges",
+      "market_cap": 29.77,
+      "price": 284.41,
       "score": 72,
       "ml_probability": 0.5,
       "grades": {
@@ -1576,28 +1576,28 @@
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 54.6,
-        "revenue_growth": 26.9,
-        "eps_growth": 61.8,
-        "pct_from_high": -3.29,
-        "volume_ratio": 0.72,
-        "rs_rating": 74,
-        "inst_ownership": 94.63,
+        "earnings_growth": 60.5,
+        "revenue_growth": 8.7,
+        "eps_growth": 59.5,
+        "pct_from_high": -6.96,
+        "volume_ratio": 0.54,
+        "rs_rating": 80,
+        "inst_ownership": 89.36,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 35.62,
-        "price_momentum": 6.27
+        "volatility": 21.81,
+        "price_momentum": -1.24
       },
       "ibd_ratings": {
-        "composite": 71,
-        "rs": 74,
-        "eps": 92,
+        "composite": 75,
+        "rs": 80,
+        "eps": 91,
         "smr": "B",
-        "acc_dis": "B",
-        "atr_percent": 3.12,
-        "pe_ratio": 19.190332,
-        "roe": 9.01,
-        "sales_growth": 26.9
+        "acc_dis": "C",
+        "atr_percent": 2.79,
+        "pe_ratio": 27.320847,
+        "roe": 23.36,
+        "sales_growth": 8.7
       },
       "trend_template": {
         "all_pass": true,
@@ -1614,35 +1614,35 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 57.45885383605957,
-          "sma_150": 55.36658398946126,
-          "sma_200": 55.27074720382691,
-          "high_52w": 65.68000030517578,
-          "low_52w": 43.05909267327092,
-          "distance_from_high": -3.29,
-          "distance_from_low": 47.52
+          "sma_50": 279.35139038085936,
+          "sma_150": 256.5741717529297,
+          "sma_200": 251.08788627624511,
+          "high_52w": 305.67999267578125,
+          "low_52w": 199.8296415200125,
+          "distance_from_high": -6.96,
+          "distance_from_low": 42.33
         }
       },
       "week_52_range": {
-        "high": 65.68,
-        "low": 43.06,
-        "current_position": 96.7
+        "high": 305.68,
+        "low": 199.83,
+        "current_position": 93.0
       }
     },
     {
-      "ticker": "AMGN",
-      "name": "Amgen Inc.",
-      "sector": "Healthcare",
-      "industry": "Drug Manufacturers - General",
-      "market_cap": 189.47,
-      "price": 351.48,
-      "score": 71,
+      "ticker": "REG",
+      "name": "Regency Centers Corporation",
+      "sector": "Real Estate",
+      "industry": "REIT - Retail",
+      "market_cap": 14.32,
+      "price": 76.69,
+      "score": 72,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
-        "N": "B",
-        "S": "B",
+        "N": "A",
+        "S": "C",
         "L": "B",
         "I": "A",
         "M": "C"
@@ -1650,64 +1650,64 @@
       "scores": {
         "C": 20,
         "A": 15,
-        "N": 8,
-        "S": 5,
+        "N": 12,
+        "S": 2,
         "L": 8,
         "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 112.1,
-        "revenue_growth": 8.6,
-        "eps_growth": 112.6,
-        "pct_from_high": -10.17,
-        "volume_ratio": 1.15,
-        "rs_rating": 76,
-        "inst_ownership": 85.26,
+        "earnings_growth": 141.9,
+        "revenue_growth": 8.9,
+        "eps_growth": 134.1,
+        "pct_from_high": -3.08,
+        "volume_ratio": 0.75,
+        "rs_rating": 72,
+        "inst_ownership": 104.01,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 29.15,
-        "price_momentum": -6.4
+        "volatility": 18.52,
+        "price_momentum": 0.77
       },
       "ibd_ratings": {
-        "composite": 83,
-        "rs": 76,
+        "composite": 69,
+        "rs": 72,
         "eps": 99,
-        "smr": "B",
+        "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 2.79,
-        "pe_ratio": 24.699932,
-        "roe": 106.1,
-        "sales_growth": 8.6
+        "atr_percent": 1.82,
+        "pe_ratio": 27.195038,
+        "roe": 7.68,
+        "sales_growth": 8.9
       },
       "trend_template": {
         "all_pass": false,
         "score": 7,
         "criteria": {
-          "Precio > SMA 50": false,
+          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
           "SMA 150 > SMA 200": true,
           "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
+          "Precio > 30% del minimo 52s": false,
           "Precio dentro 25% del maximo 52s": true
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 357.6194134521484,
-          "sma_150": 320.7568904622396,
-          "sma_200": 312.1858778381348,
-          "high_52w": 391.2900085449219,
-          "low_52w": 253.47777517133417,
-          "distance_from_high": -10.17,
-          "distance_from_low": 38.66
+          "sma_50": 74.21816452026367,
+          "sma_150": 70.82052424112956,
+          "sma_200": 70.31026248931884,
+          "high_52w": 79.12819825282982,
+          "low_52w": 60.92275706531922,
+          "distance_from_high": -3.08,
+          "distance_from_low": 25.88
         }
       },
       "week_52_range": {
-        "high": 391.29,
-        "low": 253.48,
-        "current_position": 89.8
+        "high": 79.13,
+        "low": 60.92,
+        "current_position": 96.9
       }
     },
     {
@@ -1715,16 +1715,16 @@
       "name": "Simon Property Group, Inc.",
       "sector": "Real Estate",
       "industry": "REIT - Retail",
-      "market_cap": 61.71,
-      "price": 189.9,
-      "score": 71,
+      "market_cap": 62.17,
+      "price": 191.31,
+      "score": 72,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
         "N": "A",
-        "S": "B",
-        "L": "C",
+        "S": "C",
+        "L": "B",
         "I": "A",
         "M": "C"
       },
@@ -1732,8 +1732,8 @@
         "C": 20,
         "A": 15,
         "N": 12,
-        "S": 5,
-        "L": 4,
+        "S": 2,
+        "L": 8,
         "I": 10,
         "M": 5
       },
@@ -1741,31 +1741,31 @@
         "earnings_growth": 358.1,
         "revenue_growth": 13.2,
         "eps_growth": 356.4,
-        "pct_from_high": -6.35,
-        "volume_ratio": 1.13,
-        "rs_rating": 70,
+        "pct_from_high": -5.66,
+        "volume_ratio": 0.61,
+        "rs_rating": 73,
         "inst_ownership": 93.11,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 24.75,
-        "price_momentum": -3.82
+        "volatility": 24.76,
+        "price_momentum": -4.06
       },
       "ibd_ratings": {
-        "composite": 82,
-        "rs": 70,
+        "composite": 83,
+        "rs": 73,
         "eps": 99,
         "smr": "A",
         "acc_dis": "C",
-        "atr_percent": 2.2,
-        "pe_ratio": 13.401552,
+        "atr_percent": 2.19,
+        "pe_ratio": 13.491537,
         "roe": 104.11,
         "sales_growth": 13.2
       },
       "trend_template": {
-        "all_pass": false,
-        "score": 7,
+        "all_pass": true,
+        "score": 8,
         "criteria": {
-          "Precio > SMA 50": false,
+          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -1774,21 +1774,183 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 1/2 Transition",
+        "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 190.46353637695313,
-          "sma_150": 181.35408213297526,
-          "sma_200": 175.21213340759277,
+          "sma_50": 190.60624603271484,
+          "sma_150": 181.51906494140624,
+          "sma_200": 175.39276428222655,
           "high_52w": 202.77979176729232,
           "low_52w": 129.8739399972678,
-          "distance_from_high": -6.35,
-          "distance_from_low": 46.22
+          "distance_from_high": -5.66,
+          "distance_from_low": 47.3
         }
       },
       "week_52_range": {
         "high": 202.78,
         "low": 129.87,
-        "current_position": 93.6
+        "current_position": 94.3
+      }
+    },
+    {
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "sector": "Technology",
+      "industry": "Semiconductor Equipment & Materials",
+      "market_cap": 293.9,
+      "price": 233.99,
+      "score": 71,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "C",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 12,
+        "S": 2,
+        "L": 15,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 37.0,
+        "revenue_growth": 22.1,
+        "eps_growth": 33.8,
+        "pct_from_high": -8.73,
+        "volume_ratio": 0.97,
+        "rs_rating": 98,
+        "inst_ownership": 88.8,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 52.46,
+        "price_momentum": -4.35
+      },
+      "ibd_ratings": {
+        "composite": 90,
+        "rs": 98,
+        "eps": 83,
+        "smr": "A",
+        "acc_dis": "C",
+        "atr_percent": 4.95,
+        "pe_ratio": 48.04723,
+        "roe": 65.56,
+        "sales_growth": 22.1
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 225.4250210571289,
+          "sma_150": 169.77423177083332,
+          "sma_200": 151.28875804901122,
+          "high_52w": 256.3728229508209,
+          "low_52w": 55.910342409564784,
+          "distance_from_high": -8.73,
+          "distance_from_low": 318.51
+        }
+      },
+      "week_52_range": {
+        "high": 256.37,
+        "low": 55.91,
+        "current_position": 91.3
+      }
+    },
+    {
+      "ticker": "NEE",
+      "name": "NextEra Energy, Inc.",
+      "sector": "Utilities",
+      "industry": "Utilities - Regulated Electric",
+      "market_cap": 192.54,
+      "price": 92.41,
+      "score": 71,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "C",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 15,
+        "S": 2,
+        "L": 12,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 26.0,
+        "revenue_growth": 20.7,
+        "eps_growth": 27.6,
+        "pct_from_high": -2.99,
+        "volume_ratio": 0.82,
+        "rs_rating": 83,
+        "inst_ownership": 84.65,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 25.79,
+        "price_momentum": 0.93
+      },
+      "ibd_ratings": {
+        "composite": 71,
+        "rs": 83,
+        "eps": 81,
+        "smr": "B",
+        "acc_dis": "B",
+        "atr_percent": 2.11,
+        "pe_ratio": 28.003033,
+        "roe": 8.37,
+        "sales_growth": 20.7
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 88.58189498901368,
+          "sma_150": 81.91834823608399,
+          "sma_200": 79.20116928100586,
+          "high_52w": 95.26045879634606,
+          "low_52w": 59.93746203541077,
+          "distance_from_high": -2.99,
+          "distance_from_low": 54.18
+        }
+      },
+      "week_52_range": {
+        "high": 95.26,
+        "low": 59.94,
+        "current_position": 97.0
       }
     },
     {
@@ -1796,8 +1958,8 @@
       "name": "CF Industries Holdings, Inc.",
       "sector": "Basic Materials",
       "industry": "Agricultural Inputs",
-      "market_cap": 19.77,
-      "price": 126.73,
+      "market_cap": 19.58,
+      "price": 125.56,
       "score": 70,
       "ml_probability": 0.5,
       "grades": {
@@ -1822,23 +1984,23 @@
         "earnings_growth": 37.1,
         "revenue_growth": 22.8,
         "eps_growth": 23.2,
-        "pct_from_high": -7.79,
-        "volume_ratio": 1.12,
+        "pct_from_high": -8.64,
+        "volume_ratio": 1.09,
         "rs_rating": 96,
-        "inst_ownership": 106.57,
+        "inst_ownership": 106.61,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 37.14,
-        "price_momentum": 27.42
+        "volatility": 37.15,
+        "price_momentum": 29.2
       },
       "ibd_ratings": {
         "composite": 77,
         "rs": 96,
         "eps": 68,
         "smr": "A",
-        "acc_dis": "A",
-        "atr_percent": 6.79,
-        "pe_ratio": 14.128205,
+        "acc_dis": "B",
+        "atr_percent": 7.05,
+        "pe_ratio": 14.013392,
         "roe": 23.4,
         "sales_growth": 22.8
       },
@@ -1857,35 +2019,35 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 97.70984252929688,
-          "sma_150": 87.75233393351238,
-          "sma_200": 88.74342697143555,
+          "sma_50": 98.64048034667968,
+          "sma_150": 88.02306477864583,
+          "sma_200": 88.91428211212158,
           "high_52w": 137.44000244140625,
-          "low_52w": 65.80983382931666,
-          "distance_from_high": -7.79,
-          "distance_from_low": 92.57
+          "low_52w": 65.80984883628003,
+          "distance_from_high": -8.64,
+          "distance_from_low": 90.79
         }
       },
       "week_52_range": {
         "high": 137.44,
         "low": 65.81,
-        "current_position": 92.2
+        "current_position": 91.4
       }
     },
     {
-      "ticker": "LRCX",
-      "name": "Lam Research Corporation",
-      "sector": "Technology",
-      "industry": "Semiconductor Equipment & Materials",
-      "market_cap": 282.24,
-      "price": 224.71,
-      "score": 70,
+      "ticker": "KMI",
+      "name": "Kinder Morgan, Inc.",
+      "sector": "Energy",
+      "industry": "Oil & Gas Midstream",
+      "market_cap": 74.4,
+      "price": 33.44,
+      "score": 69,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
-        "N": "B",
-        "S": "B",
+        "N": "A",
+        "S": "C",
         "L": "A",
         "I": "A",
         "M": "C"
@@ -1893,41 +2055,41 @@
       "scores": {
         "C": 15,
         "A": 12,
-        "N": 8,
-        "S": 5,
-        "L": 15,
-        "I": 10,
+        "N": 15,
+        "S": 2,
+        "L": 12,
+        "I": 8,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 37.0,
-        "revenue_growth": 22.1,
-        "eps_growth": 33.8,
-        "pct_from_high": -12.35,
-        "volume_ratio": 1.22,
-        "rs_rating": 98,
-        "inst_ownership": 88.81,
+        "earnings_growth": 49.3,
+        "revenue_growth": 13.1,
+        "eps_growth": 49.3,
+        "pct_from_high": -2.34,
+        "volume_ratio": 0.87,
+        "rs_rating": 86,
+        "inst_ownership": 69.73,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 52.34,
-        "price_momentum": -5.23
+        "volatility": 22.96,
+        "price_momentum": 2.17
       },
       "ibd_ratings": {
-        "composite": 90,
-        "rs": 98,
-        "eps": 83,
-        "smr": "A",
-        "acc_dis": "C",
-        "atr_percent": 4.75,
-        "pe_ratio": 46.04713,
-        "roe": 65.56,
-        "sales_growth": 22.1
+        "composite": 72,
+        "rs": 86,
+        "eps": 89,
+        "smr": "C",
+        "acc_dis": "B",
+        "atr_percent": 1.98,
+        "pe_ratio": 24.408758,
+        "roe": 9.83,
+        "sales_growth": 13.1
       },
       "trend_template": {
-        "all_pass": false,
-        "score": 7,
+        "all_pass": true,
+        "score": 8,
         "criteria": {
-          "Precio > SMA 50": false,
+          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -1936,102 +2098,21 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 1/2 Transition",
+        "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 224.8794677734375,
-          "sma_150": 168.92248057047527,
-          "sma_200": 150.52820880889894,
-          "high_52w": 256.3728229508209,
-          "low_52w": 55.910342409564784,
-          "distance_from_high": -12.35,
-          "distance_from_low": 301.91
+          "sma_50": 30.987755165100097,
+          "sma_150": 28.08712769826253,
+          "sma_200": 27.815754413604736,
+          "high_52w": 34.2400016784668,
+          "low_52w": 22.949629900679717,
+          "distance_from_high": -2.34,
+          "distance_from_low": 45.71
         }
       },
       "week_52_range": {
-        "high": 256.37,
-        "low": 55.91,
-        "current_position": 87.6
-      }
-    },
-    {
-      "ticker": "PPL",
-      "name": "PPL Corporation",
-      "sector": "Utilities",
-      "industry": "Utilities - Regulated Electric",
-      "market_cap": 28.59,
-      "price": 38.05,
-      "score": 70,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "B",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 15,
-        "A": 15,
-        "N": 15,
-        "S": 2,
-        "L": 8,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 49.9,
-        "revenue_growth": 2.8,
-        "eps_growth": 50.3,
-        "pct_from_high": -2.44,
-        "volume_ratio": 0.44,
-        "rs_rating": 71,
-        "inst_ownership": 87.78,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 17.73,
-        "price_momentum": 3.69
-      },
-      "ibd_ratings": {
-        "composite": 65,
-        "rs": 71,
-        "eps": 90,
-        "smr": "D",
-        "acc_dis": "C",
-        "atr_percent": 1.96,
-        "pe_ratio": 23.930817,
-        "roe": 8.16,
-        "sales_growth": 2.8
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 7,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": false,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 36.64083961486816,
-          "sma_150": 35.925643870035806,
-          "sma_200": 35.448697624206545,
-          "high_52w": 39.0,
-          "low_52w": 31.497631894889455,
-          "distance_from_high": -2.44,
-          "distance_from_low": 20.8
-        }
-      },
-      "week_52_range": {
-        "high": 39.0,
-        "low": 31.5,
-        "current_position": 97.6
+        "high": 34.24,
+        "low": 22.95,
+        "current_position": 97.7
       }
     },
     {
@@ -2039,8 +2120,8 @@
       "name": "Kroger Company (The)",
       "sector": "Consumer Defensive",
       "industry": "Grocery Stores",
-      "market_cap": 44.99,
-      "price": 73.28,
+      "market_cap": 45.29,
+      "price": 73.76,
       "score": 69,
       "ml_probability": 0.5,
       "grades": {
@@ -2065,14 +2146,14 @@
         "earnings_growth": 50.1,
         "revenue_growth": 1.2,
         "eps_growth": 35.8,
-        "pct_from_high": -4.31,
-        "volume_ratio": 0.6,
+        "pct_from_high": -3.68,
+        "volume_ratio": 0.72,
         "rs_rating": 77,
         "inst_ownership": 81.61,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 27.51,
-        "price_momentum": 8.35
+        "volatility": 27.49,
+        "price_momentum": 11.15
       },
       "ibd_ratings": {
         "composite": 67,
@@ -2080,8 +2161,8 @@
         "eps": 84,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 2.88,
-        "pe_ratio": 47.584415,
+        "atr_percent": 2.89,
+        "pe_ratio": 47.896107,
         "roe": 14.41,
         "sales_growth": 1.2
       },
@@ -2100,71 +2181,71 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 66.80310806274414,
-          "sma_150": 66.00976989746094,
-          "sma_200": 66.7952486038208,
+          "sma_50": 67.04966979980469,
+          "sma_150": 66.0397974395752,
+          "sma_200": 66.82825624465943,
           "high_52w": 76.58000183105469,
           "low_52w": 58.30758154343336,
-          "distance_from_high": -4.31,
-          "distance_from_low": 25.68
+          "distance_from_high": -3.68,
+          "distance_from_low": 26.5
         }
       },
       "week_52_range": {
         "high": 76.58,
         "low": 58.31,
-        "current_position": 95.7
+        "current_position": 96.3
       }
     },
     {
-      "ticker": "L",
-      "name": "Loews Corporation",
-      "sector": "Financial Services",
-      "industry": "Insurance - Property & Casualty",
-      "market_cap": 21.94,
-      "price": 106.16,
-      "score": 69,
+      "ticker": "AMGN",
+      "name": "Amgen Inc.",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "market_cap": 188.63,
+      "price": 349.92,
+      "score": 68,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
-        "N": "A",
-        "S": "B",
-        "L": "C",
+        "N": "B",
+        "S": "C",
+        "L": "B",
         "I": "A",
         "M": "C"
       },
       "scores": {
         "C": 20,
         "A": 15,
-        "N": 12,
-        "S": 5,
-        "L": 4,
-        "I": 8,
+        "N": 8,
+        "S": 2,
+        "L": 8,
+        "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 126.0,
-        "revenue_growth": 4.1,
-        "eps_growth": 115.0,
-        "pct_from_high": -7.55,
-        "volume_ratio": 1.01,
-        "rs_rating": 64,
-        "inst_ownership": 60.43,
+        "earnings_growth": 112.1,
+        "revenue_growth": 8.6,
+        "eps_growth": 112.6,
+        "pct_from_high": -10.57,
+        "volume_ratio": 0.81,
+        "rs_rating": 75,
+        "inst_ownership": 85.27,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 18.64,
-        "price_momentum": -1.96
+        "volatility": 29.15,
+        "price_momentum": -6.63
       },
       "ibd_ratings": {
-        "composite": 67,
-        "rs": 64,
+        "composite": 82,
+        "rs": 75,
         "eps": 99,
-        "smr": "D",
+        "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.04,
-        "pe_ratio": 13.319951,
-        "roe": 9.43,
-        "sales_growth": 4.1
+        "atr_percent": 2.74,
+        "pe_ratio": 24.573034,
+        "roe": 106.1,
+        "sales_growth": 8.6
       },
       "trend_template": {
         "all_pass": false,
@@ -2181,19 +2262,100 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 107.25055023193359,
-          "sma_150": 103.10811884562175,
-          "sma_200": 99.98214626312256,
-          "high_52w": 114.83379280086623,
-          "low_52w": 78.78086263013864,
-          "distance_from_high": -7.55,
-          "distance_from_low": 34.75
+          "sma_50": 358.05985473632813,
+          "sma_150": 321.202968343099,
+          "sma_200": 312.52464111328123,
+          "high_52w": 391.2900085449219,
+          "low_52w": 253.47774475265845,
+          "distance_from_high": -10.57,
+          "distance_from_low": 38.05
         }
       },
       "week_52_range": {
-        "high": 114.83,
-        "low": 78.78,
-        "current_position": 92.4
+        "high": 391.29,
+        "low": 253.48,
+        "current_position": 89.4
+      }
+    },
+    {
+      "ticker": "CTRA",
+      "name": "Coterra Energy Inc.",
+      "sector": "Energy",
+      "industry": "Oil & Gas E&P",
+      "market_cap": 25.74,
+      "price": 33.9,
+      "score": 68,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "B",
+        "A": "B",
+        "N": "A",
+        "S": "A",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 10,
+        "A": 8,
+        "N": 15,
+        "S": 8,
+        "L": 12,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 20.6,
+        "revenue_growth": 23.4,
+        "eps_growth": 23.9,
+        "pct_from_high": -2.22,
+        "volume_ratio": 1.52,
+        "rs_rating": 90,
+        "inst_ownership": 96.54,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 30.99,
+        "price_momentum": 9.17
+      },
+      "ibd_ratings": {
+        "composite": 69,
+        "rs": 90,
+        "eps": 68,
+        "smr": "B",
+        "acc_dis": "A",
+        "atr_percent": 2.95,
+        "pe_ratio": 15.133929,
+        "roe": 12.28,
+        "sales_growth": 23.4
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 29.320198783874513,
+          "sma_150": 26.097461026509603,
+          "sma_200": 25.66448606491089,
+          "high_52w": 34.66999816894531,
+          "low_52w": 21.715994764695044,
+          "distance_from_high": -2.22,
+          "distance_from_low": 56.11
+        }
+      },
+      "week_52_range": {
+        "high": 34.67,
+        "low": 21.72,
+        "current_position": 97.8
       }
     },
     {
@@ -2201,8 +2363,8 @@
       "name": "Dominion Energy, Inc.",
       "sector": "Utilities",
       "industry": "Utilities - Regulated Electric",
-      "market_cap": 54.66,
-      "price": 62.2,
+      "market_cap": 53.62,
+      "price": 61.02,
       "score": 68,
       "ml_probability": 0.5,
       "grades": {
@@ -2227,31 +2389,31 @@
         "earnings_growth": 365.5,
         "revenue_growth": 20.4,
         "eps_growth": 323.1,
-        "pct_from_high": -6.97,
-        "volume_ratio": 0.59,
-        "rs_rating": 66,
-        "inst_ownership": 83.98,
+        "pct_from_high": -8.73,
+        "volume_ratio": 0.89,
+        "rs_rating": 63,
+        "inst_ownership": 83.97,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 20.54,
-        "price_momentum": -3.97
+        "volatility": 20.63,
+        "price_momentum": -6.5
       },
       "ibd_ratings": {
-        "composite": 70,
-        "rs": 66,
+        "composite": 69,
+        "rs": 63,
         "eps": 99,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 1.81,
-        "pe_ratio": 17.925072,
+        "atr_percent": 2.02,
+        "pe_ratio": 17.585014,
         "roe": 9.74,
         "sales_growth": 20.4
       },
       "trend_template": {
-        "all_pass": true,
-        "score": 8,
+        "all_pass": false,
+        "score": 7,
         "criteria": {
-          "Precio > SMA 50": true,
+          "Precio > SMA 50": false,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -2260,21 +2422,21 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 2 (Advancing)",
+        "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 61.5973705291748,
-          "sma_150": 59.8074324798584,
-          "sma_200": 58.73820928573608,
+          "sma_50": 61.65575408935547,
+          "sma_150": 59.813773244222006,
+          "sma_200": 58.76874326705933,
           "high_52w": 66.85750096621835,
-          "low_52w": 45.94192414681102,
-          "distance_from_high": -6.97,
-          "distance_from_low": 35.39
+          "low_52w": 45.94192765633248,
+          "distance_from_high": -8.73,
+          "distance_from_low": 32.82
         }
       },
       "week_52_range": {
         "high": 66.86,
         "low": 45.94,
-        "current_position": 93.0
+        "current_position": 91.3
       }
     },
     {
@@ -2282,8 +2444,8 @@
       "name": "Federal Realty Investment Trust",
       "sector": "Real Estate",
       "industry": "REIT - Retail",
-      "market_cap": 9.16,
-      "price": 105.55,
+      "market_cap": 9.23,
+      "price": 106.29,
       "score": 68,
       "ml_probability": 0.5,
       "grades": {
@@ -2308,23 +2470,23 @@
         "earnings_growth": 98.7,
         "revenue_growth": 7.5,
         "eps_growth": 98.0,
-        "pct_from_high": -4.82,
-        "volume_ratio": 0.63,
-        "rs_rating": 64,
+        "pct_from_high": -4.15,
+        "volume_ratio": 0.8,
+        "rs_rating": 65,
         "inst_ownership": 99.89,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 22.01,
-        "price_momentum": -0.3
+        "volatility": 22.02,
+        "price_momentum": -1.08
       },
       "ibd_ratings": {
         "composite": 68,
-        "rs": 64,
+        "rs": 65,
         "eps": 99,
         "smr": "C",
         "acc_dis": "B",
-        "atr_percent": 2.03,
-        "pe_ratio": 22.553421,
+        "atr_percent": 1.96,
+        "pe_ratio": 22.71154,
         "roe": 12.23,
         "sales_growth": 7.5
       },
@@ -2343,19 +2505,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 104.79839965820312,
-          "sma_150": 99.77388346354167,
-          "sma_200": 97.83289344787597,
+          "sma_50": 104.90579971313477,
+          "sma_150": 99.86597264607748,
+          "sma_200": 97.90315914154053,
           "high_52w": 110.88999938964844,
           "low_52w": 77.9432403646253,
-          "distance_from_high": -4.82,
-          "distance_from_low": 35.42
+          "distance_from_high": -4.15,
+          "distance_from_low": 36.37
         }
       },
       "week_52_range": {
         "high": 110.89,
         "low": 77.94,
-        "current_position": 95.2
+        "current_position": 95.9
       }
     },
     {
@@ -2363,8 +2525,8 @@
       "name": "Johnson Controls International ",
       "sector": "Industrials",
       "industry": "Building Products & Equipment",
-      "market_cap": 81.87,
-      "price": 133.76,
+      "market_cap": 81.56,
+      "price": 133.25,
       "score": 68,
       "ml_probability": 0.5,
       "grades": {
@@ -2389,23 +2551,23 @@
         "earnings_growth": 34.2,
         "revenue_growth": 6.8,
         "eps_growth": 25.1,
-        "pct_from_high": -8.41,
-        "volume_ratio": 0.49,
-        "rs_rating": 82,
+        "pct_from_high": -8.76,
+        "volume_ratio": 0.83,
+        "rs_rating": 81,
         "inst_ownership": 95.02,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 29.25,
-        "price_momentum": -5.98
+        "price_momentum": -7.04
       },
       "ibd_ratings": {
         "composite": 71,
-        "rs": 82,
+        "rs": 81,
         "eps": 80,
         "smr": "C",
         "acc_dis": "B",
-        "atr_percent": 2.99,
-        "pe_ratio": 44.885902,
+        "atr_percent": 3.03,
+        "pe_ratio": 44.714764,
         "roe": 12.64,
         "sales_growth": 6.8
       },
@@ -2424,262 +2586,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 128.5279345703125,
-          "sma_150": 117.47491495768229,
-          "sma_200": 114.32776390075684,
+          "sma_50": 128.92093841552733,
+          "sma_150": 117.66028198242188,
+          "sma_200": 114.49541725158691,
           "high_52w": 146.03981308185237,
           "low_52w": 67.57551266631971,
-          "distance_from_high": -8.41,
-          "distance_from_low": 97.94
+          "distance_from_high": -8.76,
+          "distance_from_low": 97.19
         }
       },
       "week_52_range": {
         "high": 146.04,
         "low": 67.58,
-        "current_position": 91.6
-      }
-    },
-    {
-      "ticker": "MCK",
-      "name": "McKesson Corporation",
-      "sector": "Healthcare",
-      "industry": "Medical Distribution",
-      "market_cap": 113.6,
-      "price": 920.35,
-      "score": 68,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 12,
-        "S": 2,
-        "L": 12,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 38.0,
-        "revenue_growth": 11.4,
-        "eps_growth": 34.9,
-        "pct_from_high": -7.87,
-        "volume_ratio": 0.81,
-        "rs_rating": 81,
-        "inst_ownership": 91.48,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 28.94,
-        "price_momentum": -1.71
-      },
-      "ibd_ratings": {
-        "composite": 67,
-        "rs": 81,
-        "eps": 83,
-        "smr": "D",
-        "acc_dis": "C",
-        "atr_percent": 2.63,
-        "pe_ratio": 26.592024,
-        "roe": 0.0,
-        "sales_growth": 11.4
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 897.8977600097656,
-          "sma_150": 816.7886405436197,
-          "sma_200": 790.0235717773437,
-          "high_52w": 999.0,
-          "low_52w": 635.1193042283106,
-          "distance_from_high": -7.87,
-          "distance_from_low": 44.91
-        }
-      },
-      "week_52_range": {
-        "high": 999.0,
-        "low": 635.12,
-        "current_position": 92.1
-      }
-    },
-    {
-      "ticker": "REG",
-      "name": "Regency Centers Corporation",
-      "sector": "Real Estate",
-      "industry": "REIT - Retail",
-      "market_cap": 14.27,
-      "price": 76.4,
-      "score": 68,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "C",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 12,
-        "S": 2,
-        "L": 4,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 141.9,
-        "revenue_growth": 8.9,
-        "eps_growth": 134.1,
-        "pct_from_high": -3.45,
-        "volume_ratio": 0.92,
-        "rs_rating": 70,
-        "inst_ownership": 104.01,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 18.52,
-        "price_momentum": 1.76
-      },
-      "ibd_ratings": {
-        "composite": 68,
-        "rs": 70,
-        "eps": 99,
-        "smr": "C",
-        "acc_dis": "C",
-        "atr_percent": 1.85,
-        "pe_ratio": 27.0922,
-        "roe": 7.68,
-        "sales_growth": 8.9
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 7,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": false,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 74.06331436157227,
-          "sma_150": 70.7748567199707,
-          "sma_200": 70.27228790283203,
-          "high_52w": 79.12819825282982,
-          "low_52w": 60.92276401347818,
-          "distance_from_high": -3.45,
-          "distance_from_low": 25.4
-        }
-      },
-      "week_52_range": {
-        "high": 79.13,
-        "low": 60.92,
-        "current_position": 96.6
-      }
-    },
-    {
-      "ticker": "APH",
-      "name": "Amphenol Corporation",
-      "sector": "Technology",
-      "industry": "Electronic Components",
-      "market_cap": 157.11,
-      "price": 127.81,
-      "score": 67,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "C",
-        "S": "B",
-        "L": "B",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 4,
-        "S": 5,
-        "L": 8,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 57.6,
-        "revenue_growth": 49.1,
-        "eps_growth": 60.2,
-        "pct_from_high": -23.49,
-        "volume_ratio": 1.31,
-        "rs_rating": 76,
-        "inst_ownership": 97.92,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 40.46,
-        "price_momentum": -15.47
-      },
-      "ibd_ratings": {
-        "composite": 86,
-        "rs": 76,
-        "eps": 92,
-        "smr": "A",
-        "acc_dis": "C",
-        "atr_percent": 5.35,
-        "pe_ratio": 38.266468,
-        "roe": 36.85,
-        "sales_growth": 49.1
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 6,
-        "criteria": {
-          "Precio > SMA 50": false,
-          "Precio > SMA 150": false,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 143.3952000427246,
-          "sma_150": 132.70256408691407,
-          "sma_200": 124.34929458618164,
-          "high_52w": 167.0399932861328,
-          "low_52w": 56.16397736477,
-          "distance_from_high": -23.49,
-          "distance_from_low": 127.57
-        }
-      },
-      "week_52_range": {
-        "high": 167.04,
-        "low": 56.16,
-        "current_position": 76.5
+        "current_position": 91.2
       }
     },
     {
@@ -2687,8 +2606,8 @@
       "name": "KLA Corporation",
       "sector": "Technology",
       "industry": "Semiconductor Equipment & Materials",
-      "market_cap": 194.77,
-      "price": 1482.36,
+      "market_cap": 198.6,
+      "price": 1511.52,
       "score": 67,
       "ml_probability": 0.5,
       "grades": {
@@ -2713,23 +2632,23 @@
         "earnings_growth": 40.9,
         "revenue_growth": 7.2,
         "eps_growth": 39.0,
-        "pct_from_high": -12.35,
-        "volume_ratio": 0.92,
-        "rs_rating": 94,
-        "inst_ownership": 93.86,
+        "pct_from_high": -10.62,
+        "volume_ratio": 0.99,
+        "rs_rating": 93,
+        "inst_ownership": 93.85,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 48.68,
-        "price_momentum": 0.85
+        "volatility": 48.71,
+        "price_momentum": 1.04
       },
       "ibd_ratings": {
         "composite": 87,
-        "rs": 94,
+        "rs": 93,
         "eps": 85,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 4.53,
-        "pe_ratio": 43.104393,
+        "atr_percent": 4.68,
+        "pe_ratio": 44.054794,
         "roe": 100.73,
         "sales_growth": 7.2
       },
@@ -2748,19 +2667,19 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 1463.676953125,
-          "sma_150": 1219.2189986165365,
-          "sma_200": 1135.7245553588866,
+          "sma_50": 1466.0435595703125,
+          "sma_150": 1222.9984403483072,
+          "sma_200": 1139.4895327758788,
           "high_52w": 1691.152483982144,
-          "low_52w": 547.1813342554277,
-          "distance_from_high": -12.35,
-          "distance_from_low": 170.91
+          "low_52w": 547.1812785997862,
+          "distance_from_high": -10.62,
+          "distance_from_low": 176.24
         }
       },
       "week_52_range": {
         "high": 1691.15,
         "low": 547.18,
-        "current_position": 87.7
+        "current_position": 89.4
       }
     },
     {
@@ -2768,8 +2687,8 @@
       "name": "Advanced Micro Devices, Inc.",
       "sector": "Technology",
       "industry": "Semiconductors",
-      "market_cap": 325.2,
-      "price": 199.46,
+      "market_cap": 334.67,
+      "price": 205.27,
       "score": 66,
       "ml_probability": 0.5,
       "grades": {
@@ -2794,29 +2713,29 @@
         "earnings_growth": 217.1,
         "revenue_growth": 34.1,
         "eps_growth": 213.5,
-        "pct_from_high": -25.32,
-        "volume_ratio": 0.81,
-        "rs_rating": 83,
+        "pct_from_high": -23.14,
+        "volume_ratio": 0.92,
+        "rs_rating": 85,
         "inst_ownership": 72.3,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 64.51,
-        "price_momentum": -1.92
+        "volatility": 64.56,
+        "price_momentum": 2.56
       },
       "ibd_ratings": {
-        "composite": 79,
-        "rs": 83,
+        "composite": 80,
+        "rs": 85,
         "eps": 99,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 4.11,
-        "pe_ratio": 76.42146,
+        "atr_percent": 4.24,
+        "pe_ratio": 78.647514,
         "roe": 7.08,
         "sales_growth": 34.1
       },
       "trend_template": {
         "all_pass": false,
-        "score": 5,
+        "score": 6,
         "criteria": {
           "Precio > SMA 50": false,
           "Precio > SMA 150": false,
@@ -2825,23 +2744,23 @@
           "SMA 150 > SMA 200": true,
           "SMA 200 Tendencia Alcista": true,
           "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": false
+          "Precio dentro 25% del maximo 52s": true
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 214.7983999633789,
-          "sma_150": 207.39453318277995,
-          "sma_200": 192.09664981842042,
+          "sma_50": 214.6167999267578,
+          "sma_150": 207.53353322347004,
+          "sma_200": 192.54984985351564,
           "high_52w": 267.0799865722656,
           "low_52w": 76.4800033569336,
-          "distance_from_high": -25.32,
-          "distance_from_low": 160.8
+          "distance_from_high": -23.14,
+          "distance_from_low": 168.4
         }
       },
       "week_52_range": {
         "high": 267.08,
         "low": 76.48,
-        "current_position": 74.7
+        "current_position": 76.9
       }
     },
     {
@@ -2849,8 +2768,8 @@
       "name": "Johnson & Johnson",
       "sector": "Healthcare",
       "industry": "Drug Manufacturers - General",
-      "market_cap": 571.82,
-      "price": 237.28,
+      "market_cap": 572.59,
+      "price": 237.6,
       "score": 66,
       "ml_probability": 0.5,
       "grades": {
@@ -2875,14 +2794,14 @@
         "earnings_growth": 48.6,
         "revenue_growth": 9.1,
         "eps_growth": 49.1,
-        "pct_from_high": -5.73,
-        "volume_ratio": 0.81,
+        "pct_from_high": -5.61,
+        "volume_ratio": 0.6,
         "rs_rating": 88,
         "inst_ownership": 75.75,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 19.15,
-        "price_momentum": -3.39
+        "price_momentum": -1.5
       },
       "ibd_ratings": {
         "composite": 82,
@@ -2890,8 +2809,8 @@
         "eps": 89,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.01,
-        "pe_ratio": 21.51224,
+        "atr_percent": 1.9,
+        "pe_ratio": 21.560799,
         "roe": 35.03,
         "sales_growth": 9.1
       },
@@ -2910,109 +2829,28 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 232.1364239501953,
-          "sma_150": 203.4157139078776,
-          "sma_200": 191.82644721984863,
+          "sma_50": 232.81428283691406,
+          "sma_150": 203.85873524983725,
+          "sma_200": 192.25202842712403,
           "high_52w": 251.7100067138672,
           "low_52w": 137.6644001851633,
-          "distance_from_high": -5.73,
-          "distance_from_low": 72.36
+          "distance_from_high": -5.61,
+          "distance_from_low": 72.59
         }
       },
       "week_52_range": {
         "high": 251.71,
         "low": 137.66,
-        "current_position": 94.3
+        "current_position": 94.4
       }
     },
     {
-      "ticker": "KMI",
-      "name": "Kinder Morgan, Inc.",
-      "sector": "Energy",
-      "industry": "Oil & Gas Midstream",
-      "market_cap": 72.55,
-      "price": 32.61,
-      "score": 66,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 12,
-        "S": 2,
-        "L": 12,
-        "I": 8,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 49.3,
-        "revenue_growth": 13.1,
-        "eps_growth": 49.3,
-        "pct_from_high": -4.76,
-        "volume_ratio": 0.75,
-        "rs_rating": 85,
-        "inst_ownership": 69.73,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 22.84,
-        "price_momentum": 0.22
-      },
-      "ibd_ratings": {
-        "composite": 72,
-        "rs": 85,
-        "eps": 89,
-        "smr": "C",
-        "acc_dis": "B",
-        "atr_percent": 1.86,
-        "pe_ratio": 23.80292,
-        "roe": 9.83,
-        "sales_growth": 13.1
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 30.850200538635253,
-          "sma_150": 28.03962153116862,
-          "sma_200": 27.787373094558717,
-          "high_52w": 34.2400016784668,
-          "low_52w": 22.949631700519127,
-          "distance_from_high": -4.76,
-          "distance_from_low": 42.09
-        }
-      },
-      "week_52_range": {
-        "high": 34.24,
-        "low": 22.95,
-        "current_position": 95.2
-      }
-    },
-    {
-      "ticker": "PEP",
-      "name": "Pepsico, Inc.",
-      "sector": "Consumer Defensive",
-      "industry": "Beverages - Non-Alcoholic",
-      "market_cap": 209.94,
-      "price": 153.54,
+      "ticker": "L",
+      "name": "Loews Corporation",
+      "sector": "Financial Services",
+      "industry": "Insurance - Property & Casualty",
+      "market_cap": 21.83,
+      "price": 105.65,
       "score": 66,
       "ml_probability": 0.5,
       "grades": {
@@ -3034,115 +2872,34 @@
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 67.5,
-        "revenue_growth": 5.6,
-        "eps_growth": 66.8,
-        "pct_from_high": -9.66,
-        "volume_ratio": 0.75,
-        "rs_rating": 66,
-        "inst_ownership": 79.93,
+        "earnings_growth": 126.0,
+        "revenue_growth": 4.1,
+        "eps_growth": 115.0,
+        "pct_from_high": -8.0,
+        "volume_ratio": 0.74,
+        "rs_rating": 62,
+        "inst_ownership": 60.43,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 22.41,
-        "price_momentum": -5.88
+        "volatility": 18.65,
+        "price_momentum": -3.7
       },
       "ibd_ratings": {
-        "composite": 75,
-        "rs": 66,
-        "eps": 93,
-        "smr": "B",
-        "acc_dis": "B",
-        "atr_percent": 2.08,
-        "pe_ratio": 25.589998,
-        "roe": 42.85,
-        "sales_growth": 5.6
+        "composite": 66,
+        "rs": 62,
+        "eps": 99,
+        "smr": "D",
+        "acc_dis": "C",
+        "atr_percent": 2.07,
+        "pe_ratio": 13.25596,
+        "roe": 9.43,
+        "sales_growth": 4.1
       },
       "trend_template": {
         "all_pass": false,
-        "score": 6,
+        "score": 7,
         "criteria": {
           "Precio > SMA 50": false,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": false,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 155.88493591308594,
-          "sma_150": 147.6747299194336,
-          "sma_200": 143.83673614501953,
-          "high_52w": 169.96153592478052,
-          "low_52w": 122.8298074270925,
-          "distance_from_high": -9.66,
-          "distance_from_low": 25.0
-        }
-      },
-      "week_52_range": {
-        "high": 169.96,
-        "low": 122.83,
-        "current_position": 90.3
-      }
-    },
-    {
-      "ticker": "CTRA",
-      "name": "Coterra Energy Inc.",
-      "sector": "Energy",
-      "industry": "Oil & Gas E&P",
-      "market_cap": 25.41,
-      "price": 33.47,
-      "score": 65,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "B",
-        "A": "B",
-        "N": "A",
-        "S": "B",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 10,
-        "A": 8,
-        "N": 15,
-        "S": 5,
-        "L": 12,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 20.6,
-        "revenue_growth": 23.4,
-        "eps_growth": 23.9,
-        "pct_from_high": -0.06,
-        "volume_ratio": 1.21,
-        "rs_rating": 89,
-        "inst_ownership": 96.54,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 30.98,
-        "price_momentum": 6.32
-      },
-      "ibd_ratings": {
-        "composite": 69,
-        "rs": 89,
-        "eps": 68,
-        "smr": "B",
-        "acc_dis": "A",
-        "atr_percent": 2.9,
-        "pe_ratio": 14.941965,
-        "roe": 12.28,
-        "sales_growth": 23.4
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -3151,21 +2908,21 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 2 (Advancing)",
+        "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 29.13997138977051,
-          "sma_150": 26.02896614074707,
-          "sma_200": 25.617309398651123,
-          "high_52w": 33.4900016784668,
-          "low_52w": 21.715994764695044,
-          "distance_from_high": -0.06,
-          "distance_from_low": 54.13
+          "sma_50": 107.26096237182617,
+          "sma_150": 103.17753997802734,
+          "sma_200": 100.06285972595215,
+          "high_52w": 114.83379280086623,
+          "low_52w": 78.7808700793859,
+          "distance_from_high": -8.0,
+          "distance_from_low": 34.11
         }
       },
       "week_52_range": {
-        "high": 33.49,
-        "low": 21.72,
-        "current_position": 99.9
+        "high": 114.83,
+        "low": 78.78,
+        "current_position": 92.0
       }
     },
     {
@@ -3173,8 +2930,8 @@
       "name": "Allstate Corporation (The)",
       "sector": "Financial Services",
       "industry": "Insurance - Property & Casualty",
-      "market_cap": 53.04,
-      "price": 204.38,
+      "market_cap": 52.96,
+      "price": 204.07,
       "score": 64,
       "ml_probability": 0.5,
       "grades": {
@@ -3199,23 +2956,23 @@
         "earnings_growth": 103.2,
         "revenue_growth": 5.1,
         "eps_growth": 98.8,
-        "pct_from_high": -5.23,
-        "volume_ratio": 0.96,
-        "rs_rating": 46,
+        "pct_from_high": -5.37,
+        "volume_ratio": 0.75,
+        "rs_rating": 45,
         "inst_ownership": 82.68,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 25.69,
-        "price_momentum": 1.08
+        "volatility": 25.56,
+        "price_momentum": -0.61
       },
       "ibd_ratings": {
-        "composite": 69,
-        "rs": 46,
+        "composite": 68,
+        "rs": 45,
         "eps": 99,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.2,
-        "pe_ratio": 5.369942,
+        "atr_percent": 2.18,
+        "pe_ratio": 5.3617973,
         "roe": 39.52,
         "sales_growth": 5.1
       },
@@ -3234,19 +2991,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 204.0893634033203,
-          "sma_150": 203.3795420328776,
-          "sma_200": 201.48102935791016,
+          "sma_50": 204.0332989501953,
+          "sma_150": 203.3682187906901,
+          "sma_200": 201.45870208740234,
           "high_52w": 215.6587721691717,
           "low_52w": 172.60276012250307,
-          "distance_from_high": -5.23,
-          "distance_from_low": 18.41
+          "distance_from_high": -5.37,
+          "distance_from_low": 18.23
         }
       },
       "week_52_range": {
         "high": 215.66,
         "low": 172.6,
-        "current_position": 94.8
+        "current_position": 94.6
       }
     },
     {
@@ -3254,8 +3011,8 @@
       "name": "Alphabet Inc.",
       "sector": "Communication Services",
       "industry": "Internet Content & Information",
-      "market_cap": 3722.13,
-      "price": 307.69,
+      "market_cap": 3715.35,
+      "price": 307.13,
       "score": 64,
       "ml_probability": 0.5,
       "grades": {
@@ -3280,23 +3037,23 @@
         "earnings_growth": 31.1,
         "revenue_growth": 18.0,
         "eps_growth": 29.8,
-        "pct_from_high": -11.77,
-        "volume_ratio": 0.66,
-        "rs_rating": 89,
+        "pct_from_high": -11.94,
+        "volume_ratio": 0.83,
+        "rs_rating": 88,
         "inst_ownership": 80.85,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 30.4,
-        "price_momentum": 1.67
+        "volatility": 30.39,
+        "price_momentum": -2.42
       },
       "ibd_ratings": {
         "composite": 82,
-        "rs": 89,
+        "rs": 88,
         "eps": 81,
         "smr": "A",
         "acc_dis": "D",
-        "atr_percent": 2.26,
-        "pe_ratio": 28.489815,
+        "atr_percent": 2.2,
+        "pe_ratio": 28.411655,
         "roe": 35.71,
         "sales_growth": 18.0
       },
@@ -3315,19 +3072,100 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 318.35381591796875,
-          "sma_150": 283.73660939534506,
-          "sma_200": 258.17971145629883,
+          "sma_50": 318.21403869628904,
+          "sma_150": 284.4407702636719,
+          "sma_200": 258.8731314849854,
           "high_52w": 348.7544814019383,
-          "low_52w": 140.04439668677543,
-          "distance_from_high": -11.77,
-          "distance_from_low": 119.71
+          "low_52w": 140.04441129882048,
+          "distance_from_high": -11.94,
+          "distance_from_low": 119.31
         }
       },
       "week_52_range": {
         "high": 348.75,
         "low": 140.04,
-        "current_position": 88.2
+        "current_position": 88.1
+      }
+    },
+    {
+      "ticker": "APH",
+      "name": "Amphenol Corporation",
+      "sector": "Technology",
+      "industry": "Electronic Components",
+      "market_cap": 160.6,
+      "price": 130.65,
+      "score": 64,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "C",
+        "S": "C",
+        "L": "B",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 4,
+        "S": 2,
+        "L": 8,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 57.6,
+        "revenue_growth": 49.1,
+        "eps_growth": 60.2,
+        "pct_from_high": -21.79,
+        "volume_ratio": 0.62,
+        "rs_rating": 78,
+        "inst_ownership": 97.93,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 40.46,
+        "price_momentum": -13.5
+      },
+      "ibd_ratings": {
+        "composite": 87,
+        "rs": 78,
+        "eps": 92,
+        "smr": "A",
+        "acc_dis": "C",
+        "atr_percent": 5.32,
+        "pe_ratio": 39.116764,
+        "roe": 36.85,
+        "sales_growth": 49.1
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 6,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": false,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 143.18059982299803,
+          "sma_150": 132.84378428141275,
+          "sma_200": 124.55303344726562,
+          "high_52w": 167.0399932861328,
+          "low_52w": 56.16398090072497,
+          "distance_from_high": -21.79,
+          "distance_from_low": 132.62
+        }
+      },
+      "week_52_range": {
+        "high": 167.04,
+        "low": 56.16,
+        "current_position": 78.2
       }
     },
     {
@@ -3335,8 +3173,8 @@
       "name": "CME Group Inc.",
       "sector": "Financial Services",
       "industry": "Financial Data & Stock Exchanges",
-      "market_cap": 111.05,
-      "price": 308.9,
+      "market_cap": 111.7,
+      "price": 310.71,
       "score": 64,
       "ml_probability": 0.5,
       "grades": {
@@ -3361,23 +3199,23 @@
         "earnings_growth": 35.0,
         "revenue_growth": 8.0,
         "eps_growth": 35.3,
-        "pct_from_high": -3.91,
-        "volume_ratio": 0.62,
-        "rs_rating": 79,
-        "inst_ownership": 92.57,
+        "pct_from_high": -3.35,
+        "volume_ratio": 0.79,
+        "rs_rating": 78,
+        "inst_ownership": 92.58,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 19.19,
-        "price_momentum": 4.07
+        "price_momentum": 3.26
       },
       "ibd_ratings": {
         "composite": 69,
-        "rs": 79,
+        "rs": 78,
         "eps": 84,
         "smr": "C",
-        "acc_dis": "B",
+        "acc_dis": "A",
         "atr_percent": 2.0,
-        "pe_ratio": 27.704037,
+        "pe_ratio": 27.866367,
         "roe": 14.75,
         "sales_growth": 8.0
       },
@@ -3396,19 +3234,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 291.4445037841797,
-          "sma_150": 272.16941446940103,
-          "sma_200": 270.8978668212891,
+          "sma_50": 292.40138366699216,
+          "sma_150": 272.47395263671876,
+          "sma_200": 271.0514559936523,
           "high_52w": 321.47490946799377,
           "low_52w": 239.36739105088668,
-          "distance_from_high": -3.91,
-          "distance_from_low": 29.05
+          "distance_from_high": -3.35,
+          "distance_from_low": 29.8
         }
       },
       "week_52_range": {
         "high": 321.47,
         "low": 239.37,
-        "current_position": 96.1
+        "current_position": 96.7
       }
     },
     {
@@ -3416,8 +3254,8 @@
       "name": "Cummins Inc.",
       "sector": "Industrials",
       "industry": "Specialty Industrial Machinery",
-      "market_cap": 75.06,
-      "price": 543.29,
+      "market_cap": 74.64,
+      "price": 540.24,
       "score": 64,
       "ml_probability": 0.5,
       "grades": {
@@ -3442,23 +3280,23 @@
         "earnings_growth": 41.4,
         "revenue_growth": 1.1,
         "eps_growth": 41.9,
-        "pct_from_high": -11.79,
-        "volume_ratio": 0.7,
-        "rs_rating": 90,
+        "pct_from_high": -12.29,
+        "volume_ratio": 0.76,
+        "rs_rating": 89,
         "inst_ownership": 87.37,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 33.56,
-        "price_momentum": -8.68
+        "price_momentum": -8.94
       },
       "ibd_ratings": {
-        "composite": 78,
-        "rs": 90,
+        "composite": 77,
+        "rs": 89,
         "eps": 86,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 3.41,
-        "pe_ratio": 26.527832,
+        "atr_percent": 3.45,
+        "pe_ratio": 26.378906,
         "roe": 23.93,
         "sales_growth": 1.1
       },
@@ -3477,152 +3315,71 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 571.4884790039063,
-          "sma_150": 487.28764790852864,
-          "sma_200": 450.0347639465332,
+          "sma_50": 571.3947180175782,
+          "sma_150": 488.21160990397135,
+          "sma_200": 451.16986267089845,
           "high_52w": 615.9093645571163,
           "low_52w": 255.27341750810294,
-          "distance_from_high": -11.79,
-          "distance_from_low": 112.83
+          "distance_from_high": -12.29,
+          "distance_from_low": 111.63
         }
       },
       "week_52_range": {
         "high": 615.91,
         "low": 255.27,
-        "current_position": 88.2
+        "current_position": 87.7
       }
     },
     {
-      "ticker": "NEE",
-      "name": "NextEra Energy, Inc.",
-      "sector": "Utilities",
-      "industry": "Utilities - Regulated Electric",
-      "market_cap": 189.52,
-      "price": 90.96,
-      "score": 64,
+      "ticker": "FCX",
+      "name": "Freeport-McMoRan, Inc.",
+      "sector": "Basic Materials",
+      "industry": "Copper",
+      "market_cap": 77.06,
+      "price": 53.62,
+      "score": 63,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "B",
+        "N": "C",
+        "S": "B",
+        "L": "A",
         "I": "A",
         "M": "C"
       },
       "scores": {
         "C": 15,
         "A": 12,
-        "N": 12,
-        "S": 2,
-        "L": 8,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 26.0,
-        "revenue_growth": 20.7,
-        "eps_growth": 27.6,
-        "pct_from_high": -4.51,
-        "volume_ratio": 0.5,
-        "rs_rating": 80,
-        "inst_ownership": 84.65,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 25.76,
-        "price_momentum": -0.07
-      },
-      "ibd_ratings": {
-        "composite": 70,
-        "rs": 80,
-        "eps": 81,
-        "smr": "B",
-        "acc_dis": "B",
-        "atr_percent": 2.25,
-        "pe_ratio": 27.563637,
-        "roe": 8.37,
-        "sales_growth": 20.7
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 88.34371688842774,
-          "sma_150": 81.77414840698242,
-          "sma_200": 79.08249519348145,
-          "high_52w": 95.26045879634606,
-          "low_52w": 59.93746203541077,
-          "distance_from_high": -4.51,
-          "distance_from_low": 51.76
-        }
-      },
-      "week_52_range": {
-        "high": 95.26,
-        "low": 59.94,
-        "current_position": 95.5
-      }
-    },
-    {
-      "ticker": "DG",
-      "name": "Dollar General Corporation",
-      "sector": "Consumer Defensive",
-      "industry": "Discount Stores",
-      "market_cap": 27.88,
-      "price": 126.67,
-      "score": 63,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
-        "S": "B",
-        "L": "D",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 8,
+        "N": 4,
         "S": 5,
-        "L": 0,
+        "L": 12,
         "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 122.0,
-        "revenue_growth": 5.9,
-        "eps_growth": 122.9,
-        "pct_from_high": -19.95,
-        "volume_ratio": 1.0,
-        "rs_rating": 57,
-        "inst_ownership": 100.63,
+        "earnings_growth": 47.7,
+        "revenue_growth": -1.5,
+        "eps_growth": 48.2,
+        "pct_from_high": -23.13,
+        "volume_ratio": 1.43,
+        "rs_rating": 82,
+        "inst_ownership": 88.69,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 37.34,
-        "price_momentum": -16.55
+        "volatility": 50.51,
+        "price_momentum": -16.66
       },
       "ibd_ratings": {
         "composite": 71,
-        "rs": 57,
-        "eps": 99,
-        "smr": "C",
+        "rs": 82,
+        "eps": 89,
+        "smr": "D",
         "acc_dis": "C",
-        "atr_percent": 4.32,
-        "pe_ratio": 18.49197,
-        "roe": 18.99,
-        "sales_growth": 5.9
+        "atr_percent": 6.32,
+        "pe_ratio": 35.276314,
+        "roe": 13.95,
+        "sales_growth": -1.5
       },
       "trend_template": {
         "all_pass": false,
@@ -3639,109 +3396,28 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 146.76579895019532,
-          "sma_150": 122.37826217651367,
-          "sma_200": 119.34586071014404,
-          "high_52w": 158.22999572753906,
-          "low_52w": 78.77350045427828,
-          "distance_from_high": -19.95,
-          "distance_from_low": 60.8
+          "sma_50": 61.51946701049805,
+          "sma_150": 49.47096270243327,
+          "sma_200": 47.7341068649292,
+          "high_52w": 69.75,
+          "low_52w": 27.280475886531576,
+          "distance_from_high": -23.13,
+          "distance_from_low": 96.55
         }
       },
       "week_52_range": {
-        "high": 158.23,
-        "low": 78.77,
-        "current_position": 80.1
+        "high": 69.75,
+        "low": 27.28,
+        "current_position": 76.9
       }
     },
     {
-      "ticker": "LLY",
-      "name": "Eli Lilly and Company",
+      "ticker": "MCK",
+      "name": "McKesson Corporation",
       "sector": "Healthcare",
-      "industry": "Drug Manufacturers - General",
-      "market_cap": 821.67,
-      "price": 918.05,
-      "score": 63,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
-        "S": "B",
-        "L": "D",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 8,
-        "S": 5,
-        "L": 0,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 51.4,
-        "revenue_growth": 42.6,
-        "eps_growth": 50.5,
-        "pct_from_high": -18.9,
-        "volume_ratio": 1.18,
-        "rs_rating": 52,
-        "inst_ownership": 84.75,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 42.55,
-        "price_momentum": -10.28
-      },
-      "ibd_ratings": {
-        "composite": 77,
-        "rs": 52,
-        "eps": 90,
-        "smr": "A",
-        "acc_dis": "D",
-        "atr_percent": 3.21,
-        "pe_ratio": 40.00218,
-        "roe": 101.16,
-        "sales_growth": 42.6
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 6,
-        "criteria": {
-          "Precio > SMA 50": false,
-          "Precio > SMA 150": false,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 1030.744864501953,
-          "sma_150": 929.9427416992188,
-          "sma_200": 888.5390795898437,
-          "high_52w": 1132.0604759275961,
-          "low_52w": 620.4646509007584,
-          "distance_from_high": -18.9,
-          "distance_from_low": 47.96
-        }
-      },
-      "week_52_range": {
-        "high": 1132.06,
-        "low": 620.46,
-        "current_position": 81.1
-      }
-    },
-    {
-      "ticker": "STLD",
-      "name": "Steel Dynamics, Inc.",
-      "sector": "Basic Materials",
-      "industry": "Steel",
-      "market_cap": 24.64,
-      "price": 168.75,
+      "industry": "Medical Distribution",
+      "market_cap": 110.95,
+      "price": 898.95,
       "score": 63,
       "ml_probability": 0.5,
       "grades": {
@@ -3763,28 +3439,28 @@
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 34.7,
-        "revenue_growth": 14.0,
-        "eps_growth": 28.3,
-        "pct_from_high": -19.05,
-        "volume_ratio": 1.06,
-        "rs_rating": 71,
-        "inst_ownership": 86.06,
+        "earnings_growth": 38.0,
+        "revenue_growth": 11.4,
+        "eps_growth": 34.9,
+        "pct_from_high": -10.02,
+        "volume_ratio": 1.03,
+        "rs_rating": 77,
+        "inst_ownership": 91.48,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 37.64,
-        "price_momentum": -11.45
+        "volatility": 29.04,
+        "price_momentum": -5.04
       },
       "ibd_ratings": {
-        "composite": 68,
-        "rs": 71,
-        "eps": 81,
-        "smr": "C",
+        "composite": 66,
+        "rs": 77,
+        "eps": 83,
+        "smr": "D",
         "acc_dis": "C",
-        "atr_percent": 4.26,
-        "pe_ratio": 21.146616,
-        "roe": 13.28,
-        "sales_growth": 14.0
+        "atr_percent": 2.87,
+        "pe_ratio": 25.973707,
+        "roe": 0.0,
+        "sales_growth": 11.4
       },
       "trend_template": {
         "all_pass": false,
@@ -3801,19 +3477,100 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 184.38580078125,
-          "sma_150": 161.29675938924154,
-          "sma_200": 153.2654483795166,
-          "high_52w": 208.47000122070312,
-          "low_52w": 102.10743665021675,
-          "distance_from_high": -19.05,
-          "distance_from_low": 65.27
+          "sma_50": 899.3602880859376,
+          "sma_150": 818.3735599772135,
+          "sma_200": 790.9202267456054,
+          "high_52w": 999.0,
+          "low_52w": 635.1193042283106,
+          "distance_from_high": -10.02,
+          "distance_from_low": 41.54
         }
       },
       "week_52_range": {
-        "high": 208.47,
-        "low": 102.11,
-        "current_position": 80.9
+        "high": 999.0,
+        "low": 635.12,
+        "current_position": 90.0
+      }
+    },
+    {
+      "ticker": "ROK",
+      "name": "Rockwell Automation, Inc.",
+      "sector": "Industrials",
+      "industry": "Specialty Industrial Machinery",
+      "market_cap": 40.0,
+      "price": 355.73,
+      "score": 63,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "B",
+        "S": "B",
+        "L": "D",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 8,
+        "S": 5,
+        "L": 0,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 67.1,
+        "revenue_growth": 11.9,
+        "eps_growth": 65.8,
+        "pct_from_high": -18.63,
+        "volume_ratio": 1.0,
+        "rs_rating": 44,
+        "inst_ownership": 88.17,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 32.43,
+        "price_momentum": -10.49
+      },
+      "ibd_ratings": {
+        "composite": 67,
+        "rs": 44,
+        "eps": 93,
+        "smr": "B",
+        "acc_dis": "D",
+        "atr_percent": 3.86,
+        "pe_ratio": 40.654858,
+        "roe": 23.74,
+        "sales_growth": 11.9
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 5,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": false,
+          "Precio > SMA 200": false,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 3 (Distribution)",
+        "values": {
+          "sma_50": 399.2453918457031,
+          "sma_150": 375.9615856933594,
+          "sma_200": 365.4429681396484,
+          "high_52w": 437.20181477171076,
+          "low_52w": 211.75356995125597,
+          "distance_from_high": -18.63,
+          "distance_from_low": 67.99
+        }
+      },
+      "week_52_range": {
+        "high": 437.2,
+        "low": 211.75,
+        "current_position": 81.4
       }
     },
     {
@@ -3821,8 +3578,8 @@
       "name": "Textron Inc.",
       "sector": "Industrials",
       "industry": "Aerospace & Defense",
-      "market_cap": 15.52,
-      "price": 89.1,
+      "market_cap": 15.45,
+      "price": 88.69,
       "score": 63,
       "ml_probability": 0.5,
       "grades": {
@@ -3847,14 +3604,14 @@
         "earnings_growth": 74.4,
         "revenue_growth": 15.6,
         "eps_growth": 66.7,
-        "pct_from_high": -12.26,
-        "volume_ratio": 1.33,
+        "pct_from_high": -12.66,
+        "volume_ratio": 1.29,
         "rs_rating": 60,
         "inst_ownership": 90.82,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 28.96,
-        "price_momentum": -10.01
+        "volatility": 28.93,
+        "price_momentum": -11.97
       },
       "ibd_ratings": {
         "composite": 66,
@@ -3862,8 +3619,8 @@
         "eps": 93,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 3.08,
-        "pe_ratio": 17.402344,
+        "atr_percent": 3.11,
+        "pe_ratio": 17.322266,
         "roe": 12.24,
         "sales_growth": 15.6
       },
@@ -3882,19 +3639,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 94.42035232543945,
-          "sma_150": 86.81350362141927,
-          "sma_200": 85.00302967071534,
+          "sma_50": 94.3931460571289,
+          "sma_150": 86.86281209309895,
+          "sma_200": 85.0791785812378,
           "high_52w": 101.5478072915304,
           "low_52w": 57.645260193787664,
-          "distance_from_high": -12.26,
-          "distance_from_low": 54.57
+          "distance_from_high": -12.66,
+          "distance_from_low": 53.85
         }
       },
       "week_52_range": {
         "high": 101.55,
         "low": 57.65,
-        "current_position": 87.7
+        "current_position": 87.3
       }
     },
     {
@@ -3902,8 +3659,8 @@
       "name": "Alphabet Inc.",
       "sector": "Communication Services",
       "industry": "Internet Content & Information",
-      "market_cap": 3705.31,
-      "price": 306.3,
+      "market_cap": 3698.42,
+      "price": 305.73,
       "score": 62,
       "ml_probability": 0.5,
       "grades": {
@@ -3928,23 +3685,23 @@
         "earnings_growth": 31.1,
         "revenue_growth": 18.0,
         "eps_growth": 29.8,
-        "pct_from_high": -12.46,
-        "volume_ratio": 0.72,
-        "rs_rating": 88,
+        "pct_from_high": -12.62,
+        "volume_ratio": 0.8,
+        "rs_rating": 87,
         "inst_ownership": 60.97,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 30.04,
-        "price_momentum": 0.97
+        "volatility": 30.02,
+        "price_momentum": -2.84
       },
       "ibd_ratings": {
-        "composite": 82,
-        "rs": 88,
+        "composite": 81,
+        "rs": 87,
         "eps": 81,
         "smr": "A",
-        "acc_dis": "C",
-        "atr_percent": 2.24,
-        "pe_ratio": 28.334873,
+        "acc_dis": "D",
+        "atr_percent": 2.18,
+        "pe_ratio": 28.25601,
         "roe": 35.71,
         "sales_growth": 18.0
       },
@@ -3963,100 +3720,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 318.4954913330078,
-          "sma_150": 284.23338826497394,
-          "sma_200": 258.8017565155029,
+          "sma_50": 318.3235205078125,
+          "sma_150": 284.92109670003254,
+          "sma_200": 259.48149085998534,
           "high_52w": 349.9035038834414,
           "low_52w": 142.16851286156196,
-          "distance_from_high": -12.46,
-          "distance_from_low": 115.45
+          "distance_from_high": -12.62,
+          "distance_from_low": 115.05
         }
       },
       "week_52_range": {
         "high": 349.9,
         "low": 142.17,
-        "current_position": 87.5
-      }
-    },
-    {
-      "ticker": "CINF",
-      "name": "Cincinnati Financial Corporatio",
-      "sector": "Financial Services",
-      "industry": "Insurance - Property & Casualty",
-      "market_cap": 24.99,
-      "price": 160.2,
-      "score": 62,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "D",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 12,
-        "S": 2,
-        "L": 0,
-        "I": 8,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 67.3,
-        "revenue_growth": 21.8,
-        "eps_growth": 66.9,
-        "pct_from_high": -8.07,
-        "volume_ratio": 0.6,
-        "rs_rating": 53,
-        "inst_ownership": 71.16,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 23.43,
-        "price_momentum": -1.35
-      },
-      "ibd_ratings": {
-        "composite": 65,
-        "rs": 53,
-        "eps": 93,
-        "smr": "B",
-        "acc_dis": "C",
-        "atr_percent": 2.52,
-        "pe_ratio": 10.560316,
-        "roe": 16.04,
-        "sales_growth": 21.8
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 7,
-        "criteria": {
-          "Precio > SMA 50": false,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 163.59979888916016,
-          "sma_150": 160.1010066731771,
-          "sma_200": 156.7255945587158,
-          "high_52w": 174.27000427246094,
-          "low_52w": 120.97021922366037,
-          "distance_from_high": -8.07,
-          "distance_from_low": 32.43
-        }
-      },
-      "week_52_range": {
-        "high": 174.27,
-        "low": 120.97,
-        "current_position": 91.9
+        "current_position": 87.4
       }
     },
     {
@@ -4064,8 +3740,8 @@
       "name": "DTE Energy Company",
       "sector": "Utilities",
       "industry": "Utilities - Regulated Electric",
-      "market_cap": 30.55,
-      "price": 147.01,
+      "market_cap": 30.61,
+      "price": 147.14,
       "score": 62,
       "ml_probability": 0.5,
       "grades": {
@@ -4090,14 +3766,14 @@
         "earnings_growth": 25.5,
         "revenue_growth": 28.9,
         "eps_growth": 26.4,
-        "pct_from_high": -4.18,
-        "volume_ratio": 0.48,
+        "pct_from_high": -4.1,
+        "volume_ratio": 0.54,
         "rs_rating": 74,
         "inst_ownership": 79.29,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 16.85,
-        "price_momentum": 2.16
+        "volatility": 16.84,
+        "price_momentum": 2.27
       },
       "ibd_ratings": {
         "composite": 68,
@@ -4105,8 +3781,8 @@
         "eps": 80,
         "smr": "B",
         "acc_dis": "B",
-        "atr_percent": 1.79,
-        "pe_ratio": 20.911804,
+        "atr_percent": 1.81,
+        "pe_ratio": 20.930298,
         "roe": 12.18,
         "sales_growth": 28.9
       },
@@ -4125,19 +3801,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 139.3504377746582,
-          "sma_150": 135.73741572062175,
-          "sma_200": 134.71677459716796,
+          "sma_50": 139.7126954650879,
+          "sma_150": 135.79821716308595,
+          "sma_200": 134.7945957183838,
           "high_52w": 153.42558272039042,
-          "low_52w": 119.68365442871894,
-          "distance_from_high": -4.18,
-          "distance_from_low": 22.83
+          "low_52w": 119.68366165942822,
+          "distance_from_high": -4.1,
+          "distance_from_low": 22.94
         }
       },
       "week_52_range": {
         "high": 153.43,
         "low": 119.68,
-        "current_position": 95.8
+        "current_position": 95.9
       }
     },
     {
@@ -4145,8 +3821,8 @@
       "name": "Gilead Sciences, Inc.",
       "sector": "Healthcare",
       "industry": "Drug Manufacturers - General",
-      "market_cap": 175.4,
-      "price": 141.29,
+      "market_cap": 175.18,
+      "price": 141.11,
       "score": 62,
       "ml_probability": 0.5,
       "grades": {
@@ -4171,23 +3847,23 @@
         "earnings_growth": 23.4,
         "revenue_growth": 4.7,
         "eps_growth": 22.4,
-        "pct_from_high": -9.66,
-        "volume_ratio": 1.06,
-        "rs_rating": 85,
+        "pct_from_high": -9.78,
+        "volume_ratio": 1.11,
+        "rs_rating": 86,
         "inst_ownership": 92.62,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 28.92,
-        "price_momentum": -5.97
+        "volatility": 28.87,
+        "price_momentum": -6.27
       },
       "ibd_ratings": {
-        "composite": 74,
-        "rs": 85,
+        "composite": 75,
+        "rs": 86,
         "eps": 67,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.67,
-        "pe_ratio": 20.839231,
+        "atr_percent": 2.44,
+        "pe_ratio": 20.843428,
         "roe": 40.66,
         "sales_growth": 4.7
       },
@@ -4206,28 +3882,28 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 140.53569778442383,
-          "sma_150": 125.25477055867513,
-          "sma_200": 121.21821514129638,
+          "sma_50": 140.94440414428712,
+          "sma_150": 125.40977549235026,
+          "sma_200": 121.39331928253173,
           "high_52w": 156.4017727554144,
           "low_52w": 90.9516705016427,
-          "distance_from_high": -9.66,
-          "distance_from_low": 55.35
+          "distance_from_high": -9.78,
+          "distance_from_low": 55.15
         }
       },
       "week_52_range": {
         "high": 156.4,
         "low": 90.95,
-        "current_position": 90.3
+        "current_position": 90.2
       }
     },
     {
-      "ticker": "HCA",
-      "name": "HCA Healthcare, Inc.",
-      "sector": "Healthcare",
-      "industry": "Medical Care Facilities",
-      "market_cap": 112.27,
-      "price": 502.05,
+      "ticker": "MGM",
+      "name": "MGM Resorts International",
+      "sector": "Consumer Cyclical",
+      "industry": "Resorts & Casinos",
+      "market_cap": 10.16,
+      "price": 37.14,
       "score": 62,
       "ml_probability": 0.5,
       "grades": {
@@ -4235,152 +3911,71 @@
         "A": "A",
         "N": "A",
         "S": "C",
-        "L": "B",
+        "L": "D",
         "I": "A",
         "M": "C"
       },
       "scores": {
-        "C": 15,
-        "A": 12,
+        "C": 20,
+        "A": 15,
         "N": 12,
         "S": 2,
-        "L": 8,
+        "L": 0,
         "I": 8,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 44.5,
-        "revenue_growth": 6.7,
-        "eps_growth": 30.6,
-        "pct_from_high": -9.65,
-        "volume_ratio": 0.87,
-        "rs_rating": 80,
-        "inst_ownership": 78.44,
+        "earnings_growth": 115.7,
+        "revenue_growth": 6.0,
+        "eps_growth": 86.5,
+        "pct_from_high": -7.52,
+        "volume_ratio": 0.84,
+        "rs_rating": 55,
+        "inst_ownership": 73.36,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 26.4,
-        "price_momentum": -4.89
+        "volatility": 41.6,
+        "price_momentum": 0.95
       },
       "ibd_ratings": {
-        "composite": 67,
-        "rs": 80,
-        "eps": 82,
-        "smr": "D",
+        "composite": 65,
+        "rs": 55,
+        "eps": 97,
+        "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 3.04,
-        "pe_ratio": 17.727755,
-        "roe": 0.0,
-        "sales_growth": 6.7
+        "atr_percent": 4.3,
+        "pe_ratio": 48.86842,
+        "roe": 14.89,
+        "sales_growth": 6.0
       },
       "trend_template": {
         "all_pass": false,
         "score": 7,
         "criteria": {
-          "Precio > SMA 50": false,
+          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
+          "SMA 150 > SMA 200": false,
           "SMA 200 Tendencia Alcista": true,
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 507.4441375732422,
-          "sma_150": 464.749600016276,
-          "sma_200": 440.6740176391602,
-          "high_52w": 555.69351074447,
-          "low_52w": 312.3298035283924,
-          "distance_from_high": -9.65,
-          "distance_from_low": 60.74
+          "sma_50": 35.41759994506836,
+          "sma_150": 35.026599947611494,
+          "sma_200": 35.14869995117188,
+          "high_52w": 40.15999984741211,
+          "low_52w": 25.299999237060547,
+          "distance_from_high": -7.52,
+          "distance_from_low": 46.8
         }
       },
       "week_52_range": {
-        "high": 555.69,
-        "low": 312.33,
-        "current_position": 90.3
-      }
-    },
-    {
-      "ticker": "HWM",
-      "name": "Howmet Aerospace Inc.",
-      "sector": "Industrials",
-      "industry": "Aerospace & Defense",
-      "market_cap": 97.38,
-      "price": 241.93,
-      "score": 62,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "B",
-        "A": "B",
-        "N": "A",
-        "S": "B",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 10,
-        "A": 8,
-        "N": 12,
-        "S": 5,
-        "L": 12,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 20.3,
-        "revenue_growth": 14.6,
-        "eps_growth": 18.5,
-        "pct_from_high": -9.49,
-        "volume_ratio": 1.06,
-        "rs_rating": 89,
-        "inst_ownership": 94.44,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 33.46,
-        "price_momentum": -3.73
-      },
-      "ibd_ratings": {
-        "composite": 74,
-        "rs": 89,
-        "eps": 63,
-        "smr": "B",
-        "acc_dis": "C",
-        "atr_percent": 3.41,
-        "pe_ratio": 65.38648,
-        "roe": 30.44,
-        "sales_growth": 14.6
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 233.9229476928711,
-          "sma_150": 206.72899393717447,
-          "sma_200": 199.8980613708496,
-          "high_52w": 267.30999755859375,
-          "low_52w": 104.78272915000522,
-          "distance_from_high": -9.49,
-          "distance_from_low": 130.89
-        }
-      },
-      "week_52_range": {
-        "high": 267.31,
-        "low": 104.78,
-        "current_position": 90.5
+        "high": 40.16,
+        "low": 25.3,
+        "current_position": 92.5
       }
     },
     {
@@ -4388,8 +3983,8 @@
       "name": "NVIDIA Corporation",
       "sector": "Technology",
       "industry": "Semiconductors",
-      "market_cap": 4384.62,
-      "price": 180.4,
+      "market_cap": 4339.9,
+      "price": 178.56,
       "score": 62,
       "ml_probability": 0.5,
       "grades": {
@@ -4414,23 +4009,23 @@
         "earnings_growth": 95.6,
         "revenue_growth": 73.2,
         "eps_growth": 94.5,
-        "pct_from_high": -14.97,
-        "volume_ratio": 0.79,
-        "rs_rating": 68,
+        "pct_from_high": -15.84,
+        "volume_ratio": 0.85,
+        "rs_rating": 64,
         "inst_ownership": 69.77,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 41.35,
-        "price_momentum": -3.99
+        "volatility": 41.36,
+        "price_momentum": -5.93
       },
       "ibd_ratings": {
-        "composite": 89,
-        "rs": 68,
+        "composite": 88,
+        "rs": 64,
         "eps": 98,
         "smr": "A",
         "acc_dis": "C",
-        "atr_percent": 3.21,
-        "pe_ratio": 36.741344,
+        "atr_percent": 3.09,
+        "pe_ratio": 36.51534,
         "roe": 101.48,
         "sales_growth": 73.2
       },
@@ -4449,36 +4044,36 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 185.09336700439454,
-          "sma_150": 183.73842580159504,
-          "sma_200": 178.05378677368165,
+          "sma_50": 184.91996948242186,
+          "sma_150": 183.71842671712238,
+          "sma_200": 178.25984817504883,
           "high_52w": 212.1667169482571,
           "low_52w": 86.59958951154498,
-          "distance_from_high": -14.97,
-          "distance_from_low": 108.32
+          "distance_from_high": -15.84,
+          "distance_from_low": 106.19
         }
       },
       "week_52_range": {
         "high": 212.17,
         "low": 86.6,
-        "current_position": 85.0
+        "current_position": 84.2
       }
     },
     {
-      "ticker": "MNST",
-      "name": "Monster Beverage Corporation",
+      "ticker": "PEP",
+      "name": "Pepsico, Inc.",
       "sector": "Consumer Defensive",
       "industry": "Beverages - Non-Alcoholic",
-      "market_cap": 72.48,
-      "price": 74.09,
-      "score": 61,
+      "market_cap": 208.85,
+      "price": 152.74,
+      "score": 62,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
         "N": "B",
-        "S": "B",
-        "L": "D",
+        "S": "C",
+        "L": "C",
         "I": "A",
         "M": "C"
       },
@@ -4486,34 +4081,115 @@
         "C": 20,
         "A": 15,
         "N": 8,
-        "S": 5,
-        "L": 0,
+        "S": 2,
+        "L": 4,
         "I": 8,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 66.6,
-        "revenue_growth": 17.6,
-        "eps_growth": 65.9,
-        "pct_from_high": -15.21,
-        "volume_ratio": 1.01,
-        "rs_rating": 58,
-        "inst_ownership": 69.35,
+        "earnings_growth": 67.5,
+        "revenue_growth": 5.6,
+        "eps_growth": 66.8,
+        "pct_from_high": -10.13,
+        "volume_ratio": 0.89,
+        "rs_rating": 65,
+        "inst_ownership": 79.93,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 23.12,
-        "price_momentum": -9.64
+        "volatility": 22.41,
+        "price_momentum": -6.57
       },
       "ibd_ratings": {
-        "composite": 72,
-        "rs": 58,
+        "composite": 74,
+        "rs": 65,
         "eps": 93,
-        "smr": "A",
+        "smr": "B",
         "acc_dis": "B",
-        "atr_percent": 3.04,
-        "pe_ratio": 38.19072,
-        "roe": 26.82,
-        "sales_growth": 17.6
+        "atr_percent": 2.06,
+        "pe_ratio": 25.456667,
+        "roe": 42.85,
+        "sales_growth": 5.6
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 6,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": false,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 156.18514556884764,
+          "sma_150": 147.72517303466796,
+          "sma_200": 143.97109561920166,
+          "high_52w": 169.96153592478052,
+          "low_52w": 122.8298074270925,
+          "distance_from_high": -10.13,
+          "distance_from_low": 24.35
+        }
+      },
+      "week_52_range": {
+        "high": 169.96,
+        "low": 122.83,
+        "current_position": 89.9
+      }
+    },
+    {
+      "ticker": "HCA",
+      "name": "HCA Healthcare, Inc.",
+      "sector": "Healthcare",
+      "industry": "Medical Care Facilities",
+      "market_cap": 111.73,
+      "price": 499.65,
+      "score": 61,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "B",
+        "S": "B",
+        "L": "B",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 8,
+        "S": 5,
+        "L": 8,
+        "I": 8,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 44.5,
+        "revenue_growth": 6.7,
+        "eps_growth": 30.6,
+        "pct_from_high": -10.09,
+        "volume_ratio": 1.01,
+        "rs_rating": 79,
+        "inst_ownership": 78.44,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 26.41,
+        "price_momentum": -5.99
+      },
+      "ibd_ratings": {
+        "composite": 67,
+        "rs": 79,
+        "eps": 82,
+        "smr": "D",
+        "acc_dis": "C",
+        "atr_percent": 3.08,
+        "pe_ratio": 17.63678,
+        "roe": 0.0,
+        "sales_growth": 6.7
       },
       "trend_template": {
         "all_pass": false,
@@ -4530,19 +4206,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 80.04580032348633,
-          "sma_150": 72.77373346964518,
-          "sma_200": 69.97920009613037,
-          "high_52w": 87.37999725341797,
-          "low_52w": 54.72999954223633,
-          "distance_from_high": -15.21,
-          "distance_from_low": 35.37
+          "sma_50": 507.779501953125,
+          "sma_150": 465.48989339192707,
+          "sma_200": 441.2742289733887,
+          "high_52w": 555.69351074447,
+          "low_52w": 312.3298337404207,
+          "distance_from_high": -10.09,
+          "distance_from_low": 59.98
         }
       },
       "week_52_range": {
-        "high": 87.38,
-        "low": 54.73,
-        "current_position": 84.8
+        "high": 555.69,
+        "low": 312.33,
+        "current_position": 89.9
       }
     },
     {
@@ -4550,8 +4226,8 @@
       "name": "Citizens Financial Group, Inc.",
       "sector": "Financial Services",
       "industry": "Banks - Regional",
-      "market_cap": 24.32,
-      "price": 56.63,
+      "market_cap": 24.5,
+      "price": 57.05,
       "score": 60,
       "ml_probability": 0.5,
       "grades": {
@@ -4576,23 +4252,23 @@
         "earnings_growth": 34.8,
         "revenue_growth": 10.7,
         "eps_growth": 31.7,
-        "pct_from_high": -17.68,
-        "volume_ratio": 0.77,
+        "pct_from_high": -17.07,
+        "volume_ratio": 0.66,
         "rs_rating": 78,
         "inst_ownership": 99.86,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 32.78,
-        "price_momentum": -12.32
+        "volatility": 32.76,
+        "price_momentum": -12.62
       },
       "ibd_ratings": {
-        "composite": 68,
+        "composite": 69,
         "rs": 78,
         "eps": 82,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 3.74,
-        "pe_ratio": 14.670985,
+        "atr_percent": 3.37,
+        "pe_ratio": 14.779793,
         "roe": 7.24,
         "sales_growth": 10.7
       },
@@ -4611,78 +4287,78 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 61.91423416137695,
-          "sma_150": 55.61605143229167,
-          "sma_200": 52.81047254562378,
+          "sma_50": 61.821100006103514,
+          "sma_150": 55.67785550435384,
+          "sma_200": 52.900302200317384,
           "high_52w": 68.79000091552734,
           "low_52w": 31.45007756575466,
-          "distance_from_high": -17.68,
-          "distance_from_low": 80.06
+          "distance_from_high": -17.07,
+          "distance_from_low": 81.4
         }
       },
       "week_52_range": {
         "high": 68.79,
         "low": 31.45,
-        "current_position": 82.3
+        "current_position": 82.9
       }
     },
     {
-      "ticker": "FCX",
-      "name": "Freeport-McMoRan, Inc.",
-      "sector": "Basic Materials",
-      "industry": "Copper",
-      "market_cap": 79.69,
-      "price": 55.45,
+      "ticker": "LLY",
+      "name": "Eli Lilly and Company",
+      "sector": "Healthcare",
+      "industry": "Drug Manufacturers - General",
+      "market_cap": 821.18,
+      "price": 917.5,
       "score": 60,
       "ml_probability": 0.5,
       "grades": {
         "C": "A",
         "A": "A",
-        "N": "C",
+        "N": "B",
         "S": "C",
-        "L": "A",
+        "L": "D",
         "I": "A",
         "M": "C"
       },
       "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 4,
+        "C": 20,
+        "A": 15,
+        "N": 8,
         "S": 2,
-        "L": 12,
+        "L": 0,
         "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 47.7,
-        "revenue_growth": -1.5,
-        "eps_growth": 48.2,
-        "pct_from_high": -20.5,
-        "volume_ratio": 0.93,
-        "rs_rating": 85,
-        "inst_ownership": 88.69,
+        "earnings_growth": 51.4,
+        "revenue_growth": 42.6,
+        "eps_growth": 50.5,
+        "pct_from_high": -18.95,
+        "volume_ratio": 0.63,
+        "rs_rating": 53,
+        "inst_ownership": 84.75,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 50.39,
-        "price_momentum": -11.38
+        "volatility": 42.55,
+        "price_momentum": -9.12
       },
       "ibd_ratings": {
-        "composite": 73,
-        "rs": 85,
-        "eps": 89,
-        "smr": "D",
-        "acc_dis": "C",
-        "atr_percent": 5.78,
-        "pe_ratio": 36.480263,
-        "roe": 13.95,
-        "sales_growth": -1.5
+        "composite": 78,
+        "rs": 53,
+        "eps": 90,
+        "smr": "A",
+        "acc_dis": "D",
+        "atr_percent": 3.04,
+        "pe_ratio": 39.99564,
+        "roe": 101.16,
+        "sales_growth": 42.6
       },
       "trend_template": {
         "all_pass": false,
-        "score": 7,
+        "score": 6,
         "criteria": {
           "Precio > SMA 50": false,
-          "Precio > SMA 150": true,
+          "Precio > SMA 150": false,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
           "SMA 150 > SMA 200": true,
@@ -4692,19 +4368,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 61.567275848388675,
-          "sma_150": 49.39670542399089,
-          "sma_200": 47.66488626480103,
-          "high_52w": 69.75,
-          "low_52w": 27.280475886531576,
-          "distance_from_high": -20.5,
-          "distance_from_low": 103.26
+          "sma_50": 1027.849522705078,
+          "sma_150": 931.6795450846354,
+          "sma_200": 889.4108352661133,
+          "high_52w": 1132.0604759275961,
+          "low_52w": 620.4646509007584,
+          "distance_from_high": -18.95,
+          "distance_from_low": 47.87
         }
       },
       "week_52_range": {
-        "high": 69.75,
-        "low": 27.28,
-        "current_position": 79.5
+        "high": 1132.06,
+        "low": 620.46,
+        "current_position": 81.0
       }
     },
     {
@@ -4712,8 +4388,8 @@
       "name": "Host Hotels & Resorts, Inc.",
       "sector": "Real Estate",
       "industry": "REIT - Hotel & Motel",
-      "market_cap": 13.29,
-      "price": 19.07,
+      "market_cap": 13.31,
+      "price": 19.1,
       "score": 60,
       "ml_probability": 0.5,
       "grades": {
@@ -4738,23 +4414,23 @@
         "earnings_growth": 27.1,
         "revenue_growth": 12.8,
         "eps_growth": 25.0,
-        "pct_from_high": -9.19,
-        "volume_ratio": 0.86,
-        "rs_rating": 73,
+        "pct_from_high": -9.05,
+        "volume_ratio": 0.79,
+        "rs_rating": 75,
         "inst_ownership": 105.54,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 29.8,
-        "price_momentum": -4.98
+        "volatility": 29.77,
+        "price_momentum": -6.37
       },
       "ibd_ratings": {
-        "composite": 67,
-        "rs": 73,
+        "composite": 68,
+        "rs": 75,
         "eps": 80,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 3.25,
-        "pe_ratio": 17.336363,
+        "atr_percent": 3.06,
+        "pe_ratio": 17.363636,
         "roe": 11.49,
         "sales_growth": 12.8
       },
@@ -4773,100 +4449,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 19.125,
-          "sma_150": 17.596375128428143,
-          "sma_200": 17.028755874633788,
+          "sma_50": 19.141800003051756,
+          "sma_150": 17.619637190500896,
+          "sma_200": 17.050351977348328,
           "high_52w": 21.0,
           "low_52w": 11.698258215966478,
-          "distance_from_high": -9.19,
-          "distance_from_low": 63.02
+          "distance_from_high": -9.05,
+          "distance_from_low": 63.27
         }
       },
       "week_52_range": {
         "high": 21.0,
         "low": 11.7,
-        "current_position": 90.8
-      }
-    },
-    {
-      "ticker": "ROK",
-      "name": "Rockwell Automation, Inc.",
-      "sector": "Industrials",
-      "industry": "Specialty Industrial Machinery",
-      "market_cap": 39.93,
-      "price": 355.11,
-      "score": 60,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
-        "S": "C",
-        "L": "D",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 20,
-        "A": 15,
-        "N": 8,
-        "S": 2,
-        "L": 0,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 67.1,
-        "revenue_growth": 11.9,
-        "eps_growth": 65.8,
-        "pct_from_high": -18.78,
-        "volume_ratio": 0.71,
-        "rs_rating": 44,
-        "inst_ownership": 88.17,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 32.44,
-        "price_momentum": -9.87
-      },
-      "ibd_ratings": {
-        "composite": 66,
-        "rs": 44,
-        "eps": 93,
-        "smr": "B",
-        "acc_dis": "D",
-        "atr_percent": 3.87,
-        "pe_ratio": 40.630436,
-        "roe": 23.74,
-        "sales_growth": 11.9
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 5,
-        "criteria": {
-          "Precio > SMA 50": false,
-          "Precio > SMA 150": false,
-          "Precio > SMA 200": false,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 3 (Distribution)",
-        "values": {
-          "sma_50": 400.3693829345703,
-          "sma_150": 375.8914080810547,
-          "sma_200": 365.2334150695801,
-          "high_52w": 437.20181477171076,
-          "low_52w": 211.75358348357352,
-          "distance_from_high": -18.78,
-          "distance_from_low": 67.7
-        }
-      },
-      "week_52_range": {
-        "high": 437.2,
-        "low": 211.75,
-        "current_position": 81.2
+        "current_position": 91.0
       }
     },
     {
@@ -4874,8 +4469,8 @@
       "name": "TJX Companies, Inc. (The)",
       "sector": "Consumer Cyclical",
       "industry": "Apparel Retail",
-      "market_cap": 170.13,
-      "price": 152.87,
+      "market_cap": 172.15,
+      "price": 154.68,
       "score": 60,
       "ml_probability": 0.5,
       "grades": {
@@ -4900,23 +4495,23 @@
         "earnings_growth": 28.3,
         "revenue_growth": 8.5,
         "eps_growth": 26.8,
-        "pct_from_high": -6.03,
-        "volume_ratio": 0.61,
-        "rs_rating": 64,
+        "pct_from_high": -4.92,
+        "volume_ratio": 0.58,
+        "rs_rating": 66,
         "inst_ownership": 93.11,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 18.14,
-        "price_momentum": -2.33
+        "volatility": 18.11,
+        "price_momentum": -2.24
       },
       "ibd_ratings": {
-        "composite": 75,
-        "rs": 64,
+        "composite": 76,
+        "rs": 66,
         "eps": 80,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.15,
-        "pe_ratio": 31.325817,
+        "atr_percent": 2.13,
+        "pe_ratio": 31.761806,
         "roe": 59.13,
         "sales_growth": 8.5
       },
@@ -4935,19 +4530,262 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 155.35820709228517,
-          "sma_150": 147.92429972330729,
-          "sma_200": 142.10476051330568,
+          "sma_50": 155.38208587646486,
+          "sma_150": 148.06940317789713,
+          "sma_200": 142.24168758392335,
           "high_52w": 162.67999267578125,
           "low_52w": 112.60646924921748,
-          "distance_from_high": -6.03,
-          "distance_from_low": 35.76
+          "distance_from_high": -4.92,
+          "distance_from_low": 37.36
         }
       },
       "week_52_range": {
         "high": 162.68,
         "low": 112.61,
-        "current_position": 94.0
+        "current_position": 95.1
+      }
+    },
+    {
+      "ticker": "DG",
+      "name": "Dollar General Corporation",
+      "sector": "Consumer Defensive",
+      "industry": "Discount Stores",
+      "market_cap": 27.17,
+      "price": 123.45,
+      "score": 59,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "C",
+        "S": "B",
+        "L": "D",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 4,
+        "S": 5,
+        "L": 0,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 122.0,
+        "revenue_growth": 5.9,
+        "eps_growth": 122.9,
+        "pct_from_high": -21.98,
+        "volume_ratio": 1.01,
+        "rs_rating": 49,
+        "inst_ownership": 100.63,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 37.43,
+        "price_momentum": -18.05
+      },
+      "ibd_ratings": {
+        "composite": 68,
+        "rs": 49,
+        "eps": 99,
+        "smr": "C",
+        "acc_dis": "C",
+        "atr_percent": 4.47,
+        "pe_ratio": 18.021898,
+        "roe": 18.99,
+        "sales_growth": 5.9
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 7,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 146.34099884033202,
+          "sma_150": 122.4372285970052,
+          "sma_200": 119.4846724319458,
+          "high_52w": 158.22999572753906,
+          "low_52w": 78.7735077767255,
+          "distance_from_high": -21.98,
+          "distance_from_low": 56.72
+        }
+      },
+      "week_52_range": {
+        "high": 158.23,
+        "low": 78.77,
+        "current_position": 78.0
+      }
+    },
+    {
+      "ticker": "GE",
+      "name": "GE Aerospace",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "market_cap": 307.59,
+      "price": 291.61,
+      "score": 59,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "B",
+        "S": "B",
+        "L": "C",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 8,
+        "S": 5,
+        "L": 4,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 37.4,
+        "revenue_growth": 17.6,
+        "eps_growth": 33.8,
+        "pct_from_high": -16.2,
+        "volume_ratio": 1.19,
+        "rs_rating": 62,
+        "inst_ownership": 81.09,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 32.12,
+        "price_momentum": -14.91
+      },
+      "ibd_ratings": {
+        "composite": 76,
+        "rs": 62,
+        "eps": 83,
+        "smr": "A",
+        "acc_dis": "C",
+        "atr_percent": 3.97,
+        "pe_ratio": 36.224842,
+        "roe": 44.69,
+        "sales_growth": 17.6
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 6,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": false,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 317.78822509765627,
+          "sma_150": 302.40211385091146,
+          "sma_200": 290.8273323059082,
+          "high_52w": 347.97310029360074,
+          "low_52w": 158.52094682677517,
+          "distance_from_high": -16.2,
+          "distance_from_low": 83.96
+        }
+      },
+      "week_52_range": {
+        "high": 347.97,
+        "low": 158.52,
+        "current_position": 83.8
+      }
+    },
+    {
+      "ticker": "STLD",
+      "name": "Steel Dynamics, Inc.",
+      "sector": "Basic Materials",
+      "industry": "Steel",
+      "market_cap": 24.46,
+      "price": 167.56,
+      "score": 59,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "B",
+        "S": "B",
+        "L": "C",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 8,
+        "S": 5,
+        "L": 4,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 34.7,
+        "revenue_growth": 14.0,
+        "eps_growth": 28.3,
+        "pct_from_high": -19.62,
+        "volume_ratio": 1.33,
+        "rs_rating": 67,
+        "inst_ownership": 86.06,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 37.62,
+        "price_momentum": -13.36
+      },
+      "ibd_ratings": {
+        "composite": 66,
+        "rs": 67,
+        "eps": 81,
+        "smr": "C",
+        "acc_dis": "C",
+        "atr_percent": 4.43,
+        "pe_ratio": 20.971214,
+        "roe": 13.28,
+        "sales_growth": 14.0
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 7,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 184.2822006225586,
+          "sma_150": 161.55783777872722,
+          "sma_200": 153.4316869354248,
+          "high_52w": 208.47000122070312,
+          "low_52w": 102.10744373887502,
+          "distance_from_high": -19.62,
+          "distance_from_low": 64.1
+        }
+      },
+      "week_52_range": {
+        "high": 208.47,
+        "low": 102.11,
+        "current_position": 80.4
       }
     },
     {
@@ -4955,8 +4793,8 @@
       "name": "Broadcom Inc.",
       "sector": "Technology",
       "industry": "Semiconductors",
-      "market_cap": 1497.91,
-      "price": 315.93,
+      "market_cap": 1516.45,
+      "price": 319.84,
       "score": 58,
       "ml_probability": 0.5,
       "grades": {
@@ -4981,23 +4819,23 @@
         "earnings_growth": 188.1,
         "revenue_growth": 16.4,
         "eps_growth": 172.7,
-        "pct_from_high": -23.65,
+        "pct_from_high": -22.71,
         "volume_ratio": 0.81,
-        "rs_rating": 65,
-        "inst_ownership": 79.53,
+        "rs_rating": 64,
+        "inst_ownership": 79.52,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 48.2,
-        "price_momentum": -5.41
+        "volatility": 48.14,
+        "price_momentum": -3.85
       },
       "ibd_ratings": {
         "composite": 79,
-        "rs": 65,
+        "rs": 64,
         "eps": 99,
         "smr": "A",
         "acc_dis": "C",
-        "atr_percent": 4.11,
-        "pe_ratio": 61.70508,
+        "atr_percent": 4.13,
+        "pe_ratio": 62.46875,
         "roe": 33.37,
         "sales_growth": 16.4
       },
@@ -5016,77 +4854,77 @@
         },
         "stage": "Stage 3 (Distribution)",
         "values": {
-          "sma_50": 331.56239929199216,
-          "sma_150": 340.67270731608073,
-          "sma_200": 323.89100982666014,
+          "sma_50": 331.08379943847655,
+          "sma_150": 340.7518269856771,
+          "sma_200": 324.2540670776367,
           "high_52w": 413.81818763503134,
           "low_52w": 137.27741190274102,
-          "distance_from_high": -23.65,
-          "distance_from_low": 130.14
+          "distance_from_high": -22.71,
+          "distance_from_low": 132.99
         }
       },
       "week_52_range": {
         "high": 413.82,
         "low": 137.28,
-        "current_position": 76.3
+        "current_position": 77.3
       }
     },
     {
-      "ticker": "NOC",
-      "name": "Northrop Grumman Corporation",
+      "ticker": "HWM",
+      "name": "Howmet Aerospace Inc.",
       "sector": "Industrials",
       "industry": "Aerospace & Defense",
-      "market_cap": 103.45,
-      "price": 724.84,
+      "market_cap": 93.76,
+      "price": 232.94,
       "score": 58,
       "ml_probability": 0.5,
       "grades": {
         "C": "B",
-        "A": "C",
-        "N": "A",
-        "S": "C",
+        "A": "B",
+        "N": "B",
+        "S": "B",
         "L": "A",
         "I": "A",
         "M": "C"
       },
       "scores": {
         "C": 10,
-        "A": 4,
-        "N": 12,
-        "S": 2,
-        "L": 15,
+        "A": 8,
+        "N": 8,
+        "S": 5,
+        "L": 12,
         "I": 10,
         "M": 5
       },
       "metrics": {
-        "earnings_growth": 15.2,
-        "revenue_growth": 9.6,
-        "eps_growth": 12.9,
-        "pct_from_high": -6.35,
-        "volume_ratio": 0.63,
-        "rs_rating": 92,
-        "inst_ownership": 83.5,
+        "earnings_growth": 20.3,
+        "revenue_growth": 14.6,
+        "eps_growth": 18.5,
+        "pct_from_high": -12.86,
+        "volume_ratio": 1.03,
+        "rs_rating": 86,
+        "inst_ownership": 94.44,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 28.64,
-        "price_momentum": -1.32
+        "volatility": 33.69,
+        "price_momentum": -9.75
       },
       "ibd_ratings": {
-        "composite": 72,
-        "rs": 92,
-        "eps": 59,
+        "composite": 73,
+        "rs": 86,
+        "eps": 63,
         "smr": "B",
         "acc_dis": "C",
-        "atr_percent": 2.68,
-        "pe_ratio": 24.934298,
-        "roe": 26.17,
-        "sales_growth": 9.6
+        "atr_percent": 3.72,
+        "pe_ratio": 62.956757,
+        "roe": 30.44,
+        "sales_growth": 14.6
       },
       "trend_template": {
-        "all_pass": true,
-        "score": 8,
+        "all_pass": false,
+        "score": 7,
         "criteria": {
-          "Precio > SMA 50": true,
+          "Precio > SMA 50": false,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -5095,21 +4933,102 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 2 (Advancing)",
+        "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 694.1991076660156,
-          "sma_150": 616.8478393554688,
-          "sma_200": 592.6426387023926,
-          "high_52w": 774.0,
-          "low_52w": 443.01102948288667,
-          "distance_from_high": -6.35,
-          "distance_from_low": 63.62
+          "sma_50": 234.29040557861327,
+          "sma_150": 207.10462290445963,
+          "sma_200": 200.20107917785646,
+          "high_52w": 267.30999755859375,
+          "low_52w": 104.78272915000522,
+          "distance_from_high": -12.86,
+          "distance_from_low": 122.31
         }
       },
       "week_52_range": {
-        "high": 774.0,
-        "low": 443.01,
-        "current_position": 93.6
+        "high": 267.31,
+        "low": 104.78,
+        "current_position": 87.1
+      }
+    },
+    {
+      "ticker": "MNST",
+      "name": "Monster Beverage Corporation",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Non-Alcoholic",
+      "market_cap": 72.14,
+      "price": 73.74,
+      "score": 58,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "B",
+        "S": "C",
+        "L": "D",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 20,
+        "A": 15,
+        "N": 8,
+        "S": 2,
+        "L": 0,
+        "I": 8,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 66.6,
+        "revenue_growth": 17.6,
+        "eps_growth": 65.9,
+        "pct_from_high": -15.61,
+        "volume_ratio": 0.65,
+        "rs_rating": 57,
+        "inst_ownership": 69.36,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 23.13,
+        "price_momentum": -11.96
+      },
+      "ibd_ratings": {
+        "composite": 71,
+        "rs": 57,
+        "eps": 93,
+        "smr": "A",
+        "acc_dis": "C",
+        "atr_percent": 2.92,
+        "pe_ratio": 38.010307,
+        "roe": 26.82,
+        "sales_growth": 17.6
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 7,
+        "criteria": {
+          "Precio > SMA 50": false,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 80.00620025634765,
+          "sma_150": 72.83766677856445,
+          "sma_200": 70.02875007629395,
+          "high_52w": 87.37999725341797,
+          "low_52w": 54.72999954223633,
+          "distance_from_high": -15.61,
+          "distance_from_low": 34.73
+        }
+      },
+      "week_52_range": {
+        "high": 87.38,
+        "low": 54.73,
+        "current_position": 84.4
       }
     },
     {
@@ -5117,8 +5036,8 @@
       "name": "Nucor Corporation",
       "sector": "Basic Materials",
       "industry": "Steel",
-      "market_cap": 36.88,
-      "price": 161.16,
+      "market_cap": 37.06,
+      "price": 161.95,
       "score": 58,
       "ml_probability": 0.5,
       "grades": {
@@ -5143,23 +5062,23 @@
         "earnings_growth": 34.2,
         "revenue_growth": 8.6,
         "eps_growth": 31.7,
-        "pct_from_high": -18.15,
-        "volume_ratio": 0.76,
-        "rs_rating": 74,
+        "pct_from_high": -17.75,
+        "volume_ratio": 0.99,
+        "rs_rating": 73,
         "inst_ownership": 78.6,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 36.16,
-        "price_momentum": -10.49
+        "volatility": 36.14,
+        "price_momentum": -10.03
       },
       "ibd_ratings": {
         "composite": 66,
-        "rs": 74,
+        "rs": 73,
         "eps": 82,
         "smr": "D",
         "acc_dis": "C",
-        "atr_percent": 3.18,
-        "pe_ratio": 21.40239,
+        "atr_percent": 3.34,
+        "pe_ratio": 21.564579,
         "roe": 9.36,
         "sales_growth": 8.6
       },
@@ -5178,100 +5097,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 176.43259979248046,
-          "sma_150": 157.05261311848957,
-          "sma_200": 150.9367769241333,
+          "sma_50": 176.284599609375,
+          "sma_150": 157.1672332763672,
+          "sma_200": 151.15149799346923,
           "high_52w": 196.89999389648438,
           "low_52w": 96.45993192982979,
-          "distance_from_high": -18.15,
-          "distance_from_low": 67.07
+          "distance_from_high": -17.75,
+          "distance_from_low": 67.89
         }
       },
       "week_52_range": {
         "high": 196.9,
         "low": 96.46,
-        "current_position": 81.8
-      }
-    },
-    {
-      "ticker": "VTR",
-      "name": "Ventas, Inc.",
-      "sector": "Real Estate",
-      "industry": "REIT - Healthcare Facilities",
-      "market_cap": 41.48,
-      "price": 87.33,
-      "score": 57,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "C",
-        "A": "B",
-        "N": "A",
-        "S": "C",
-        "L": "A",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 5,
-        "A": 8,
-        "N": 15,
-        "S": 2,
-        "L": 12,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 10.1,
-        "revenue_growth": 21.4,
-        "eps_growth": 23.5,
-        "pct_from_high": -1.17,
-        "volume_ratio": 0.89,
-        "rs_rating": 85,
-        "inst_ownership": 105.61,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 19.38,
-        "price_momentum": 2.16
-      },
-      "ibd_ratings": {
-        "composite": 66,
-        "rs": 85,
-        "eps": 68,
-        "smr": "C",
-        "acc_dis": "C",
-        "atr_percent": 1.82,
-        "pe_ratio": 161.72221,
-        "roe": 2.17,
-        "sales_growth": 21.4
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 81.93520034790039,
-          "sma_150": 75.59725255330403,
-          "sma_200": 72.66905725479126,
-          "high_52w": 88.36499786376953,
-          "low_52w": 58.91595218767495,
-          "distance_from_high": -1.17,
-          "distance_from_low": 48.23
-        }
-      },
-      "week_52_range": {
-        "high": 88.36,
-        "low": 58.92,
-        "current_position": 98.8
+        "current_position": 82.2
       }
     },
     {
@@ -5279,8 +5117,8 @@
       "name": "The Bank of New York Mellon Cor",
       "sector": "Financial Services",
       "industry": "Banks - Diversified",
-      "market_cap": 79.96,
-      "price": 114.66,
+      "market_cap": 80.13,
+      "price": 114.9,
       "score": 56,
       "ml_probability": 0.5,
       "grades": {
@@ -5305,23 +5143,23 @@
         "earnings_growth": 30.5,
         "revenue_growth": 7.8,
         "eps_growth": 26.5,
-        "pct_from_high": -10.95,
-        "volume_ratio": 0.89,
-        "rs_rating": 68,
-        "inst_ownership": 87.98,
+        "pct_from_high": -10.76,
+        "volume_ratio": 0.87,
+        "rs_rating": 70,
+        "inst_ownership": 87.97,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 23.61,
-        "price_momentum": -2.96
+        "price_momentum": -2.78
       },
       "ibd_ratings": {
-        "composite": 66,
-        "rs": 68,
+        "composite": 67,
+        "rs": 70,
         "eps": 80,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 2.85,
-        "pe_ratio": 15.494595,
+        "atr_percent": 2.69,
+        "pe_ratio": 15.527027,
         "roe": 12.9,
         "sales_growth": 7.8
       },
@@ -5340,19 +5178,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 119.24847259521485,
-          "sma_150": 111.9282499186198,
-          "sma_200": 107.36014064788819,
+          "sma_50": 119.13097229003907,
+          "sma_150": 112.02116577148438,
+          "sma_200": 107.49621318817138,
           "high_52w": 128.75999450683594,
           "low_52w": 69.0074286284975,
-          "distance_from_high": -10.95,
-          "distance_from_low": 66.16
+          "distance_from_high": -10.76,
+          "distance_from_low": 66.5
         }
       },
       "week_52_range": {
         "high": 128.76,
         "low": 69.01,
-        "current_position": 89.0
+        "current_position": 89.2
       }
     },
     {
@@ -5360,8 +5198,8 @@
       "name": "Cisco Systems, Inc.",
       "sector": "Technology",
       "industry": "Communication Equipment",
-      "market_cap": 306.6,
-      "price": 77.6,
+      "market_cap": 310.2,
+      "price": 78.51,
       "score": 56,
       "ml_probability": 0.5,
       "grades": {
@@ -5386,31 +5224,31 @@
         "earnings_growth": 31.2,
         "revenue_growth": 9.7,
         "eps_growth": 30.8,
-        "pct_from_high": -12.01,
-        "volume_ratio": 0.88,
-        "rs_rating": 64,
+        "pct_from_high": -10.98,
+        "volume_ratio": 0.78,
+        "rs_rating": 65,
         "inst_ownership": 82.04,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 27.61,
-        "price_momentum": -1.22
+        "volatility": 27.62,
+        "price_momentum": -0.87
       },
       "ibd_ratings": {
         "composite": 68,
-        "rs": 64,
+        "rs": 65,
         "eps": 82,
         "smr": "C",
         "acc_dis": "C",
-        "atr_percent": 2.52,
-        "pe_ratio": 27.91367,
+        "atr_percent": 2.45,
+        "pe_ratio": 28.241009,
         "roe": 23.75,
         "sales_growth": 9.7
       },
       "trend_template": {
-        "all_pass": false,
-        "score": 7,
+        "all_pass": true,
+        "score": 8,
         "criteria": {
-          "Precio > SMA 50": false,
+          "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
@@ -5419,21 +5257,21 @@
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 1/2 Transition",
+        "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 78.18259994506836,
-          "sma_150": 73.73553517659505,
-          "sma_200": 71.97184801101685,
+          "sma_50": 78.2481999206543,
+          "sma_150": 73.79490188598633,
+          "sma_200": 72.05063997268677,
           "high_52w": 88.19000244140625,
           "low_52w": 51.213562410953124,
-          "distance_from_high": -12.01,
-          "distance_from_low": 51.52
+          "distance_from_high": -10.98,
+          "distance_from_low": 53.3
         }
       },
       "week_52_range": {
         "high": 88.19,
         "low": 51.21,
-        "current_position": 88.0
+        "current_position": 89.0
       }
     },
     {
@@ -5441,8 +5279,8 @@
       "name": "Delta Air Lines, Inc.",
       "sector": "Industrials",
       "industry": "Airlines",
-      "market_cap": 41.68,
-      "price": 63.81,
+      "market_cap": 42.46,
+      "price": 65.01,
       "score": 56,
       "ml_probability": 0.5,
       "grades": {
@@ -5467,23 +5305,23 @@
         "earnings_growth": 44.6,
         "revenue_growth": 2.9,
         "eps_growth": 44.6,
-        "pct_from_high": -16.24,
-        "volume_ratio": 0.82,
-        "rs_rating": 62,
+        "pct_from_high": -14.67,
+        "volume_ratio": 0.78,
+        "rs_rating": 68,
         "inst_ownership": 86.55,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 50.24,
-        "price_momentum": -5.13
+        "volatility": 50.23,
+        "price_momentum": -6.13
       },
       "ibd_ratings": {
-        "composite": 69,
-        "rs": 62,
+        "composite": 72,
+        "rs": 68,
         "eps": 87,
         "smr": "B",
         "acc_dis": "D",
-        "atr_percent": 5.08,
-        "pe_ratio": 8.330288,
+        "atr_percent": 4.74,
+        "pe_ratio": 8.486945,
         "roe": 27.69,
         "sales_growth": 2.9
       },
@@ -5502,100 +5340,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 67.40622970581055,
-          "sma_150": 63.44404996236165,
-          "sma_200": 60.472238807678224,
+          "sma_50": 67.26594360351562,
+          "sma_150": 63.48359387715657,
+          "sma_200": 60.55702850341797,
           "high_52w": 76.18300492416245,
-          "low_52w": 34.31819561757296,
-          "distance_from_high": -16.24,
-          "distance_from_low": 85.94
+          "low_52w": 34.31819917522637,
+          "distance_from_high": -14.67,
+          "distance_from_low": 89.43
         }
       },
       "week_52_range": {
         "high": 76.18,
         "low": 34.32,
-        "current_position": 83.8
-      }
-    },
-    {
-      "ticker": "GE",
-      "name": "GE Aerospace",
-      "sector": "Industrials",
-      "industry": "Aerospace & Defense",
-      "market_cap": 317.46,
-      "price": 300.96,
-      "score": 56,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "B",
-        "S": "C",
-        "L": "C",
-        "I": "A",
-        "M": "C"
-      },
-      "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 8,
-        "S": 2,
-        "L": 4,
-        "I": 10,
-        "M": 5
-      },
-      "metrics": {
-        "earnings_growth": 37.4,
-        "revenue_growth": 17.6,
-        "eps_growth": 33.8,
-        "pct_from_high": -13.51,
-        "volume_ratio": 0.64,
-        "rs_rating": 69,
-        "inst_ownership": 81.09,
-        "market_score": 40,
-        "market_phase": "MARKET IN TRANSITION",
-        "volatility": 31.97,
-        "price_momentum": -9.96
-      },
-      "ibd_ratings": {
-        "composite": 79,
-        "rs": 69,
-        "eps": 83,
-        "smr": "A",
-        "acc_dis": "C",
-        "atr_percent": 3.64,
-        "pe_ratio": 37.432835,
-        "roe": 44.69,
-        "sales_growth": 17.6
-      },
-      "trend_template": {
-        "all_pass": false,
-        "score": 6,
-        "criteria": {
-          "Precio > SMA 50": false,
-          "Precio > SMA 150": false,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 1/2 Transition",
-        "values": {
-          "sma_50": 318.4972967529297,
-          "sma_150": 302.243613688151,
-          "sma_200": 290.60016746520995,
-          "high_52w": 347.97310029360074,
-          "low_52w": 158.52094682677517,
-          "distance_from_high": -13.51,
-          "distance_from_low": 89.86
-        }
-      },
-      "week_52_range": {
-        "high": 347.97,
-        "low": 158.52,
-        "current_position": 86.5
+        "current_position": 85.3
       }
     },
     {
@@ -5603,8 +5360,8 @@
       "name": "Incyte Corporation",
       "sector": "Healthcare",
       "industry": "Biotechnology",
-      "market_cap": 18.36,
-      "price": 92.24,
+      "market_cap": 18.5,
+      "price": 92.95,
       "score": 56,
       "ml_probability": 0.5,
       "grades": {
@@ -5629,23 +5386,23 @@
         "earnings_growth": 43.6,
         "revenue_growth": 27.8,
         "eps_growth": 48.7,
-        "pct_from_high": -17.86,
-        "volume_ratio": 0.95,
-        "rs_rating": 65,
+        "pct_from_high": -17.22,
+        "volume_ratio": 0.77,
+        "rs_rating": 69,
         "inst_ownership": 104.68,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
-        "volatility": 33.79,
-        "price_momentum": -9.33
+        "volatility": 33.8,
+        "price_momentum": -8.26
       },
       "ibd_ratings": {
-        "composite": 77,
-        "rs": 65,
+        "composite": 78,
+        "rs": 69,
         "eps": 89,
         "smr": "A",
         "acc_dis": "C",
-        "atr_percent": 2.91,
-        "pe_ratio": 14.390016,
+        "atr_percent": 2.81,
+        "pe_ratio": 14.50078,
         "roe": 29.87,
         "sales_growth": 27.8
       },
@@ -5664,19 +5421,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 101.19,
-          "sma_150": 95.65073333740234,
-          "sma_200": 89.41664993286133,
+          "sma_50": 100.91579986572266,
+          "sma_150": 95.69806666056316,
+          "sma_200": 89.55484992980956,
           "high_52w": 112.29000091552734,
           "low_52w": 53.560001373291016,
-          "distance_from_high": -17.86,
-          "distance_from_low": 72.22
+          "distance_from_high": -17.22,
+          "distance_from_low": 73.54
         }
       },
       "week_52_range": {
         "high": 112.29,
         "low": 53.56,
-        "current_position": 82.1
+        "current_position": 82.8
       }
     },
     {
@@ -5684,8 +5441,8 @@
       "name": "Quanta Services, Inc.",
       "sector": "Industrials",
       "industry": "Engineering & Construction",
-      "market_cap": 85.58,
-      "price": 572.0,
+      "market_cap": 86.47,
+      "price": 577.95,
       "score": 56,
       "ml_probability": 0.5,
       "grades": {
@@ -5710,23 +5467,23 @@
         "earnings_growth": 2.6,
         "revenue_growth": 19.7,
         "eps_growth": 3.4,
-        "pct_from_high": -2.01,
-        "volume_ratio": 0.59,
-        "rs_rating": 95,
-        "inst_ownership": 95.84,
+        "pct_from_high": -0.99,
+        "volume_ratio": 0.75,
+        "rs_rating": 94,
+        "inst_ownership": 95.86,
         "market_score": 40,
         "market_phase": "MARKET IN TRANSITION",
         "volatility": 35.52,
-        "price_momentum": 3.25
+        "price_momentum": 4.58
       },
       "ibd_ratings": {
         "composite": 66,
-        "rs": 95,
+        "rs": 94,
         "eps": 46,
         "smr": "B",
         "acc_dis": "C",
         "atr_percent": 3.56,
-        "pe_ratio": 83.994125,
+        "pe_ratio": 84.7434,
         "roe": 12.74,
         "sales_growth": 19.7
       },
@@ -5745,19 +5502,100 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 510.1574011230469,
-          "sma_150": 450.52421040852863,
-          "sma_200": 433.0335478210449,
+          "sma_50": 512.9520013427734,
+          "sma_150": 451.8454150390625,
+          "sma_200": 434.1969708251953,
           "high_52w": 583.72998046875,
-          "low_52w": 226.90601871500803,
-          "distance_from_high": -2.01,
-          "distance_from_low": 152.09
+          "low_52w": 226.9060045838258,
+          "distance_from_high": -0.99,
+          "distance_from_low": 154.71
         }
       },
       "week_52_range": {
         "high": 583.73,
         "low": 226.91,
-        "current_position": 98.0
+        "current_position": 99.0
+      }
+    },
+    {
+      "ticker": "NOC",
+      "name": "Northrop Grumman Corporation",
+      "sector": "Industrials",
+      "industry": "Aerospace & Defense",
+      "market_cap": 101.92,
+      "price": 714.15,
+      "score": 55,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "B",
+        "A": "C",
+        "N": "A",
+        "S": "C",
+        "L": "A",
+        "I": "A",
+        "M": "C"
+      },
+      "scores": {
+        "C": 10,
+        "A": 4,
+        "N": 12,
+        "S": 2,
+        "L": 12,
+        "I": 10,
+        "M": 5
+      },
+      "metrics": {
+        "earnings_growth": 15.2,
+        "revenue_growth": 9.6,
+        "eps_growth": 12.9,
+        "pct_from_high": -7.73,
+        "volume_ratio": 1.0,
+        "rs_rating": 90,
+        "inst_ownership": 83.5,
+        "market_score": 40,
+        "market_phase": "MARKET IN TRANSITION",
+        "volatility": 28.68,
+        "price_momentum": -0.98
+      },
+      "ibd_ratings": {
+        "composite": 71,
+        "rs": 90,
+        "eps": 59,
+        "smr": "B",
+        "acc_dis": "C",
+        "atr_percent": 2.77,
+        "pe_ratio": 24.566565,
+        "roe": 26.17,
+        "sales_growth": 9.6
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 696.308896484375,
+          "sma_150": 617.7713256835938,
+          "sma_200": 593.82332321167,
+          "high_52w": 774.0,
+          "low_52w": 443.01102948288667,
+          "distance_from_high": -7.73,
+          "distance_from_low": 61.2
+        }
+      },
+      "week_52_range": {
+        "high": 774.0,
+        "low": 443.01,
+        "current_position": 92.3
       }
     }
   ]

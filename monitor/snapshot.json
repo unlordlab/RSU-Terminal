@@ -190,5 +190,9 @@
   "CRUS": {
     "precio_compra": 136.76,
     "fecha": "16/03/2026"
+  },
+  "GLD": {
+    "precio_compra": 410.0,
+    "fecha": "23/03/2026"
   }
 }

@@ -616,3 +616,51 @@
 2026-03-20 04:48:37,554 [INFO] Completo: 69 candidatos
 2026-03-20 04:48:37,576 [INFO] Guardado: data/scan_cache.json
 2026-03-20 04:48:37,576 [INFO] Tiempo: 5.7 min — OK
+2026-03-23 04:58:38,137 [INFO] ============================================================
+2026-03-23 04:58:38,137 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-23 04:58 UTC
+2026-03-23 04:58:38,213 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-23 04:58:38,213 [INFO] Universo: 480 tickers
+2026-03-23 04:58:38,214 [INFO] PASO 1/4 — Historico batch...
+2026-03-23 04:58:38,215 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-03-23 04:58:40,496 [INFO]   Batch 1 — 50 descargados
+2026-03-23 04:58:42,610 [INFO]   Batch 2 — 100 descargados
+2026-03-23 04:58:44,770 [INFO]   Batch 3 — 150 descargados
+2026-03-23 04:58:47,007 [INFO]   Batch 4 — 200 descargados
+2026-03-23 04:58:53,891 [INFO]   Batch 5 — 250 descargados
+2026-03-23 04:58:55,317 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-23 04:58:59,432 [ERROR] 
+1 Failed download:
+2026-03-23 04:58:59,432 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-23 04:58:59,474 [INFO]   Batch 6 — 299 descargados
+2026-03-23 04:59:04,050 [INFO]   Batch 7 — 349 descargados
+2026-03-23 04:59:08,574 [INFO]   Batch 8 — 399 descargados
+2026-03-23 04:59:12,716 [INFO]   Batch 9 — 449 descargados
+2026-03-23 04:59:15,059 [INFO]   Batch 10 — 479 descargados
+2026-03-23 04:59:15,059 [INFO] PASO 2/4 — Info fundamental...
+2026-03-23 04:59:43,819 [INFO]   Info: 50/480
+2026-03-23 05:00:14,264 [INFO]   Info: 100/480
+2026-03-23 05:00:44,838 [INFO]   Info: 150/480
+2026-03-23 05:01:14,894 [INFO]   Info: 200/480
+2026-03-23 05:01:45,251 [INFO]   Info: 250/480
+2026-03-23 05:02:15,991 [INFO]   Info: 300/480
+2026-03-23 05:02:46,000 [INFO]   Info: 350/480
+2026-03-23 05:03:17,357 [INFO]   Info: 400/480
+2026-03-23 05:03:48,497 [INFO]   Info: 450/480
+2026-03-23 05:04:07,823 [INFO]   480 tickers
+2026-03-23 05:04:07,824 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-23 05:04:07,907 [INFO]   466 tickers
+2026-03-23 05:04:07,907 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-23 05:04:08,522 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-03-23 05:04:08,522 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-23 05:04:08,683 [INFO]   50/466 — candidatos: 10
+2026-03-23 05:04:08,841 [INFO]   100/466 — candidatos: 15
+2026-03-23 05:04:09,000 [INFO]   150/466 — candidatos: 26
+2026-03-23 05:04:09,157 [INFO]   200/466 — candidatos: 33
+2026-03-23 05:04:09,315 [INFO]   250/466 — candidatos: 42
+2026-03-23 05:04:09,473 [INFO]   300/466 — candidatos: 53
+2026-03-23 05:04:09,631 [INFO]   350/466 — candidatos: 59
+2026-03-23 05:04:09,789 [INFO]   400/466 — candidatos: 65
+2026-03-23 05:04:09,947 [INFO]   450/466 — candidatos: 71
+2026-03-23 05:04:09,997 [INFO] Completo: 72 candidatos
+2026-03-23 05:04:10,028 [INFO] Guardado: data/scan_cache.json
+2026-03-23 05:04:10,029 [INFO] Tiempo: 5.5 min — OK

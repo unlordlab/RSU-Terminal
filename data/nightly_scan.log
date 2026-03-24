@@ -664,3 +664,57 @@
 2026-03-23 05:04:09,997 [INFO] Completo: 72 candidatos
 2026-03-23 05:04:10,028 [INFO] Guardado: data/scan_cache.json
 2026-03-23 05:04:10,029 [INFO] Tiempo: 5.5 min — OK
+2026-03-24 04:49:22,693 [INFO] ============================================================
+2026-03-24 04:49:22,693 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-24 04:49 UTC
+2026-03-24 04:49:22,856 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-24 04:49:22,857 [INFO] Universo: 480 tickers
+2026-03-24 04:49:22,857 [INFO] PASO 1/4 — Historico batch...
+2026-03-24 04:49:26,011 [ERROR] 
+1 Failed download:
+2026-03-24 04:49:26,011 [ERROR] ['ALB']: OperationalError('database is locked')
+2026-03-24 04:49:26,056 [INFO]   Batch 1 — 49 descargados
+2026-03-24 04:49:28,058 [INFO]   Batch 2 — 99 descargados
+2026-03-24 04:49:38,907 [ERROR] Failed to get ticker 'DVA' reason: Failed to perform, curl: (28) Operation timed out after 10002 milliseconds with 0 out of 1267 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+2026-03-24 04:50:08,911 [ERROR] 
+1 Failed download:
+2026-03-24 04:50:08,911 [ERROR] ['DVA']: Timeout('Failed to perform, curl: (28) Operation timed out after 30002 milliseconds with 0 out of 89 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+2026-03-24 04:50:08,958 [INFO]   Batch 3 — 148 descargados
+2026-03-24 04:50:11,322 [INFO]   Batch 4 — 198 descargados
+2026-03-24 04:50:13,479 [INFO]   Batch 5 — 248 descargados
+2026-03-24 04:50:15,421 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-24 04:50:16,589 [ERROR] 
+1 Failed download:
+2026-03-24 04:50:16,589 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-24 04:50:16,632 [INFO]   Batch 6 — 297 descargados
+2026-03-24 04:50:19,733 [INFO]   Batch 7 — 347 descargados
+2026-03-24 04:50:22,447 [INFO]   Batch 8 — 397 descargados
+2026-03-24 04:50:25,043 [INFO]   Batch 9 — 447 descargados
+2026-03-24 04:50:27,682 [INFO]   Batch 10 — 477 descargados
+2026-03-24 04:50:27,682 [INFO] PASO 2/4 — Info fundamental...
+2026-03-24 04:50:56,566 [INFO]   Info: 50/480
+2026-03-24 04:51:27,029 [INFO]   Info: 100/480
+2026-03-24 04:51:58,430 [INFO]   Info: 150/480
+2026-03-24 04:52:28,905 [INFO]   Info: 200/480
+2026-03-24 04:52:59,471 [INFO]   Info: 250/480
+2026-03-24 04:53:30,000 [INFO]   Info: 300/480
+2026-03-24 04:54:00,861 [INFO]   Info: 350/480
+2026-03-24 04:54:30,962 [INFO]   Info: 400/480
+2026-03-24 04:55:01,387 [INFO]   Info: 450/480
+2026-03-24 04:55:20,466 [INFO]   480 tickers
+2026-03-24 04:55:20,466 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-24 04:55:20,550 [INFO]   464 tickers
+2026-03-24 04:55:20,550 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-24 04:55:21,183 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-03-24 04:55:21,183 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-24 04:55:21,342 [INFO]   50/464 — candidatos: 8
+2026-03-24 04:55:21,500 [INFO]   100/464 — candidatos: 14
+2026-03-24 04:55:21,693 [INFO]   150/464 — candidatos: 24
+2026-03-24 04:55:21,849 [INFO]   200/464 — candidatos: 31
+2026-03-24 04:55:22,005 [INFO]   250/464 — candidatos: 41
+2026-03-24 04:55:22,162 [INFO]   300/464 — candidatos: 50
+2026-03-24 04:55:22,319 [INFO]   350/464 — candidatos: 55
+2026-03-24 04:55:22,475 [INFO]   400/464 — candidatos: 62
+2026-03-24 04:55:22,631 [INFO]   450/464 — candidatos: 68
+2026-03-24 04:55:22,675 [INFO] Completo: 69 candidatos
+2026-03-24 04:55:22,689 [INFO] Guardado: data/scan_cache.json
+2026-03-24 04:55:22,689 [INFO] Tiempo: 6.0 min — OK

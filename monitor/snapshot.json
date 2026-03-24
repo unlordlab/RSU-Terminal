@@ -194,5 +194,9 @@
   "GLD": {
     "precio_compra": 410.0,
     "fecha": "23/03/2026"
+  },
+  "WT": {
+    "precio_compra": 14.0,
+    "fecha": "24/03/2026"
   }
 }

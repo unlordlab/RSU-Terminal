@@ -11,10 +11,6 @@
     "precio_compra": 39.12,
     "fecha": "11/07/2025"
   },
-  "KTOS": {
-    "precio_compra": 51.71,
-    "fecha": "11/07/2025"
-  },
   "LEU": {
     "precio_compra": 206.4,
     "fecha": "11/07/2025"
@@ -194,5 +190,9 @@
   "WT": {
     "precio_compra": 14.0,
     "fecha": "24/03/2026"
+  },
+  "WDC": {
+    "precio_compra": 298.2,
+    "fecha": "25/03/2026"
   }
 }

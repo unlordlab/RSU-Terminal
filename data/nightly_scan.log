@@ -813,3 +813,50 @@
 2026-03-26 05:06:49,650 [INFO] Completo: 68 candidatos
 2026-03-26 05:06:49,683 [INFO] Guardado: data/scan_cache.json
 2026-03-26 05:06:49,684 [INFO] Tiempo: 5.7 min — OK
+2026-03-27 05:02:33,776 [INFO] ============================================================
+2026-03-27 05:02:33,776 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-27 05:02 UTC
+2026-03-27 05:02:33,861 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-27 05:02:33,862 [INFO] Universo: 480 tickers
+2026-03-27 05:02:33,862 [INFO] PASO 1/4 — Historico batch...
+2026-03-27 05:02:36,210 [INFO]   Batch 1 — 50 descargados
+2026-03-27 05:02:38,422 [INFO]   Batch 2 — 100 descargados
+2026-03-27 05:02:40,647 [INFO]   Batch 3 — 150 descargados
+2026-03-27 05:02:45,997 [INFO]   Batch 4 — 200 descargados
+2026-03-27 05:02:49,019 [INFO]   Batch 5 — 250 descargados
+2026-03-27 05:02:53,544 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-27 05:02:55,628 [ERROR] 
+1 Failed download:
+2026-03-27 05:02:55,628 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-27 05:02:55,673 [INFO]   Batch 6 — 299 descargados
+2026-03-27 05:02:58,904 [INFO]   Batch 7 — 349 descargados
+2026-03-27 05:03:04,611 [INFO]   Batch 8 — 399 descargados
+2026-03-27 05:03:07,933 [INFO]   Batch 9 — 449 descargados
+2026-03-27 05:03:10,343 [INFO]   Batch 10 — 479 descargados
+2026-03-27 05:03:10,344 [INFO] PASO 2/4 — Info fundamental...
+2026-03-27 05:03:40,357 [INFO]   Info: 50/480
+2026-03-27 05:04:11,542 [INFO]   Info: 100/480
+2026-03-27 05:04:42,737 [INFO]   Info: 150/480
+2026-03-27 05:05:13,560 [INFO]   Info: 200/480
+2026-03-27 05:05:44,793 [INFO]   Info: 250/480
+2026-03-27 05:06:16,090 [INFO]   Info: 300/480
+2026-03-27 05:06:47,112 [INFO]   Info: 350/480
+2026-03-27 05:07:18,221 [INFO]   Info: 400/480
+2026-03-27 05:07:49,633 [INFO]   Info: 450/480
+2026-03-27 05:08:09,353 [INFO]   480 tickers
+2026-03-27 05:08:09,354 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-27 05:08:09,438 [INFO]   467 tickers
+2026-03-27 05:08:09,438 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-27 05:08:10,134 [INFO]   Market: 30/100 DOWNTREND UNDER PRESSURE
+2026-03-27 05:08:10,134 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-27 05:08:10,293 [INFO]   50/467 — candidatos: 7
+2026-03-27 05:08:10,452 [INFO]   100/467 — candidatos: 11
+2026-03-27 05:08:10,610 [INFO]   150/467 — candidatos: 21
+2026-03-27 05:08:10,769 [INFO]   200/467 — candidatos: 26
+2026-03-27 05:08:10,938 [INFO]   250/467 — candidatos: 31
+2026-03-27 05:08:11,097 [INFO]   300/467 — candidatos: 40
+2026-03-27 05:08:11,256 [INFO]   350/467 — candidatos: 43
+2026-03-27 05:08:11,415 [INFO]   400/467 — candidatos: 48
+2026-03-27 05:08:11,574 [INFO]   450/467 — candidatos: 54
+2026-03-27 05:08:11,628 [INFO] Completo: 55 candidatos
+2026-03-27 05:08:11,646 [INFO] Guardado: data/scan_cache.json
+2026-03-27 05:08:11,646 [INFO] Tiempo: 5.6 min — OK

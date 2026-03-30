@@ -860,3 +860,53 @@
 2026-03-27 05:08:11,628 [INFO] Completo: 55 candidatos
 2026-03-27 05:08:11,646 [INFO] Guardado: data/scan_cache.json
 2026-03-27 05:08:11,646 [INFO] Tiempo: 5.6 min — OK
+2026-03-30 05:18:48,788 [INFO] ============================================================
+2026-03-30 05:18:48,789 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-03-30 05:18 UTC
+2026-03-30 05:18:48,899 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-03-30 05:18:48,900 [INFO] Universo: 480 tickers
+2026-03-30 05:18:48,900 [INFO] PASO 1/4 — Historico batch...
+2026-03-30 05:18:48,902 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-03-30 05:18:48,902 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-03-30 05:18:48,903 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-03-30 05:18:51,530 [INFO]   Batch 1 — 50 descargados
+2026-03-30 05:18:53,997 [INFO]   Batch 2 — 100 descargados
+2026-03-30 05:18:56,519 [INFO]   Batch 3 — 150 descargados
+2026-03-30 05:19:00,804 [INFO]   Batch 4 — 200 descargados
+2026-03-30 05:19:05,169 [INFO]   Batch 5 — 250 descargados
+2026-03-30 05:19:07,138 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-30 05:19:08,615 [ERROR] 
+1 Failed download:
+2026-03-30 05:19:08,615 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-03-30 05:19:08,661 [INFO]   Batch 6 — 299 descargados
+2026-03-30 05:19:11,577 [INFO]   Batch 7 — 349 descargados
+2026-03-30 05:19:14,426 [INFO]   Batch 8 — 399 descargados
+2026-03-30 05:19:18,049 [INFO]   Batch 9 — 449 descargados
+2026-03-30 05:19:19,560 [INFO]   Batch 10 — 479 descargados
+2026-03-30 05:19:19,560 [INFO] PASO 2/4 — Info fundamental...
+2026-03-30 05:19:46,800 [INFO]   Info: 50/480
+2026-03-30 05:20:17,271 [INFO]   Info: 100/480
+2026-03-30 05:20:46,514 [INFO]   Info: 150/480
+2026-03-30 05:21:16,747 [INFO]   Info: 200/480
+2026-03-30 05:21:46,400 [INFO]   Info: 250/480
+2026-03-30 05:22:15,629 [INFO]   Info: 300/480
+2026-03-30 05:22:45,619 [INFO]   Info: 350/480
+2026-03-30 05:23:15,169 [INFO]   Info: 400/480
+2026-03-30 05:23:45,617 [INFO]   Info: 450/480
+2026-03-30 05:24:04,021 [INFO]   480 tickers
+2026-03-30 05:24:04,022 [INFO] PASO 3/4 — Pre-filtro...
+2026-03-30 05:24:04,109 [INFO]   467 tickers
+2026-03-30 05:24:04,109 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-03-30 05:24:04,883 [INFO]   Market: 30/100 DOWNTREND UNDER PRESSURE
+2026-03-30 05:24:04,883 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-03-30 05:24:05,048 [INFO]   50/467 — candidatos: 8
+2026-03-30 05:24:05,207 [INFO]   100/467 — candidatos: 11
+2026-03-30 05:24:05,367 [INFO]   150/467 — candidatos: 19
+2026-03-30 05:24:05,528 [INFO]   200/467 — candidatos: 24
+2026-03-30 05:24:05,692 [INFO]   250/467 — candidatos: 28
+2026-03-30 05:24:05,855 [INFO]   300/467 — candidatos: 38
+2026-03-30 05:24:06,016 [INFO]   350/467 — candidatos: 42
+2026-03-30 05:24:06,176 [INFO]   400/467 — candidatos: 47
+2026-03-30 05:24:06,340 [INFO]   450/467 — candidatos: 53
+2026-03-30 05:24:06,395 [INFO] Completo: 54 candidatos
+2026-03-30 05:24:06,430 [INFO] Guardado: data/scan_cache.json
+2026-03-30 05:24:06,430 [INFO] Tiempo: 5.3 min — OK

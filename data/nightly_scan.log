@@ -1300,3 +1300,56 @@
 2026-04-09 05:10:01,822 [INFO] Completo: 21 candidatos
 2026-04-09 05:10:01,833 [INFO] Guardado: data/scan_cache.json
 2026-04-09 05:10:01,833 [INFO] Tiempo: 5.4 min — OK
+2026-04-10 05:19:29,389 [INFO] ============================================================
+2026-04-10 05:19:29,389 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-04-10 05:19 UTC
+2026-04-10 05:19:29,472 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-04-10 05:19:29,474 [INFO] Universo: 480 tickers
+2026-04-10 05:19:29,474 [INFO] PASO 1/4 — Historico batch...
+2026-04-10 05:19:32,202 [INFO]   Batch 1 — 50 descargados
+2026-04-10 05:19:34,560 [INFO]   Batch 2 — 100 descargados
+2026-04-10 05:19:35,491 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-04-10 05:19:35,707 [ERROR] $DAY: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-10 05:19:37,163 [ERROR] 
+1 Failed download:
+2026-04-10 05:19:37,163 [ERROR] ['DAY']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-10 05:19:37,208 [INFO]   Batch 3 — 149 descargados
+2026-04-10 05:19:41,006 [INFO]   Batch 4 — 199 descargados
+2026-04-10 05:19:43,862 [INFO]   Batch 5 — 249 descargados
+2026-04-10 05:19:46,246 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-10 05:19:46,401 [ERROR] 
+1 Failed download:
+2026-04-10 05:19:46,401 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-10 05:19:46,477 [INFO]   Batch 6 — 298 descargados
+2026-04-10 05:19:50,139 [INFO]   Batch 7 — 348 descargados
+2026-04-10 05:19:53,791 [INFO]   Batch 8 — 398 descargados
+2026-04-10 05:19:58,066 [INFO]   Batch 9 — 448 descargados
+2026-04-10 05:19:59,530 [INFO]   Batch 10 — 478 descargados
+2026-04-10 05:19:59,530 [INFO] PASO 2/4 — Info fundamental...
+2026-04-10 05:20:27,164 [INFO]   Info: 50/480
+2026-04-10 05:20:57,191 [INFO]   Info: 100/480
+2026-04-10 05:21:19,012 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-04-10 05:21:26,583 [INFO]   Info: 150/480
+2026-04-10 05:21:56,375 [INFO]   Info: 200/480
+2026-04-10 05:22:26,634 [INFO]   Info: 250/480
+2026-04-10 05:22:56,999 [INFO]   Info: 300/480
+2026-04-10 05:23:26,718 [INFO]   Info: 350/480
+2026-04-10 05:23:56,705 [INFO]   Info: 400/480
+2026-04-10 05:24:26,476 [INFO]   Info: 450/480
+2026-04-10 05:24:44,718 [INFO]   479 tickers
+2026-04-10 05:24:44,718 [INFO] PASO 3/4 — Pre-filtro...
+2026-04-10 05:24:44,804 [INFO]   462 tickers
+2026-04-10 05:24:44,804 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-04-10 05:24:45,538 [INFO]   Market: 70/100 UPTREND UNDER PRESSURE
+2026-04-10 05:24:45,538 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-04-10 05:24:45,699 [INFO]   50/462 — candidatos: 9
+2026-04-10 05:24:45,859 [INFO]   100/462 — candidatos: 14
+2026-04-10 05:24:46,020 [INFO]   150/462 — candidatos: 25
+2026-04-10 05:24:46,181 [INFO]   200/462 — candidatos: 35
+2026-04-10 05:24:46,342 [INFO]   250/462 — candidatos: 46
+2026-04-10 05:24:46,502 [INFO]   300/462 — candidatos: 57
+2026-04-10 05:24:46,663 [INFO]   350/462 — candidatos: 64
+2026-04-10 05:24:46,821 [INFO]   400/462 — candidatos: 72
+2026-04-10 05:24:47,018 [INFO]   450/462 — candidatos: 79
+2026-04-10 05:24:47,056 [INFO] Completo: 81 candidatos
+2026-04-10 05:24:47,070 [INFO] Guardado: data/scan_cache.json
+2026-04-10 05:24:47,071 [INFO] Tiempo: 5.3 min — OK

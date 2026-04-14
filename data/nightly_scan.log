@@ -1406,3 +1406,57 @@
 2026-04-13 05:41:07,704 [INFO] Completo: 82 candidatos
 2026-04-13 05:41:07,721 [INFO] Guardado: data/scan_cache.json
 2026-04-13 05:41:07,721 [INFO] Tiempo: 6.3 min — OK
+2026-04-14 05:16:48,335 [INFO] ============================================================
+2026-04-14 05:16:48,335 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-04-14 05:16 UTC
+2026-04-14 05:16:48,526 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-04-14 05:16:48,527 [INFO] Universo: 480 tickers
+2026-04-14 05:16:48,528 [INFO] PASO 1/4 — Historico batch...
+2026-04-14 05:16:48,529 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-04-14 05:16:53,181 [INFO]   Batch 1 — 50 descargados
+2026-04-14 05:16:57,362 [INFO]   Batch 2 — 100 descargados
+2026-04-14 05:16:58,402 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-04-14 05:16:58,992 [ERROR] $DAY: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-14 05:17:02,208 [ERROR] 
+1 Failed download:
+2026-04-14 05:17:02,208 [ERROR] ['DAY']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-14 05:17:02,246 [INFO]   Batch 3 — 149 descargados
+2026-04-14 05:17:06,797 [INFO]   Batch 4 — 199 descargados
+2026-04-14 05:17:11,082 [INFO]   Batch 5 — 249 descargados
+2026-04-14 05:17:13,867 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-14 05:17:15,104 [ERROR] 
+1 Failed download:
+2026-04-14 05:17:15,104 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-04-14 05:17:15,142 [INFO]   Batch 6 — 298 descargados
+2026-04-14 05:17:18,482 [INFO]   Batch 7 — 348 descargados
+2026-04-14 05:17:22,090 [INFO]   Batch 8 — 398 descargados
+2026-04-14 05:17:25,384 [INFO]   Batch 9 — 448 descargados
+2026-04-14 05:17:27,599 [INFO]   Batch 10 — 478 descargados
+2026-04-14 05:17:27,599 [INFO] PASO 2/4 — Info fundamental...
+2026-04-14 05:18:00,646 [INFO]   Info: 50/480
+2026-04-14 05:18:35,076 [INFO]   Info: 100/480
+2026-04-14 05:19:01,209 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-04-14 05:19:10,223 [INFO]   Info: 150/480
+2026-04-14 05:19:44,396 [INFO]   Info: 200/480
+2026-04-14 05:20:18,368 [INFO]   Info: 250/480
+2026-04-14 05:20:53,116 [INFO]   Info: 300/480
+2026-04-14 05:21:27,399 [INFO]   Info: 350/480
+2026-04-14 05:22:01,740 [INFO]   Info: 400/480
+2026-04-14 05:22:36,700 [INFO]   Info: 450/480
+2026-04-14 05:22:58,155 [INFO]   479 tickers
+2026-04-14 05:22:58,156 [INFO] PASO 3/4 — Pre-filtro...
+2026-04-14 05:22:58,224 [INFO]   461 tickers
+2026-04-14 05:22:58,224 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-04-14 05:22:59,146 [INFO]   Market: 70/100 UPTREND UNDER PRESSURE
+2026-04-14 05:22:59,146 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-04-14 05:22:59,285 [INFO]   50/461 — candidatos: 9
+2026-04-14 05:22:59,421 [INFO]   100/461 — candidatos: 14
+2026-04-14 05:22:59,559 [INFO]   150/461 — candidatos: 25
+2026-04-14 05:22:59,696 [INFO]   200/461 — candidatos: 35
+2026-04-14 05:22:59,834 [INFO]   250/461 — candidatos: 45
+2026-04-14 05:22:59,971 [INFO]   300/461 — candidatos: 55
+2026-04-14 05:23:00,108 [INFO]   350/461 — candidatos: 61
+2026-04-14 05:23:00,244 [INFO]   400/461 — candidatos: 70
+2026-04-14 05:23:00,380 [INFO]   450/461 — candidatos: 77
+2026-04-14 05:23:00,411 [INFO] Completo: 78 candidatos
+2026-04-14 05:23:00,424 [INFO] Guardado: data/scan_cache.json
+2026-04-14 05:23:00,424 [INFO] Tiempo: 6.2 min — OK

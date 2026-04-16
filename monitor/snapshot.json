@@ -107,10 +107,6 @@
     "precio_compra": 109.75,
     "fecha": "11/12/2025"
   },
-  "MRCY": {
-    "precio_compra": 75.25,
-    "fecha": "11/12/2025"
-  },
   "MIR": {
     "precio_compra": 26.13,
     "fecha": "12/12/2025"
@@ -125,10 +121,6 @@
   },
   "UMAC": {
     "precio_compra": 15.75,
-    "fecha": "01/01/2026"
-  },
-  "PLAB": {
-    "precio_compra": 35.78,
     "fecha": "01/01/2026"
   },
   "COHR": {
@@ -155,10 +147,6 @@
     "precio_compra": 18.8,
     "fecha": "06/03/2026"
   },
-  "SKYT": {
-    "precio_compra": 29.0,
-    "fecha": "10/03/2026"
-  },
   "USAR": {
     "precio_compra": 20.0,
     "fecha": "10/03/2026"
@@ -178,10 +166,6 @@
   "URG": {
     "precio_compra": 1.58,
     "fecha": "12/03/2026"
-  },
-  "CRUS": {
-    "precio_compra": 136.76,
-    "fecha": "16/03/2026"
   },
   "GLD": {
     "precio_compra": 410.0,

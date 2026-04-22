@@ -12,8 +12,8 @@
     "fecha": "11/07/2025"
   },
   "LEU": {
-    "precio_compra": 206.4,
-    "fecha": "11/07/2025"
+    "precio_compra": 199.48,
+    "fecha": "22/04/2026"
   },
   "IBIT": {
     "precio_compra": 59.0,
@@ -73,10 +73,6 @@
   },
   "ENS": {
     "precio_compra": 123.1,
-    "fecha": "12/10/2025"
-  },
-  "PPTA": {
-    "precio_compra": 24.5,
     "fecha": "12/10/2025"
   },
   "PLPC": {
@@ -166,10 +162,6 @@
   "GLD": {
     "precio_compra": 410.0,
     "fecha": "23/03/2026"
-  },
-  "WT": {
-    "precio_compra": 14.0,
-    "fecha": "24/03/2026"
   },
   "WDC": {
     "precio_compra": 298.2,

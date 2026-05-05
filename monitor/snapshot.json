@@ -123,16 +123,8 @@
     "precio_compra": 108.0,
     "fecha": "06/02/2026"
   },
-  "VRT": {
-    "precio_compra": 250.0,
-    "fecha": "05/03/2026"
-  },
   "MSFT": {
     "precio_compra": 408.0,
-    "fecha": "06/03/2026"
-  },
-  "RDDT": {
-    "precio_compra": 140.0,
     "fecha": "06/03/2026"
   },
   "SOFI": {
@@ -147,14 +139,6 @@
     "precio_compra": 36.0,
     "fecha": "10/03/2026"
   },
-  "VLO": {
-    "precio_compra": 224.47,
-    "fecha": "11/03/2026"
-  },
-  "ALAB": {
-    "precio_compra": 126.45,
-    "fecha": "11/03/2026"
-  },
   "URG": {
     "precio_compra": 1.58,
     "fecha": "12/03/2026"
@@ -162,9 +146,5 @@
   "GLD": {
     "precio_compra": 410.0,
     "fecha": "23/03/2026"
-  },
-  "WDC": {
-    "precio_compra": 298.2,
-    "fecha": "25/03/2026"
   }
 }

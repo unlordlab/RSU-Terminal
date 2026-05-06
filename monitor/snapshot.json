@@ -146,5 +146,9 @@
   "GLD": {
     "precio_compra": 410.0,
     "fecha": "23/03/2026"
+  },
+  "LITE": {
+    "precio_compra": 922.0,
+    "fecha": "06/05/2026"
   }
 }

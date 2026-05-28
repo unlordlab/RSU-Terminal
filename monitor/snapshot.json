@@ -170,5 +170,9 @@
   "ZS": {
     "precio_compra": 130.3,
     "fecha": "28/05/2026"
+  },
+  "KTOS": {
+    "precio_compra": 66.19,
+    "fecha": "28/05/2026"
   }
 }

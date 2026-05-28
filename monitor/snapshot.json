@@ -166,5 +166,9 @@
   "NU": {
     "precio_compra": 12.73,
     "fecha": "25/05/2026"
+  },
+  "ZS": {
+    "precio_compra": 130.3,
+    "fecha": "28/05/2026"
   }
 }

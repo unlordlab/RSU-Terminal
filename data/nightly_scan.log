@@ -3200,3 +3200,62 @@
 2026-05-28 06:53:29,420 [INFO] Completo: 109 candidatos
 2026-05-28 06:53:29,437 [INFO] Guardado: data/scan_cache.json
 2026-05-28 06:53:29,437 [INFO] Tiempo: 6.3 min — OK
+2026-05-29 06:47:36,835 [INFO] ============================================================
+2026-05-29 06:47:36,835 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-05-29 06:47 UTC
+2026-05-29 06:47:36,918 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-05-29 06:47:36,919 [INFO] Universo: 480 tickers
+2026-05-29 06:47:36,919 [INFO] PASO 1/4 — Historico batch...
+2026-05-29 06:47:39,622 [INFO]   Batch 1 — 50 descargados
+2026-05-29 06:47:41,928 [INFO]   Batch 2 — 100 descargados
+2026-05-29 06:47:44,090 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-05-29 06:47:44,357 [ERROR] $DAY: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-05-29 06:47:44,547 [ERROR] 
+1 Failed download:
+2026-05-29 06:47:44,547 [ERROR] ['DAY']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-05-29 06:47:44,579 [INFO]   Batch 3 — 149 descargados
+2026-05-29 06:47:46,351 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: EXAS"}}}
+2026-05-29 06:47:46,599 [ERROR] $EXAS: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-05-29 06:47:47,118 [ERROR] 
+1 Failed download:
+2026-05-29 06:47:47,118 [ERROR] ['EXAS']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-05-29 06:47:47,150 [INFO]   Batch 4 — 198 descargados
+2026-05-29 06:47:49,753 [INFO]   Batch 5 — 248 descargados
+2026-05-29 06:47:50,279 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-05-29 06:47:52,092 [ERROR] 
+1 Failed download:
+2026-05-29 06:47:52,092 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-05-29 06:47:52,123 [INFO]   Batch 6 — 297 descargados
+2026-05-29 06:47:55,444 [INFO]   Batch 7 — 347 descargados
+2026-05-29 06:47:57,907 [INFO]   Batch 8 — 397 descargados
+2026-05-29 06:48:00,566 [INFO]   Batch 9 — 447 descargados
+2026-05-29 06:48:03,018 [INFO]   Batch 10 — 477 descargados
+2026-05-29 06:48:03,019 [INFO] PASO 2/4 — Info fundamental...
+2026-05-29 06:48:31,497 [INFO]   Info: 50/480
+2026-05-29 06:49:00,937 [INFO]   Info: 100/480
+2026-05-29 06:49:22,623 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-05-29 06:49:30,202 [INFO]   Info: 150/480
+2026-05-29 06:49:46,649 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: EXAS"}}}
+2026-05-29 06:50:00,599 [INFO]   Info: 200/480
+2026-05-29 06:50:29,703 [INFO]   Info: 250/480
+2026-05-29 06:50:58,889 [INFO]   Info: 300/480
+2026-05-29 06:51:29,223 [INFO]   Info: 350/480
+2026-05-29 06:51:58,396 [INFO]   Info: 400/480
+2026-05-29 06:52:27,908 [INFO]   Info: 450/480
+2026-05-29 06:52:46,808 [INFO]   478 tickers
+2026-05-29 06:52:46,808 [INFO] PASO 3/4 — Pre-filtro...
+2026-05-29 06:52:46,896 [INFO]   465 tickers
+2026-05-29 06:52:46,896 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-05-29 06:52:47,530 [INFO]   Market: 80/100 CONFIRMED UPTREND
+2026-05-29 06:52:47,530 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-05-29 06:52:47,696 [INFO]   50/465 — candidatos: 16
+2026-05-29 06:52:47,861 [INFO]   100/465 — candidatos: 27
+2026-05-29 06:52:48,025 [INFO]   150/465 — candidatos: 39
+2026-05-29 06:52:48,189 [INFO]   200/465 — candidatos: 54
+2026-05-29 06:52:48,354 [INFO]   250/465 — candidatos: 67
+2026-05-29 06:52:48,518 [INFO]   300/465 — candidatos: 75
+2026-05-29 06:52:48,682 [INFO]   350/465 — candidatos: 87
+2026-05-29 06:52:48,847 [INFO]   400/465 — candidatos: 97
+2026-05-29 06:52:49,012 [INFO]   450/465 — candidatos: 107
+2026-05-29 06:52:49,062 [INFO] Completo: 111 candidatos
+2026-05-29 06:52:49,080 [INFO] Guardado: data/scan_cache.json
+2026-05-29 06:52:49,080 [INFO] Tiempo: 5.2 min — OK

@@ -458,7 +458,7 @@ def _build(title, desc, link, src, mins):
 # ══════════════════════════════════════════════════════════════════════
 def _fetch_feedparser(src):
     import feedparser
-    feed = feedparser.parse(src["url"], request_headers={"User-Agent":"RSU-Terminal/2.0"}, sanitize_html=False)
+    feed = feedparser.parse(src["url"])
     items = []
     for e in feed.entries[:30]:
         title = getattr(e,"title","") or ""
@@ -502,53 +502,48 @@ def _fetch_atom(src):
     return items, len(items)>0
 
 def _fetch_source(src):
-    fmt = src.get("fmt","rss")
-    last_err = None
-    # Try feedparser first (best parser)
-    if fmt != "atom":
+    """Fetch one source. Returns (items, ok). Never raises."""
+    fmt = src.get("fmt", "rss")
+    try:
+        if fmt == "atom":
+            return _fetch_atom(src)
+        # Try feedparser first
         try:
             return _fetch_feedparser(src)
         except ImportError:
-            pass  # feedparser not installed, fall through
-        except Exception as e:
-            last_err = e
-    # Try atom parser for atom feeds or feedparser failures
-    if fmt == "atom":
-        try:
-            return _fetch_atom(src)
+            pass  # not installed
         except Exception:
-            return [], False
-    # Requests fallback for RSS
-    try:
+            pass
+        # Requests fallback
         return _fetch_requests_rss(src)
     except Exception:
-        pass
-    return [], False
+        return [], False
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_news():
     from concurrent.futures import wait as _wait
     all_items, status = [], {}
-    # Pre-mark all as failed; overwrite on success
     for s in SOURCES:
         status[s["id"]] = {"count": 0, "ok": False}
 
-    with ThreadPoolExecutor(max_workers=12) as ex:
+    # DO NOT use context manager — its __exit__ calls shutdown(wait=True)
+    # which blocks indefinitely on stuck HTTP threads (can't cancel running threads).
+    ex = ThreadPoolExecutor(max_workers=12)
+    try:
         futures = {ex.submit(_fetch_source, s): s for s in SOURCES}
-        # Hard 25-second wall-clock timeout for the whole batch
-        done, not_done = _wait(futures.keys(), timeout=25)
-        # Cancel anything still running
-        for fut in not_done:
+        done, _not_done = _wait(futures.keys(), timeout=15)
+        for fut in _not_done:
             fut.cancel()
-        # Collect results from completed futures
         for fut in done:
             src = futures[fut]
             try:
-                items, ok = fut.result(timeout=2)
+                items, ok = fut.result(timeout=1)
                 all_items.extend(items)
                 status[src["id"]] = {"count": len(items), "ok": ok}
             except Exception:
-                pass  # already marked failed above
+                pass
+    finally:
+        ex.shutdown(wait=False)   # ← key: don't block on stuck threads
 
     all_items.sort(key=lambda x: x["minutes_ago"])
     return all_items, status

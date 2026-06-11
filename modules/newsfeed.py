@@ -1,3 +1,4 @@
+
 # modules/newsfeed.py
 """
 RSU News Feed — financial news aggregator.
@@ -14,14 +15,24 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # CONFIGURACIÓN
 # ══════════════════════════════════════════════════════════════════════
 SOURCES = [
-    {"id": "reuters",      "label": "Reuters",       "css": "src-reuters",      "url": "https://feeds.reuters.com/reuters/businessNews"},
-    {"id": "marketwatch",  "label": "MarketWatch",   "css": "src-marketwatch",  "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
-    {"id": "cnbc",         "label": "CNBC",          "css": "src-cnbc",         "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
-    {"id": "yahoofinance", "label": "Yahoo Finance", "css": "src-yahoofinance", "url": "https://finance.yahoo.com/rss/topstories"},
-    {"id": "wsj",          "label": "WSJ",           "css": "src-wsj",          "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
-    {"id": "investing",    "label": "Investing.com", "css": "src-investing",    "url": "https://www.investing.com/rss/news.rss"},
-    {"id": "benzinga",     "label": "Benzinga",      "css": "src-generic",      "url": "https://www.benzinga.com/feed"},
-    {"id": "ft",           "label": "FT",            "css": "src-ft",           "url": "https://www.ft.com/rss/home/uk"},
+    # Mainstream financial news
+    {"id": "reuters",      "label": "Reuters",          "css": "src-reuters",      "url": "https://feeds.reuters.com/reuters/businessNews"},
+    {"id": "marketwatch",  "label": "MarketWatch",      "css": "src-marketwatch",  "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
+    {"id": "cnbc",         "label": "CNBC",             "css": "src-cnbc",         "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
+    {"id": "yahoofinance", "label": "Yahoo Finance",    "css": "src-yahoofinance", "url": "https://finance.yahoo.com/rss/topstories"},
+    {"id": "wsj",          "label": "WSJ",              "css": "src-wsj",          "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
+    {"id": "ft",           "label": "FT",               "css": "src-ft",           "url": "https://www.ft.com/rss/home/uk"},
+    {"id": "investing",    "label": "Investing.com",    "css": "src-investing",    "url": "https://www.investing.com/rss/news.rss"},
+    {"id": "benzinga",     "label": "Benzinga",         "css": "src-benzinga",     "url": "https://www.benzinga.com/feed"},
+    {"id": "nasdaq",       "label": "Nasdaq",           "css": "src-nasdaq",       "url": "https://www.nasdaq.com/feed/rss/nasdaq-originals"},
+    {"id": "bizinsider",   "label": "Business Insider", "css": "src-bizinsider",   "url": "https://feeds.businessinsider.com/custom/all"},
+    {"id": "seekingalpha", "label": "Seeking Alpha",    "css": "src-seekingalpha", "url": "https://seekingalpha.com/market_currents.xml"},
+    {"id": "zerohedge",    "label": "ZeroHedge",        "css": "src-zerohedge",    "url": "https://feeds.feedburner.com/zerohedge/feed"},
+    # Regulators & policy
+    {"id": "fed",          "label": "FED",              "css": "src-fed",          "url": "https://www.federalreserve.gov/feeds/press_all.xml"},
+    {"id": "sec",          "label": "SEC 8-K",          "css": "src-sec",          "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&dateb=&owner=include&count=20&output=atom"},
+    # Trump / Truth Social
+    {"id": "trump",        "label": "Trump",            "css": "src-trump",        "url": "https://truthsocial.com/@realDonaldTrump.rss", "special": "trump"},
 ]
 
 SECTORS_MAP = {
@@ -274,6 +285,65 @@ _CSS = """
 .src-yahoofinance  { color:#818cf8; border-color:rgba(129,140,248,.25); background:rgba(129,140,248,.07); }
 .src-investing     { color:#38bdf8; border-color:rgba(56,189,248,.25);  background:rgba(56,189,248,.07); }
 .src-generic       { color:#6a6a88; border-color:#242434;               background:transparent; }
+.src-benzinga      { color:#f59e0b; border-color:rgba(245,158,11,.3);  background:rgba(245,158,11,.07); }
+.src-nasdaq        { color:#60a5fa; border-color:rgba(96,165,250,.25); background:rgba(96,165,250,.07); }
+.src-bizinsider    { color:#fb923c; border-color:rgba(251,146,60,.25); background:rgba(251,146,60,.07); }
+.src-seekingalpha  { color:#a3e635; border-color:rgba(163,230,53,.25); background:rgba(163,230,53,.07); }
+.src-zerohedge     { color:#facc15; border-color:rgba(250,204,21,.25); background:rgba(250,204,21,.07); }
+.src-fed           { color:#e040fb; border-color:rgba(224,64,251,.25); background:rgba(224,64,251,.07); }
+.src-sec           { color:#448aff; border-color:rgba(68,138,255,.25); background:rgba(68,138,255,.10); }
+.src-trump         { color:#ff6b35; border-color:rgba(255,107,53,.35); background:rgba(255,107,53,.10); }
+
+/* ── FIX: multiselect tag clipping ───────────────────────── */
+[data-testid="stMultiSelect"] [data-baseweb="tag"] {
+  max-width: none !important;
+  height: auto !important;
+  min-height: 26px !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  line-height: 1.4 !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] span[data-testid="stMarkdownContainer"],
+[data-testid="stMultiSelect"] [data-baseweb="tag"] span {
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  max-width: none !important;
+}
+
+/* ── ALERT BADGE ─────────────────────────────────────────── */
+.nf-alert-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,171,0,0.10);
+  border: 1px solid rgba(255,171,0,0.3);
+  border-radius: 2px; padding: 3px 10px;
+  font-size: 9px; color: #ffab00;
+  font-family: "Courier New", monospace;
+  letter-spacing: 0.12em; cursor: pointer;
+  transition: all 0.15s;
+}
+.nf-alert-badge.on {
+  background: rgba(255,23,68,0.10);
+  border-color: rgba(255,23,68,0.4);
+  color: #ff1744;
+}
+.nf-alert-dot { width:6px; height:6px; border-radius:50%; }
+.nf-alert-badge.on .nf-alert-dot { background:#ff1744; animation: nf-blink 0.8s infinite; }
+.nf-alert-badge:not(.on) .nf-alert-dot { background:#ffab00; }
+
+/* ── COUNTDOWN ───────────────────────────────────────────── */
+.nf-countdown {
+  font-size: 9px; color: #4a4a68;
+  font-family: "Courier New", monospace;
+  letter-spacing: 0.1em;
+}
+#nf-cd-secs { color: #ffab00; }
+
+/* ── TRUMP CARD ──────────────────────────────────────────── */
+.nf-card.trump {
+  border-left-color: #ff6b35 !important;
+  background: rgba(255,107,53,0.04);
+}
 
 .nf-sector {
   font-size: 8px; color: #4a4a68;
@@ -520,6 +590,7 @@ def _build_item(title, desc, link, src, minutes_ago):
         "src_id":      src["id"],
         "src_label":   src["label"],
         "src_css":     src["css"],
+        "special":     src.get("special"),
         "impact":      _classify_impact(combined),
         "sentiment":   _sentiment(combined),
         "sector":      _sector(combined),
@@ -560,6 +631,24 @@ def _fetch_via_requests(src):
     return items, len(items) > 0
 
 def _fetch_source(src):
+    # Truth Social (Mastodon .rss) - handle separately
+    if src.get("special") == "trump":
+        try:
+            return _fetch_via_feedparser(src)
+        except ImportError:
+            pass
+        try:
+            return _fetch_via_requests(src)
+        except Exception:
+            return [], False
+
+    # SEC Atom feed needs Atom parser
+    if src["id"] == "sec":
+        try:
+            return _fetch_sec_atom(src)
+        except Exception:
+            return [], False
+
     try:
         return _fetch_via_feedparser(src)
     except ImportError:
@@ -568,6 +657,32 @@ def _fetch_source(src):
         return _fetch_via_requests(src)
     except Exception:
         return [], False
+
+
+def _fetch_sec_atom(src):
+    """Fetch SEC 8-K Atom feed."""
+    import requests
+    import xml.etree.ElementTree as ET
+    ns = {"a": "http://www.w3.org/2005/Atom"}
+    r = requests.get(src["url"], timeout=10, headers={"User-Agent": "RSU-Terminal/2.0"})
+    root = ET.fromstring(r.text)
+    items = []
+    for entry in root.findall("a:entry", ns)[:20]:
+        title   = (entry.findtext("a:title",   "", ns) or "").strip()
+        summary = (entry.findtext("a:summary", "", ns) or "").strip()
+        link_el = entry.find("a:link", ns)
+        link    = link_el.get("href", "") if link_el is not None else ""
+        updated = (entry.findtext("a:updated", "", ns) or "").strip()
+        import email.utils
+        mins_ago = 30
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+            mins_ago = max(0, int((datetime.now(timezone.utc) - dt).total_seconds() / 60))
+        except Exception:
+            pass
+        items.append(_build_item(title, summary[:300], link, src, mins_ago))
+    return items, len(items) > 0
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_news():
@@ -826,15 +941,94 @@ def _keyword_legend_html():
             f'  </div>'
             f'</div>')
 
+def _card_html_trump(it):
+    """Special rendering for Trump / Truth Social posts."""
+    mins = it["minutes_ago"]
+    tstr = f"{mins}" if mins < 60 else f"{mins//60}h{mins%60:02d}"
+    lbl  = "MIN AGO" if mins < 60 else "AGO"
+    title_html = (f'<a href="{it["link"]}" target="_blank" rel="noopener">{it["title"]}</a>'
+                  if it["link"] else it["title"])
+    tickers_html = "".join(f'<span class="nf-tk">{t}</span>' for t in it["tickers"])
+    return (
+        f'<div class="nf-card trump">'
+        f'  <div class="nf-time-col">'
+        f'    <div class="nf-mins">{tstr}</div>'
+        f'    <div class="nf-mins-lbl">{lbl}</div>'
+        f'    <div class="nf-impact-dot nf-dot-high"></div>'
+        f'    <div class="nf-score">{it["score"]}/10</div>'
+        f'  </div>'
+        f'  <div class="nf-body">'
+        f'    <div class="nf-nc-header">'
+        f'      <span class="nf-src-badge src-trump">🇺🇸 TRUMP</span>'
+        f'      <span class="nf-sector">POLICY</span>'
+        f'    </div>'
+        f'    <div class="nf-title">{title_html}</div>'
+        f'    <div class="nf-desc">{it["desc"][:200]}</div>'
+        f'    <div class="nf-keywords">{tickers_html}</div>'
+        f'  </div>'
+        f'</div>'
+    )
+
+
+def _js_html(refresh_secs, new_high_count, alerts_on):
+    """Inject auto-refresh countdown + optional sound alert."""
+    beep = ""
+    if alerts_on and new_high_count > 0:
+        n = min(new_high_count, 3)
+        beep = f"""
+try {{
+  for (var _bi = 0; _bi < {n}; _bi++) {{
+    (function(d) {{
+      setTimeout(function() {{
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; osc.type = "sine";
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25);
+      }}, d * 350);
+    }})(_bi);
+  }}
+}} catch(e) {{}}
+"""
+    countdown = f"""
+(function() {{
+  var secs = {refresh_secs};
+  function tick() {{
+    var el = document.getElementById("nf-cd-secs");
+    if (el) el.textContent = secs + "s";
+    if (secs <= 0) {{
+      try {{ window.parent.location.reload(); }} catch(e) {{ window.location.reload(); }}
+      return;
+    }}
+    secs--;
+    setTimeout(tick, 1000);
+  }}
+  tick();
+}})();
+"""
+    return f"<script>{beep}{countdown}</script>"
+
+
 # ══════════════════════════════════════════════════════════════════════
 # RENDER
 # ══════════════════════════════════════════════════════════════════════
 def render():
+    _REFRESH_SECS = 120
+
     # ── CSS ─────────────────────────────────────────────────────
     st.markdown(_CSS, unsafe_allow_html=True)
 
+    # ── SESSION STATE ────────────────────────────────────────────
+    if "nf_alerts_on" not in st.session_state:
+        st.session_state.nf_alerts_on = False
+    if "nf_seen_high" not in st.session_state:
+        st.session_state.nf_seen_high = set()
+
     # ── HEADER ──────────────────────────────────────────────────
-    col_logo, col_btn = st.columns([5, 1])
+    col_logo, col_alert, col_cd, col_btn = st.columns([4, 1, 1, 1])
     with col_logo:
         st.markdown(
             "<div class='nf-header-row'>"
@@ -848,10 +1042,22 @@ def render():
             "</div>",
             unsafe_allow_html=True,
         )
+    with col_alert:
+        st.markdown("<br>", unsafe_allow_html=True)
+        alerts_label = "🔔 ALERTS ON" if st.session_state.nf_alerts_on else "🔕 ALERTS"
+        if st.button(alerts_label, use_container_width=True, key="nf_alert_btn"):
+            st.session_state.nf_alerts_on = not st.session_state.nf_alerts_on
+            st.rerun()
+    with col_cd:
+        st.markdown(
+            "<br><div class='nf-countdown'>AUTO ⟳<br><span id='nf-cd-secs'>...</span></div>",
+            unsafe_allow_html=True,
+        )
     with col_btn:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("⟳ REFRESH", use_container_width=True):
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⟳ REFRESH", use_container_width=True, key="nf_refresh_btn"):
             st.cache_data.clear()
+            st.session_state.nf_seen_high = set()
             st.rerun()
 
     # ── TICKER ──────────────────────────────────────────────────
@@ -863,7 +1069,7 @@ def render():
     with fc1:
         impact_sel = st.multiselect(
             "Impacto", ["high", "med", "low"], default=["high", "med", "low"],
-            format_func=lambda x: {"high":"🔴 ALTO","med":"🟡 MEDIO","low":"🟢 BAJO"}[x],
+            format_func=lambda x: {"high":"🔴 HIGH","med":"🟡 MED","low":"🟢 LOW"}[x],
             key="nf_impact", label_visibility="collapsed",
         )
     with fc2:
@@ -871,18 +1077,25 @@ def render():
         src_sel = st.selectbox("Fuente", src_options, key="nf_src",
                                label_visibility="collapsed")
     with fc3:
-        search = st.text_input("🔍 Buscar keyword", key="nf_search",
-                               placeholder="buscar en titulares...",
+        search = st.text_input("search", key="nf_search",
+                               placeholder="🔍 buscar en titulares...",
                                label_visibility="collapsed")
     with fc4:
-        ticker_filter = st.text_input("$ Ticker", key="nf_ticker",
-                                      placeholder="ej: NVDA",
+        ticker_filter = st.text_input("ticker", key="nf_ticker",
+                                      placeholder="$ ej: NVDA",
                                       label_visibility="collapsed").upper().strip()
 
     # ── LOAD DATA ───────────────────────────────────────────────
     with st.spinner("◌ Cargando feed..."):
         items, status = _load_news()
     active = sum(1 for s in status.values() if s["ok"])
+
+    # ── SOUND ALERT DETECTION ────────────────────────────────────
+    high_items   = [it for it in items if it["impact"] == "high"]
+    high_hashes  = {hash(it["title"][:60]) for it in high_items}
+    new_high_set = high_hashes - st.session_state.nf_seen_high
+    new_high_cnt = len(new_high_set)
+    st.session_state.nf_seen_high = high_hashes
 
     # ── APPLY FILTERS ───────────────────────────────────────────
     filtered = [it for it in items if it["impact"] in (impact_sel or ["high","med","low"])]
@@ -921,10 +1134,23 @@ def render():
                 unsafe_allow_html=True,
             )
         else:
-            cards = "".join(_card_html(it) for it in filtered[:120])
-            st.markdown(cards, unsafe_allow_html=True)
+            cards = []
+            for it in filtered[:120]:
+                special = it.get("special")
+                if special == "trump":
+                    cards.append(_card_html_trump(it))
+                else:
+                    cards.append(_card_html(it))
+            st.markdown("".join(cards), unsafe_allow_html=True)
+
+    # ── JS: auto-refresh countdown + sound alerts ────────────────
+    st.markdown(
+        _js_html(_REFRESH_SECS, new_high_cnt, st.session_state.nf_alerts_on),
+        unsafe_allow_html=True,
+    )
 
     st.caption(
-        f"↺ {datetime.now().strftime('%H:%M:%S')} · caché 120s · "
+        f"↺ {datetime.now().strftime('%H:%M:%S')} · "
+        f"auto-refresh {_REFRESH_SECS}s · "
         f"{len(filtered)} items · {active}/{len(SOURCES)} fuentes activas"
     )

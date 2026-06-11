@@ -1,4 +1,3 @@
-
 # modules/newsfeed.py
 """
 RSU News Feed — financial news aggregator.
@@ -502,4 +501,3 @@ def render():
         f"↺ Actualizado: {datetime.now().strftime('%H:%M:%S')} · "
         f"caché 120s · pulsa ⟳ para forzar recarga"
     )
-

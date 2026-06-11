@@ -2,7 +2,7 @@
 """
 RSU News Feed — financial news aggregator.
 Módulo integrado en RSU Terminal (app.py).
-Sin dependencias externas de utils/ — completamente autocontenido.
+Autocontenido, sin utils/, sin st.set_page_config(), sin st.sidebar.
 """
 import re
 import streamlit as st
@@ -13,202 +13,485 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ══════════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN
 # ══════════════════════════════════════════════════════════════════════
-
 SOURCES = [
-    {"id": "reuters",      "label": "Reuters",       "url": "https://feeds.reuters.com/reuters/businessNews"},
-    {"id": "marketwatch",  "label": "MarketWatch",   "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
-    {"id": "cnbc",         "label": "CNBC",          "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
-    {"id": "yahoofinance", "label": "Yahoo Finance", "url": "https://finance.yahoo.com/rss/topstories"},
-    {"id": "wsj",          "label": "WSJ Markets",   "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
-    {"id": "investing",    "label": "Investing.com", "url": "https://www.investing.com/rss/news.rss"},
-    {"id": "benzinga",     "label": "Benzinga",      "url": "https://www.benzinga.com/feed"},
-    {"id": "ft",           "label": "FT",            "url": "https://www.ft.com/rss/home/uk"},
+    {"id": "reuters",      "label": "Reuters",       "css": "src-reuters",      "url": "https://feeds.reuters.com/reuters/businessNews"},
+    {"id": "marketwatch",  "label": "MarketWatch",   "css": "src-marketwatch",  "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
+    {"id": "cnbc",         "label": "CNBC",          "css": "src-cnbc",         "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
+    {"id": "yahoofinance", "label": "Yahoo Finance", "css": "src-yahoofinance", "url": "https://finance.yahoo.com/rss/topstories"},
+    {"id": "wsj",          "label": "WSJ",           "css": "src-wsj",          "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
+    {"id": "investing",    "label": "Investing.com", "css": "src-investing",    "url": "https://www.investing.com/rss/news.rss"},
+    {"id": "benzinga",     "label": "Benzinga",      "css": "src-generic",      "url": "https://www.benzinga.com/feed"},
+    {"id": "ft",           "label": "FT",            "css": "src-ft",           "url": "https://www.ft.com/rss/home/uk"},
 ]
 
 SECTORS_MAP = {
-    "tech":    ["nvidia", "apple", "microsoft", "google", "meta", "tesla", "amd", "intel",
-                "nvda", "aapl", "msft", "googl", "chip", "semiconductor", "ai", "cloud", "software"],
-    "finance": ["jpmorgan", "goldman", "bank", "federal reserve", "interest rate",
-                "yield", "treasury", "fomc", "jpm", "gs", "bac"],
-    "energy":  ["oil", "gas", "opec", "crude", "wti", "brent", "energy", "xom", "cvx"],
-    "health":  ["pharma", "fda", "drug", "biotech", "clinical", "vaccine", "pfizer", "jnj", "merck"],
-    "macro":   ["gdp", "cpi", "jobs", "unemployment", "recession", "inflation", "economy"],
-    "crypto":  ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "sol", "solana", "xrp"],
+    "TECH":    ["nvidia","apple","microsoft","google","meta","tesla","amd","intel",
+                "nvda","aapl","msft","googl","chip","semiconductor","ai","cloud","software","tech"],
+    "FINANCE": ["jpmorgan","goldman","bank","federal reserve","interest rate",
+                "yield","treasury","fomc","jpm","gs","bac","bonds","lending"],
+    "ENERGY":  ["oil","gas","opec","crude","wti","brent","energy","xom","cvx","exxon"],
+    "HEALTH":  ["pharma","fda","drug","biotech","clinical","vaccine","pfizer","jnj","merck","health"],
+    "MACRO":   ["gdp","cpi","jobs","unemployment","recession","inflation","economy","fed "],
+    "CRYPTO":  ["bitcoin","btc","ethereum","eth","crypto","blockchain","sol","solana","xrp","defi"],
+    "MACRO":   ["gdp","cpi","jobs","unemployment","recession","inflation","economy"],
 }
 
-HIGH_KW = [
-    "fed", "fomc", "rate cut", "rate hike", "inflation", "cpi", "gdp", "recession",
-    "crash", "crisis", "emergency", "bankrupt", "default", "collapse", "surge", "plunge",
-    "earnings beat", "earnings miss", "acquisition", "merger", "sec", "tariff", "ban",
-    "war", "sanction", "breakout", "breakdown",
-]
-MED_KW = [
-    "rally", "selloff", "upgrade", "downgrade", "ipo", "dividend", "buyback",
-    "layoff", "forecast", "outlook", "deal", "revenue", "profit", "loss", "quarterly",
-]
-BULL_KW = [
-    "surge", "rally", "beats", "upgrade", "bullish", "growth", "record high",
-    "breakout", "strong", "profit", "gain", "rise", "boost", "soar", "jump", "outperform",
-]
-BEAR_KW = [
-    "plunge", "crash", "miss", "downgrade", "bearish", "recession", "default",
-    "crisis", "collapse", "loss", "decline", "fall", "weak", "layoff", "slump", "underperform",
-]
+HIGH_KW = ["fed","fomc","rate cut","rate hike","inflation","cpi","gdp","recession",
+           "crash","crisis","emergency","bankrupt","default","collapse","surge","plunge",
+           "earnings beat","earnings miss","acquisition","merger","sec","tariff","ban",
+           "war","sanction","breakout","breakdown","flash crash","circuit breaker"]
+MED_KW  = ["rally","selloff","upgrade","downgrade","ipo","dividend","buyback",
+           "layoff","forecast","outlook","deal","revenue","profit","loss","quarterly",
+           "guidance","beat","miss","target price","analyst"]
+BULL_KW = ["surge","rally","beats","upgrade","bullish","growth","record high","breakout",
+           "strong","profit","gain","rise","boost","soar","jump","outperform","buy"]
+BEAR_KW = ["plunge","crash","miss","downgrade","bearish","recession","default","crisis",
+           "collapse","loss","decline","fall","weak","layoff","slump","underperform","sell"]
 KNOWN_TICKERS = {
-    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "NVDA", "AMD", "INTC",
-    "JPM", "GS", "BAC", "MS", "C", "WFC", "XOM", "CVX", "JNJ", "PFE", "MRK",
-    "SPY", "QQQ", "IWM", "DIA", "TLT", "GLD", "SLV", "HYG", "VXX", "BTC", "ETH", "SOL",
-    "UBER", "LYFT", "NFLX", "DIS", "PYPL", "SQ", "SHOP", "CRM", "SNOW", "PLTR",
-    "HOOD", "COIN", "MSTR", "SMCI", "ARM", "AVGO", "QCOM", "MU", "ASML", "SOFI",
-    "RIVN", "NIO", "BABA", "JD", "PDD", "ROKU", "ZM", "DOCU",
+    "AAPL","MSFT","GOOGL","GOOG","AMZN","META","TSLA","NVDA","AMD","INTC",
+    "JPM","GS","BAC","MS","C","WFC","XOM","CVX","JNJ","PFE","MRK",
+    "SPY","QQQ","IWM","DIA","TLT","GLD","SLV","HYG","VXX","BTC","ETH","SOL",
+    "UBER","LYFT","NFLX","DIS","PYPL","SQ","SHOP","CRM","SNOW","PLTR",
+    "HOOD","COIN","MSTR","SMCI","ARM","AVGO","QCOM","MU","ASML","SOFI",
+    "RIVN","NIO","BABA","JD","PDD","ROKU","ZM","DOCU","ORCL","IBM","DELL",
 }
 PRICE_TICKERS = {
-    "S&P 500":  "^GSPC",
-    "NASDAQ":   "^IXIC",
-    "DOW":      "^DJI",
-    "VIX":      "^VIX",
-    "EUR/USD":  "EURUSD=X",
-    "GBP/USD":  "GBPUSD=X",
-    "USD/JPY":  "USDJPY=X",
-    "BTC/USD":  "BTC-USD",
-    "ETH/USD":  "ETH-USD",
-    "SOL/USD":  "SOL-USD",
-    "GOLD":     "GC=F",
-    "OIL WTI":  "CL=F",
-    "10Y UST":  "^TNX",
+    "S&P 500": "^GSPC", "NASDAQ": "^IXIC", "DOW": "^DJI", "VIX": "^VIX",
+    "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X",
+    "BTC/USD": "BTC-USD", "ETH/USD": "ETH-USD", "SOL/USD": "SOL-USD",
+    "GOLD": "GC=F", "OIL WTI": "CL=F", "10Y UST": "^TNX",
 }
 
-# CSS específico del módulo (el base CRT ya lo inyecta app.py)
-_FEED_CSS = """
+# ══════════════════════════════════════════════════════════════════════
+# CSS  (base terminal ya inyectado por app.py — solo estilos del módulo)
+# ══════════════════════════════════════════════════════════════════════
+_CSS = """
 <style>
-.nf-header {
-    font-family: 'VT323', monospace;
-    font-size: 2.6rem;
-    color: #00ffad;
-    text-shadow: 0 0 20px #00ffad66;
-    letter-spacing: 4px;
-    margin-bottom: 2px;
+/* ── TICKER STRIP ─────────────────────────────────────────── */
+.nf-ticker-wrap {
+  overflow: hidden;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  background: #00e676;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  position: relative;
+}
+.nf-ticker-label {
+  background: #000;
+  color: #00e676;
+  font-family: 'VT323', monospace;
+  font-size: 17px;
+  padding: 0 14px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.1em;
+  z-index: 2;
+}
+.nf-ticker-track {
+  display: flex;
+  animation: nf-ticker 70s linear infinite;
+  white-space: nowrap;
+}
+.nf-ticker-item {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: #000;
+  font-weight: bold;
+  padding: 0 26px;
+  letter-spacing: 0.05em;
+}
+.nf-t-up   { color: #003320; }
+.nf-t-down { color: #5a0010; }
+@keyframes nf-ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ── HEADER ──────────────────────────────────────────────── */
+.nf-header-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.nf-logo {
+  font-family: 'VT323', monospace;
+  font-size: 2.4rem;
+  color: #00e676;
+  text-shadow: 0 0 18px rgba(0,230,118,0.5);
+  letter-spacing: 0.1em;
+  line-height: 1;
 }
 .nf-sub {
-    font-family: 'Courier New', monospace;
-    font-size: 0.62rem;
-    color: #00d9ff55;
-    letter-spacing: 3px;
-    margin-bottom: 16px;
-    text-transform: uppercase;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 0.55rem;
+  color: #4a4a68;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
-.ticker-strip {
-    background: linear-gradient(90deg, #0a0c10, #0d1117, #0a0c10);
-    border: 1px solid #00d9ff22;
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.78rem;
-    color: #aaa;
-    overflow-x: auto;
-    white-space: nowrap;
-    margin-bottom: 14px;
+.nf-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,23,68,0.12);
+  border: 1px solid rgba(255,23,68,0.3);
+  padding: 3px 10px;
+  border-radius: 2px;
+  font-size: 9px;
+  color: #ff1744;
+  letter-spacing: 0.15em;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 6px;
 }
-.ticker-strip b { color: #e0e0e0; }
-.tk-up   { color: #00ffad; }
-.tk-down { color: #f23645; }
-.news-card {
-    background: #0d1117;
-    border-radius: 6px;
-    padding: 12px 16px;
-    margin-bottom: 10px;
-    border-left: 3px solid #2a3040;
+.nf-live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #ff1744;
+  display: inline-block;
+  animation: nf-blink 1.2s ease-in-out infinite;
 }
-.news-card.high { border-left-color: #f23645; background: rgba(242,54,69,0.04); }
-.news-card.med  { border-left-color: #ff9800; background: rgba(255,152,0,0.03); }
-.news-card.low  { border-left-color: #00ffad22; }
-.nc-meta {
-    font-size: 0.65rem;
-    color: #555;
-    font-family: 'Courier New', monospace;
-    margin-bottom: 5px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+@keyframes nf-blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ── FILTER BAR ──────────────────────────────────────────── */
+.nf-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: #0b0b10;
+  border: 1px solid #1c1c2a;
+  border-radius: 4px;
+  margin-bottom: 12px;
 }
-.nc-time { color: #00d9ff88; }
-.nc-src  { color: #00ffad88; }
-.nc-title {
-    font-family: 'VT323', monospace;
-    font-size: 1.25rem;
-    color: #ddd;
-    line-height: 1.3;
-    margin-bottom: 4px;
+.nf-filter-label {
+  font-size: 9px;
+  color: #4a4a68;
+  letter-spacing: 0.15em;
+  font-family: 'Courier New', monospace;
+  margin-right: 4px;
+  text-transform: uppercase;
 }
-.nc-title a { color: #ddd; text-decoration: none; }
-.nc-title a:hover { color: #00ffad; }
-.nc-desc {
-    font-size: 0.78rem;
-    color: #666;
-    font-family: 'Courier New', monospace;
-    line-height: 1.5;
+.nf-filter-div {
+  width: 1px; height: 20px;
+  background: #1c1c2a;
+  margin: 0 6px;
 }
-.tk-tag {
-    display: inline-block;
-    background: rgba(0,255,173,0.08);
-    color: #00ffad99;
-    border: 1px solid #00ffad22;
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-size: 0.65rem;
-    font-family: 'Courier New', monospace;
-    margin-right: 4px;
+
+/* ── STATUS STRIP ────────────────────────────────────────── */
+.nf-status {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  font-size: 10px;
+  color: #4a4a68;
+  letter-spacing: 0.08em;
+  padding: 8px 0;
+  border-bottom: 1px solid #1c1c2a;
+  margin-bottom: 10px;
+  font-family: 'Courier New', monospace;
 }
-.sent-bull { color: #00ffad; font-weight: bold; }
-.sent-bear { color: #f23645; font-weight: bold; }
+.nf-stat-item { display: flex; align-items: center; gap: 5px; }
+.nf-stat-dot { width: 5px; height: 5px; border-radius: 50%; }
+.nf-s-red    { background: #ff1744; }
+.nf-s-amber  { background: #ffab00; }
+.nf-s-green  { background: #00e676; }
+.nf-s-blue   { background: #448aff; }
+.nf-stat-n   { color: #dde1f0; font-weight: 600; }
+
+/* ── NEWS CARDS ──────────────────────────────────────────── */
+.nf-card {
+  background: #0b0b10;
+  border: 1px solid #1c1c2a;
+  border-left: 3px solid #242434;
+  padding: 12px 14px 12px 16px;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  margin-bottom: 2px;
+  animation: nf-fadeUp 0.25s ease both;
+  transition: background 0.12s;
+}
+.nf-card:hover { background: #101018; }
+.nf-card.high { border-left-color: #ff1744; }
+.nf-card.med  { border-left-color: #ffab00; }
+.nf-card.low  { border-left-color: #00e676; }
+@keyframes nf-fadeUp {
+  from { opacity:0; transform:translateY(4px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* time column */
+.nf-time-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 2px;
+}
+.nf-mins {
+  font-family: 'VT323', monospace;
+  font-size: 22px;
+  line-height: 1;
+  color: #dde1f0;
+}
+.nf-mins-lbl {
+  font-size: 8px;
+  color: #4a4a68;
+  letter-spacing: 0.12em;
+  font-family: 'Courier New', monospace;
+  text-align: center;
+}
+.nf-impact-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; }
+.nf-dot-high { background: #ff1744; box-shadow: 0 0 4px #ff1744; }
+.nf-dot-med  { background: #ffab00; box-shadow: 0 0 4px #ffab00; }
+.nf-dot-low  { background: #00e676; box-shadow: 0 0 4px #00e676; }
+.nf-score { font-size: 8px; color: #4a4a68; letter-spacing: 0.05em; font-family: 'Courier New', monospace; }
+
+/* body */
+.nf-body { min-width: 0; }
+.nf-nc-header { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; flex-wrap: wrap; }
+.nf-src-badge {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+.src-reuters       { color:#f87171; border-color:rgba(248,113,113,.25); background:rgba(248,113,113,.07); }
+.src-wsj           { color:#94a3b8; border-color:rgba(148,163,184,.2);  background:rgba(148,163,184,.06); }
+.src-cnbc          { color:#4ade80; border-color:rgba(74,222,128,.2);   background:rgba(74,222,128,.06); }
+.src-ft            { color:#fb923c; border-color:rgba(251,146,60,.2);   background:rgba(251,146,60,.06); }
+.src-marketwatch   { color:#a78bfa; border-color:rgba(167,139,250,.2);  background:rgba(167,139,250,.07); }
+.src-yahoofinance  { color:#818cf8; border-color:rgba(129,140,248,.25); background:rgba(129,140,248,.07); }
+.src-investing     { color:#38bdf8; border-color:rgba(56,189,248,.25);  background:rgba(56,189,248,.07); }
+.src-generic       { color:#6a6a88; border-color:#242434;               background:transparent; }
+
+.nf-sector {
+  font-size: 8px; color: #4a4a68;
+  letter-spacing: 0.12em;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+.nf-title {
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #dde1f0;
+  margin-bottom: 4px;
+}
+.nf-title a { color: inherit; text-decoration: none; }
+.nf-title a:hover { color: #00e676; }
+.nf-desc {
+  font-size: 9px;
+  color: #6a6a88;
+  line-height: 1.5;
+  margin-bottom: 6px;
+  font-family: 'Courier New', monospace;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nf-keywords { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.nf-kw {
+  font-size: 8px; padding: 1px 6px; border-radius: 1px;
+  background: #161620; color: #6a6a88;
+  border: 1px solid #1c1c2a; letter-spacing: 0.06em;
+  font-family: 'Courier New', monospace;
+}
+.nf-tk {
+  font-family: 'Courier New', monospace;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 6px; border-radius: 2px;
+  background: rgba(68,138,255,.12);
+  color: #6aa3ff;
+  border: 1px solid rgba(68,138,255,.3);
+  letter-spacing: 0.03em;
+}
+.nf-tk::before { content: '$'; opacity: 0.6; }
+.nf-sent-dot {
+  display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.nf-sent-bull { background: #00e676; box-shadow: 0 0 4px #00e676; }
+.nf-sent-bear { background: #ff1744; box-shadow: 0 0 4px #ff1744; }
+.nf-sent-neut { background: #4a4a68; }
+
+/* ── RIGHT PANEL ──────────────────────────────────────────── */
+.nf-sbox {
+  background: #0b0b10;
+  border: 1px solid #1c1c2a;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.nf-sbox-hdr {
+  padding: 8px 14px;
+  border-bottom: 1px solid #1c1c2a;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #6a6a88;
+  background: #101018;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+.nf-sbox-hdr .acc { color: #00e676; }
+
+/* Heatmap */
+.nf-heatmap { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 10px; }
+.nf-hm-cell {
+  padding: 8px 10px; border-radius: 2px;
+  border: 1px solid #1c1c2a; background: #161620;
+}
+.nf-hm-cell.h0 { background: #101018; }
+.nf-hm-cell.h1 { border-color: rgba(0,230,118,.3); }
+.nf-hm-cell.h2 { border-color: rgba(0,230,118,.5); background: rgba(0,230,118,.04); }
+.nf-hm-cell.h3 { border-color: rgba(255,171,0,.5);  background: rgba(255,171,0,.04); }
+.nf-hm-cell.h4 { border-color: rgba(255,23,68,.5);  background: rgba(255,23,68,.05); }
+.nf-hm-cell.h5 { border-color: #ff1744; background: rgba(255,23,68,.08); box-shadow: 0 0 6px rgba(255,23,68,.2); }
+.nf-hm-name { font-size: 8px; letter-spacing: 0.1em; color: #6a6a88; margin-bottom: 4px; font-family: 'Courier New', monospace; }
+.nf-hm-count { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; color: #dde1f0; }
+.nf-hm-bar { height: 2px; margin-top: 5px; background: #1c1c2a; border-radius: 1px; overflow: hidden; }
+.nf-hm-fill { height: 100%; border-radius: 1px; background: #00e676; }
+
+/* Impact bars */
+.nf-imp-bars { padding: 10px 14px; display: flex; flex-direction: column; gap: 7px; }
+.nf-imp-row { display: flex; align-items: center; gap: 8px; font-size: 9px; font-family: 'Courier New', monospace; }
+.nf-imp-lbl { width: 36px; letter-spacing: 0.1em; text-transform: uppercase; }
+.nf-imp-lbl.high { color: #ff1744; }
+.nf-imp-lbl.med  { color: #ffab00; }
+.nf-imp-lbl.low  { color: #00e676; }
+.nf-imp-bw { flex: 1; height: 4px; background: #1c1c2a; border-radius: 1px; overflow: hidden; }
+.nf-imp-b { height: 100%; border-radius: 1px; }
+.nf-imp-b.high { background: #ff1744; }
+.nf-imp-b.med  { background: #ffab00; }
+.nf-imp-b.low  { background: #00e676; }
+.nf-imp-n { color: #dde1f0; width: 20px; text-align: right; }
+
+/* Source health */
+.nf-src-health { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.nf-src-row { display: flex; align-items: center; gap: 8px; font-size: 9px; font-family: 'Courier New', monospace; }
+.nf-src-name { flex: 1; color: #6a6a88; letter-spacing: 0.08em; }
+.nf-src-count { color: #dde1f0; min-width: 22px; text-align: right; }
+.nf-src-bw { flex: 2; height: 3px; background: #1c1c2a; border-radius: 1px; overflow: hidden; }
+.nf-src-b  { height: 100%; background: #00e676; border-radius: 1px; }
+.nf-src-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.nf-src-ok  { background: #00e676; }
+.nf-src-err { background: #ff1744; }
+
+/* Sentiment gauge */
+.nf-sent-wrap { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.nf-sent-label {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: #6a6a88;
+  letter-spacing: 0.1em; font-family: 'Courier New', monospace; text-transform: uppercase;
+}
+.nf-sent-bar-wrap {
+  position: relative; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, #ff1744 0%, #ffab00 50%, #00e676 100%);
+  opacity: 0.85;
+}
+.nf-sent-needle {
+  position: absolute; top: -2px;
+  width: 3px; height: 12px;
+  background: #fff; border-radius: 1px;
+  box-shadow: 0 0 4px rgba(255,255,255,0.8);
+  transition: left 0.5s ease;
+}
+.nf-sent-score {
+  text-align: center; font-family: 'VT323', monospace;
+  font-size: 1.2rem; letter-spacing: 0.1em;
+}
+
+/* ── EMPTY / LOADING ─────────────────────────────────────── */
+.nf-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 60px 20px; color: #4a4a68;
+  font-size: 11px; gap: 10px;
+  letter-spacing: 0.1em; font-family: 'Courier New', monospace;
+}
+
+/* ── TIMELINE ────────────────────────────────────────────── */
+.nf-tl { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; }
+.nf-tl-bars { display: flex; align-items: flex-end; gap: 2px; height: 60px; }
+.nf-tl-bar {
+  flex: 1; background: #161620; border-radius: 2px 2px 0 0;
+  min-height: 2px; transition: background 0.3s;
+  cursor: default; position: relative;
+}
+.nf-tl-bar.imp-high { background: rgba(255,23,68,.6); }
+.nf-tl-bar.imp-med  { background: rgba(255,171,0,.6); }
+.nf-tl-bar.imp-low  { background: rgba(0,230,118,.5); }
+.nf-tl-labels { display: flex; gap: 2px; }
+.nf-tl-lbl {
+  flex: 1; text-align: center;
+  font-size: 7px; color: #4a4a68;
+  font-family: 'Courier New', monospace;
+}
+
+/* ── KEYWORD LEGEND ──────────────────────────────────────── */
+.nf-kw-legend { padding: 10px 14px; }
+.nf-kw-section { margin-bottom: 7px; }
+.nf-kw-title { font-size: 8px; letter-spacing: 0.15em; margin-bottom: 4px; font-family: 'Courier New', monospace; text-transform: uppercase; }
+.nf-kw-title.high { color: #ff1744; }
+.nf-kw-title.med  { color: #ffab00; }
+.nf-kw-title.low  { color: #00e676; }
+.nf-kw-list { display: flex; flex-wrap: wrap; gap: 3px; }
+.nf-kw-pill { font-size: 8px; padding: 1px 6px; border-radius: 1px; font-family: 'Courier New', monospace; }
+.nf-kw-pill.high { background: rgba(255,23,68,.12); color: #ff1744; border: 1px solid rgba(255,23,68,.2); }
+.nf-kw-pill.med  { background: rgba(255,171,0,.12); color: #ffab00; border: 1px solid rgba(255,171,0,.2); }
+.nf-kw-pill.low  { background: rgba(0,230,118,.12); color: #00e676; border: 1px solid rgba(0,230,118,.2); }
+
+/* Ensure no extra padding from Streamlit containers */
+.block-container { padding-top: 1rem !important; }
 </style>
 """
 
 # ══════════════════════════════════════════════════════════════════════
 # NLP HELPERS
 # ══════════════════════════════════════════════════════════════════════
-
-def _classify_impact(text: str) -> str:
+def _classify_impact(text):
     t = text.lower()
-    if any(k in t for k in HIGH_KW):
-        return "high"
-    if any(k in t for k in MED_KW):
-        return "med"
+    if any(k in t for k in HIGH_KW): return "high"
+    if any(k in t for k in MED_KW):  return "med"
     return "low"
 
-
-def _sentiment(text: str) -> dict:
+def _sentiment(text):
     t = text.lower()
     b = sum(1 for k in BULL_KW if k in t)
     e = sum(1 for k in BEAR_KW if k in t)
-    if b > e:
-        return {"label": "bullish", "score": b}
-    if e > b:
-        return {"label": "bearish", "score": e}
+    if b > e: return {"label": "bullish", "score": b}
+    if e > b: return {"label": "bearish", "score": e}
     return {"label": "neutral", "score": 0}
 
-
-def _sector(text: str) -> str:
+def _sector(text):
     t = text.lower()
     for sec, kws in SECTORS_MAP.items():
-        if any(k in t for k in kws):
-            return sec
-    return "general"
+        if any(k in t for k in kws): return sec
+    return "GENERAL"
 
-
-def _score(text: str) -> int:
+def _score(text):
     t = text.lower()
     s = 3
     s += sum(2 for k in HIGH_KW if k in t)
     s += sum(1 for k in MED_KW  if k in t)
     return min(10, s)
 
-
-def _extract_tickers(text: str) -> list:
+def _extract_tickers(text):
     words = re.findall(r'\b[A-Z]{2,5}\b', text)
     return sorted({w for w in words if w in KNOWN_TICKERS})
 
-
-def _minutes_ago_feedparser(entry) -> int:
+def _minutes_ago_feedparser(entry):
     import calendar
     for field in ("published_parsed", "updated_parsed"):
         val = getattr(entry, field, None)
@@ -220,8 +503,7 @@ def _minutes_ago_feedparser(entry) -> int:
                 pass
     return 30
 
-
-def _minutes_ago_pubdate(pub_str: str) -> int:
+def _minutes_ago_pubdate(pub_str):
     import email.utils
     try:
         dt = email.utils.parsedate_to_datetime(pub_str)
@@ -229,8 +511,7 @@ def _minutes_ago_pubdate(pub_str: str) -> int:
     except Exception:
         return 30
 
-
-def _build_item(title: str, desc: str, link: str, src: dict, minutes_ago: int) -> dict:
+def _build_item(title, desc, link, src, minutes_ago):
     combined = f"{title} {desc}"
     return {
         "title":       title,
@@ -238,6 +519,7 @@ def _build_item(title: str, desc: str, link: str, src: dict, minutes_ago: int) -
         "link":        link,
         "src_id":      src["id"],
         "src_label":   src["label"],
+        "src_css":     src["css"],
         "impact":      _classify_impact(combined),
         "sentiment":   _sentiment(combined),
         "sector":      _sector(combined),
@@ -249,8 +531,7 @@ def _build_item(title: str, desc: str, link: str, src: dict, minutes_ago: int) -
 # ══════════════════════════════════════════════════════════════════════
 # DATA FETCHING
 # ══════════════════════════════════════════════════════════════════════
-
-def _fetch_via_feedparser(src: dict):
+def _fetch_via_feedparser(src):
     import feedparser
     feed = feedparser.parse(src["url"])
     items = []
@@ -263,12 +544,11 @@ def _fetch_via_feedparser(src: dict):
                                  _minutes_ago_feedparser(e)))
     return items, len(items) > 0
 
-
-def _fetch_via_requests(src: dict):
+def _fetch_via_requests(src):
     import requests
     import xml.etree.ElementTree as ET
     r = requests.get(src["url"], timeout=8,
-                     headers={"User-Agent": "RSU-Terminal/2.0 (RSS reader)"})
+                     headers={"User-Agent": "RSU-Terminal/2.0"})
     root = ET.fromstring(r.text)
     items = []
     for item in root.findall(".//item")[:30]:
@@ -279,8 +559,7 @@ def _fetch_via_requests(src: dict):
         items.append(_build_item(title, desc, link, src, _minutes_ago_pubdate(pub)))
     return items, len(items) > 0
 
-
-def _fetch_source(src: dict):
+def _fetch_source(src):
     try:
         return _fetch_via_feedparser(src)
     except ImportError:
@@ -290,9 +569,8 @@ def _fetch_source(src: dict):
     except Exception:
         return [], False
 
-
 @st.cache_data(ttl=120, show_spinner=False)
-def load_news():
+def _load_news():
     all_items, status = [], {}
     with ThreadPoolExecutor(max_workers=len(SOURCES)) as ex:
         futures = {ex.submit(_fetch_source, s): s for s in SOURCES}
@@ -307,9 +585,8 @@ def load_news():
     all_items.sort(key=lambda x: x["minutes_ago"])
     return all_items, status
 
-
 @st.cache_data(ttl=60, show_spinner=False)
-def load_prices():
+def _load_prices():
     try:
         import yfinance as yf
         prices = {}
@@ -333,104 +610,282 @@ def load_prices():
         return {}
 
 # ══════════════════════════════════════════════════════════════════════
-# UI HELPER
+# HTML BUILDERS
 # ══════════════════════════════════════════════════════════════════════
+def _ticker_html(prices):
+    ORDER = ["S&P 500","NASDAQ","DOW","VIX","EUR/USD","GBP/USD",
+             "USD/JPY","BTC/USD","ETH/USD","SOL/USD","GOLD","OIL WTI","10Y UST"]
+    items = []
+    for lbl in ORDER:
+        d = prices.get(lbl)
+        if not d:
+            items.append(f'<span class="nf-ticker-item">{lbl} <span style="color:#444">—</span></span>')
+            continue
+        p = d["price"]
+        pf = (f"{p:,.0f}" if p > 10000 else
+              f"{p:.2f}"  if p > 100   else
+              f"{p:.4f}"  if p > 1     else
+              f"{p:.6f}")
+        chg = d.get("chg")
+        chg_html = ""
+        if chg is not None:
+            cls = "nf-t-up" if chg >= 0 else "nf-t-down"
+            arr = "▲" if chg >= 0 else "▼"
+            chg_html = f' <span class="{cls}">{arr}{chg:+.2f}%</span>'
+        items.append(f'<span class="nf-ticker-item">{lbl} <strong>{pf}</strong>{chg_html}</span>')
+    doubled = "".join(items) * 2
+    return (f'<div class="nf-ticker-wrap">'
+            f'<div class="nf-ticker-label">◈ LIVE</div>'
+            f'<div class="nf-ticker-track">{doubled}</div>'
+            f'</div>')
 
-def _fmt_price(label: str, d: dict) -> str:
-    p = d["price"]
-    if p > 10000:   pf = f"{p:,.0f}"
-    elif p > 100:   pf = f"{p:.2f}"
-    elif p > 1:     pf = f"{p:.4f}"
-    else:           pf = f"{p:.6f}"
-    if d.get("chg") is not None:
-        arrow = "▲" if d["chg"] >= 0 else "▼"
-        cls   = "tk-up" if d["chg"] >= 0 else "tk-down"
-        return f"{label} <b>{pf}</b> <span class='{cls}'>{arrow}{d['chg']:+.2f}%</span>"
-    return f"{label} <b>{pf}</b>"
+def _status_html(nh, nm, nl, active, total):
+    return (f'<div class="nf-status">'
+            f'<span class="nf-stat-item"><span class="nf-stat-dot nf-s-red"></span>'
+            f'ALTO <span class="nf-stat-n">{nh}</span></span>'
+            f'<span class="nf-stat-item"><span class="nf-stat-dot nf-s-amber"></span>'
+            f'MEDIO <span class="nf-stat-n">{nm}</span></span>'
+            f'<span class="nf-stat-item"><span class="nf-stat-dot nf-s-green"></span>'
+            f'BAJO <span class="nf-stat-n">{nl}</span></span>'
+            f'<span class="nf-stat-item"><span class="nf-stat-dot nf-s-blue"></span>'
+            f'FUENTES <span class="nf-stat-n">{active}/{len(SOURCES)}</span></span>'
+            f'<span class="nf-stat-item">TOTAL <span class="nf-stat-n">{total}</span></span>'
+            f'</div>')
+
+def _card_html(it):
+    mins = it["minutes_ago"]
+    tstr = f"{mins}" if mins < 60 else f"{mins//60}h{mins%60:02d}"
+    lbl  = "MIN AGO" if mins < 60 else "AGO"
+    dot_cls = {"high": "nf-dot-high", "med": "nf-dot-med", "low": "nf-dot-low"}[it["impact"]]
+    sent = it["sentiment"]["label"]
+    sent_html = ""
+    if sent == "bullish":
+        sent_html = '<span class="nf-sent-dot nf-sent-bull"></span>'
+    elif sent == "bearish":
+        sent_html = '<span class="nf-sent-dot nf-sent-bear"></span>'
+
+    tickers_html = "".join(f'<span class="nf-tk">{t}</span>' for t in it["tickers"])
+    title_html = (f'<a href="{it["link"]}" target="_blank" rel="noopener">{it["title"]}</a>'
+                  if it["link"] else it["title"])
+
+    return (
+        f'<div class="nf-card {it["impact"]}">'
+        f'  <div class="nf-time-col">'
+        f'    <div class="nf-mins">{tstr}</div>'
+        f'    <div class="nf-mins-lbl">{lbl}</div>'
+        f'    <div class="nf-impact-dot {dot_cls}"></div>'
+        f'    <div class="nf-score">{it["score"]}/10</div>'
+        f'  </div>'
+        f'  <div class="nf-body">'
+        f'    <div class="nf-nc-header">'
+        f'      <span class="nf-src-badge {it["src_css"]}">{it["src_label"]}</span>'
+        f'      <span class="nf-sector">{it["sector"]}</span>'
+        f'      {sent_html}'
+        f'    </div>'
+        f'    <div class="nf-title">{title_html}</div>'
+        f'    <div class="nf-desc">{it["desc"][:180]}</div>'
+        f'    <div class="nf-keywords">{tickers_html}</div>'
+        f'  </div>'
+        f'</div>'
+    )
+
+def _heatmap_html(items):
+    counts = {}
+    for it in items:
+        counts[it["sector"]] = counts.get(it["sector"], 0) + 1
+    top = sorted(counts.items(), key=lambda x: -x[1])[:8]
+    mx  = top[0][1] if top else 1
+    def heat(n):
+        r = n / mx if mx else 0
+        return "h5" if r>0.8 else "h4" if r>0.6 else "h3" if r>0.4 else "h2" if r>0.2 else "h1" if r>0 else "h0"
+    cells = ""
+    for sec, cnt in top:
+        pct = int(cnt / mx * 100)
+        cells += (f'<div class="nf-hm-cell {heat(cnt)}">'
+                  f'  <div class="nf-hm-name">{sec}</div>'
+                  f'  <div class="nf-hm-count">{cnt}</div>'
+                  f'  <div class="nf-hm-bar"><div class="nf-hm-fill" style="width:{pct}%"></div></div>'
+                  f'</div>')
+    return (f'<div class="nf-sbox">'
+            f'  <div class="nf-sbox-hdr">◈ SECTOR <span class="acc">HEATMAP</span></div>'
+            f'  <div class="nf-heatmap">{cells}</div>'
+            f'</div>')
+
+def _impact_bars_html(nh, nm, nl):
+    total = nh + nm + nl or 1
+    pw = lambda n: int(n / total * 100)
+    return (f'<div class="nf-sbox">'
+            f'  <div class="nf-sbox-hdr">◈ IMPACT <span class="acc">BREAKDOWN</span></div>'
+            f'  <div class="nf-imp-bars">'
+            f'    <div class="nf-imp-row"><span class="nf-imp-lbl high">HIGH</span>'
+            f'      <div class="nf-imp-bw"><div class="nf-imp-b high" style="width:{pw(nh)}%"></div></div>'
+            f'      <span class="nf-imp-n">{nh}</span></div>'
+            f'    <div class="nf-imp-row"><span class="nf-imp-lbl med">MED</span>'
+            f'      <div class="nf-imp-bw"><div class="nf-imp-b med" style="width:{pw(nm)}%"></div></div>'
+            f'      <span class="nf-imp-n">{nm}</span></div>'
+            f'    <div class="nf-imp-row"><span class="nf-imp-lbl low">LOW</span>'
+            f'      <div class="nf-imp-bw"><div class="nf-imp-b low" style="width:{pw(nl)}%"></div></div>'
+            f'      <span class="nf-imp-n">{nl}</span></div>'
+            f'  </div>'
+            f'</div>')
+
+def _source_health_html(status):
+    max_cnt = max((s["count"] for s in status.values()), default=1) or 1
+    rows = ""
+    for src in SOURCES:
+        st_ = status.get(src["id"], {"count": 0, "ok": False})
+        dot = "nf-src-ok" if st_["ok"] else "nf-src-err"
+        pct = int(st_["count"] / max_cnt * 100)
+        rows += (f'<div class="nf-src-row">'
+                 f'  <span class="nf-src-dot {dot}"></span>'
+                 f'  <span class="nf-src-name">{src["label"]}</span>'
+                 f'  <div class="nf-src-bw"><div class="nf-src-b" style="width:{pct}%"></div></div>'
+                 f'  <span class="nf-src-count">{st_["count"]}</span>'
+                 f'</div>')
+    return (f'<div class="nf-sbox">'
+            f'  <div class="nf-sbox-hdr">◈ SOURCE <span class="acc">HEALTH</span></div>'
+            f'  <div class="nf-src-health">{rows}</div>'
+            f'</div>')
+
+def _sentiment_html(items):
+    recent = [it for it in items if it["minutes_ago"] <= 60]
+    bull   = sum(1 for it in recent if it["sentiment"]["label"] == "bullish")
+    bear   = sum(1 for it in recent if it["sentiment"]["label"] == "bearish")
+    total  = bull + bear or 1
+    net    = (bull - bear) / total
+    pct    = int((net + 1) / 2 * 100)  # 0-100
+    if net > 0.25:
+        label_s = f'<span style="color:#00e676">RISK-ON</span>'
+    elif net < -0.25:
+        label_s = f'<span style="color:#ff1744">RISK-OFF</span>'
+    else:
+        label_s = '<span style="color:#ffab00">MIXTO</span>'
+    return (f'<div class="nf-sbox">'
+            f'  <div class="nf-sbox-hdr">◈ SENTIMENT <span class="acc">1H</span></div>'
+            f'  <div class="nf-sent-wrap">'
+            f'    <div class="nf-sent-label"><span>BEARISH</span><span>BULLISH</span></div>'
+            f'    <div class="nf-sent-bar-wrap">'
+            f'      <div class="nf-sent-needle" style="left:{pct}%"></div>'
+            f'    </div>'
+            f'    <div class="nf-sent-score">{label_s} · {bull}↑ {bear}↓</div>'
+            f'  </div>'
+            f'</div>')
+
+def _timeline_html(items):
+    buckets = [0] * 24
+    dom_imp = [""] * 24
+    imp_cnt = [{"high":0,"med":0,"low":0} for _ in range(24)]
+    for it in items:
+        h = it["minutes_ago"] // 60
+        if 0 <= h < 24:
+            idx = 23 - h
+            buckets[idx] += 1
+            imp_cnt[idx][it["impact"]] += 1
+    mx = max(buckets) or 1
+    bars, labels = "", ""
+    for i in range(24):
+        h = (23 - i)
+        cnt = buckets[i]
+        d = imp_cnt[i]
+        dom = "high" if d["high"] >= d["med"] and d["high"] >= d["low"] else \
+              "med"  if d["med"]  >= d["low"]  else "low"
+        imp_cls = f"imp-{dom}" if cnt else ""
+        ht  = max(4, int(cnt / mx * 56))
+        lbl = f"-{h}h" if h % 6 == 0 else ""
+        bars   += f'<div class="nf-tl-bar {imp_cls}" style="height:{ht}px" title="{cnt} items"></div>'
+        labels += f'<div class="nf-tl-lbl">{lbl}</div>'
+    return (f'<div class="nf-sbox">'
+            f'  <div class="nf-sbox-hdr">◈ TIMELINE <span class="acc">24H</span></div>'
+            f'  <div class="nf-tl">'
+            f'    <div class="nf-tl-bars">{bars}</div>'
+            f'    <div class="nf-tl-labels">{labels}</div>'
+            f'  </div>'
+            f'</div>')
+
+def _keyword_legend_html():
+    h_kws = ["crash","recession","fomc","rate hike","default","collapse","surge","plunge"]
+    m_kws = ["rally","ipo","upgrade","downgrade","outlook","buyback","layoff"]
+    l_kws = ["profit","revenue","deal","dividend","quarterly"]
+    def pills(kws, cls):
+        return "".join(f'<span class="nf-kw-pill {cls}">{k}</span>' for k in kws)
+    return (f'<div class="nf-sbox">'
+            f'  <div class="nf-sbox-hdr">◈ KEYWORD <span class="acc">LEGEND</span></div>'
+            f'  <div class="nf-kw-legend">'
+            f'    <div class="nf-kw-section">'
+            f'      <div class="nf-kw-title high">HIGH IMPACT</div>'
+            f'      <div class="nf-kw-list">{pills(h_kws,"high")}</div>'
+            f'    </div>'
+            f'    <div class="nf-kw-section">'
+            f'      <div class="nf-kw-title med">MED IMPACT</div>'
+            f'      <div class="nf-kw-list">{pills(m_kws,"med")}</div>'
+            f'    </div>'
+            f'    <div class="nf-kw-section">'
+            f'      <div class="nf-kw-title low">LOW IMPACT</div>'
+            f'      <div class="nf-kw-list">{pills(l_kws,"low")}</div>'
+            f'    </div>'
+            f'  </div>'
+            f'</div>')
 
 # ══════════════════════════════════════════════════════════════════════
-# RENDER  ← punto de entrada desde app.py
+# RENDER
 # ══════════════════════════════════════════════════════════════════════
-
 def render():
-    # CSS específico del feed
-    st.markdown(_FEED_CSS, unsafe_allow_html=True)
+    # ── CSS ─────────────────────────────────────────────────────
+    st.markdown(_CSS, unsafe_allow_html=True)
 
     # ── HEADER ──────────────────────────────────────────────────
-    col_logo, col_refresh = st.columns([4, 1])
+    col_logo, col_btn = st.columns([5, 1])
     with col_logo:
         st.markdown(
-            "<div class='nf-header'>📰 NEWS FEED</div>"
-            "<div class='nf-sub'>Financial Intelligence Feed · Tiempo Real</div>",
+            "<div class='nf-header-row'>"
+            "  <div>"
+            "    <div class='nf-logo'>📰 NEWS FEED</div>"
+            "    <div class='nf-sub'>Financial Intelligence Feed · Tiempo Real</div>"
+            "  </div>"
+            "  <div class='nf-live-pill'>"
+            "    <span class='nf-live-dot'></span>LIVE"
+            "  </div>"
+            "</div>",
             unsafe_allow_html=True,
         )
-    with col_refresh:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⟳ ACTUALIZAR", use_container_width=True):
+    with col_btn:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        if st.button("⟳ REFRESH", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
-    # ── TICKER STRIP ────────────────────────────────────────────
-    prices = load_prices()
-    order  = ["S&P 500", "NASDAQ", "DOW", "VIX", "EUR/USD", "GBP/USD",
-              "USD/JPY", "BTC/USD", "ETH/USD", "SOL/USD", "GOLD", "OIL WTI", "10Y UST"]
-    parts  = [_fmt_price(lbl, prices[lbl]) for lbl in order if lbl in prices]
-    if parts:
-        st.markdown(
-            f"<div class='ticker-strip'>{'  ·  '.join(parts)}</div>",
-            unsafe_allow_html=True,
-        )
-    elif not prices:
-        st.caption("⚠ Precios no disponibles")
+    # ── TICKER ──────────────────────────────────────────────────
+    prices = _load_prices()
+    st.markdown(_ticker_html(prices), unsafe_allow_html=True)
 
-    # ── DATA ────────────────────────────────────────────────────
-    with st.spinner("Cargando noticias..."):
-        items, status = load_news()
+    # ── FILTER ROW ──────────────────────────────────────────────
+    fc1, fc2, fc3, fc4 = st.columns([2, 2, 3, 2])
+    with fc1:
+        impact_sel = st.multiselect(
+            "Impacto", ["high", "med", "low"], default=["high", "med", "low"],
+            format_func=lambda x: {"high":"🔴 ALTO","med":"🟡 MEDIO","low":"🟢 BAJO"}[x],
+            key="nf_impact", label_visibility="collapsed",
+        )
+    with fc2:
+        src_options = ["(todas)"] + [s["label"] for s in SOURCES]
+        src_sel = st.selectbox("Fuente", src_options, key="nf_src",
+                               label_visibility="collapsed")
+    with fc3:
+        search = st.text_input("🔍 Buscar keyword", key="nf_search",
+                               placeholder="buscar en titulares...",
+                               label_visibility="collapsed")
+    with fc4:
+        ticker_filter = st.text_input("$ Ticker", key="nf_ticker",
+                                      placeholder="ej: NVDA",
+                                      label_visibility="collapsed").upper().strip()
+
+    # ── LOAD DATA ───────────────────────────────────────────────
+    with st.spinner("◌ Cargando feed..."):
+        items, status = _load_news()
     active = sum(1 for s in status.values() if s["ok"])
 
-    # ── SIDEBAR FILTERS ─────────────────────────────────────────
-    with st.sidebar:
-        st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
-        st.markdown("**◈ NEWS FILTERS**")
-
-        impact_sel = st.multiselect(
-            "Impacto", ["high", "med", "low"],
-            default=["high", "med", "low"],
-            format_func=lambda x: {"high": "🔴 Alto", "med": "🟡 Medio", "low": "🟢 Bajo"}[x],
-            key="nf_impact",
-        )
-        src_options  = ["(todas)"] + [s["label"] for s in SOURCES]
-        src_sel      = st.selectbox("Fuente", src_options, key="nf_src")
-        search       = st.text_input("Buscar keyword", key="nf_search")
-        ticker_filter = st.text_input("Ticker (ej: NVDA)", key="nf_ticker").upper().strip()
-
-        st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
-        st.markdown("**◈ SENTIMIENTO 1H**")
-        recent = [it for it in items if it["minutes_ago"] <= 60]
-        bull   = sum(1 for it in recent if it["sentiment"]["label"] == "bullish")
-        bear   = sum(1 for it in recent if it["sentiment"]["label"] == "bearish")
-        if bull + bear:
-            net = (bull - bear) / (bull + bear)
-            if net > 0.2:
-                label_sent = f"<span class='sent-bull'>RISK-ON</span> · {bull}↑ / {bear}↓"
-            elif net < -0.2:
-                label_sent = f"<span class='sent-bear'>RISK-OFF</span> · {bull}↑ / {bear}↓"
-            else:
-                label_sent = f"MIXTO · {bull}↑ / {bear}↓"
-            st.markdown(label_sent, unsafe_allow_html=True)
-            st.progress((net + 1) / 2)
-        else:
-            st.caption("Sin datos suficientes")
-
-        st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
-        st.markdown("**◈ ESTADO FUENTES**")
-        for s in SOURCES:
-            st_ = status.get(s["id"], {"count": 0, "ok": False})
-            dot = "🟢" if st_["ok"] else "🔴"
-            st.caption(f"{dot} {s['label']}: {st_['count']}")
-
-    # ── APLICAR FILTROS ─────────────────────────────────────────
-    filtered = [it for it in items if it["impact"] in impact_sel]
+    # ── APPLY FILTERS ───────────────────────────────────────────
+    filtered = [it for it in items if it["impact"] in (impact_sel or ["high","med","low"])]
     if src_sel != "(todas)":
         filtered = [it for it in filtered if it["src_label"] == src_sel]
     if search:
@@ -439,65 +894,37 @@ def render():
     if ticker_filter:
         filtered = [it for it in filtered if ticker_filter in it["tickers"]]
 
-    # ── MÉTRICAS ────────────────────────────────────────────────
     nh = sum(1 for i in filtered if i["impact"] == "high")
     nm = sum(1 for i in filtered if i["impact"] == "med")
     nl = sum(1 for i in filtered if i["impact"] == "low")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("🔴 Alto",         nh)
-    c2.metric("🟡 Medio",        nm)
-    c3.metric("🟢 Bajo",         nl)
-    c4.metric("Fuentes activas", f"{active}/{len(SOURCES)}")
-    c5.metric("Total",           len(filtered))
 
-    # ── TIMELINE ────────────────────────────────────────────────
-    with st.expander("📊 Timeline — últimas 24h"):
-        buckets = [0] * 24
-        for it in items:
-            h = it["minutes_ago"] // 60
-            if 0 <= h < 24:
-                buckets[23 - h] += 1
-        df_t = pd.DataFrame({
-            "hora":     [f"-{23 - i}h" for i in range(24)],
-            "noticias": buckets,
-        })
-        st.bar_chart(df_t.set_index("hora"), height=160)
+    # ── STATUS STRIP ────────────────────────────────────────────
+    st.markdown(_status_html(nh, nm, nl, active, len(filtered)), unsafe_allow_html=True)
+
+    # ── TWO-COLUMN LAYOUT ───────────────────────────────────────
+    col_feed, col_panel = st.columns([7, 3])
+
+    # ── RIGHT PANEL ─────────────────────────────────────────────
+    with col_panel:
+        st.markdown(_heatmap_html(filtered),         unsafe_allow_html=True)
+        st.markdown(_impact_bars_html(nh, nm, nl),   unsafe_allow_html=True)
+        st.markdown(_sentiment_html(items),          unsafe_allow_html=True)
+        st.markdown(_timeline_html(items),           unsafe_allow_html=True)
+        st.markdown(_source_health_html(status),     unsafe_allow_html=True)
+        st.markdown(_keyword_legend_html(),          unsafe_allow_html=True)
 
     # ── FEED ────────────────────────────────────────────────────
-    st.markdown("---")
-    if not filtered:
-        st.info("◌ Sin noticias en este filtro")
-    else:
-        for it in filtered[:120]:
-            mins = it["minutes_ago"]
-            tstr = f"{mins}m" if mins < 60 else f"{mins // 60}h{mins % 60:02d}m"
-            sent = it["sentiment"]["label"]
-            sent_html = (
-                " <span class='sent-bull'>▲ BULL</span>" if sent == "bullish" else
-                " <span class='sent-bear'>▼ BEAR</span>" if sent == "bearish" else ""
-            )
-            tickers_html = "".join(
-                f"<span class='tk-tag'>${t}</span>" for t in it["tickers"]
-            )
-            title_html = (
-                f"<a href='{it['link']}' target='_blank' rel='noopener'>{it['title']}</a>"
-                if it["link"] else it["title"]
-            )
+    with col_feed:
+        if not filtered:
             st.markdown(
-                f"<div class='news-card {it['impact']}'>"
-                f"  <div class='nc-meta'>"
-                f"    <span class='nc-time'>{tstr}</span> · "
-                f"    <span class='nc-src'>{it['src_label']}</span> · "
-                f"    {it['sector']} · score {it['score']}/10{sent_html}"
-                f"  </div>"
-                f"  <div class='nc-title'>{title_html}</div>"
-                f"  <div class='nc-desc'>{it['desc'][:200]}</div>"
-                f"  <div style='margin-top:6px'>{tickers_html}</div>"
-                f"</div>",
+                "<div class='nf-empty'>◌ SIN NOTICIAS EN ESTE FILTRO</div>",
                 unsafe_allow_html=True,
             )
+        else:
+            cards = "".join(_card_html(it) for it in filtered[:120])
+            st.markdown(cards, unsafe_allow_html=True)
 
     st.caption(
-        f"↺ Actualizado: {datetime.now().strftime('%H:%M:%S')} · "
-        f"caché 120s · pulsa ⟳ para forzar recarga"
+        f"↺ {datetime.now().strftime('%H:%M:%S')} · caché 120s · "
+        f"{len(filtered)} items · {active}/{len(SOURCES)} fuentes activas"
     )

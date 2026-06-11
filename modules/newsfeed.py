@@ -1,8 +1,10 @@
+
 # modules/newsfeed.py  — RSU Terminal integration
 """
 RSU News Feed — autocontenido, sin utils/, sin st.set_page_config(), sin st.sidebar.
 """
 import re
+import html as _html
 import streamlit as st
 import streamlit.components.v1 as _components
 from datetime import datetime, timezone
@@ -19,7 +21,10 @@ SOURCES = [
     {"id":"ft",          "label":"FT",           "css":"src-ft",          "url":"https://www.ft.com/rss/home/uk"},
     {"id":"marketwatch", "label":"MKTWATCH",     "css":"src-marketwatch", "url":"https://feeds.content.dowjones.io/public/rss/mw_topstories"},
     # ── Policy / Regulatory ─────────────────────────────────────────
-    {"id":"trump",       "label":"TRUMP",        "css":"src-trump",       "url":"https://truthsocial.com/@realDonaldTrump.rss","special":"trump"},
+    # Truth Social RSS (Mastodon-based, may need to try multiple endpoints)
+    {"id":"trump",       "label":"TRUMP",        "css":"src-trump",       "url":"https://truthsocial.com/@realDonaldTrump.rss","special":"trump",
+     "fallback_urls":["https://www.politico.com/rss/politics08.xml",
+                      "https://feeds.npr.org/1014/rss.xml"]},
     {"id":"sec",         "label":"SEC 8-K",      "css":"src-sec",         "url":"https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&dateb=&owner=include&count=20&output=atom","fmt":"atom"},
     {"id":"fed",         "label":"FED",          "css":"src-fed",         "url":"https://www.federalreserve.gov/feeds/press_all.xml","fmt":"atom"},
     {"id":"bce",         "label":"BCE",          "css":"src-bce",         "url":"https://www.ecb.europa.eu/rss/press.html"},
@@ -67,6 +72,15 @@ SOURCES = [
     {"id":"benzinga",    "label":"BENZINGA",     "css":"src-benzinga",    "url":"https://www.benzinga.com/feed"},
     {"id":"hedgeco",     "label":"HEDGECO",      "css":"src-hedgeco",     "url":"https://www.hedgeco.net/feed"},
 ]
+
+def _strip_html(text):
+    """Remove HTML tags, decode entities, collapse whitespace."""
+    if not text:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", text)      # strip tags
+    text = _html.unescape(text)                # &amp; &lt; &#39; etc.
+    text = re.sub(r"\s+", " ", text).strip()  # collapse whitespace
+    return text
 
 PRICE_TICKERS = {
     "S&P 500":"^GSPC","NASDAQ":"^IXIC","DOW":"^DJI","VIX":"^VIX",
@@ -445,6 +459,8 @@ def _mins_pubdate(s):
     except: return 30
 
 def _build(title, desc, link, src, mins):
+    title = _strip_html(title)
+    desc  = _strip_html(desc)
     combined = f"{title} {desc}"
     return {"title":title,"desc":desc[:300],"link":link,
             "src_id":src["id"],"src_label":src["label"],"src_css":src.get("css","src-generic"),
@@ -504,20 +520,24 @@ def _fetch_atom(src):
 def _fetch_source(src):
     """Fetch one source. Returns (items, ok). Never raises."""
     fmt = src.get("fmt", "rss")
-    try:
-        if fmt == "atom":
-            return _fetch_atom(src)
-        # Try feedparser first
+    urls_to_try = [src["url"]] + src.get("fallback_urls", [])
+    for url in urls_to_try:
+        src_with_url = {**src, "url": url}
         try:
-            return _fetch_feedparser(src)
-        except ImportError:
-            pass  # not installed
+            if fmt == "atom":
+                items, ok = _fetch_atom(src_with_url)
+            else:
+                try:
+                    items, ok = _fetch_feedparser(src_with_url)
+                except ImportError:
+                    items, ok = _fetch_requests_rss(src_with_url)
+                except Exception:
+                    items, ok = _fetch_requests_rss(src_with_url)
+            if ok:
+                return items, ok
         except Exception:
-            pass
-        # Requests fallback
-        return _fetch_requests_rss(src)
-    except Exception:
-        return [], False
+            continue
+    return [], False
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_news():
@@ -616,8 +636,11 @@ def _card_html(it):
     if sent=="bullish": sdot='<span class="nf-sent-dot nf-sent-bull"></span>'
     elif sent=="bearish": sdot='<span class="nf-sent-dot nf-sent-bear"></span>'
     tks="".join(f'<span class="nf-tk">{t}</span>' for t in it["tickers"])
-    th=(f'<a href="{it["link"]}" target="_blank" rel="noopener">{it["title"]}</a>'
-        if it["link"] else it["title"])
+    # Escape title and desc so no feed HTML can break our card structure
+    safe_title = _html.escape(it["title"])
+    safe_desc  = _html.escape(it["desc"][:180])
+    th=(f'<a href="{it["link"]}" target="_blank" rel="noopener">{safe_title}</a>'
+        if it["link"] else safe_title)
     return (f'<div class="nf-card {it["impact"]}">'
             f'<div class="nf-time-col"><div class="nf-mins">{tstr}</div>'
             f'<div class="nf-mins-lbl">{lbl}</div>'
@@ -628,7 +651,7 @@ def _card_html(it):
             f'<span class="nf-src-badge {it["src_css"]}">{it["src_label"]}</span>'
             f'<span class="nf-sector">{it["sector"]}</span>{sdot}</div>'
             f'<div class="nf-title">{th}</div>'
-            f'<div class="nf-desc">{it["desc"][:180]}</div>'
+            f'<div class="nf-desc">{safe_desc}</div>'
             f'<div class="nf-keywords">{tks}</div></div></div>')
 
 def _trump_panel_html(trump_items):
@@ -771,7 +794,9 @@ o.connect(g);g.connect(c.destination);o.frequency.value=880;o.type="sine";
 g.gain.setValueAtTime(.4,c.currentTime);
 g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.25);
 o.start(c.currentTime);o.stop(c.currentTime+.25);}},d*350);}})(_i);}}}}catch(e){{}}"""
-    # Countdown: updates #nf-cd-secs in parent page, then reloads
+    # Countdown: updates #nf-cd-secs then clicks Streamlit ACTUALIZAR button
+    # (button click triggers st.rerun(), preserving auth session)
+    # NEVER use window.location.reload() — it clears the Streamlit session
     cd=f"""(function(){{
   var secs={refresh_secs};
   function tick(){{
@@ -780,7 +805,14 @@ o.start(c.currentTime);o.stop(c.currentTime+.25);}},d*350);}})(_i);}}}}catch(e){
       if(el) el.textContent=secs+"s";
     }}catch(e){{}}
     if(secs<=0){{
-      try{{window.parent.location.reload();}}catch(e){{window.location.reload();}}
+      // Click the Streamlit ACTUALIZAR button (triggers rerun, preserves auth)
+      try{{
+        var btns=window.parent.document.querySelectorAll("button");
+        for(var i=0;i<btns.length;i++){{
+          var t=btns[i].innerText||btns[i].textContent||"";
+          if(t.indexOf("ACTUALIZAR")>=0){{btns[i].click();return;}}
+        }}
+      }}catch(e){{}}
       return;
     }}
     secs--;
@@ -910,17 +942,19 @@ def render():
         with st.expander("◈ HEATMAP SECTORES", expanded=False):
             st.markdown(_heatmap_html(filtered), unsafe_allow_html=True)
 
-        with st.expander("◈ ALERTAS SONORAS", expanded=False):
-            al_status = "ON — Alertas activas para noticias HIGH" if st.session_state.nf_alerts_on else "OFF — Pulsa el botón del header para activar"
-            al_cls    = "nf-alert-on" if st.session_state.nf_alerts_on else "nf-alert-off"
-            st.markdown(
-                f'<div class="nf-alert-wrap">'
-                f'  <div class="nf-alert-status {al_cls}">{al_status}</div>'
-                f'  <div class="nf-alert-row"><label>Sonido al detectar noticias de ALTO impacto nuevas. '
-                f'Usa el botón ALERTAS en el header para activar/desactivar.</label></div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+        alert_label = "◈ ALERTAS SONORAS  🔔 ON" if st.session_state.nf_alerts_on else "◈ ALERTAS SONORAS  🔕 OFF"
+        with st.expander(alert_label, expanded=False):
+            al_cls = "nf-alert-on" if st.session_state.nf_alerts_on else "nf-alert-off"
+            al_txt = "🔔 ACTIVAS — Beep al detectar noticias HIGH nuevas" if st.session_state.nf_alerts_on else "🔕 DESACTIVADAS"
+            st.markdown(f'<div class="nf-alert-status {al_cls}">{al_txt}</div>',
+                        unsafe_allow_html=True)
+            if st.button(
+                "🔔 Desactivar alertas" if st.session_state.nf_alerts_on else "🔕 Activar alertas",
+                use_container_width=True, key="nf_al_exp_btn"
+            ):
+                st.session_state.nf_alerts_on = not st.session_state.nf_alerts_on
+                st.rerun()
+            st.caption("El beep suena cuando aparecen noticias de ALTO impacto nuevas desde el último refresco.")
 
         with st.expander("◈ KEYWORDS CLASIFICACIÓN", expanded=False):
             st.markdown(_keywords_html(), unsafe_allow_html=True)

@@ -1,4 +1,3 @@
-
 # modules/newsfeed.py  — RSU Terminal integration
 """
 RSU News Feed — autocontenido, sin utils/, sin st.set_page_config(), sin st.sidebar.
@@ -126,15 +125,18 @@ KNOWN_TICKERS = {
 _CSS = """
 <style>
 /* ── TICKER ──────────────────────────────────────────────── */
-.nf-ticker-wrap{overflow:hidden;height:30px;display:flex;align-items:center;
-  background:#00e676;border-radius:4px;margin-bottom:14px;}
+.nf-ticker-wrap{overflow:hidden;height:28px;display:flex;align-items:center;
+  background:#050508;border:1px solid #00e67644;border-radius:4px;margin-bottom:14px;}
 .nf-ticker-label{background:#000;color:#00e676;font-family:"VT323",monospace;
-  font-size:17px;padding:0 14px;height:100%;display:flex;align-items:center;
-  white-space:nowrap;flex-shrink:0;letter-spacing:.1em;z-index:2;}
+  font-size:16px;padding:0 14px;height:100%;display:flex;align-items:center;
+  white-space:nowrap;flex-shrink:0;letter-spacing:.12em;z-index:2;
+  border-right:1px solid #00e67633;}
 .nf-ticker-track{display:flex;animation:nf-ticker 80s linear infinite;white-space:nowrap;}
-.nf-ticker-item{font-family:"VT323",monospace;font-size:16px;color:#000;
-  font-weight:bold;padding:0 26px;letter-spacing:.05em;}
-.nf-t-up{color:#003320}.nf-t-down{color:#5a0010}
+.nf-ticker-item{font-family:"VT323",monospace;font-size:15px;color:#8a9ab0;
+  padding:0 22px;letter-spacing:.04em;}
+.nf-ticker-item strong{color:#e0e8f0;}
+.nf-t-up{color:#00e676;font-weight:bold;}
+.nf-t-down{color:#ff4466;font-weight:bold;}
 @keyframes nf-ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
 /* ── HEADER ──────────────────────────────────────────────── */
@@ -456,7 +458,7 @@ def _build(title, desc, link, src, mins):
 # ══════════════════════════════════════════════════════════════════════
 def _fetch_feedparser(src):
     import feedparser
-    feed = feedparser.parse(src["url"])
+    feed = feedparser.parse(src["url"], request_headers={"User-Agent":"RSU-Terminal/2.0"}, sanitize_html=False)
     items = []
     for e in feed.entries[:30]:
         title = getattr(e,"title","") or ""
@@ -468,7 +470,7 @@ def _fetch_feedparser(src):
 
 def _fetch_requests_rss(src):
     import requests, xml.etree.ElementTree as ET
-    r = requests.get(src["url"],timeout=8,headers={"User-Agent":"RSU-Terminal/2.0"})
+    r = requests.get(src["url"],timeout=5,headers={"User-Agent":"RSU-Terminal/2.0"})
     root = ET.fromstring(r.text)
     items = []
     for item in root.findall(".//item")[:30]:
@@ -482,7 +484,7 @@ def _fetch_requests_rss(src):
 def _fetch_atom(src):
     import requests, xml.etree.ElementTree as ET
     ns = {"a":"http://www.w3.org/2005/Atom"}
-    r = requests.get(src["url"],timeout=10,headers={"User-Agent":"RSU-Terminal/2.0"})
+    r = requests.get(src["url"],timeout=5,headers={"User-Agent":"RSU-Terminal/2.0"})
     root = ET.fromstring(r.text)
     items = []
     for entry in root.findall("a:entry",ns)[:20]:
@@ -525,17 +527,29 @@ def _fetch_source(src):
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _load_news():
+    from concurrent.futures import wait as _wait
     all_items, status = [], {}
-    with ThreadPoolExecutor(max_workers=min(len(SOURCES),16)) as ex:
-        futures = {ex.submit(_fetch_source,s):s for s in SOURCES}
-        for fut in as_completed(futures):
+    # Pre-mark all as failed; overwrite on success
+    for s in SOURCES:
+        status[s["id"]] = {"count": 0, "ok": False}
+
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        futures = {ex.submit(_fetch_source, s): s for s in SOURCES}
+        # Hard 25-second wall-clock timeout for the whole batch
+        done, not_done = _wait(futures.keys(), timeout=25)
+        # Cancel anything still running
+        for fut in not_done:
+            fut.cancel()
+        # Collect results from completed futures
+        for fut in done:
             src = futures[fut]
             try:
-                items, ok = fut.result()
+                items, ok = fut.result(timeout=2)
                 all_items.extend(items)
-                status[src["id"]] = {"count":len(items),"ok":ok}
-            except:
-                status[src["id"]] = {"count":0,"ok":False}
+                status[src["id"]] = {"count": len(items), "ok": ok}
+            except Exception:
+                pass  # already marked failed above
+
     all_items.sort(key=lambda x: x["minutes_ago"])
     return all_items, status
 

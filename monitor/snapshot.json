@@ -174,5 +174,9 @@
   "KTOS": {
     "precio_compra": 66.19,
     "fecha": "28/05/2026"
+  },
+  "SMCI": {
+    "precio_compra": 29.27,
+    "fecha": "11/06/2026"
   }
 }

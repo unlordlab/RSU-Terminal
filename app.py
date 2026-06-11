@@ -33,7 +33,7 @@ from modules import rsudb as rsudb_module
 from modules import earnings as earnings_module
 from modules import cartera as cartera_module
 from modules import tesis as tesis_module
-from modules import ia_report as ia_report_module
+from modules import newsfeed as newsfeed_module
 from modules import academy as academy_module
 from modules import trade_grader as trade_grader_module
 from modules import spxl_strategy as spxl_strategy_module
@@ -513,7 +513,7 @@ with st.sidebar:
     menu = st.radio("", [
         "📊 DASHBOARD", "📜 MANIFEST", "♣️ RSU CLUB", "📈 SCANNER RS/RW",
         "🤖 ALGORITMO RSU", "⚡ EMA EDGE", "🎯 CAN SLIM", "🗄️ RSU DB",
-        "🔬 RSU RESEARCH", "💼 CARTERA", "📝 TESIS", "🤖 AI REPORT",
+        "🔬 RSU RESEARCH", "💼 CARTERA", "📝 TESIS", "📰 NEWS FEED",
         "🎓 ACADEMY", "🏆 TRADE GRADER", "🚀 SPXL STRATEGY",
         "₿ BTC STRATUM", "🗺️ ROADMAP 2026", "🇺🇸 TRUMP PLAYBOOK",
         "👥 COMUNIDAD", "⚠️ DISCLAIMER"
@@ -539,7 +539,7 @@ modules = {
     "🔬 RSU RESEARCH":     earnings_module,
     "💼 CARTERA":          cartera_module,
     "📝 TESIS":            tesis_module,
-    "🤖 AI REPORT":        ia_report_module,
+    "📰 NEWS FEED":        newsfeed_module,
     "🎓 ACADEMY":          academy_module,
     "🏆 TRADE GRADER":     trade_grader_module,
     "🚀 SPXL STRATEGY":    spxl_strategy_module,
@@ -555,5 +555,4 @@ if menu in modules:
         modules[menu].render()
     except Exception as e:
         st.error(f"Error cargando módulo: {e}")
-
 

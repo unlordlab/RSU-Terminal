@@ -1,9 +1,11 @@
+
 # modules/newsfeed.py  — RSU Terminal integration
 """
 RSU News Feed — autocontenido, sin utils/, sin st.set_page_config(), sin st.sidebar.
 """
 import re
 import streamlit as st
+import streamlit.components.v1 as _components
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -471,7 +473,7 @@ def _fetch_requests_rss(src):
     items = []
     for item in root.findall(".//item")[:30]:
         title = (item.findtext("title") or "").strip()
-        desc  = re.sub(r"<[^>]+>", (item.findtext("description") or "")).strip()
+        desc  = re.sub(r"<[^>]+>", "", (item.findtext("description") or "")).strip()
         link  = (item.findtext("link") or "").strip()
         pub   = item.findtext("pubDate") or ""
         items.append(_build(title,desc,link,src,_mins_pubdate(pub)))
@@ -485,7 +487,7 @@ def _fetch_atom(src):
     items = []
     for entry in root.findall("a:entry",ns)[:20]:
         title   = (entry.findtext("a:title","",ns) or "").strip()
-        summary = re.sub(r"<[^>]+>", (entry.findtext("a:summary","",ns) or "")).strip()
+        summary = re.sub(r"<[^>]+>", "", (entry.findtext("a:summary","",ns) or "")).strip()
         le = entry.find("a:link",ns)
         link = le.get("href","") if le is not None else ""
         updated = (entry.findtext("a:updated","",ns) or "").strip()
@@ -499,18 +501,26 @@ def _fetch_atom(src):
 
 def _fetch_source(src):
     fmt = src.get("fmt","rss")
-    try:
-        if fmt == "atom":
+    last_err = None
+    # Try feedparser first (best parser)
+    if fmt != "atom":
+        try:
+            return _fetch_feedparser(src)
+        except ImportError:
+            pass  # feedparser not installed, fall through
+        except Exception as e:
+            last_err = e
+    # Try atom parser for atom feeds or feedparser failures
+    if fmt == "atom":
+        try:
             return _fetch_atom(src)
-        return _fetch_feedparser(src)
-    except ImportError:
-        pass
-    except Exception:
-        if fmt == "atom":
+        except Exception:
             return [], False
+    # Requests fallback for RSS
     try:
         return _fetch_requests_rss(src)
-    except: pass
+    except Exception:
+        pass
     return [], False
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -741,6 +751,7 @@ def _keywords_html():
             f'</div></div>')
 
 def _js_html(refresh_secs, new_high_cnt, alerts_on):
+    """Returns JS body (no <script> tags) — injected via components.html()."""
     beep=""
     if alerts_on and new_high_cnt>0:
         n=min(new_high_cnt,3)
@@ -751,11 +762,24 @@ o.connect(g);g.connect(c.destination);o.frequency.value=880;o.type="sine";
 g.gain.setValueAtTime(.4,c.currentTime);
 g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.25);
 o.start(c.currentTime);o.stop(c.currentTime+.25);}},d*350);}})(_i);}}}}catch(e){{}}"""
-    cd=f"""(function(){{var s={refresh_secs};function t(){{
-var e=document.getElementById("nf-cd-secs");if(e)e.textContent=s+"s";
-if(s<=0){{try{{window.parent.location.reload();}}catch(e){{window.location.reload();}}return;}}
-s--;setTimeout(t,1000);}}t();}})();"""
-    return f"<script>{beep}{cd}</script>"
+    # Countdown: updates #nf-cd-secs in parent page, then reloads
+    cd=f"""(function(){{
+  var secs={refresh_secs};
+  function tick(){{
+    try{{
+      var el=window.parent.document.getElementById("nf-cd-secs");
+      if(el) el.textContent=secs+"s";
+    }}catch(e){{}}
+    if(secs<=0){{
+      try{{window.parent.location.reload();}}catch(e){{window.location.reload();}}
+      return;
+    }}
+    secs--;
+    setTimeout(tick,1000);
+  }}
+  tick();
+}})();"""
+    return beep + cd
 
 # ══════════════════════════════════════════════════════════════════════
 # RENDER
@@ -901,9 +925,11 @@ def render():
             st.markdown("".join(_card_html(it) for it in filtered[:120]),
                         unsafe_allow_html=True)
 
-    # ── JS ───────────────────────────────────────────────────────
-    st.markdown(_js_html(_REFRESH_SECS, new_high, st.session_state.nf_alerts_on),
-                unsafe_allow_html=True)
+    # ── JS: countdown + sound (components.html → real iframe execution) ──
+    _components.html(
+        f"<script>{_js_html(_REFRESH_SECS, new_high, st.session_state.nf_alerts_on)}</script>",
+        height=0,
+    )
 
     st.caption(
         f"↺ {datetime.now().strftime('%H:%M:%S')} · "

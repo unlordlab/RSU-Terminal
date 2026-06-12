@@ -1,4 +1,3 @@
-
 # modules/newsfeed.py  — RSU Terminal integration
 """
 RSU News Feed — autocontenido, sin utils/, sin st.set_page_config(), sin st.sidebar.
@@ -14,63 +13,56 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # SOURCES  (~50, matching HTML reference)
 # ══════════════════════════════════════════════════════════════════════
 SOURCES = [
-    # ── Mainstream ──────────────────────────────────────────────────
-    {"id":"reuters",     "label":"REUTERS",      "css":"src-reuters",     "url":"https://feeds.reuters.com/reuters/businessNews"},
+    # ── Mainstream reliable ──────────────────────────────────────────
+    {"id":"reuters",     "label":"REUTERS",      "css":"src-reuters",     "url":"https://feeds.reuters.com/reuters/topNews"},
     {"id":"wsj",         "label":"WSJ",          "css":"src-wsj",         "url":"https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
     {"id":"cnbc",        "label":"CNBC",         "css":"src-cnbc",        "url":"https://www.cnbc.com/id/20910258/device/rss/rss.html"},
     {"id":"ft",          "label":"FT",           "css":"src-ft",          "url":"https://www.ft.com/rss/home/uk"},
     {"id":"marketwatch", "label":"MKTWATCH",     "css":"src-marketwatch", "url":"https://feeds.content.dowjones.io/public/rss/mw_topstories"},
-    # ── Policy / Regulatory ─────────────────────────────────────────
-    # Truth Social RSS (Mastodon-based, may need to try multiple endpoints)
-    {"id":"trump",       "label":"TRUMP",        "css":"src-trump",       "url":"https://truthsocial.com/@realDonaldTrump.rss","special":"trump",
-     "fallback_urls":["https://www.politico.com/rss/politics08.xml",
-                      "https://feeds.npr.org/1014/rss.xml"]},
-    {"id":"sec",         "label":"SEC 8-K",      "css":"src-sec",         "url":"https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&dateb=&owner=include&count=20&output=atom","fmt":"atom"},
-    {"id":"fed",         "label":"FED",          "css":"src-fed",         "url":"https://www.federalreserve.gov/feeds/press_all.xml","fmt":"atom"},
-    {"id":"bce",         "label":"BCE",          "css":"src-bce",         "url":"https://www.ecb.europa.eu/rss/press.html"},
-    {"id":"reddit",      "label":"REDDIT",       "css":"src-reddit",      "url":"https://www.reddit.com/r/investing+stocks+options/new.rss"},
-    {"id":"zerohedge",   "label":"ZEROHEDGE",    "css":"src-zerohedge",   "url":"https://feeds.feedburner.com/zerohedge/feed"},
-    {"id":"investing",   "label":"INVESTING",    "css":"src-investing",   "url":"https://www.investing.com/rss/news.rss"},
-    # ── Finance analysts / newsletters ──────────────────────────────
-    {"id":"kobeissi",    "label":"KOBEISSI",     "css":"src-kobeissi",    "url":"https://nitter.poast.org/KobeissiLetter/rss"},
-    {"id":"tedzhang",    "label":"TED ZHANG",    "css":"src-tedzhang",    "url":"https://nitter.poast.org/tedzhangfin/rss"},
-    {"id":"unusualwhales","label":"UNQ.WHALES",  "css":"src-unusualwhales","url":"https://unusualwhales.com/rss"},
-    {"id":"calcrisk",    "label":"CALC.RISK",    "css":"src-calcrisk",    "url":"https://feeds.feedburner.com/CalculatedRisk"},
-    {"id":"nakedcap",    "label":"NAKED CAP",    "css":"src-nakedcap",    "url":"https://www.nakedcapitalism.com/feed"},
-    {"id":"ftalphaville","label":"FT ALPHAV",    "css":"src-ftalphaville","url":"https://ftalphaville.ft.com/feed/"},
-    {"id":"bizinsider",  "label":"BUS.INSIDER",  "css":"src-bizinsider",  "url":"https://feeds.businessinsider.com/custom/all"},
+    {"id":"ap",          "label":"AP BUSINESS",  "css":"src-generic",     "url":"https://feeds.apnews.com/apnews/business"},
     {"id":"yahoofinance","label":"YAHOO FIN",    "css":"src-yahoofinance","url":"https://finance.yahoo.com/rss/topstories"},
-    {"id":"macroalf",    "label":"MACRO ALF",    "css":"src-macroalf",    "url":"https://themacrocompass.substack.com/feed","fmt":"atom"},
-    {"id":"doomberg",    "label":"DOOMBERG",     "css":"src-doomberg",    "url":"https://doomberg.substack.com/feed","fmt":"atom"},
-    {"id":"chartbook",   "label":"CHARTBOOK",    "css":"src-chartbook",   "url":"https://adamtooze.substack.com/feed","fmt":"atom"},
-    {"id":"steno",       "label":"STENO",        "css":"src-steno",       "url":"https://stenoresearch.substack.com/feed","fmt":"atom"},
-    {"id":"timiraos",    "label":"TIMIRAOS",     "css":"src-timiraos",    "url":"https://nitter.poast.org/NickTimiraos/rss"},
-    {"id":"burry",       "label":"BURRY",        "css":"src-burry",       "url":"https://nitter.poast.org/michaeljburry/rss"},
+    {"id":"bizinsider",  "label":"BUS.INSIDER",  "css":"src-bizinsider",  "url":"https://feeds.businessinsider.com/custom/all"},
+    {"id":"benzinga",    "label":"BENZINGA",     "css":"src-benzinga",    "url":"https://www.benzinga.com/feed"},
     {"id":"blockworks",  "label":"BLOCKWORKS",   "css":"src-blockworks",  "url":"https://blockworks.co/feed"},
-    {"id":"netinterest", "label":"NET INTEREST", "css":"src-netinterest", "url":"https://www.netinterest.co/feed","fmt":"atom"},
-    {"id":"barchart",    "label":"BARCHART",     "css":"src-barchart",    "url":"https://www.barchart.com/news/rss"},
-    {"id":"nasdaq",      "label":"NASDAQ",       "css":"src-nasdaq",      "url":"https://www.nasdaq.com/feed/rss/nasdaq-originals"},
-    # ── Hedge funds ─────────────────────────────────────────────────
-    {"id":"citadel",     "label":"CITADEL",      "css":"src-citadel",     "url":"https://www.citadel.com/research-insights/rss"},
-    {"id":"bridgewater", "label":"BRIDGEWATER",  "css":"src-bridgewater", "url":"https://www.bridgewater.com/research-and-insights/rss"},
-    {"id":"oaktree",     "label":"OAKTREE",      "css":"src-oaktree",     "url":"https://www.oaktreecapital.com/insights/rss"},
-    {"id":"aqr",         "label":"AQR",          "css":"src-aqr",         "url":"https://www.aqr.com/insights/rss"},
-    {"id":"point72",     "label":"POINT72",      "css":"src-point72",     "url":"https://www.point72.com/feed"},
-    {"id":"elliott",     "label":"ELLIOTT",      "css":"src-elliott",     "url":"https://elliottinvestment.com/feed"},
-    {"id":"ackman",      "label":"ACKMAN",       "css":"src-ackman",      "url":"https://nitter.poast.org/BillAckman/rss"},
-    {"id":"drucken",     "label":"DRUCKEN",      "css":"src-drucken",     "url":"https://nitter.poast.org/StanleyDruckenmiller/rss"},
-    {"id":"millennium",  "label":"MILLENNIUM",   "css":"src-millennium",  "url":"https://www.mlp.com/insights/rss"},
-    # ── HF news ─────────────────────────────────────────────────────
-    {"id":"hfnews",      "label":"HF NEWS",      "css":"src-hfnews",      "url":"https://www.hedgefundnews.com/feed"},
-    {"id":"hedgeweek",   "label":"HEDGEWEEK",    "css":"src-hedgeweek",   "url":"https://www.hedgeweek.com/feed"},
+    {"id":"seekingalpha","label":"SEKALPHA",     "css":"src-seekingalpha","url":"https://seekingalpha.com/market_currents.xml"},
     {"id":"valuewalk",   "label":"VALUEWALK",    "css":"src-valuewalk",   "url":"https://www.valuewalk.com/feed"},
     {"id":"insidermonkey","label":"INSDR MNKY",  "css":"src-insidermonkey","url":"https://www.insidermonkey.com/feed"},
     {"id":"marketfolly", "label":"MKT FOLLY",    "css":"src-marketfolly", "url":"https://www.marketfolly.com/feeds/posts/default?alt=rss"},
     {"id":"gurufocus",   "label":"GURUFOCUS",    "css":"src-gurufocus",   "url":"https://www.gurufocus.com/term/news/rss"},
-    {"id":"dalio",       "label":"DALIO",        "css":"src-dalio",       "url":"https://nitter.poast.org/RayDalio/rss"},
-    {"id":"seekingalpha","label":"SEKALPHA",     "css":"src-seekingalpha","url":"https://seekingalpha.com/market_currents.xml"},
-    {"id":"benzinga",    "label":"BENZINGA",     "css":"src-benzinga",    "url":"https://www.benzinga.com/feed"},
+    {"id":"hedgeweek",   "label":"HEDGEWEEK",    "css":"src-hedgeweek",   "url":"https://www.hedgeweek.com/feed"},
+    # ── Macro / Alt finance ──────────────────────────────────────────
+    {"id":"zerohedge",   "label":"ZEROHEDGE",    "css":"src-zerohedge",   "url":"https://feeds.feedburner.com/zerohedge/feed"},
+    {"id":"calcrisk",    "label":"CALC.RISK",    "css":"src-calcrisk",    "url":"https://feeds.feedburner.com/CalculatedRisk"},
+    {"id":"nakedcap",    "label":"NAKED CAP",    "css":"src-nakedcap",    "url":"https://www.nakedcapitalism.com/feed"},
+    {"id":"ftalphaville","label":"FT ALPHAV",    "css":"src-ftalphaville","url":"https://ftalphaville.ft.com/feed/"},
+    {"id":"investing",   "label":"INVESTING",    "css":"src-investing",   "url":"https://www.investing.com/rss/news.rss"},
+    # ── Substack public newsletters ──────────────────────────────────
+    {"id":"macroalf",    "label":"MACRO ALF",    "css":"src-macroalf",    "url":"https://themacrocompass.substack.com/feed"},
+    {"id":"chartbook",   "label":"CHARTBOOK",    "css":"src-chartbook",   "url":"https://adamtooze.substack.com/feed"},
+    {"id":"netinterest", "label":"NET INTEREST", "css":"src-netinterest", "url":"https://www.netinterest.co/feed"},
+    # ── Policy / Regulators ──────────────────────────────────────────
+    {"id":"fed",         "label":"FED",          "css":"src-fed",         "url":"https://www.federalreserve.gov/feeds/press_all.xml","fmt":"atom"},
+    {"id":"sec",         "label":"SEC 8-K",      "css":"src-sec",         "url":"https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&dateb=&owner=include&count=20&output=atom","fmt":"atom"},
+    {"id":"bce",         "label":"BCE",          "css":"src-bce",         "url":"https://www.ecb.europa.eu/rss/press.html"},
+    {"id":"reddit",      "label":"REDDIT",       "css":"src-reddit",      "url":"https://www.reddit.com/r/investing+stocks+options/new.rss"},
+    # ── Trump / Truth Social (dedicated panel — no unrelated fallback) ──
+    {"id":"trump",       "label":"TRUMP",        "css":"src-trump",       "url":"https://truthsocial.com/@realDonaldTrump.rss","special":"trump",
+     "fallback_urls":["https://truthsocial.com/users/realDonaldTrump.rss"]},
+    # ── HF news aggregators ──────────────────────────────────────────
     {"id":"hedgeco",     "label":"HEDGECO",      "css":"src-hedgeco",     "url":"https://www.hedgeco.net/feed"},
+    {"id":"hfnews",      "label":"HF NEWS",      "css":"src-hfnews",      "url":"https://www.hedgefundnews.com/feed"},
+    # ── X-only accounts (no RSS — shown for reference, always 0) ─────
+    {"id":"kobeissi",    "label":"KOBEISSI",     "css":"src-kobeissi",    "url":""},
+    {"id":"timiraos",    "label":"TIMIRAOS",     "css":"src-timiraos",    "url":""},
+    {"id":"burry",       "label":"BURRY",        "css":"src-burry",       "url":""},
+    {"id":"ackman",      "label":"ACKMAN",       "css":"src-ackman",      "url":""},
+    # ── HF institutions (no public feed — shown for reference) ───────
+    {"id":"citadel",     "label":"CITADEL",      "css":"src-citadel",     "url":""},
+    {"id":"bridgewater", "label":"BRIDGEWATER",  "css":"src-bridgewater", "url":""},
+    {"id":"oaktree",     "label":"OAKTREE",      "css":"src-oaktree",     "url":""},
+    {"id":"point72",     "label":"POINT72",      "css":"src-point72",     "url":""},
+    {"id":"millennium",  "label":"MILLENNIUM",   "css":"src-millennium",  "url":""},
+    {"id":"drucken",     "label":"DRUCKEN",      "css":"src-drucken",     "url":""},
 ]
 
 def _strip_html(text):
@@ -474,7 +466,11 @@ def _build(title, desc, link, src, mins):
 # ══════════════════════════════════════════════════════════════════════
 def _fetch_feedparser(src):
     import feedparser
-    feed = feedparser.parse(src["url"])
+    try:
+        import socket as _socket
+        _socket.setdefaulttimeout(5)
+    except: pass
+    feed = feedparser.parse(src["url"], request_headers=_HEADERS)
     items = []
     for e in feed.entries[:30]:
         title = getattr(e,"title","") or ""
@@ -484,43 +480,112 @@ def _fetch_feedparser(src):
         items.append(_build(title.strip(),desc.strip(),link.strip(),src,_mins_feedparser(e)))
     return items, len(items)>0
 
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RSU-Terminal/2.0; +https://rsu.app)"}
+
 def _fetch_requests_rss(src):
+    """Fetch RSS 2.0 or Atom, auto-detecting the format."""
     import requests, xml.etree.ElementTree as ET
-    r = requests.get(src["url"],timeout=5,headers={"User-Agent":"RSU-Terminal/2.0"})
-    root = ET.fromstring(r.text)
-    items = []
-    for item in root.findall(".//item")[:30]:
-        title = (item.findtext("title") or "").strip()
-        desc  = re.sub(r"<[^>]+>", "", (item.findtext("description") or "")).strip()
-        link  = (item.findtext("link") or "").strip()
-        pub   = item.findtext("pubDate") or ""
-        items.append(_build(title,desc,link,src,_mins_pubdate(pub)))
-    return items, len(items)>0
+    r = requests.get(src["url"], timeout=5, headers=_HEADERS)
+    r.raise_for_status()
+    # Strip BOM / leading whitespace that can break ET
+    text = r.text.lstrip("﻿").strip()
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return [], False
+    tag = root.tag
+    # Atom feed: root tag contains "feed"
+    if "feed" in tag.lower() or tag.endswith("}feed"):
+        ns_map = {"a": tag.split("}")[0].lstrip("{") if "}" in tag else "http://www.w3.org/2005/Atom"}
+        ns = {"a": ns_map["a"]}
+        items = []
+        for entry in (root.findall("a:entry", ns) or root.findall("entry"))[:30]:
+            def _t(el, tags, ns=ns):
+                for t in tags:
+                    v = el.findtext(t) or el.findtext(f"a:{t}", namespaces=ns) or ""
+                    if v: return v.strip()
+                return ""
+            title   = _t(entry, ["title"])
+            summary = re.sub(r"<[^>]+>", "", _t(entry, ["summary", "content"]))
+            le = entry.find("link") or entry.find("a:link", ns)
+            link = (le.get("href","") if le is not None else "")
+            updated = _t(entry, ["updated","published"])
+            mins = 30
+            try:
+                dt = datetime.fromisoformat(updated.replace("Z","+00:00"))
+                mins = max(0,int((datetime.now(timezone.utc)-dt).total_seconds()/60))
+            except: pass
+            items.append(_build(title, summary[:300], link, src, mins))
+        return items, len(items) > 0
+    else:
+        # RSS 2.0
+        items = []
+        for item in root.findall(".//item")[:30]:
+            title = (item.findtext("title") or "").strip()
+            desc  = re.sub(r"<[^>]+>", "", (item.findtext("description") or "")).strip()
+            link  = (item.findtext("link") or "").strip()
+            pub   = item.findtext("pubDate") or ""
+            items.append(_build(title, desc, link, src, _mins_pubdate(pub)))
+        return items, len(items) > 0
 
 def _fetch_atom(src):
+    """Robust Atom parser — auto-detects namespace, finds entries recursively."""
     import requests, xml.etree.ElementTree as ET
-    ns = {"a":"http://www.w3.org/2005/Atom"}
-    r = requests.get(src["url"],timeout=5,headers={"User-Agent":"RSU-Terminal/2.0"})
-    root = ET.fromstring(r.text)
+    r = requests.get(src["url"], timeout=5, headers=_HEADERS)
+    r.raise_for_status()
+    root = ET.fromstring(r.content)  # bytes → ET handles encoding declaration
+    # Detect namespace from root tag {uri}feed → uri
+    ns_uri = root.tag.split("}")[0][1:] if root.tag.startswith("{") else ""
+    pfx = {"a": ns_uri} if ns_uri else {}
+    def _t(el, tag):
+        """Get text from child, trying namespace prefix and raw tag."""
+        for t in ([f"a:{tag}"] if ns_uri else []) + [tag] + ([f"{{{ns_uri}}}{tag}"] if ns_uri else []):
+            found = el.find(t, pfx) if ":" in t else el.find(t)
+            if found is not None and (found.text or "").strip():
+                return found.text.strip()
+        return ""
+    # Find entries (try multiple strategies)
+    entries = []
+    for selector in (
+        [f"a:entry"] if ns_uri else [],
+        ["entry"],
+        [f"{{{ns_uri}}}entry"] if ns_uri else [],
+        [".//entry"],
+        [f".//{{{ns_uri}}}entry"] if ns_uri else [],
+    ):
+        if not selector: continue
+        found = root.findall(selector[0], pfx) if ":" in selector[0] else root.findall(selector[0])
+        if found:
+            entries = found
+            break
     items = []
-    for entry in root.findall("a:entry",ns)[:20]:
-        title   = (entry.findtext("a:title","",ns) or "").strip()
-        summary = re.sub(r"<[^>]+>", "", (entry.findtext("a:summary","",ns) or "")).strip()
-        le = entry.find("a:link",ns)
-        link = le.get("href","") if le is not None else ""
-        updated = (entry.findtext("a:updated","",ns) or "").strip()
+    for entry in entries[:25]:
+        title   = _t(entry, "title")
+        summary = _t(entry, "summary") or _t(entry, "content")
+        # Link — prefer href attribute
+        link = ""
+        for ltag in ([f"a:link"] if ns_uri else []) + ["link"] + ([f"{{{ns_uri}}}link"] if ns_uri else []):
+            le = entry.find(ltag, pfx) if ":" in ltag else entry.find(ltag)
+            if le is not None:
+                link = le.get("href","") or (le.text or "")
+                if link: break
+        updated = _t(entry, "updated") or _t(entry, "published")
         mins = 30
         try:
             dt = datetime.fromisoformat(updated.replace("Z","+00:00"))
-            mins = max(0,int((datetime.now(timezone.utc)-dt).total_seconds()/60))
+            mins = max(0, int((datetime.now(timezone.utc)-dt).total_seconds()/60))
         except: pass
-        items.append(_build(title,summary[:300],link,src,mins))
-    return items, len(items)>0
+        if title:
+            items.append(_build(title, summary[:300], link, src, mins))
+    return items, len(items) > 0
 
 def _fetch_source(src):
     """Fetch one source. Returns (items, ok). Never raises."""
     fmt = src.get("fmt", "rss")
-    urls_to_try = [src["url"]] + src.get("fallback_urls", [])
+    # Skip sources with no URL (X-only, HF without feed)
+    urls_to_try = [u for u in [src["url"]] + src.get("fallback_urls", []) if u]
+    if not urls_to_try:
+        return [], False
     for url in urls_to_try:
         src_with_url = {**src, "url": url}
         try:
@@ -942,19 +1007,33 @@ def render():
         with st.expander("◈ HEATMAP SECTORES", expanded=False):
             st.markdown(_heatmap_html(filtered), unsafe_allow_html=True)
 
-        alert_label = "◈ ALERTAS SONORAS  🔔 ON" if st.session_state.nf_alerts_on else "◈ ALERTAS SONORAS  🔕 OFF"
-        with st.expander(alert_label, expanded=False):
-            al_cls = "nf-alert-on" if st.session_state.nf_alerts_on else "nf-alert-off"
-            al_txt = "🔔 ACTIVAS — Beep al detectar noticias HIGH nuevas" if st.session_state.nf_alerts_on else "🔕 DESACTIVADAS"
-            st.markdown(f'<div class="nf-alert-status {al_cls}">{al_txt}</div>',
-                        unsafe_allow_html=True)
-            if st.button(
-                "🔔 Desactivar alertas" if st.session_state.nf_alerts_on else "🔕 Activar alertas",
-                use_container_width=True, key="nf_al_exp_btn"
-            ):
-                st.session_state.nf_alerts_on = not st.session_state.nf_alerts_on
-                st.rerun()
-            st.caption("El beep suena cuando aparecen noticias de ALTO impacto nuevas desde el último refresco.")
+        al_title = "◈ ALERTAS SONORAS  🔔" if st.session_state.nf_alerts_on else "◈ ALERTAS SONORAS  🔕"
+        with st.expander(al_title, expanded=False):
+            st.caption(
+                "Activa/desactiva las alertas con el botón del header. "
+                "El beep suena automáticamente cuando llegan noticias de ALTO impacto nuevas. "
+                "Usa el botón de abajo para verificar que el sonido funciona en tu navegador."
+            )
+            # Test sound button — runs in iframe so user gesture is valid for AudioContext
+            _components.html("""
+<style>
+  button{background:#161620;border:1px solid #00e67644;color:#00e676;
+  font-family:"Courier New",monospace;font-size:10px;letter-spacing:.1em;
+  padding:6px 16px;border-radius:2px;cursor:pointer;width:100%;}
+  button:hover{background:#00e67611;border-color:#00e676;}
+</style>
+<button onclick="(function(){
+  try{
+    var c=new(window.AudioContext||window.webkitAudioContext)();
+    var o=c.createOscillator(); var g=c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.frequency.value=880; o.type='sine';
+    g.gain.setValueAtTime(.4,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.3);
+    o.start(c.currentTime); o.stop(c.currentTime+.3);
+  }catch(e){alert('Audio no disponible: '+e.message);}
+})()">🔊 TEST SOUND</button>
+""", height=38)
 
         with st.expander("◈ KEYWORDS CLASIFICACIÓN", expanded=False):
             st.markdown(_keywords_html(), unsafe_allow_html=True)

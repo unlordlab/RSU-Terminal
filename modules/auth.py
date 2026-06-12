@@ -43,7 +43,7 @@ def login():
     for k, v in [
         ("auth", False), ("login_attempts", 0),
         ("lockout_time", None), ("last_activity", None),
-        ("vt_theme", "VT220"), ("vt_menu_open", False),
+        ("vt_theme", "VT220"),
     ]:
         if k not in st.session_state:
             st.session_state[k] = v
@@ -69,7 +69,7 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    t = THEMES[st.session_state["vt_theme"]]
+    t   = THEMES[st.session_state["vt_theme"]]
     pri    = t["pri"]
     bg     = t["bg"]
     bg2    = t["bg2"]
@@ -82,396 +82,380 @@ def login():
 
     logo_b64 = get_logo_base64()
 
-    # Build theme JS object for the switcher
-    themes_js = "{"
+    # Build JS themes object
+    themes_js_parts = []
     for k, v in THEMES.items():
-        themes_js += f'"{k}":{{"pri":"{v["pri"]}","bg":"{v["bg"]}","bg2":"{v["bg2"]}","bg3":"{v["bg3"]}","border":"{v["border"]}","mid":"{v["mid"]}","dim":"{v["dim"]}","dark":"{v["dark"]}","label":"{v["label"]}"}},'
-    themes_js = themes_js.rstrip(",") + "}"
+        themes_js_parts.append(
+            f'"{k}":{{"pri":"{v["pri"]}","bg":"{v["bg"]}","bg2":"{v["bg2"]}","bg3":"{v["bg3"]}",'
+            f'"border":"{v["border"]}","mid":"{v["mid"]}","dim":"{v["dim"]}","label":"{v["label"]}"}}'
+        )
+    themes_js = "{" + ",".join(themes_js_parts) + "}"
 
-    # ── CSS + HTML ─────────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+    cur = st.session_state["vt_theme"]
 
-        #MainMenu, footer, header {{ visibility: hidden !important; }}
-
-        html, body, .stApp {{
-            background: {bg} !important;
-        }}
-
-        /* CRT scanlines */
-        .stApp::before {{
-            content: '';
-            position: fixed; inset: 0;
-            background: repeating-linear-gradient(
-                to bottom,
-                transparent 0, transparent 3px,
-                rgba(0,0,0,0.25) 3px, rgba(0,0,0,0.25) 4px
-            );
-            pointer-events: none; z-index: 9998;
-        }}
-
-        /* phosphor vignette */
-        .stApp::after {{
-            content: '';
-            position: fixed; inset: 0;
-            background: radial-gradient(ellipse 90% 90% at 50% 50%, transparent 50%, rgba(0,0,0,0.7) 100%);
-            pointer-events: none; z-index: 9997;
-        }}
-
-        /* Strip all Streamlit chrome */
-        .main .block-container {{
-            max-width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-        }}
-
-        section[data-testid="stMain"] > div {{ padding: 0 !important; }}
-
-        div[data-testid="stVerticalBlock"] {{
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            gap: 0 !important;
-        }}
-
-        div[data-testid="stHorizontalBlock"],
-        div[data-testid="column"] {{
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            gap: 0 !important;
-            min-height: 0 !important;
-        }}
-
-        /* ── INPUT ────────────────────────────────────────── */
-        .stTextInput > label {{ display: none !important; }}
-
-        .stTextInput > div {{
-            border: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            padding: 0 !important;
-        }}
-
-        .stTextInput > div > div > input {{
-            background: {bg3} !important;
-            border: none !important;
-            border-bottom: 1px solid {border} !important;
-            border-radius: 0 !important;
-            color: {pri} !important;
-            height: 30px !important;
-            font-family: 'Share Tech Mono', monospace !important;
-            font-size: 0.82rem !important;
-            letter-spacing: 1px !important;
-            padding: 0 8px !important;
-            caret-color: {pri};
-            transition: border-color 0.1s;
-            width: 100% !important;
-        }}
-
-        .stTextInput > div > div > input:focus {{
-            border-bottom-color: {dim} !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }}
-
-        .stTextInput > div > div > input::placeholder {{
-            color: {border} !important;
-            font-style: italic;
-        }}
-
-        .stTextInput [data-testid="stIcon"] {{ display: none !important; }}
-
-        /* ── BUTTON ──────────────────────────────────────── */
-        div[data-testid="stButton"] {{
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }}
-
-        .stButton > button {{
-            font-family: 'Share Tech Mono', monospace !important;
-            background: {pri} !important;
-            color: {bg} !important;
-            border: none !important;
-            border-radius: 0 !important;
-            font-size: 0.85rem !important;
-            letter-spacing: 4px !important;
-            width: 100% !important;
-            height: 44px !important;
-            padding: 0 !important;
-            text-transform: uppercase !important;
-            margin: 0 !important;
-            transition: opacity 0.1s !important;
-            box-shadow: none !important;
-        }}
-
-        .stButton > button:hover {{ opacity: 0.85 !important; }}
-        .stButton > button:focus {{ outline: 2px solid {pri} !important; outline-offset: 2px !important; }}
-
-        /* ── ALERTS ──────────────────────────────────────── */
-        .stAlert {{
-            font-family: 'Share Tech Mono', monospace !important;
-            font-size: 0.75rem !important;
-            border-radius: 0 !important;
-            border-left: 2px solid {pri} !important;
-            background: {bg2} !important;
-        }}
-
-        /* theme toggle btn — hidden visually, keep functionality */
-        #theme-toggle-row {{
-            position: absolute; top: 0; right: 0;
-            opacity: 0; pointer-events: none;
-            height: 0; overflow: hidden;
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    # ── FULL PAGE HTML ────────────────────────────────────────────────────────
-    logo_html = ""
+    # ── ALL CSS + ALL HTML in a single st.markdown() call ─────────────────────
+    logo_img = ""
     if logo_b64:
-        logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="display:block;width:56px;height:56px;border-radius:6px;margin:0 auto 10px;box-shadow:0 0 16px rgba(255,179,0,0.3);">'
+        logo_img = (
+            f'<img src="data:image/png;base64,{logo_b64}" '
+            f'style="display:block;width:56px;height:56px;border-radius:6px;'
+            f'margin:0 auto 10px;opacity:0.9;">'
+        )
 
-    cur_theme = st.session_state["vt_theme"]
+    def mk_dot(k):
+        return ("▶", dim) if k == cur else ("○", border)
+    def mk_arrow(k):
+        return f'<span style="margin-left:auto;color:{dim};font-size:0.6rem;">←</span>' if k == cur else ""
 
-    def dot(k):
-        return "▶" if k == cur_theme else "○"
-    def arrow(k):
-        return '<span style="margin-left:auto;font-size:0.62rem;color:' + dim + ';">←</span>' if k == cur_theme else ""
-    def dot_cls(k):
-        return dim if k == cur_theme else border
+    vt_d, vt_c   = mk_dot("VT220")
+    gr_d, gr_c   = mk_dot("GREEN")
+    cy_d, cy_c   = mk_dot("CYAN")
 
     st.markdown(f"""
-    <div id="vt-root" style="
-        font-family:'Share Tech Mono',monospace;
-        color:{pri};
-        background:{bg};
-        min-height:100vh;
-        ">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
-      <!-- MENUBAR -->
-      <div style="
-          display:flex;justify-content:space-between;align-items:stretch;
-          height:30px;border-bottom:1px solid {border};background:{bg2};
-          font-size:0.7rem;letter-spacing:1px;position:relative;z-index:10;">
+/* ── GLOBAL ─────────────────────────── */
+#MainMenu, footer, header {{ visibility: hidden !important; }}
+html, body, .stApp {{ background: {bg} !important; }}
 
-        <div style="display:flex;align-items:stretch;">
-          <div style="display:flex;align-items:center;padding:0 10px;color:{pri};
-                      border-right:1px solid {border};background:{bg};
-                      border-top:1px solid {dim};border-bottom:1px solid {dim};">
-            <span style="color:{dim};margin-right:3px;">^1</span>LOGIN
-          </div>
-          <div style="display:flex;align-items:center;padding:0 10px;color:{dim};border-right:1px solid {border};">
-            <span style="color:{border};margin-right:3px;">^2</span>STATUS
-          </div>
-          <div style="display:flex;align-items:center;padding:0 10px;color:{dim};border-right:1px solid {border};">
-            <span style="color:{border};margin-right:3px;">^3</span>INFO
-          </div>
-        </div>
+.stApp::before {{
+    content:''; position:fixed; inset:0; z-index:9998; pointer-events:none;
+    background: repeating-linear-gradient(
+        to bottom, transparent 0, transparent 3px,
+        rgba(0,0,0,0.25) 3px, rgba(0,0,0,0.25) 4px);
+}}
+.stApp::after {{
+    content:''; position:fixed; inset:0; z-index:9997; pointer-events:none;
+    background: radial-gradient(ellipse 90% 90% at 50% 50%, transparent 50%, rgba(0,0,0,0.7) 100%);
+}}
 
-        <div style="display:flex;align-items:stretch;border-left:1px solid {border};">
-          <div id="theme-trigger" onclick="toggleAppear()"
-               style="display:flex;align-items:center;padding:0 10px;cursor:pointer;
-                      border-left:1px solid {border};background:{bg2};color:{pri};">
-            <span style="color:{dim};margin-right:3px;">^T</span>
-            <span id="theme-label">{label}</span>
-          </div>
-          <div style="display:flex;align-items:center;padding:0 12px;
-                      border-left:1px solid {border};background:{bg};color:{pri};">
-            RSU TERMINAL
-          </div>
-        </div>
+/* ── STRIP STREAMLIT CHROME ─────────── */
+.main .block-container {{
+    max-width:100% !important; padding:0 !important; margin:0 !important;
+}}
+section[data-testid="stMain"] > div {{ padding:0 !important; }}
+div[data-testid="stVerticalBlock"] {{
+    background:transparent !important; border:none !important;
+    box-shadow:none !important; padding:0 !important; gap:0 !important;
+}}
+div[data-testid="stHorizontalBlock"],
+div[data-testid="column"] {{
+    background:transparent !important; border:none !important;
+    box-shadow:none !important; padding:0 !important;
+    gap:0 !important; min-height:0 !important;
+}}
+
+/* ── HIDE THEME BUTTONS ─────────────── */
+[data-testid="stButton"].vt-hidden-btn,
+.vt-hidden-btn {{ display:none !important; }}
+
+/* ── INPUT ───────────────────────────── */
+.stTextInput > label {{ display:none !important; }}
+.stTextInput > div {{
+    border:none !important; box-shadow:none !important;
+    background:transparent !important; padding:0 !important;
+}}
+.stTextInput > div > div {{
+    border:none !important; box-shadow:none !important;
+    background:transparent !important;
+}}
+.stTextInput > div > div > input {{
+    background: {bg3} !important;
+    border: none !important;
+    border-bottom: 1px solid {border} !important;
+    border-radius: 0 !important;
+    color: {pri} !important;
+    height: 32px !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 1px !important;
+    padding: 0 8px !important;
+    caret-color: {pri};
+    box-shadow: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+}}
+.stTextInput > div > div > input:focus {{
+    border-bottom-color: {dim} !important;
+    box-shadow: none !important;
+    outline: none !important;
+}}
+.stTextInput > div > div > input::placeholder {{
+    color: {border} !important; font-style:italic;
+}}
+.stTextInput [data-testid="stIcon"] {{ display:none !important; }}
+
+/* ── MAIN SIGN IN BUTTON ─────────────── */
+.vt-signin-btn > div[data-testid="stButton"] > button {{
+    font-family: 'Share Tech Mono', monospace !important;
+    background: {pri} !important;
+    color: {bg} !important;
+    border: none !important;
+    border-radius: 0 !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 4px !important;
+    width: 100% !important;
+    height: 44px !important;
+    padding: 0 !important;
+    text-transform: uppercase !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    transition: opacity 0.1s !important;
+    display: block !important;
+}}
+.vt-signin-btn > div[data-testid="stButton"] > button:hover {{ opacity:0.85 !important; }}
+
+/* ── ALERTS ──────────────────────────── */
+.stAlert {{
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.75rem !important;
+    border-radius: 0 !important;
+    border-left: 2px solid {pri} !important;
+    background: {bg2} !important;
+    margin: 4px 0 0 !important;
+}}
+
+/* ── BLINK ───────────────────────────── */
+@keyframes vt-blink {{ 0%,100%{{opacity:1;}} 50%{{opacity:0;}} }}
+.vt-dot {{
+    display:inline-block; width:5px; height:5px; border-radius:50%;
+    background:{pri}; vertical-align:middle; margin-right:5px;
+    animation: vt-blink 1.1s step-end infinite;
+}}
+
+/* ── APPEARANCE PANEL ────────────────── */
+.vt-appear {{
+    display:none; position:fixed; z-index:9999;
+    top:31px; right:0;
+    width:206px;
+    border:1px solid {dim};
+    background:{bg2};
+    font-family:'Share Tech Mono',monospace;
+    border-top:none;
+}}
+.vt-appear.open {{ display:block; }}
+.vt-ap-head {{
+    font-size:0.62rem; letter-spacing:3px; color:{dim};
+    text-align:center; padding:7px 0 6px;
+    border-bottom:1px solid {border}; text-transform:uppercase;
+}}
+.vt-ap-sec {{ padding:8px 10px 4px; }}
+.vt-ap-lbl {{
+    font-size:0.58rem; color:{dim}; letter-spacing:2px;
+    text-transform:uppercase; margin-bottom:4px;
+}}
+.vt-ap-grp {{
+    background:{bg}; border:1px solid {border}; padding:2px 0; margin-bottom:6px;
+}}
+.vt-ap-opt {{
+    display:flex; align-items:center;
+    padding:5px 8px; font-size:0.75rem; cursor:pointer;
+    gap:8px; color:{pri}; letter-spacing:0.5px;
+}}
+.vt-ap-opt:hover {{ background:rgba(255,255,255,0.04); }}
+.vt-ap-foot {{
+    font-size:0.58rem; color:{border}; text-align:center;
+    padding:6px 0; border-top:1px solid {border}; letter-spacing:1px;
+}}
+</style>
+
+<!-- ═══════════════════════════════════════ TOP MENUBAR -->
+<div id="vt-menubar" style="
+    display:flex; justify-content:space-between; align-items:stretch;
+    height:30px; border-bottom:1px solid {border}; background:{bg2};
+    font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+    letter-spacing:1px; position:relative; z-index:100;">
+  <div style="display:flex;align-items:stretch;">
+    <div style="display:flex;align-items:center;padding:0 10px;color:{pri};
+                border-right:1px solid {border};background:{bg};
+                border-top:1px solid {mid};border-bottom:1px solid {mid};">
+      <span style="color:{dim};margin-right:3px;">^1</span>LOGIN
+    </div>
+    <div style="display:flex;align-items:center;padding:0 10px;color:{dim};border-right:1px solid {border};">
+      <span style="color:{border};margin-right:3px;">^2</span>STATUS
+    </div>
+    <div style="display:flex;align-items:center;padding:0 10px;color:{dim};border-right:1px solid {border};">
+      <span style="color:{border};margin-right:3px;">^3</span>INFO
+    </div>
+  </div>
+  <div style="display:flex;align-items:stretch;">
+    <div id="vt-theme-btn" onclick="vtToggleAppear()" style="
+        display:flex;align-items:center;padding:0 10px;cursor:pointer;
+        border-left:1px solid {border};background:{bg2};color:{pri};">
+      <span style="color:{dim};margin-right:3px;">^T</span>
+      <span id="vt-theme-label">{label}</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 12px;
+                border-left:1px solid {border};background:{bg};color:{pri};">
+      RSU TERMINAL
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ APPEARANCE PANEL -->
+<div class="vt-appear" id="vt-appear">
+  <div class="vt-ap-head"><span style="color:{border};">── </span>APPEARANCE<span style="color:{border};"> ──</span></div>
+  <div class="vt-ap-sec">
+    <div class="vt-ap-lbl">THEME</div>
+    <div class="vt-ap-grp">
+      <div class="vt-ap-opt" onclick="vtSetTheme('VT220')">
+        <span id="vt-d-VT220" style="width:10px;font-size:0.62rem;color:{vt_c};">{vt_d}</span>
+        VT220
+        <span id="vt-a-VT220" style="margin-left:auto;color:{dim};font-size:0.6rem;">{"←" if cur=="VT220" else ""}</span>
       </div>
+      <div class="vt-ap-opt" onclick="vtSetTheme('GREEN')">
+        <span id="vt-d-GREEN" style="width:10px;font-size:0.62rem;color:{gr_c};">{gr_d}</span>
+        Green Phosphor
+        <span id="vt-a-GREEN" style="margin-left:auto;color:{dim};font-size:0.6rem;">{"←" if cur=="GREEN" else ""}</span>
+      </div>
+      <div class="vt-ap-opt" onclick="vtSetTheme('CYAN')">
+        <span id="vt-d-CYAN" style="width:10px;font-size:0.62rem;color:{cy_c};">{cy_d}</span>
+        Cyan VDT
+        <span id="vt-a-CYAN" style="margin-left:auto;color:{dim};font-size:0.6rem;">{"←" if cur=="CYAN" else ""}</span>
+      </div>
+    </div>
+  </div>
+  <div class="vt-ap-foot">↑↓ NAV · ↵ SEL · ESC</div>
+</div>
 
-      <!-- CONTENT -->
-      <div style="padding:20px 0 0 28px;">
-        <div style="font-size:0.78rem;color:{pri};letter-spacing:1px;margin-bottom:2px;">RSU TERMINAL</div>
-        <div style="font-size:0.72rem;color:{dim};margin-bottom:18px;">Redistribution Strategy Unit.</div>
+<!-- ═══════════════════════════════════════ PAGE CONTENT -->
+<div id="vt-page" style="
+    padding:18px 0 0 28px;
+    font-family:'Share Tech Mono',monospace;
+    color:{pri};">
+  <div style="font-size:0.78rem;letter-spacing:1px;margin-bottom:2px;">{logo_img}RSU TERMINAL</div>
+  <div style="font-size:0.7rem;color:{dim};margin-bottom:18px;">Redistribution Strategy Unit.</div>
 
-        <div style="display:flex;">
+  <!-- LOGIN BOX WRAPPER: only top border + sides, no bottom yet -->
+  <div style="width:460px;border:1px solid {mid};border-bottom:none;">
+    <!-- Box title -->
+    <div style="display:flex;align-items:center;justify-content:center;
+                height:28px;font-size:0.7rem;letter-spacing:3px;
+                border-bottom:1px solid {border};background:{bg2};position:relative;">
+      <span style="position:absolute;left:12px;color:{border};">── </span>
+      LOGIN
+      <span style="position:absolute;right:12px;color:{border};"> ──</span>
+    </div>
+    <!-- Box body top -->
+    <div style="padding:16px 18px 0 18px;background:{bg};">
+      <div style="font-family:'VT323',monospace;font-size:2.1rem;letter-spacing:6px;
+                  text-align:center;color:{pri};text-transform:uppercase;
+                  text-shadow:0 0 12px rgba(255,179,0,0.35);line-height:1;margin-bottom:2px;">
+        RSU TERMINAL
+      </div>
+      <div style="font-size:0.58rem;letter-spacing:3px;text-align:center;
+                  color:{dim};text-transform:uppercase;margin-bottom:14px;">
+        Redistribution Strategy Unit
+      </div>
+      <!-- PASSWORD label -->
+      <div style="font-size:0.7rem;color:{pri};letter-spacing:2px;text-transform:uppercase;
+                  padding:4px 6px 3px;background:{bg2};
+                  border:1px solid {border};border-bottom:none;">
+        PASSWORD
+      </div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-          <!-- LOGIN BOX -->
-          <div style="border:1px solid {mid};width:460px;position:relative;">
-            <div style="display:flex;align-items:center;justify-content:center;
-                        height:28px;font-size:0.7rem;letter-spacing:3px;
-                        border-bottom:1px solid {border};background:{bg2};position:relative;">
-              <span style="position:absolute;left:12px;color:{border};">── </span>
-              LOGIN
-              <span style="position:absolute;right:12px;color:{border};"> ──</span>
-            </div>
-
-            <div style="padding:18px 18px 0;">
-              {logo_html}
-              <div style="font-family:'VT323',monospace;font-size:2.1rem;letter-spacing:6px;
-                          text-align:center;color:{pri};text-shadow:0 0 12px rgba(255,179,0,0.4);
-                          margin-bottom:2px;text-transform:uppercase;">
-                RSU TERMINAL
-              </div>
-              <div style="font-size:0.58rem;letter-spacing:3px;text-align:center;
-                          color:{dim};text-transform:uppercase;margin-bottom:14px;">
-                Redistribution Strategy Unit
-              </div>
-
-              <!-- PASSWORD LABEL -->
-              <div style="font-size:0.7rem;color:{pri};letter-spacing:2px;
-                          text-transform:uppercase;padding:4px 6px 2px;background:{bg2};
-                          border-top:1px solid {border};border-left:1px solid {border};
-                          border-right:1px solid {border};">
-                PASSWORD
-              </div>
-            </div>
-    """, unsafe_allow_html=True)
-
-    # Native Streamlit password input
+    # ── NATIVE: password input (sits flush inside the box via CSS) ────────────
     password = st.text_input(
-        "pwd",
-        type="password",
+        "pwd", type="password",
         placeholder="Enter your password",
         label_visibility="collapsed",
         key="login_password"
     )
 
+    # ── SIGN IN BUTTON wrapper div ─────────────────────────────────────────────
     st.markdown(f"""
-            <div style="height:2px;"></div>
-          </div>
-    """, unsafe_allow_html=True)
+<div class="vt-signin-btn" style="width:460px;margin-left:28px;
+     border-left:1px solid {mid};border-right:1px solid {mid};">
+""", unsafe_allow_html=True)
 
-    # Native Streamlit button
     button_clicked = st.button("SIGN IN", key="btn_login", use_container_width=True)
 
+    # ── CLOSE the box + footer ────────────────────────────────────────────────
     st.markdown(f"""
-          <div style="font-size:0.58rem;color:{border};text-align:center;
-                      letter-spacing:2px;text-transform:uppercase;padding:8px 0 4px;">
-            <span style="display:inline-block;width:5px;height:5px;background:{pri};
-                         border-radius:50%;vertical-align:middle;margin-right:4px;
-                         animation:blink 1.1s step-end infinite;"></span>
-            SECURE CONNECTION · AES-256 · TLS 1.3
-          </div>
-          <div style="font-size:0.56rem;color:{border};text-align:center;letter-spacing:2px;
-                      padding:6px 18px;border-top:1px solid {border};text-transform:uppercase;">
-            🔒 SSL ENCRYPTED · © 2026 RSU TERMINAL v2.0 // STATUS: ACTIVE
-          </div>
+</div>
+<div style="width:460px;margin-left:28px;border:1px solid {mid};border-top:none;background:{bg};">
+  <div style="font-size:0.58rem;color:{border};text-align:center;letter-spacing:2px;
+              text-transform:uppercase;padding:7px 0 5px;">
+    <span class="vt-dot"></span>SECURE CONNECTION · AES-256 · TLS 1.3
+  </div>
+  <div style="font-size:0.55rem;color:{border};text-align:center;letter-spacing:1px;
+              padding:5px 18px 10px;border-top:1px solid {border};text-transform:uppercase;">
+    🔒 SSL ENCRYPTED · © 2026 RSU TERMINAL v2.0 // STATUS: ACTIVE
+  </div>
+</div>
 
-          <!-- APPEARANCE PANEL (positioned relative to loginbox) -->
-          <div id="appear-panel" style="
-              display:none;
-              position:absolute;top:0;right:-212px;
-              width:202px;
-              border:1px solid {dim};
-              background:{bg2};
-              z-index:200;
-              font-family:'Share Tech Mono',monospace;
-              ">
-            <div style="font-size:0.62rem;letter-spacing:3px;color:{dim};text-align:center;
-                        padding:7px 0 6px;border-bottom:1px solid {border};text-transform:uppercase;">
-              <span style="color:{border};">── </span>APPEARANCE<span style="color:{border};"> ──</span>
-            </div>
+<script>
+var VT_THEMES = {themes_js};
+var vtPanelOpen = false;
+var vtCurrent = "{cur}";
 
-            <!-- THEME -->
-            <div style="padding:8px 10px 4px;">
-              <div style="font-size:0.58rem;color:{dim};letter-spacing:2px;margin-bottom:4px;text-transform:uppercase;">THEME</div>
-              <div style="background:{bg};border:1px solid {border};padding:2px 0;">
-                <div class="ap-opt" onclick="setTheme('VT220')" style="display:flex;align-items:center;padding:4px 8px;font-size:0.75rem;cursor:pointer;gap:8px;color:{pri};">
-                  <span id="d-vt220" style="font-size:0.62rem;width:10px;color:{dot_cls('VT220')};">{dot('VT220')}</span>VT220{arrow('VT220')}
-                </div>
-                <div class="ap-opt" onclick="setTheme('GREEN')" style="display:flex;align-items:center;padding:4px 8px;font-size:0.75rem;cursor:pointer;gap:8px;color:{pri};">
-                  <span id="d-green" style="font-size:0.62rem;width:10px;color:{dot_cls('GREEN')};">{dot('GREEN')}</span>Green Phosphor{arrow('GREEN')}
-                </div>
-                <div class="ap-opt" onclick="setTheme('CYAN')" style="display:flex;align-items:center;padding:4px 8px;font-size:0.75rem;cursor:pointer;gap:8px;color:{pri};">
-                  <span id="d-cyan" style="font-size:0.62rem;width:10px;color:{dot_cls('CYAN')};">{dot('CYAN')}</span>Cyan VDT{arrow('CYAN')}
-                </div>
-              </div>
-            </div>
+function vtToggleAppear() {{
+    vtPanelOpen = !vtPanelOpen;
+    document.getElementById('vt-appear').className = 'vt-appear' + (vtPanelOpen ? ' open' : '');
+}}
 
-            <div style="font-size:0.58rem;color:{border};text-align:center;padding:6px 0;
-                        border-top:1px solid {border};letter-spacing:1px;">
-              ↑↓ NAV · ↵ SEL · ESC
-            </div>
-          </div>
-        </div><!-- /loginbox -->
-      </div><!-- /content-row -->
-    </div><!-- /content -->
-    </div><!-- /vt-root -->
-
-    <style>
-    @keyframes blink {{0%,100%{{opacity:1;}}50%{{opacity:0;}}}}
-    .ap-opt:hover {{ background: rgba(255,179,0,0.07) !important; }}
-    </style>
-
-    <script>
-    var THEMES = {themes_js};
-    var panelOpen = false;
-
-    function toggleAppear() {{
-        panelOpen = !panelOpen;
-        document.getElementById('appear-panel').style.display = panelOpen ? 'block' : 'none';
-    }}
-
-    function applyTheme(k) {{
-        var t = THEMES[k];
-        var r = document.documentElement.style;
-        r.setProperty('--vt-pri', t.pri);
-        // recolor all inline elements via a class swap would need full DOM walk
-        // instead reload with Streamlit session_state
-    }}
-
-    function setTheme(k) {{
-        // Store in sessionStorage so Streamlit can pick it up via JS
-        window.sessionStorage.setItem('vt_pending_theme', k);
-        // Trigger Streamlit rerun by clicking the hidden theme button
-        var btn = document.querySelector('[data-testid="stButton"][key="btn_set_theme"] button, button[kind="secondary"]');
-        // fallback: find any button whose text is the theme key
-        var btns = document.querySelectorAll('button');
-        for(var i=0;i<btns.length;i++){{
-            if(btns[i].innerText.trim() === '__THEME_' + k + '__') {{
-                btns[i].click(); return;
-            }}
+function vtSetTheme(k) {{
+    // Click the hidden Streamlit button for that theme
+    var btns = document.querySelectorAll('button');
+    var target = '__VT_THEME_' + k + '__';
+    for (var i = 0; i < btns.length; i++) {{
+        if (btns[i].innerText.trim() === target) {{
+            btns[i].click();
+            vtPanelOpen = false;
+            document.getElementById('vt-appear').className = 'vt-appear';
+            return;
         }}
     }}
+}}
 
-    document.addEventListener('keydown', function(e) {{
-        if (e.key === 'Escape') {{
-            panelOpen = false;
-            var p = document.getElementById('appear-panel');
-            if(p) p.style.display = 'none';
-        }}
-        if (e.key === 'Enter') {{
-            var inp = document.querySelector('input[type="password"]');
-            if (inp && document.activeElement === inp) {{
-                var btns = document.querySelectorAll('button');
-                for(var i=0;i<btns.length;i++){{
-                    if(btns[i].innerText.trim()==='SIGN IN'){{btns[i].click();return;}}
-                }}
-            }}
-        }}
-        if (e.key === 't' && (e.ctrlKey || e.metaKey)) {{
-            e.preventDefault(); toggleAppear();
-        }}
-    }});
-
-    // Auto-focus password field
-    setTimeout(function(){{
+document.addEventListener('keydown', function(e) {{
+    if (e.key === 'Escape') {{
+        vtPanelOpen = false;
+        var p = document.getElementById('vt-appear');
+        if (p) p.className = 'vt-appear';
+    }}
+    if (e.key === 'Enter') {{
         var inp = document.querySelector('input[type="password"]');
-        if(inp) inp.focus();
-    }}, 500);
-    </script>
-    """, unsafe_allow_html=True)
+        if (inp && document.activeElement === inp) {{
+            var btns = document.querySelectorAll('button');
+            for (var i = 0; i < btns.length; i++) {{
+                if (btns[i].innerText.trim() === 'SIGN IN') {{ btns[i].click(); return; }}
+            }}
+        }}
+    }}
+}});
 
-    # Hidden theme-change buttons (one per theme)
+// Auto-focus
+setTimeout(function() {{
+    var inp = document.querySelector('input[type="password"]');
+    if (inp) inp.focus();
+}}, 500);
+</script>
+""", unsafe_allow_html=True)
+
+    # ── HIDDEN THEME BUTTONS (invisible, triggered via JS) ────────────────────
+    hide_css = """
+    <style>
+    .vt-theme-triggers { position:absolute; width:0; height:0; overflow:hidden; opacity:0; pointer-events:none; }
+    .vt-theme-triggers button { position:absolute; width:1px; height:1px; }
+    </style>
+    <div class="vt-theme-triggers">
+    """
+    st.markdown(hide_css, unsafe_allow_html=True)
+
     for tkey in THEMES:
-        if st.button(f"__THEME_{tkey}__", key=f"btn_theme_{tkey}"):
+        if st.button(f"__VT_THEME_{tkey}__", key=f"vt_btn_theme_{tkey}"):
             st.session_state["vt_theme"] = tkey
             st.rerun()
 
-    # Hidden theme toggle button for menubar click
-    if st.button("__TOGGLE_MENU__", key="btn_menu_toggle"):
-        st.session_state["vt_menu_open"] = not st.session_state["vt_menu_open"]
-        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── AUTH LOGIC ────────────────────────────────────────────────────────────
+    # ── AUTH LOGIC ─────────────────────────────────────────────────────────────
     if button_clicked:
         if not password:
             st.error("⚠  INGRESE CONTRASEÑA")

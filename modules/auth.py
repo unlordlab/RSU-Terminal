@@ -133,7 +133,7 @@ body::after{{
 
 /* ─── LOGIN BOX ───────────────────────────── */
 .loginbox{{
-  width:520px;
+  width:min(700px,96vw);
   border:1px solid var(--mid);
   background:var(--bg);
   position:relative;
@@ -152,7 +152,7 @@ body::after{{
 .crt-screen{{
   position:relative;
   background:#0d0500;
-  padding:28px 32px 24px;
+  padding:32px 48px 28px;
   overflow:hidden;
 }}
 
@@ -203,40 +203,45 @@ body::after{{
 
 /* logo */
 .logo-img{{
-  display:block;width:72px;height:72px;border-radius:8px;
-  margin:0 auto 14px;
-  filter:drop-shadow(0 0 10px rgba(255,140,0,0.5));
+  display:block;width:88px;height:88px;border-radius:10px;
+  margin:0 auto 16px;
+  filter:drop-shadow(0 0 14px rgba(255,140,0,0.55));
 }}
 
 /* App title */
 .app-title{{
-  font-family:'VT323',monospace;font-size:2.6rem;letter-spacing:8px;
+  font-family:'VT323',monospace;font-size:3.2rem;letter-spacing:10px;
   text-align:center;color:var(--pri);text-transform:uppercase;
   text-shadow:0 0 18px rgba(255,140,0,0.6),0 0 4px rgba(255,200,0,0.4);
-  line-height:1;margin-bottom:3px;
+  line-height:1;margin-bottom:4px;
 }}
 .app-sub{{
-  font-size:0.6rem;letter-spacing:4px;text-align:center;
-  color:var(--dim);text-transform:uppercase;margin-bottom:20px;
+  font-size:0.65rem;letter-spacing:5px;text-align:center;
+  color:var(--dim);text-transform:uppercase;margin-bottom:24px;
 }}
 
-/* Field */
+/* Field — full rectangular block */
+.field-wrap{{
+  border:1px solid var(--mid);
+  margin-bottom:4px;
+}}
 .field-label{{
-  display:block;font-size:0.72rem;color:var(--pri);letter-spacing:2px;
-  text-transform:uppercase;padding:4px 6px 3px;
-  background:rgba(0,0,0,0.5);
-  border:1px solid var(--border);border-bottom:none;
+  display:block;font-size:0.75rem;color:var(--pri);letter-spacing:3px;
+  text-transform:uppercase;padding:6px 10px 5px;
+  background:rgba(20,12,0,0.85);
+  border-bottom:1px solid var(--border);
 }}
 .field-input{{
-  display:block;width:100%;height:34px;
-  background:rgba(0,0,0,0.6);
-  border:none;border-bottom:1px solid var(--border);
+  display:block;width:100%;height:40px;
+  background:rgba(8,5,0,0.9);
+  border:none;
   color:var(--pri);font-family:'Share Tech Mono',monospace;
-  font-size:0.88rem;letter-spacing:2px;padding:0 8px;outline:none;
-  caret-color:var(--pri);transition:border-color 0.1s;
+  font-size:1rem;letter-spacing:3px;padding:0 12px;outline:none;
+  caret-color:var(--pri);transition:background 0.1s;
 }}
-.field-input::placeholder{{color:var(--border);font-style:italic;}}
-.field-input:focus{{border-bottom-color:var(--dim);}}
+.field-input::placeholder{{color:var(--dim);font-style:italic;letter-spacing:2px;}}
+.field-input:focus{{background:rgba(30,18,0,0.95);}}
+.field-wrap:focus-within{{border-color:var(--pri);}}
 
 /* Button */
 .btn-signin{{
@@ -383,9 +388,11 @@ body::after{{
         <div class="app-title">RSU TERMINAL</div>
         <div class="app-sub">Redistribution Strategy Unit</div>
 
-        <label class="field-label" for="pwd">PASSWORD</label>
-        <input class="field-input" type="password" id="pwd"
-               placeholder="Enter your password" autocomplete="current-password">
+        <div class="field-wrap">
+          <label class="field-label" for="pwd">PASSWORD</label>
+          <input class="field-input" type="password" id="pwd"
+                 placeholder="Enter your password" autocomplete="current-password">
+        </div>
 
         {error_block}
         {attempts_block}
@@ -546,7 +553,7 @@ def login() -> bool:
     html_content = _build_html(logo_b64, theme, error_msg, attempts_l)
 
     # Render in isolated iframe — height covers login box fully
-    components.html(html_content, height=620, scrolling=False)
+    components.html(html_content, height=680, scrolling=False)
 
     # Message bridge: listen for postMessage from iframe
     st.markdown("""

@@ -1,7 +1,6 @@
 # modules/auth.py
 import os
 import hashlib
-import time
 import logging
 import base64
 from datetime import datetime, timedelta
@@ -39,7 +38,7 @@ def _build_html(logo_b64: str, theme: str, error_msg: str, attempts_left: int) -
     if 0 < attempts_left <= 2:
         attempts_block = f'<div class="vt-warn">⚠ {attempts_left} INTENTOS RESTANTES</div>'
 
-    fade_url = f"data:image/gif;base64,{FADE_GIF_B64}"
+    fade_b64 = FADE_GIF_B64
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -48,293 +47,159 @@ def _build_html(logo_b64: str, theme: str, error_msg: str, attempts_left: int) -
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
-
 *{{box-sizing:border-box;margin:0;padding:0}}
 
-/* ─── THEME VARS ─────────────────────────── */
 :root{{
   --bg:#0a0800;--bg2:#130f00;--bg3:#1a1200;
   --pri:#ffb300;--dim:#7a5500;--border:#3d2900;--mid:#5a3e00;--dark:#1e1400;
-  --crt-r:180;--crt-g:80;--crt-b:0;
 }}
-.t-GREEN{{
-  --bg:#000d04;--bg2:#001508;--bg3:#001e0a;
-  --pri:#00ffad;--dim:#008855;--border:#003820;--mid:#006640;--dark:#001810;
-  --crt-r:0;--crt-g:200;--crt-b:100;
-}}
-.t-CYAN{{
-  --bg:#00080d;--bg2:#001018;--bg3:#001520;
-  --pri:#00d9ff;--dim:#006680;--border:#002c38;--mid:#005566;--dark:#000c14;
-  --crt-r:0;--crt-g:160;--crt-b:220;
-}}
+.t-GREEN{{--bg:#000d04;--bg2:#001508;--bg3:#001e0a;--pri:#00ffad;--dim:#008855;--border:#003820;--mid:#006640;--dark:#001810;}}
+.t-CYAN{{--bg:#00080d;--bg2:#001018;--bg3:#001520;--pri:#00d9ff;--dim:#006680;--border:#002c38;--mid:#005566;--dark:#000c14;}}
 
-/* ─── GLOBAL ──────────────────────────────── */
 html,body{{
-  width:100%;height:100%;min-height:600px;
-  background:var(--bg);
-  font-family:'Share Tech Mono',monospace;
-  color:var(--pri);
+  width:100%;background:var(--bg);
+  font-family:'Share Tech Mono',monospace;color:var(--pri);
   overflow-x:hidden;
 }}
-
-/* CRT scanlines */
 body::before{{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;
-  background:repeating-linear-gradient(
-    to bottom,transparent 0,transparent 3px,
-    rgba(0,0,0,0.22) 3px,rgba(0,0,0,0.22) 4px);
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,0.22) 3px,rgba(0,0,0,0.22) 4px);
 }}
-/* phosphor vignette */
 body::after{{
   content:'';position:fixed;inset:0;pointer-events:none;z-index:9997;
   background:radial-gradient(ellipse 92% 92% at 50% 50%,transparent 48%,rgba(0,0,0,0.72) 100%);
 }}
 
-/* ─── MENUBAR ─────────────────────────────── */
+/* MENUBAR */
 .menubar{{
   display:flex;justify-content:space-between;align-items:stretch;
   height:30px;border-bottom:1px solid var(--border);background:var(--bg2);
-  font-size:0.7rem;letter-spacing:1px;
-  position:sticky;top:0;z-index:500;
-  user-select:none;
+  font-size:0.7rem;letter-spacing:1px;position:sticky;top:0;z-index:500;user-select:none;
 }}
 .menubar-left,.menubar-right{{display:flex;align-items:stretch;}}
-.tab{{
-  display:flex;align-items:center;padding:0 10px;
-  color:var(--dim);border-right:1px solid var(--border);
-  cursor:default;white-space:nowrap;
-}}
+.tab{{display:flex;align-items:center;padding:0 10px;color:var(--dim);border-right:1px solid var(--border);cursor:default;white-space:nowrap;}}
 .tab .key{{color:var(--border);margin-right:3px;}}
-.tab.active{{
-  color:var(--pri);background:var(--bg);
-  border-top:1px solid var(--mid);border-bottom:1px solid var(--mid);
-}}
+.tab.active{{color:var(--pri);background:var(--bg);border-top:1px solid var(--mid);border-bottom:1px solid var(--mid);}}
 .tab.active .key{{color:var(--dim);}}
 .menubar-right{{border-left:1px solid var(--border);}}
-.chip{{
-  display:flex;align-items:center;padding:0 10px;
-  border-left:1px solid var(--border);background:var(--bg2);
-  color:var(--pri);cursor:pointer;white-space:nowrap;
-  font-size:0.7rem;letter-spacing:1px;
-}}
+.chip{{display:flex;align-items:center;padding:0 10px;border-left:1px solid var(--border);background:var(--bg2);color:var(--pri);cursor:pointer;white-space:nowrap;font-size:0.7rem;letter-spacing:1px;}}
 .chip .key{{color:var(--dim);margin-right:3px;}}
 .chip:hover{{background:var(--dark);}}
 .chip.site{{background:var(--bg);cursor:default;}}
 .chip.site:hover{{background:var(--bg);}}
 
-/* ─── LAYOUT: FULL CENTER ─────────────────── */
-.page{{
-  display:flex;
-  justify-content:center;
-  align-items:flex-start;
-  padding:32px 20px 40px;
-  position:relative;z-index:1;
-}}
+/* PAGE */
+.page{{display:flex;justify-content:center;align-items:flex-start;padding:28px 20px 40px;position:relative;z-index:1;}}
 
-/* ─── LOGIN BOX ───────────────────────────── */
-.loginbox{{
-  width:min(700px,96vw);
-  border:1px solid var(--mid);
-  background:var(--bg);
-  position:relative;
-}}
-
+/* LOGIN BOX */
+.loginbox{{width:min(700px,96vw);border:1px solid var(--mid);background:var(--bg);position:relative;}}
 .loginbox-head{{
   display:flex;align-items:center;justify-content:center;
   height:28px;font-size:0.7rem;letter-spacing:3px;
-  border-bottom:1px solid var(--border);background:var(--bg2);
-  position:relative;
+  border-bottom:1px solid var(--border);background:var(--bg2);position:relative;
 }}
 .loginbox-head::before{{content:'── ';color:var(--border);position:absolute;left:12px;}}
 .loginbox-head::after{{content:' ──';color:var(--border);position:absolute;right:12px;}}
 
-/* ─── CRT INNER AREA ──────────────────────── */
-.crt-screen{{
-  position:relative;
-  background:#0d0500;
-  padding:32px 48px 28px;
-  overflow:hidden;
-}}
-
-/* Red-tinted phosphor noise via canvas */
+/* CRT SCREEN */
+.crt-screen{{position:relative;background:#0d0500;padding:32px 48px 32px;overflow:hidden;}}
 .crt-screen::before{{
-  content:'';
-  position:absolute;inset:0;
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
-  background-repeat:repeat;
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:2;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
   background-size:200px 200px;
-  pointer-events:none;
-  z-index:2;
-  mix-blend-mode:overlay;
 }}
-/* scanlines inside CRT too */
 .crt-screen::after{{
-  content:'';
-  position:absolute;inset:0;
-  background:repeating-linear-gradient(
-    to bottom,transparent 0,transparent 2px,
-    rgba(0,0,0,0.30) 2px,rgba(0,0,0,0.30) 4px);
-  pointer-events:none;
-  z-index:3;
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(0,0,0,0.28) 2px,rgba(0,0,0,0.28) 4px);
 }}
-
-/* warm tint overlay */
-.crt-tint{{
-  position:absolute;inset:0;
-  background:radial-gradient(ellipse 80% 70% at 50% 40%,
-    rgba(180,60,0,0.12) 0%,transparent 70%);
-  pointer-events:none;z-index:4;
-}}
-
-/* CRT screen flicker */
-@keyframes flicker{{
-  0%,100%{{opacity:1;}}
-  92%{{opacity:1;}}
-  93%{{opacity:0.94;}}
-  94%{{opacity:1;}}
-  96%{{opacity:0.97;}}
-  97%{{opacity:1;}}
-}}
+.crt-tint{{position:absolute;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse 80% 70% at 50% 40%,rgba(180,60,0,0.12) 0%,transparent 70%);}}
+@keyframes flicker{{0%,100%{{opacity:1}}92%{{opacity:1}}93%{{opacity:.94}}94%{{opacity:1}}96%{{opacity:.97}}97%{{opacity:1}}}}
 .crt-screen{{animation:flicker 8s infinite;}}
-
-/* content inside CRT must be above overlays */
 .crt-content{{position:relative;z-index:10;}}
 
-/* logo */
-.logo-img{{
-  display:block;width:88px;height:88px;border-radius:10px;
-  margin:0 auto 16px;
-  filter:drop-shadow(0 0 14px rgba(255,140,0,0.55));
-}}
+.logo-img{{display:block;width:92px;height:92px;border-radius:10px;margin:0 auto 16px;filter:drop-shadow(0 0 14px rgba(255,140,0,0.55));}}
 
-/* App title */
 .app-title{{
-  font-family:'VT323',monospace;font-size:3.2rem;letter-spacing:10px;
+  font-family:'VT323',monospace;font-size:3.4rem;letter-spacing:10px;
   text-align:center;color:var(--pri);text-transform:uppercase;
   text-shadow:0 0 18px rgba(255,140,0,0.6),0 0 4px rgba(255,200,0,0.4);
   line-height:1;margin-bottom:4px;
 }}
-.app-sub{{
-  font-size:0.65rem;letter-spacing:5px;text-align:center;
-  color:var(--dim);text-transform:uppercase;margin-bottom:24px;
-}}
+.app-sub{{font-size:0.65rem;letter-spacing:5px;text-align:center;color:var(--dim);text-transform:uppercase;margin-bottom:28px;}}
 
-/* Field — full rectangular block */
-.field-wrap{{
-  border:1px solid var(--mid);
-  margin-bottom:4px;
-}}
+/* PASSWORD FIELD — full rectangular */
+.field-wrap{{border:1px solid var(--mid);margin-bottom:16px;}}
 .field-label{{
   display:block;font-size:0.75rem;color:var(--pri);letter-spacing:3px;
-  text-transform:uppercase;padding:6px 10px 5px;
-  background:rgba(20,12,0,0.85);
-  border-bottom:1px solid var(--border);
+  text-transform:uppercase;padding:7px 12px 6px;
+  background:rgba(20,12,0,0.9);border-bottom:1px solid var(--border);
 }}
 .field-input{{
-  display:block;width:100%;height:40px;
-  background:rgba(8,5,0,0.9);
-  border:none;
+  display:block;width:100%;height:44px;
+  background:rgba(8,5,0,0.95);border:none;
   color:var(--pri);font-family:'Share Tech Mono',monospace;
-  font-size:1rem;letter-spacing:3px;padding:0 12px;outline:none;
-  caret-color:var(--pri);transition:background 0.1s;
+  font-size:1.05rem;letter-spacing:3px;padding:0 12px;outline:none;
+  caret-color:var(--pri);
 }}
-.field-input::placeholder{{color:var(--dim);font-style:italic;letter-spacing:2px;}}
-.field-input:focus{{background:rgba(30,18,0,0.95);}}
+.field-input::placeholder{{color:var(--dim);font-style:italic;letter-spacing:2px;font-size:0.9rem;}}
 .field-wrap:focus-within{{border-color:var(--pri);}}
+.field-wrap:focus-within .field-label{{color:var(--pri);background:rgba(30,18,0,0.95);}}
 
-/* Button */
+/* SIGN IN BUTTON */
 .btn-signin{{
-  display:block;width:100%;height:46px;
+  display:block;width:100%;height:50px;
   background:var(--pri);color:var(--bg);
-  font-family:'Share Tech Mono',monospace;
-  font-size:0.9rem;letter-spacing:5px;text-transform:uppercase;
-  border:none;cursor:pointer;margin-top:14px;
-  transition:opacity 0.15s;
-  /* CRT scanlines on button too */
-  background-image:repeating-linear-gradient(
-    to bottom,transparent 0,transparent 2px,
-    rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
+  font-family:'Share Tech Mono',monospace;font-size:0.95rem;
+  letter-spacing:6px;text-transform:uppercase;
+  border:none;cursor:pointer;transition:opacity 0.15s;
+  background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
 }}
-.btn-signin:hover{{opacity:0.88;}}
-.btn-signin:active{{opacity:0.72;}}
+.btn-signin:hover{{opacity:.88;}}
+.btn-signin:active{{opacity:.72;}}
 
-/* Feedback */
-.vt-error{{
-  font-size:0.72rem;color:#ff5533;letter-spacing:1px;
-  padding:6px 0 2px;text-transform:uppercase;
-}}
-.vt-warn{{
-  font-size:0.68rem;color:var(--dim);letter-spacing:1px;padding:2px 0;
-}}
+.vt-error{{font-size:0.75rem;color:#ff5533;letter-spacing:1px;padding:8px 0 4px;text-transform:uppercase;}}
+.vt-warn{{font-size:0.7rem;color:var(--dim);letter-spacing:1px;padding:2px 0 8px;}}
 
-/* Status / footer */
-.loginbox-status{{
-  font-size:0.58rem;color:var(--border);text-align:center;
-  letter-spacing:2px;text-transform:uppercase;padding:8px 0 5px;
-  background:var(--bg);
-}}
-.loginbox-footer{{
-  font-size:0.55rem;color:var(--border);text-align:center;
-  letter-spacing:1px;padding:5px 18px 9px;
-  border-top:1px solid var(--border);background:var(--bg);
-  text-transform:uppercase;
-}}
-@keyframes blink{{0%,100%{{opacity:1;}}50%{{opacity:0;}}}}
-.dot{{
-  display:inline-block;width:5px;height:5px;border-radius:50%;
-  background:var(--pri);vertical-align:middle;margin-right:5px;
-  animation:blink 1.1s step-end infinite;
-}}
+/* STATUS / FOOTER */
+.loginbox-status{{font-size:0.58rem;color:var(--border);text-align:center;letter-spacing:2px;text-transform:uppercase;padding:10px 0 6px;background:var(--bg);}}
+.loginbox-footer{{font-size:0.55rem;color:var(--border);text-align:center;letter-spacing:1px;padding:6px 18px 10px;border-top:1px solid var(--border);background:var(--bg);text-transform:uppercase;}}
+@keyframes blink{{0%,100%{{opacity:1}}50%{{opacity:0}}}}
+.dot{{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--pri);vertical-align:middle;margin-right:5px;animation:blink 1.1s step-end infinite;}}
 
-/* ─── APPEARANCE PANEL ────────────────────── */
+/* APPEARANCE PANEL */
 .appear{{
   display:none;position:fixed;top:30px;right:0;z-index:9999;
-  width:230px;
-  background:var(--bg2);
+  width:230px;background:var(--bg2);
   border:1px solid var(--mid);border-top:none;
+  border-left:4px solid transparent;
+  border-image:url("data:image/gif;base64,{fade_b64}") 8 repeat;
   font-family:'Share Tech Mono',monospace;
-  /* fade.gif as border texture on left+bottom */
-  border-left: 4px solid transparent;
-  border-image: url("data:image/gif;base64,{FADE_GIF_B64}") 8 repeat;
 }}
 .appear.open{{display:block;}}
 .ap-head{{
-  font-size:0.62rem;letter-spacing:3px;color:var(--dim);
-  text-align:center;padding:8px 0 7px;
+  font-size:0.62rem;letter-spacing:3px;color:var(--dim);text-align:center;
+  padding:8px 0 7px;text-transform:uppercase;
   border-bottom:3px solid transparent;
-  border-image:url("data:image/gif;base64,{FADE_GIF_B64}") 8 repeat;
-  text-transform:uppercase;
+  border-image:url("data:image/gif;base64,{fade_b64}") 8 repeat;
 }}
 .ap-sec{{padding:8px 12px 4px;}}
-.ap-lbl{{
-  font-size:0.58rem;color:var(--dim);letter-spacing:2px;
-  text-transform:uppercase;margin-bottom:4px;
-}}
+.ap-lbl{{font-size:0.58rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;}}
 .ap-grp{{
-  background:var(--bg);
+  background:var(--bg);padding:2px 0;margin-bottom:6px;
   border:2px solid transparent;
-  border-image:url("data:image/gif;base64,{FADE_GIF_B64}") 8 repeat;
-  padding:2px 0;margin-bottom:6px;
+  border-image:url("data:image/gif;base64,{fade_b64}") 8 repeat;
 }}
-.ap-opt{{
-  display:flex;align-items:center;
-  padding:6px 10px;font-size:0.78rem;cursor:pointer;
-  gap:8px;color:var(--pri);letter-spacing:0.5px;
-}}
-.ap-opt:hover{{background:rgba(255,255,255,0.05);}}
-.ap-dot{{font-size:0.65rem;width:12px;}}
-.ap-arrow{{margin-left:auto;font-size:0.62rem;color:var(--dim);}}
+.ap-opt{{display:flex;align-items:center;padding:6px 10px;font-size:0.78rem;cursor:pointer;gap:8px;color:var(--pri);letter-spacing:.5px;}}
+.ap-opt:hover{{background:rgba(255,255,255,.05);}}
+.ap-dot{{font-size:.65rem;width:12px;}}
+.ap-arrow{{margin-left:auto;font-size:.62rem;color:var(--dim);}}
 .ap-foot{{
-  font-size:0.6rem;color:var(--border);text-align:center;
-  padding:7px 0;
-  border-top:3px solid transparent;
-  border-image:url("data:image/gif;base64,{FADE_GIF_B64}") 8 repeat;
-  letter-spacing:1px;
+  font-size:.6rem;color:var(--border);text-align:center;padding:7px 0;
+  letter-spacing:1px;border-top:3px solid transparent;
+  border-image:url("data:image/gif;base64,{fade_b64}") 8 repeat;
 }}
 </style>
 </head>
-
 <body id="body" class="">
 
 <!-- MENUBAR -->
@@ -358,60 +223,49 @@ body::after{{
   <div class="ap-sec">
     <div class="ap-lbl">THEME</div>
     <div class="ap-grp">
-      <div class="ap-opt" onclick="setTheme('VT220')">
-        <span class="ap-dot" id="d-VT220">▶</span>VT220
-        <span class="ap-arrow" id="a-VT220">←</span>
-      </div>
-      <div class="ap-opt" onclick="setTheme('GREEN')">
-        <span class="ap-dot" id="d-GREEN">○</span>Green Phosphor
-        <span class="ap-arrow" id="a-GREEN" style="display:none">←</span>
-      </div>
-      <div class="ap-opt" onclick="setTheme('CYAN')">
-        <span class="ap-dot" id="d-CYAN">○</span>Cyan VDT
-        <span class="ap-arrow" id="a-CYAN" style="display:none">←</span>
-      </div>
+      <div class="ap-opt" onclick="setTheme('VT220')"><span class="ap-dot" id="d-VT220">▶</span>VT220<span class="ap-arrow" id="a-VT220">←</span></div>
+      <div class="ap-opt" onclick="setTheme('GREEN')"><span class="ap-dot" id="d-GREEN">○</span>Green Phosphor<span class="ap-arrow" id="a-GREEN" style="display:none">←</span></div>
+      <div class="ap-opt" onclick="setTheme('CYAN')"><span class="ap-dot" id="d-CYAN">○</span>Cyan VDT<span class="ap-arrow" id="a-CYAN" style="display:none">←</span></div>
     </div>
   </div>
   <div class="ap-foot">↑↓ NAV · ↵ SEL · ESC</div>
 </div>
 
-<!-- PAGE: centered -->
+<!-- PAGE -->
 <div class="page">
   <div class="loginbox">
     <div class="loginbox-head">LOGIN</div>
-
-    <!-- CRT phosphor screen area -->
     <div class="crt-screen">
       <div class="crt-tint"></div>
       <div class="crt-content">
         {logo_html}
         <div class="app-title">RSU TERMINAL</div>
         <div class="app-sub">Redistribution Strategy Unit</div>
-
         <div class="field-wrap">
           <label class="field-label" for="pwd">PASSWORD</label>
           <input class="field-input" type="password" id="pwd"
                  placeholder="Enter your password" autocomplete="current-password">
         </div>
-
         {error_block}
         {attempts_block}
-
-        <button class="btn-signin" onclick="submitPassword()">SIGN IN</button>
+        <button class="btn-signin" id="btn-signin" onclick="submitPassword()">SIGN IN</button>
       </div>
     </div>
-    <!-- end CRT screen -->
-
-    <div class="loginbox-status">
-      <span class="dot"></span>SECURE CONNECTION · AES-256 · TLS 1.3
-    </div>
-    <div class="loginbox-footer">
-      🔒 SSL ENCRYPTED · © 2026 RSU TERMINAL v2.0 // STATUS: ACTIVE
-    </div>
+    <div class="loginbox-status"><span class="dot"></span>SECURE CONNECTION · AES-256 · TLS 1.3</div>
+    <div class="loginbox-footer">🔒 SSL ENCRYPTED · © 2026 RSU TERMINAL v2.0 // STATUS: ACTIVE</div>
   </div>
 </div>
 
 <script>
+// ── Streamlit component bridge ──────────────────────────────────────────────
+// streamlit:setComponentValue sends data back to Python as the component return value
+function sendToStreamlit(data) {{
+  window.parent.postMessage({{
+    type: 'streamlit:setComponentValue',
+    value: data
+  }}, '*');
+}}
+
 var currentTheme = '{theme}';
 var panelOpen = false;
 
@@ -430,7 +284,7 @@ function setTheme(k) {{
   }});
   panelOpen = false;
   document.getElementById('appear').className = 'appear';
-  window.parent.postMessage({{type:'vt_theme', value:k}}, '*');
+  sendToStreamlit({{action:'theme', value:k}});
 }}
 
 function toggleAppear() {{
@@ -441,7 +295,9 @@ function toggleAppear() {{
 function submitPassword() {{
   var pwd = document.getElementById('pwd').value;
   if (!pwd) return;
-  window.parent.postMessage({{type:'vt_login', value:pwd}}, '*');
+  document.getElementById('btn-signin').textContent = 'VERIFICANDO...';
+  document.getElementById('btn-signin').disabled = true;
+  sendToStreamlit({{action:'login', value:pwd}});
 }}
 
 document.addEventListener('keydown', function(e) {{
@@ -458,25 +314,25 @@ document.addEventListener('keydown', function(e) {{
 }});
 
 applyThemeClass(currentTheme);
-document.getElementById('pwd').focus();
+// Focus after a short delay to ensure iframe is ready
+setTimeout(function(){{ document.getElementById('pwd').focus(); }}, 100);
 </script>
 </body>
 </html>"""
 
 
 def login() -> bool:
+    # ── INIT ──────────────────────────────────────────────────────────────────
     defaults = {
         "auth": False, "login_attempts": 0,
         "lockout_time": None, "last_activity": None,
-        "vt_theme": "VT220",
-        "vt_pwd_submitted": None,
-        "vt_error": "",
+        "vt_theme": "VT220", "vt_error": "",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Timeout
+    # ── TIMEOUT ───────────────────────────────────────────────────────────────
     if st.session_state["auth"] and st.session_state["last_activity"]:
         if datetime.now() - st.session_state["last_activity"] > timedelta(minutes=30):
             st.session_state["auth"] = False
@@ -487,7 +343,7 @@ def login() -> bool:
         st.session_state["last_activity"] = datetime.now()
         return True
 
-    # Lockout
+    # ── LOCKOUT ───────────────────────────────────────────────────────────────
     if st.session_state["lockout_time"]:
         if datetime.now() < st.session_state["lockout_time"]:
             remaining = int(
@@ -499,14 +355,44 @@ def login() -> bool:
             st.session_state["login_attempts"] = 0
             st.session_state["vt_error"] = ""
 
-    # Handle password submit
-    submitted_pwd = st.session_state.get("vt_pwd_submitted")
-    if submitted_pwd:
-        st.session_state["vt_pwd_submitted"] = None
-        if not st.session_state["lockout_time"]:
-            pwd_hash  = hashlib.sha256(submitted_pwd.encode()).hexdigest()
+    # ── STREAMLIT CHROME: hide everything ─────────────────────────────────────
+    st.markdown("""
+    <style>
+    #MainMenu,footer,header{visibility:hidden!important}
+    .stApp{background:#0a0800!important}
+    .main .block-container{padding:0!important;max-width:100%!important;margin:0!important}
+    section[data-testid="stMain"]>div{padding:0!important}
+    div[data-testid="stVerticalBlock"]{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;gap:0!important}
+    iframe{border:none!important;display:block!important}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── RENDER HTML COMPONENT ─────────────────────────────────────────────────
+    logo_b64  = get_logo_base64() or ""
+    error_msg = st.session_state.get("vt_error", "")
+    attempts_l = 5 - st.session_state.get("login_attempts", 0)
+    theme     = st.session_state.get("vt_theme", "VT220")
+
+    html_content = _build_html(logo_b64, theme, error_msg, attempts_l)
+
+    # components.html returns the value sent via Streamlit.setComponentValue
+    result = components.html(html_content, height=740, scrolling=False)
+
+    # ── PROCESS COMPONENT RETURN VALUE ────────────────────────────────────────
+    # result is whatever was passed to sendToStreamlit({action, value})
+    if result is not None and isinstance(result, dict):
+        action = result.get("action")
+        value  = result.get("value", "")
+
+        if action == "theme" and value in ("VT220", "GREEN", "CYAN"):
+            st.session_state["vt_theme"] = value
+            st.rerun()
+
+        elif action == "login" and value:
+            pwd_hash  = hashlib.sha256(value.encode()).hexdigest()
             real_pwd  = st.secrets.get("APP_PASSWORD", "")
             real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
+
             if pwd_hash == real_hash:
                 st.session_state["auth"] = True
                 st.session_state["login_attempts"] = 0
@@ -518,84 +404,10 @@ def login() -> bool:
                 remaining = 5 - st.session_state["login_attempts"]
                 if st.session_state["login_attempts"] >= 5:
                     st.session_state["lockout_time"] = datetime.now() + timedelta(minutes=15)
-                    st.session_state["vt_error"] = "⛔ BLOQUEADO — 15 MIN"
+                    st.session_state["vt_error"] = "⛔ ACCESO BLOQUEADO — 15 MIN"
                 else:
-                    st.session_state["vt_error"] = "⚠ CONTRASEÑA INCORRECTA"
+                    st.session_state["vt_error"] = f"⚠ CONTRASEÑA INCORRECTA — {remaining} INTENTOS"
                 st.rerun()
-
-    # Strip all Streamlit chrome
-    st.markdown("""
-    <style>
-    #MainMenu,footer,header{visibility:hidden!important}
-    .stApp{background:#0a0800!important}
-    .main .block-container{padding:0!important;max-width:100%!important;margin:0!important}
-    section[data-testid="stMain"]>div{padding:0!important}
-    div[data-testid="stVerticalBlock"]{
-        background:transparent!important;border:none!important;
-        box-shadow:none!important;padding:0!important;gap:0!important}
-    div[data-testid="stHorizontalBlock"],
-    div[data-testid="column"]{
-        background:transparent!important;border:none!important;
-        box-shadow:none!important;padding:0!important;
-        gap:0!important;min-height:0!important}
-    iframe{border:none!important;display:block!important}
-    /* Hide ALL stray buttons */
-    button[kind="secondary"]{display:none!important}
-    div[data-testid="stButton"]{display:none!important}
-    </style>
-    """, unsafe_allow_html=True)
-
-    logo_b64   = get_logo_base64() or ""
-    error_msg  = st.session_state.get("vt_error", "")
-    attempts_l = 5 - st.session_state.get("login_attempts", 0)
-    theme      = st.session_state.get("vt_theme", "VT220")
-
-    html_content = _build_html(logo_b64, theme, error_msg, attempts_l)
-
-    # Render in isolated iframe — height covers login box fully
-    components.html(html_content, height=680, scrolling=False)
-
-    # Message bridge: listen for postMessage from iframe
-    st.markdown("""
-    <script>
-    (function(){
-      if(window._vtListenerAttached) return;
-      window._vtListenerAttached = true;
-      window.addEventListener('message', function(e){
-        var d = e.data;
-        if(!d||!d.type) return;
-        if(d.type==='vt_login'){
-          var url=new URL(window.location.href);
-          url.searchParams.set('_vt_pwd', btoa(unescape(encodeURIComponent(d.value))));
-          window.location.href=url.toString();
-        }
-        if(d.type==='vt_theme'){
-          var url=new URL(window.location.href);
-          url.searchParams.set('_vt_theme', d.value);
-          window.location.href=url.toString();
-        }
-      });
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-
-    # Read query params
-    qp = st.query_params
-    if "_vt_pwd" in qp:
-        try:
-            pwd_plain = base64.b64decode(qp["_vt_pwd"]).decode("utf-8")
-            st.session_state["vt_pwd_submitted"] = pwd_plain
-        except Exception:
-            pass
-        st.query_params.clear()
-        st.rerun()
-
-    if "_vt_theme" in qp:
-        tv = qp["_vt_theme"]
-        if tv in ("VT220", "GREEN", "CYAN"):
-            st.session_state["vt_theme"] = tv
-        st.query_params.clear()
-        st.rerun()
 
     return False
 

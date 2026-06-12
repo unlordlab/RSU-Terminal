@@ -13,43 +13,34 @@ logger = logging.getLogger(__name__)
 # ── THEMES ──────────────────────────────────────────────────────────────────────
 THEMES = {
     "VT220": {
-        "bg":       "#0a0800",
-        "bg2":      "#110e00",
-        "primary":  "#ffb300",
-        "primary2": "#ff8c00",
-        "dim":      "#7a5500",
-        "dimmer":   "#3a2800",
-        "glow":     "rgba(255,179,0,0.15)",
-        "glow2":    "rgba(255,179,0,0.05)",
-        "border":   "rgba(255,179,0,0.35)",
-        "border2":  "rgba(255,179,0,0.15)",
-        "label":    "VT220",
+        "bg":      "#0a0800",
+        "bg2":     "#130f00",
+        "primary": "#ffb300",
+        "dim":     "#6b4800",
+        "dimmer":  "#2e1f00",
+        "border":  "#3d2900",
+        "glow":    "rgba(255,179,0,0.18)",
+        "label":   "VT220",
     },
     "GREEN": {
-        "bg":       "#000d04",
-        "bg2":      "#001508",
-        "primary":  "#00ffad",
-        "primary2": "#00d97a",
-        "dim":      "#007a4a",
-        "dimmer":   "#003020",
-        "glow":     "rgba(0,255,173,0.15)",
-        "glow2":    "rgba(0,255,173,0.05)",
-        "border":   "rgba(0,255,173,0.35)",
-        "border2":  "rgba(0,255,173,0.15)",
-        "label":    "P3 GREEN",
+        "bg":      "#000d04",
+        "bg2":     "#001508",
+        "primary": "#00ffad",
+        "dim":     "#006640",
+        "dimmer":  "#002418",
+        "border":  "#003820",
+        "glow":    "rgba(0,255,173,0.18)",
+        "label":   "P3 GREEN",
     },
     "CYAN": {
-        "bg":       "#00080d",
-        "bg2":      "#001018",
-        "primary":  "#00d9ff",
-        "primary2": "#00aacc",
-        "dim":      "#006688",
-        "dimmer":   "#002030",
-        "glow":     "rgba(0,217,255,0.15)",
-        "glow2":    "rgba(0,217,255,0.05)",
-        "border":   "rgba(0,217,255,0.35)",
-        "border2":  "rgba(0,217,255,0.15)",
-        "label":    "CYAN VDT",
+        "bg":      "#00080d",
+        "bg2":     "#001018",
+        "primary": "#00d9ff",
+        "dim":     "#005566",
+        "dimmer":  "#001e28",
+        "border":  "#002c38",
+        "glow":    "rgba(0,217,255,0.18)",
+        "label":   "CYAN VDT",
     },
 }
 
@@ -62,24 +53,18 @@ def get_logo_base64():
         pass
     return None
 
-def _get_theme():
-    return st.session_state.get("vt_theme", "VT220")
 
 def login():
     # ── INIT ──────────────────────────────────────────────────────────────────
-    if "auth" not in st.session_state:
-        st.session_state["auth"] = False
-        st.session_state["login_attempts"] = 0
-        st.session_state["lockout_time"] = None
-        st.session_state["last_activity"] = None
+    for k, v in [
+        ("auth", False), ("login_attempts", 0),
+        ("lockout_time", None), ("last_activity", None),
+        ("vt_theme", "VT220"), ("vt_menu_open", False),
+    ]:
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-    if "vt_theme" not in st.session_state:
-        st.session_state["vt_theme"] = "VT220"
-
-    if "vt_menu_open" not in st.session_state:
-        st.session_state["vt_menu_open"] = False
-
-    # ── SESSION TIMEOUT ───────────────────────────────────────────────────────
+    # ── TIMEOUT ───────────────────────────────────────────────────────────────
     if st.session_state["auth"] and st.session_state["last_activity"]:
         if datetime.now() - st.session_state["last_activity"] > timedelta(minutes=30):
             st.session_state["auth"] = False
@@ -100,393 +85,340 @@ def login():
             st.session_state["lockout_time"] = None
             st.session_state["login_attempts"] = 0
 
-    t = THEMES[_get_theme()]
+    t = THEMES[st.session_state["vt_theme"]]
+    bg      = t["bg"]
+    bg2     = t["bg2"]
+    primary = t["primary"]
+    dim     = t["dim"]
+    dimmer  = t["dimmer"]
+    border  = t["border"]
+    glow    = t["glow"]
+    label   = t["label"]
 
-    # ── THEME BUTTON CALLBACKS ─────────────────────────────────────────────────
-    def toggle_menu():
-        st.session_state["vt_menu_open"] = not st.session_state.get("vt_menu_open", False)
-
-    def set_theme(name):
-        st.session_state["vt_theme"] = name
-        st.session_state["vt_menu_open"] = False
+    logo_b64 = get_logo_base64()
 
     # ── CSS ───────────────────────────────────────────────────────────────────
-    bg        = t["bg"]
-    bg2       = t["bg2"]
-    primary   = t["primary"]
-    primary2  = t["primary2"]
-    dim       = t["dim"]
-    dimmer    = t["dimmer"]
-    glow      = t["glow"]
-    glow2     = t["glow2"]
-    border    = t["border"]
-    border2   = t["border2"]
-    label     = t["label"]
-
     st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
-        /* ── GLOBAL ─────────────────────────────────────────── */
+        /* ── RESET / GLOBAL ─────────────────────────────────── */
         #MainMenu, footer, header {{ visibility: hidden; }}
 
-        .stApp {{
+        html, body, .stApp {{
             background: {bg} !important;
+            margin: 0;
+            padding: 0;
         }}
 
-        /* CRT scanlines overlay */
+        /* CRT scanlines */
         .stApp::before {{
             content: '';
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
+            inset: 0;
             background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(0,0,0,0.18) 2px,
-                rgba(0,0,0,0.18) 4px
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.22) 3px,
+                rgba(0,0,0,0.22) 4px
             );
             pointer-events: none;
             z-index: 9998;
         }}
 
-        /* CRT phosphor vignette */
+        /* Phosphor vignette */
         .stApp::after {{
             content: '';
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(ellipse at center,
-                transparent 60%,
-                rgba(0,0,0,0.55) 100%
-            );
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 50%,
+                transparent 55%, rgba(0,0,0,0.65) 100%);
             pointer-events: none;
             z-index: 9997;
         }}
 
-        /* ── LAYOUT ─────────────────────────────────────────── */
+        /* ── STREAMLIT LAYOUT OVERRIDES ──────────────────────── */
         .main .block-container {{
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 90vh;
-            padding-top: 0 !important;
-            max-width: 520px !important;
-            margin: 0 auto;
+            max-width: 640px !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
         }}
 
-        /* ── TOP BAR ─────────────────────────────────────────── */
-        .vt-topbar {{
+        section[data-testid="stMain"] > div {{
+            padding: 0 !important;
+        }}
+
+        /* Remove any card look from stVerticalBlock */
+        div[data-testid="stVerticalBlock"] {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }}
+
+        div[data-testid="stHorizontalBlock"],
+        div[data-testid="column"] {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            gap: 0 !important;
+        }}
+
+        /* ── TOP MENUBAR ─────────────────────────────────────── */
+        .vt-menubar {{
             width: 100%;
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid {border2};
-            padding-bottom: 10px;
-            margin-bottom: 32px;
-            position: relative;
-        }}
-
-        .vt-topbar-left {{
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.75rem;
-            color: {dim};
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }}
-
-        .vt-topbar-left span {{
-            color: {primary};
-            margin-right: 18px;
-        }}
-
-        .vt-topbar-right {{
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }}
-
-        .vt-badge {{
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.7rem;
-            color: {dimmer};
-            border: 1px solid {dimmer};
-            padding: 2px 8px;
-            border-radius: 2px;
-            letter-spacing: 1px;
-        }}
-
-        /* ── THEME BUTTON ──────────────────────────────────────── */
-        .vt-theme-btn {{
+            align-items: stretch;
+            background: {bg2};
+            border-bottom: 1px solid {border};
             font-family: 'Share Tech Mono', monospace;
             font-size: 0.72rem;
-            background: {bg2};
-            color: {primary};
-            border: 1px solid {primary};
-            padding: 3px 10px;
-            border-radius: 2px;
             letter-spacing: 1px;
-            cursor: pointer;
+            height: 32px;
+            box-sizing: border-box;
+            margin-bottom: 0;
+        }}
+
+        .vt-menubar-left {{
+            display: flex;
+            align-items: stretch;
+        }}
+
+        .vt-tab {{
             display: flex;
             align-items: center;
-            gap: 5px;
-            box-shadow: 0 0 8px {glow};
-            text-transform: uppercase;
+            padding: 0 10px;
+            color: {primary};
+            border-right: 1px solid {border};
+            white-space: nowrap;
+            cursor: default;
+            opacity: 0.9;
         }}
 
-        .vt-theme-btn::before {{
-            content: '^T';
+        .vt-tab .key {{
             color: {dim};
-            font-size: 0.65rem;
+            margin-right: 2px;
         }}
 
-        /* ── THEME DROPDOWN ─────────────────────────────────────── */
-        .vt-menu {{
-            background: {bg2};
-            border: 1px solid {primary};
-            border-radius: 3px;
-            padding: 16px;
-            margin-bottom: 20px;
-            box-shadow: 0 0 30px {glow};
-            width: 100%;
-            box-sizing: border-box;
+        .vt-tab.active {{
+            background: {primary};
+            color: {bg};
+            font-weight: bold;
+            opacity: 1;
         }}
 
-        .vt-menu-title {{
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.7rem;
-            color: {dim};
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            text-align: center;
-            margin-bottom: 12px;
-            border-bottom: 1px solid {border2};
-            padding-bottom: 8px;
+        .vt-tab.active .key {{
+            color: {bg};
         }}
 
-        .vt-menu-title::before {{ content: '── '; }}
-        .vt-menu-title::after  {{ content: ' ──'; }}
+        .vt-menubar-right {{
+            display: flex;
+            align-items: stretch;
+            border-left: 1px solid {border};
+        }}
 
-        .vt-option {{
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.85rem;
-            padding: 8px 12px;
-            border-radius: 2px;
-            cursor: pointer;
+        .vt-theme-chip {{
             display: flex;
             align-items: center;
-            gap: 10px;
-            transition: background 0.1s;
+            padding: 0 10px;
             color: {primary};
-            letter-spacing: 1px;
-        }}
-
-        .vt-option:hover {{
-            background: {glow};
-        }}
-
-        .vt-option-dot {{
-            font-size: 0.7rem;
-            width: 14px;
-            text-align: center;
-            color: {dim};
-        }}
-
-        .vt-option-dot.active {{
-            color: {primary};
-        }}
-
-        .vt-option-active {{
-            background: {glow2};
-        }}
-
-        .vt-menu-hint {{
+            background: {bg2};
+            border-left: 1px solid {border};
+            white-space: nowrap;
             font-family: 'Share Tech Mono', monospace;
-            font-size: 0.65rem;
-            color: {dimmer};
-            text-align: center;
-            margin-top: 12px;
+            font-size: 0.72rem;
             letter-spacing: 1px;
-            border-top: 1px solid {border2};
-            padding-top: 8px;
+            cursor: pointer;
+            text-decoration: none;
         }}
 
-        /* ── CARD ───────────────────────────────────────────── */
-        .vt-card {{
-            background: linear-gradient(160deg, {bg2} 0%, {bg} 100%);
-            border: 1px solid {border};
-            border-radius: 4px;
-            padding: 40px 48px 36px;
-            width: 100%;
-            box-sizing: border-box;
-            box-shadow: 0 0 50px {glow2}, inset 0 0 30px rgba(0,0,0,0.4);
+        .vt-theme-chip .key {{
+            color: {dim};
+            margin-right: 4px;
         }}
 
-        /* ── STATUS LINE ─────────────────────────────────────── */
-        .vt-status {{
+        .vt-site-chip {{
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            color: {primary};
+            background: {bg};
+            border-left: 1px solid {border};
+            white-space: nowrap;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+        }}
+
+        /* ── THEME DROPDOWN ─────────────────────────────────── */
+        .vt-dropdown {{
+            background: {bg2};
+            border: 1px solid {primary};
+            width: 260px;
+            margin: 0 auto 0;
+            box-shadow: 0 4px 24px {glow};
+        }}
+
+        .vt-dropdown-title {{
             font-family: 'Share Tech Mono', monospace;
             font-size: 0.68rem;
+            color: {dim};
+            letter-spacing: 3px;
+            text-align: center;
+            padding: 8px 0 6px;
+            border-bottom: 1px solid {border};
+            text-transform: uppercase;
+        }}
+
+        .vt-dropdown-footer {{
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.6rem;
             color: {dimmer};
             text-align: center;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            margin-bottom: 28px;
+            padding: 6px 0;
+            border-top: 1px solid {border};
+            letter-spacing: 1px;
         }}
 
-        .vt-status-dot {{
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            background: {primary};
-            border-radius: 50%;
-            margin-right: 8px;
-            box-shadow: 0 0 6px {primary};
-            vertical-align: middle;
-            animation: blink 1.2s step-end infinite;
+        /* ── CONTENT AREA ────────────────────────────────────── */
+        .vt-content {{
+            padding: 28px 0 0;
+            width: 100%;
         }}
 
-        @keyframes blink {{
-            0%, 100% {{ opacity: 1; }}
-            50%       {{ opacity: 0; }}
-        }}
-
-        /* ── LOGO / TITLE ────────────────────────────────────── */
-        .vt-logo {{
-            width: 88px;
-            height: 88px;
-            border-radius: 10px;
-            display: block;
-            margin: 0 auto 20px;
-            box-shadow: 0 0 30px {glow}, 0 0 60px {glow2};
-        }}
-
-        .vt-logo-placeholder {{
-            width: 88px;
-            height: 88px;
-            margin: 0 auto 20px;
-            background: linear-gradient(135deg, {border2}, transparent);
+        /* ── LOGIN BOX ───────────────────────────────────────── */
+        .vt-loginbox {{
             border: 1px solid {border};
-            border-radius: 10px;
+            width: 380px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }}
+
+        .vt-loginbox-title {{
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            color: {primary};
+            letter-spacing: 3px;
+            text-align: center;
+            padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2.2rem;
-            box-shadow: 0 0 24px {glow2};
+            height: 28px;
+            border-bottom: 1px solid {border};
+            background: {bg2};
         }}
 
-        .vt-title {{
+        .vt-loginbox-title::before {{
+            content: '── ';
+            color: {border};
+            margin-right: 6px;
+        }}
+        .vt-loginbox-title::after {{
+            content: ' ──';
+            color: {border};
+            margin-left: 6px;
+        }}
+
+        .vt-loginbox-body {{
+            padding: 20px 24px 20px;
+        }}
+
+        /* ── MAIN TITLE ──────────────────────────────────────── */
+        .vt-apptitle {{
             font-family: 'VT323', monospace;
             color: {primary};
-            font-size: 3rem;
+            font-size: 2.4rem;
+            letter-spacing: 6px;
             text-align: center;
-            letter-spacing: 8px;
-            text-shadow: 0 0 20px {primary}, 0 0 40px {glow};
-            margin-bottom: 2px;
+            text-shadow: 0 0 18px {glow}, 0 0 6px {primary};
+            margin: 0 0 2px;
             text-transform: uppercase;
             line-height: 1;
         }}
 
-        .vt-subtitle {{
+        .vt-appsubtitle {{
             font-family: 'Share Tech Mono', monospace;
             color: {dim};
-            font-size: 0.72rem;
-            text-align: center;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            margin-bottom: 30px;
-        }}
-
-        /* ── DIVIDER ─────────────────────────────────────────── */
-        .vt-divider {{
-            height: 1px;
-            background: linear-gradient(90deg, transparent, {primary}55, transparent);
-            margin: 0 0 28px;
-        }}
-
-        /* ── INPUT LABEL ─────────────────────────────────────── */
-        .vt-label {{
-            font-family: 'Share Tech Mono', monospace;
-            color: {dim};
-            font-size: 0.72rem;
-            text-transform: uppercase;
+            font-size: 0.62rem;
             letter-spacing: 3px;
-            text-align: left;
-            display: block;
-            margin-bottom: 6px;
+            text-align: center;
+            text-transform: uppercase;
+            margin-bottom: 18px;
         }}
 
-        .vt-label::before {{ content: '▸ '; color: {primary}; }}
+        /* ── FIELD LABELS ────────────────────────────────────── */
+        .vt-field-label {{
+            font-family: 'Share Tech Mono', monospace;
+            color: {primary};
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            display: block;
+        }}
 
         /* ── INPUT ───────────────────────────────────────────── */
+        .stTextInput > label {{ display: none !important; }}
+
         .stTextInput > div > div > input {{
-            background: {bg} !important;
-            border: 1px solid {border} !important;
-            border-radius: 3px !important;
+            background: {bg2} !important;
+            border: none !important;
+            border-bottom: 1px solid {dim} !important;
+            border-radius: 0 !important;
             color: {primary} !important;
-            height: 48px !important;
-            font-family: 'VT323', monospace !important;
-            font-size: 1.5rem !important;
-            letter-spacing: 4px !important;
-            text-align: left !important;
-            padding: 0 14px !important;
+            height: 36px !important;
+            font-family: 'Share Tech Mono', monospace !important;
+            font-size: 0.9rem !important;
+            letter-spacing: 2px !important;
+            padding: 0 8px !important;
             caret-color: {primary};
-            transition: border-color 0.15s, box-shadow 0.15s;
+            transition: border-color 0.1s;
+            width: 100% !important;
         }}
 
         .stTextInput > div > div > input:focus {{
-            border-color: {primary} !important;
-            box-shadow: 0 0 14px {glow} !important;
+            border-bottom-color: {primary} !important;
+            box-shadow: 0 2px 8px {glow} !important;
             outline: none !important;
         }}
 
         .stTextInput > div > div > input::placeholder {{
             color: {dimmer} !important;
-            letter-spacing: 6px;
+            font-style: italic;
         }}
 
         .stTextInput [data-testid="stIcon"] {{ display: none !important; }}
+        .stTextInput > div {{ border: none !important; box-shadow: none !important; }}
 
         /* ── BUTTON ─────────────────────────────────────────── */
         div[data-testid="stButton"] {{
-            display: flex !important;
-            justify-content: flex-start !important;
             width: 100% !important;
-            margin-top: 6px !important;
-        }}
-
-        /* Small theme toggle buttons */
-        div[data-testid="stButton"].theme-toggle-btn > button,
-        .vt-small-btn > button {{
-            min-width: 0 !important;
-            width: auto !important;
-            height: 28px !important;
-            padding: 0 12px !important;
-            font-size: 0.72rem !important;
-            letter-spacing: 1px !important;
             margin-top: 0 !important;
         }}
 
         .stButton > button {{
             font-family: 'Share Tech Mono', monospace !important;
-            background: transparent !important;
-            color: {primary} !important;
-            border: 1px solid {primary} !important;
-            border-radius: 3px !important;
+            background: {primary} !important;
+            color: {bg} !important;
+            border: none !important;
+            border-radius: 0 !important;
             font-size: 0.85rem !important;
             letter-spacing: 3px !important;
             width: 100% !important;
-            height: 48px !important;
+            height: 44px !important;
             padding: 0 !important;
             text-transform: uppercase !important;
-            transition: all 0.15s !important;
-            box-shadow: 0 0 10px {glow2} !important;
-            margin-top: 20px !important;
+            margin-top: 16px !important;
+            transition: opacity 0.1s !important;
+            box-shadow: 0 0 20px {glow} !important;
         }}
 
         .stButton > button:hover {{
-            background: {primary} !important;
-            color: {bg} !important;
-            box-shadow: 0 0 24px {glow} !important;
+            opacity: 0.85 !important;
         }}
 
         .stButton > button:focus {{
@@ -494,194 +426,191 @@ def login():
             outline-offset: 2px !important;
         }}
 
+        /* Theme option buttons — override the full-width default */
+        [data-testid="stButton"][key*="theme_"] > button,
+        .theme-opt .stButton > button {{
+            background: transparent !important;
+            color: {primary} !important;
+            border: none !important;
+            height: 32px !important;
+            font-size: 0.78rem !important;
+            margin-top: 0 !important;
+            box-shadow: none !important;
+            letter-spacing: 2px !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+        }}
+
+        .theme-opt .stButton > button:hover {{
+            background: rgba(255,255,255,0.04) !important;
+            opacity: 1 !important;
+        }}
+
         /* ── ALERTS ─────────────────────────────────────────── */
         .stAlert {{
             font-family: 'Share Tech Mono', monospace !important;
-            font-size: 0.8rem !important;
-            border-radius: 3px !important;
-            margin-top: 12px !important;
+            font-size: 0.75rem !important;
+            border-radius: 0 !important;
+            margin-top: 8px !important;
+            border-left: 2px solid {primary} !important;
+        }}
+
+        /* ── STATUS DOT ──────────────────────────────────────── */
+        @keyframes blink {{
+            0%, 100% {{ opacity: 1; }}
+            50%       {{ opacity: 0.1; }}
+        }}
+
+        .vt-dot {{
+            display: inline-block;
+            width: 5px; height: 5px;
+            background: {primary};
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+            animation: blink 1.1s step-end infinite;
+            box-shadow: 0 0 5px {primary};
+        }}
+
+        .vt-status-bar {{
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.62rem;
+            color: {dimmer};
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 10px 0 4px;
         }}
 
         /* ── FOOTER ─────────────────────────────────────────── */
         .vt-footer {{
             font-family: 'Share Tech Mono', monospace;
-            text-align: center;
+            font-size: 0.6rem;
             color: {dimmer};
-            font-size: 0.65rem;
-            margin-top: 28px;
-            padding-top: 16px;
-            border-top: 1px solid {border2};
+            text-align: center;
             letter-spacing: 2px;
             text-transform: uppercase;
+            padding: 12px 0 0;
+            margin-top: 10px;
+            border-top: 1px solid {border};
         }}
 
         .vt-footer span {{ color: {dim}; }}
-
-        /* ── KEYBOARD HINT ───────────────────────────────────── */
-        .vt-kbd-hint {{
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.62rem;
-            color: {dimmer};
-            text-align: right;
-            letter-spacing: 1px;
-            margin-top: 6px;
-        }}
-
-        .vt-kbd-hint kbd {{
-            background: {bg2};
-            border: 1px solid {dimmer};
-            border-radius: 2px;
-            padding: 1px 5px;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.6rem;
-            color: {dim};
-        }}
-
-        /* Hide stray streamlit borders */
-        div[data-testid="stHorizontalBlock"],
-        div[data-testid="column"] {{
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-        }}
     </style>
     """, unsafe_allow_html=True)
 
-    logo_b64 = get_logo_base64()
-    cur_theme = _get_theme()
-
-    # ── KEYBOARD HANDLER (JS) ────────────────────────────────────────────────
-    # Inject JS for Enter-to-submit and Esc-to-close menu
-    st.markdown("""
-    <script>
-    (function() {
-        function waitAndBind() {
-            const input = document.querySelector('input[type="password"]');
-            const btns  = document.querySelectorAll('button');
-            let loginBtn = null;
-            btns.forEach(b => {
-                if (b.innerText.includes('ENTER') || b.innerText.includes('ACCESS') || b.innerText.includes('UNLOCK')) loginBtn = b;
-            });
-            if (input) {
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && loginBtn) loginBtn.click();
-                    if (e.key === 'Escape') {
-                        // Close menu if open — click the VT220 toggle
-                        const toggles = document.querySelectorAll('button');
-                        toggles.forEach(b => { if (b.innerText.includes('VT220') || b.innerText.includes('GREEN') || b.innerText.includes('CYAN')) b.blur(); });
-                    }
-                });
-                input.focus();
-            }
-        }
-        setTimeout(waitAndBind, 600);
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-
-    # ── TOP BAR ──────────────────────────────────────────────────────────────
-    col_left, col_right = st.columns([3, 1])
-
-    with col_left:
-        st.markdown(f"""
-        <div class="vt-topbar-left">
-            <span>^1</span>LOGIN
-            &nbsp;&nbsp;
-            <span>^2</span>STATUS
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col_right:
-        if st.button(f"^T  {label}", key="btn_theme_toggle", help="Cambiar tema (^T)"):
-            toggle_menu()
-
-    # ── THEME MENU ────────────────────────────────────────────────────────────
-    if st.session_state.get("vt_menu_open", False):
-        st.markdown(f"""
-        <div class="vt-menu">
-            <div class="vt-menu-title">APPEARANCE</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        theme_cols = st.columns(3)
-        theme_list = list(THEMES.keys())
-
-        for i, (tkey, tdata) in enumerate(THEMES.items()):
-            is_active = (tkey == cur_theme)
-            marker = "▶" if is_active else "○"
-            with theme_cols[i]:
-                if st.button(
-                    f"{marker} {tdata['label']}",
-                    key=f"theme_{tkey}",
-                    help=f"Activar tema {tdata['label']}"
-                ):
-                    set_theme(tkey)
-                    st.rerun()
-
-        st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
-                    color:{t['dimmer']}; text-align:center; letter-spacing:1px;
-                    margin-top:4px; padding-top:8px; border-top:1px solid {t['border2']};">
-            ↑↓ NAV &nbsp;·&nbsp; ↵ SEL &nbsp;·&nbsp; ESC
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ── MAIN CARD ─────────────────────────────────────────────────────────────
-    st.markdown(f'<div class="vt-card">', unsafe_allow_html=True)
-
-    # Status
+    # ── TOP MENUBAR ───────────────────────────────────────────────────────────
+    site_name = "RSU TERMINAL"
     st.markdown(f"""
-    <div class="vt-status">
-        <span class="vt-status-dot"></span>
-        SECURE CONNECTION &nbsp;·&nbsp; AES-256 &nbsp;·&nbsp; TLS 1.3
+    <div class="vt-menubar">
+        <div class="vt-menubar-left">
+            <div class="vt-tab active"><span class="key">^1</span>&nbsp;LOGIN</div>
+            <div class="vt-tab"><span class="key">^2</span>&nbsp;STATUS</div>
+            <div class="vt-tab"><span class="key">^3</span>&nbsp;INFO</div>
+        </div>
+        <div class="vt-menubar-right">
+            <div class="vt-theme-chip" id="vt-theme-trigger">
+                <span class="key">^T</span>&nbsp;{label}
+            </div>
+            <div class="vt-site-chip">{site_name}</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Logo
+    # ── THEME TOGGLE BUTTON (invisible, triggers menu) ────────────────────────
+    col_dummy, col_btn = st.columns([5, 1])
+    with col_btn:
+        if st.button(f"^T {label}", key="btn_theme_toggle",
+                     help="Cambiar tema (^T)"):
+            st.session_state["vt_menu_open"] = not st.session_state.get("vt_menu_open", False)
+            st.rerun()
+
+    # ── THEME DROPDOWN ────────────────────────────────────────────────────────
+    if st.session_state.get("vt_menu_open", False):
+        st.markdown(f"""
+        <div class="vt-dropdown">
+            <div class="vt-dropdown-title">── APPEARANCE ──</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        for tkey, tdata in THEMES.items():
+            is_active = (tkey == st.session_state["vt_theme"])
+            marker = "▶" if is_active else "○"
+            arrow = " ←" if is_active else ""
+            st.markdown('<div class="theme-opt">', unsafe_allow_html=True)
+            if st.button(f"  {marker}  {tdata['label']}{arrow}", key=f"theme_{tkey}"):
+                st.session_state["vt_theme"] = tkey
+                st.session_state["vt_menu_open"] = False
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="vt-dropdown">
+            <div class="vt-dropdown-footer">↑↓ NAV · ↵ SEL · ESC</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── LOGIN BOX ─────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="vt-content">
+        <div class="vt-loginbox">
+            <div class="vt-loginbox-title">LOGIN</div>
+            <div class="vt-loginbox-body">
+    """, unsafe_allow_html=True)
+
+    # App title inside box
     if logo_b64:
-        st.markdown(
-            f'<img src="data:image/png;base64,{logo_b64}" class="vt-logo">',
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown('<div class="vt-logo-placeholder">⬡</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="text-align:center;margin-bottom:12px;">
+            <img src="data:image/png;base64,{logo_b64}"
+                 style="width:64px;height:64px;border-radius:6px;
+                        box-shadow:0 0 20px {glow};">
+        </div>
+        """, unsafe_allow_html=True)
 
-    # Title
-    st.markdown('<div class="vt-title">RSU TERMINAL</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="vt-subtitle">SISTEMA DE ACCESO // v2.0</div>', unsafe_allow_html=True)
-    st.markdown('<div class="vt-divider"></div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="vt-apptitle">RSU TERMINAL</div>
+    <div class="vt-appsubtitle">Redistribution Strategy Unit</div>
+    """, unsafe_allow_html=True)
 
-    # Input label
-    st.markdown('<span class="vt-label">PASSWORD</span>', unsafe_allow_html=True)
-
+    # Password field
+    st.markdown('<span class="vt-field-label">PASSWORD</span>', unsafe_allow_html=True)
     password = st.text_input(
-        "",
+        "password",
         type="password",
-        placeholder="················",
+        placeholder="Enter your password",
         label_visibility="collapsed",
         key="login_password"
     )
 
-    # Keyboard hint
+    # Login button
+    button_clicked = st.button("SIGN IN", key="btn_login", use_container_width=True)
+
+    st.markdown('</div></div></div>', unsafe_allow_html=True)  # close loginbox-body, loginbox, vt-content
+
+    # Status bar below box
     st.markdown(f"""
-    <div class="vt-kbd-hint">
-        <kbd>ENTER</kbd> confirmar &nbsp;·&nbsp; <kbd>TAB</kbd> navegar
+    <div class="vt-status-bar">
+        <span class="vt-dot"></span>
+        SECURE CONNECTION · AES-256 · TLS 1.3
     </div>
     """, unsafe_allow_html=True)
 
-    # ── LOGIN BUTTON ──────────────────────────────────────────────────────────
-    button_clicked = st.button(
-        "[ ENTER // UNLOCK TERMINAL ]",
-        key="btn_login",
-        use_container_width=True
-    )
+    # Footer
+    st.markdown(f"""
+    <div class="vt-footer">
+        🔒 SSL ENCRYPTED ·
+        <span>© 2026 RSU TERMINAL v2.0 // STATUS: ACTIVE</span>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # ── AUTH LOGIC ────────────────────────────────────────────────────────────
     if button_clicked:
         if not password:
             st.error("⚠  INGRESE CONTRASEÑA")
         else:
-            pwd_hash = hashlib.sha256(password.encode()).hexdigest()
-            real_pwd = st.secrets.get("APP_PASSWORD", "")
+            pwd_hash  = hashlib.sha256(password.encode()).hexdigest()
+            real_pwd  = st.secrets.get("APP_PASSWORD", "")
             real_hash = hashlib.sha256(real_pwd.encode()).hexdigest()
 
             if pwd_hash == real_hash:
@@ -700,15 +629,26 @@ def login():
                 else:
                     st.error(f"⚠  CONTRASEÑA INCORRECTA — {remaining} INTENTOS RESTANTES")
 
-    # Footer
-    st.markdown(f"""
-    <div class="vt-footer">
-        🔒 SSL ENCRYPTED &nbsp;·&nbsp;
-        <span>© 2026 RSU TERMINAL // STATUS: ACTIVE</span>
-    </div>
+    # ── KEYBOARD ENTER HANDLER ────────────────────────────────────────────────
+    st.markdown("""
+    <script>
+    (function() {
+        function bindKeys() {
+            const inp = document.querySelector('input[type="password"]');
+            if (!inp) { setTimeout(bindKeys, 500); return; }
+            inp.focus();
+            inp.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const btns = Array.from(document.querySelectorAll('button'));
+                    const signIn = btns.find(b => b.innerText.trim() === 'SIGN IN');
+                    if (signIn) signIn.click();
+                }
+            });
+        }
+        setTimeout(bindKeys, 600);
+    })();
+    </script>
     """, unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)  # close vt-card
 
     return False
 

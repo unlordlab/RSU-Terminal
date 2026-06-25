@@ -170,5 +170,9 @@
   "SMCI": {
     "precio_compra": 29.27,
     "fecha": "11/06/2026"
+  },
+  "PTC": {
+    "precio_compra": 112.93,
+    "fecha": "25/06/2026"
   }
 }

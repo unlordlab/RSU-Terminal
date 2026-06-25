@@ -170,5 +170,9 @@
   "PTC": {
     "precio_compra": 112.93,
     "fecha": "25/06/2026"
+  },
+  "ZBRA": {
+    "precio_compra": 248.12,
+    "fecha": "25/06/2026"
   }
 }

@@ -174,5 +174,9 @@
   "ZBRA": {
     "precio_compra": 248.12,
     "fecha": "25/06/2026"
+  },
+  "NTSK": {
+    "precio_compra": 9.88,
+    "fecha": "26/06/2026"
   }
 }

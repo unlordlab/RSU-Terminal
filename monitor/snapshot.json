@@ -202,5 +202,9 @@
   "NXT": {
     "precio_compra": 106.77,
     "fecha": "29/06/2026"
+  },
+  "PL": {
+    "precio_compra": 27.07,
+    "fecha": "29/06/2026"
   }
 }

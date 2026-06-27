@@ -190,5 +190,9 @@
   "FUTU": {
     "precio_compra": 94.4,
     "fecha": "29/06/2026"
+  },
+  "ATI": {
+    "precio_compra": 197.4,
+    "fecha": "29/06/2026"
   }
 }

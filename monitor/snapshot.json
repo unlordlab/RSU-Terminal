@@ -1,8 +1,4 @@
 {
-  "NBIS": {
-    "precio_compra": 44.25,
-    "fecha": "11/07/2025"
-  },
   "HOOD": {
     "precio_compra": 74.83,
     "fecha": "16/03/2026"
@@ -188,7 +184,7 @@
     "fecha": "29/06/2026"
   },
   "FUTU": {
-    "precio_compra": 94.4,
+    "precio_compra": 96.4,
     "fecha": "29/06/2026"
   },
   "ATI": {
@@ -200,7 +196,7 @@
     "fecha": "29/06/2026"
   },
   "NXT": {
-    "precio_compra": 106.77,
+    "precio_compra": 106.95,
     "fecha": "29/06/2026"
   },
   "PL": {

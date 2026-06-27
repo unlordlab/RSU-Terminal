@@ -178,5 +178,9 @@
   "NTSK": {
     "precio_compra": 9.88,
     "fecha": "26/06/2026"
+  },
+  "ROK": {
+    "precio_compra": 476.82,
+    "fecha": "29/06/2026"
   }
 }

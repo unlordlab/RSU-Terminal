@@ -182,5 +182,9 @@
   "ROK": {
     "precio_compra": 476.82,
     "fecha": "29/06/2026"
+  },
+  "WDC": {
+    "precio_compra": 586.45,
+    "fecha": "29/06/2026"
   }
 }

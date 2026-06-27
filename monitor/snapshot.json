@@ -206,5 +206,9 @@
   "PL": {
     "precio_compra": 27.07,
     "fecha": "29/06/2026"
+  },
+  "HWM": {
+    "precio_compra": 268.87,
+    "fecha": "29/06/2026"
   }
 }

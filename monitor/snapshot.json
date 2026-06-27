@@ -186,5 +186,9 @@
   "WDC": {
     "precio_compra": 586.45,
     "fecha": "29/06/2026"
+  },
+  "FUTU": {
+    "precio_compra": 94.4,
+    "fecha": "29/06/2026"
   }
 }

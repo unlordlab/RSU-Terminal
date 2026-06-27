@@ -198,5 +198,9 @@
   "POWL": {
     "precio_compra": 279.77,
     "fecha": "29/06/2026"
+  },
+  "NXT": {
+    "precio_compra": 106.77,
+    "fecha": "29/06/2026"
   }
 }

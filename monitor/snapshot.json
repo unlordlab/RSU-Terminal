@@ -206,5 +206,9 @@
   "HWM": {
     "precio_compra": 268.87,
     "fecha": "29/06/2026"
+  },
+  "NEE": {
+    "precio_compra": 88.56,
+    "fecha": "29/06/2026"
   }
 }

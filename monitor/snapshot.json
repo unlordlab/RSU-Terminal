@@ -210,5 +210,9 @@
   "NEE": {
     "precio_compra": 88.56,
     "fecha": "29/06/2026"
+  },
+  "ORLY": {
+    "precio_compra": 89.55,
+    "fecha": "29/06/2026"
   }
 }

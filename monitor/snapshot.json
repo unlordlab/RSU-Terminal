@@ -214,5 +214,9 @@
   "ORLY": {
     "precio_compra": 89.55,
     "fecha": "29/06/2026"
+  },
+  "SPCX": {
+    "precio_compra": 153.23,
+    "fecha": "29/06/2026"
   }
 }

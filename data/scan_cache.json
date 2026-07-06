@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-03T06:29:54.537475",
+  "generated_at": "2026-07-06T07:10:04.605666",
   "sp500_count": 480,
   "total_candidates": 98,
   "market_status": {
@@ -45,7 +45,7 @@
         "pct_from_high": -1.35,
         "volume_ratio": 0.63,
         "rs_rating": 93,
-        "inst_ownership": 90.31,
+        "inst_ownership": 90.28,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 30.95,
@@ -78,8 +78,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 93.39950073242187,
-          "sma_150": 82.08717890421549,
-          "sma_200": 80.69924766540527,
+          "sma_150": 82.08717880249023,
+          "sma_200": 80.69924739837647,
           "high_52w": 106.1500015258789,
           "low_52w": 57.05136819393077,
           "distance_from_high": -1.35,
@@ -126,7 +126,7 @@
         "pct_from_high": -1.95,
         "volume_ratio": 0.94,
         "rs_rating": 92,
-        "inst_ownership": 85.3,
+        "inst_ownership": 85.32,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 38.65,
@@ -207,7 +207,7 @@
         "pct_from_high": -0.41,
         "volume_ratio": 1.01,
         "rs_rating": 84,
-        "inst_ownership": 102.56,
+        "inst_ownership": 102.6,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 30.03,
@@ -240,10 +240,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 19.202979431152343,
-          "sma_150": 17.434959615071616,
-          "sma_200": 17.429799575805664,
+          "sma_150": 17.434959786732993,
+          "sma_200": 17.429799685478212,
           "high_52w": 21.979999542236328,
-          "low_52w": 15.182008621867839,
+          "low_52w": 15.182009571311678,
           "distance_from_high": -0.41,
           "distance_from_low": 44.18
         }
@@ -288,7 +288,7 @@
         "pct_from_high": -1.54,
         "volume_ratio": 1.16,
         "rs_rating": 84,
-        "inst_ownership": 106.58,
+        "inst_ownership": 106.57,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 33.75,
@@ -369,7 +369,7 @@
         "pct_from_high": -0.52,
         "volume_ratio": 0.67,
         "rs_rating": 92,
-        "inst_ownership": 103.96,
+        "inst_ownership": 104.0,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 41.4,
@@ -382,7 +382,7 @@
         "smr": "B",
         "acc_dis": "B",
         "atr_percent": 2.1,
-        "pe_ratio": 48.89572,
+        "pe_ratio": 48.76533,
         "roe": 19.13,
         "sales_growth": 21.0
       },
@@ -450,7 +450,7 @@
         "pct_from_high": -1.53,
         "volume_ratio": 0.99,
         "rs_rating": 84,
-        "inst_ownership": 118.35,
+        "inst_ownership": 118.29,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 50.49,
@@ -483,8 +483,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 53.918740234375,
-          "sma_150": 57.637658106486,
-          "sma_200": 57.93292104721069,
+          "sma_150": 57.63765833536784,
+          "sma_200": 57.93292102813721,
           "high_52w": 71.92990838980309,
           "low_52w": 43.1201874966908,
           "distance_from_high": -1.53,
@@ -530,16 +530,16 @@
         "eps_growth": 782.7,
         "pct_from_high": -1.41,
         "volume_ratio": 0.82,
-        "rs_rating": 83,
+        "rs_rating": 82,
         "inst_ownership": 81.05,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 22.57,
+        "volatility": 22.59,
         "price_momentum": 7.11
       },
       "ibd_ratings": {
-        "composite": 75,
-        "rs": 83,
+        "composite": 74,
+        "rs": 82,
         "eps": 99,
         "smr": "D",
         "acc_dis": "C",
@@ -563,18 +563,18 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 103.76101028442383,
-          "sma_150": 94.24639999389649,
-          "sma_200": 90.65897533416748,
+          "sma_50": 104.1931999206543,
+          "sma_150": 94.86634587605795,
+          "sma_200": 91.28326183319092,
           "high_52w": 112.44999694824219,
-          "low_52w": 72.34154031144658,
+          "low_52w": 72.91857830831684,
           "distance_from_high": -1.41,
-          "distance_from_low": 53.26
+          "distance_from_low": 52.05
         }
       },
       "week_52_range": {
         "high": 112.45,
-        "low": 72.34,
+        "low": 72.92,
         "current_position": 98.6
       }
     },
@@ -612,7 +612,7 @@
         "pct_from_high": -7.54,
         "volume_ratio": 1.35,
         "rs_rating": 86,
-        "inst_ownership": 97.28,
+        "inst_ownership": 97.27,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 27.46,
@@ -646,7 +646,7 @@
         "values": {
           "sma_50": 261.3169689941406,
           "sma_150": 226.87463857014973,
-          "sma_200": 210.21689895629882,
+          "sma_200": 210.21689865112305,
           "high_52w": 280.0,
           "low_52w": 141.76617800954006,
           "distance_from_high": -7.54,
@@ -774,7 +774,7 @@
         "pct_from_high": -14.77,
         "volume_ratio": 1.39,
         "rs_rating": 92,
-        "inst_ownership": 93.68,
+        "inst_ownership": 93.64,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 56.15,
@@ -854,16 +854,16 @@
         "eps_growth": 182.5,
         "pct_from_high": 0.0,
         "volume_ratio": 1.1,
-        "rs_rating": 79,
-        "inst_ownership": 102.62,
+        "rs_rating": 78,
+        "inst_ownership": 102.58,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 22.24,
         "price_momentum": 17.53
       },
       "ibd_ratings": {
-        "composite": 78,
-        "rs": 79,
+        "composite": 77,
+        "rs": 78,
         "eps": 99,
         "smr": "B",
         "acc_dis": "B",
@@ -888,10 +888,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 213.40738677978516,
-          "sma_150": 202.4001315307617,
-          "sma_200": 196.24237243652342,
+          "sma_150": 202.4001318359375,
+          "sma_200": 196.242373046875,
           "high_52w": 236.05999755859375,
-          "low_52w": 147.92522932966875,
+          "low_52w": 147.92521432757405,
           "distance_from_high": 0.0,
           "distance_from_low": 59.58
         }
@@ -936,7 +936,7 @@
         "pct_from_high": -1.27,
         "volume_ratio": 0.86,
         "rs_rating": 94,
-        "inst_ownership": 51.47,
+        "inst_ownership": 51.57,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 27.72,
@@ -969,8 +969,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 31.07830348968506,
-          "sma_150": 26.69391518910726,
-          "sma_200": 25.516536769866942,
+          "sma_150": 26.693915265401206,
+          "sma_200": 25.516536827087403,
           "high_52w": 34.54999923706055,
           "low_52w": 20.320361704085197,
           "distance_from_high": -1.27,
@@ -1017,7 +1017,7 @@
         "pct_from_high": -5.78,
         "volume_ratio": 0.72,
         "rs_rating": 94,
-        "inst_ownership": 79.69,
+        "inst_ownership": 79.7,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 51.44,
@@ -1050,8 +1050,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 1041.6969482421875,
-          "sma_150": 860.5017561848958,
-          "sma_200": 793.7075698852539,
+          "sma_150": 860.5017590332031,
+          "sma_200": 793.7075711059571,
           "high_52w": 1181.3463589986993,
           "low_52w": 504.6538661063114,
           "distance_from_high": -5.78,
@@ -1062,87 +1062,6 @@
         "high": 1181.35,
         "low": 504.65,
         "current_position": 94.2
-      }
-    },
-    {
-      "ticker": "BK",
-      "name": "The Bank of New York Mellon Cor",
-      "sector": "Financial Services",
-      "industry": "Banks - Diversified",
-      "market_cap": 94.14,
-      "price": 143.56,
-      "score": 81,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "A",
-        "L": "A",
-        "I": "A",
-        "M": "B"
-      },
-      "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 12,
-        "S": 10,
-        "L": 12,
-        "I": 10,
-        "M": 10
-      },
-      "metrics": {
-        "earnings_growth": 41.8,
-        "revenue_growth": 13.4,
-        "eps_growth": 33.8,
-        "pct_from_high": -3.33,
-        "volume_ratio": 3.56,
-        "rs_rating": 83,
-        "inst_ownership": 87.86,
-        "market_score": 70,
-        "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 20.28,
-        "price_momentum": 2.96
-      },
-      "ibd_ratings": {
-        "composite": 73,
-        "rs": 83,
-        "eps": 83,
-        "smr": "B",
-        "acc_dis": "C",
-        "atr_percent": 2.54,
-        "pe_ratio": 17.01737,
-        "roe": 13.47,
-        "sales_growth": 13.4
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 138.35699127197265,
-          "sma_150": 124.51044611612956,
-          "sma_200": 120.02645248413086,
-          "high_52w": 148.5,
-          "low_52w": 90.26381131078435,
-          "distance_from_high": -3.33,
-          "distance_from_low": 59.04
-        }
-      },
-      "week_52_range": {
-        "high": 148.5,
-        "low": 90.26,
-        "current_position": 96.7
       }
     },
     {
@@ -1179,7 +1098,7 @@
         "pct_from_high": -4.58,
         "volume_ratio": 0.71,
         "rs_rating": 88,
-        "inst_ownership": 105.7,
+        "inst_ownership": 105.77,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 24.05,
@@ -1213,7 +1132,7 @@
         "values": {
           "sma_50": 22.17301486968994,
           "sma_150": 19.407051836649575,
-          "sma_200": 18.499006614685058,
+          "sma_200": 18.499006624221803,
           "high_52w": 24.47190928745387,
           "low_52w": 13.970311771314448,
           "distance_from_high": -4.58,
@@ -1259,21 +1178,21 @@
         "eps_growth": 312.9,
         "pct_from_high": -0.02,
         "volume_ratio": 0.85,
-        "rs_rating": 73,
-        "inst_ownership": 85.46,
+        "rs_rating": 71,
+        "inst_ownership": 85.47,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 23.93,
+        "volatility": 23.91,
         "price_momentum": 18.73
       },
       "ibd_ratings": {
-        "composite": 81,
-        "rs": 73,
+        "composite": 80,
+        "rs": 71,
         "eps": 99,
         "smr": "B",
         "acc_dis": "C",
         "atr_percent": 2.27,
-        "pe_ratio": 5.5382743,
+        "pe_ratio": 5.5370493,
         "roe": 45.22,
         "sales_growth": 3.0
       },
@@ -1292,18 +1211,18 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 219.2092333984375,
-          "sma_150": 209.73486083984375,
-          "sma_200": 207.46895881652833,
+          "sma_50": 219.81879974365233,
+          "sma_150": 210.6580081176758,
+          "sma_200": 208.42560653686525,
           "high_52w": 250.3800048828125,
-          "low_52w": 185.27840152623034,
+          "low_52w": 186.25446046356996,
           "distance_from_high": -0.02,
-          "distance_from_low": 35.11
+          "distance_from_low": 34.4
         }
       },
       "week_52_range": {
         "high": 250.38,
-        "low": 185.28,
+        "low": 186.25,
         "current_position": 100.0
       }
     },
@@ -1341,10 +1260,10 @@
         "pct_from_high": -15.42,
         "volume_ratio": 1.06,
         "rs_rating": 88,
-        "inst_ownership": 93.33,
+        "inst_ownership": 93.32,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 34.63,
+        "volatility": 34.59,
         "price_momentum": -12.03
       },
       "ibd_ratings": {
@@ -1373,18 +1292,18 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 408.10780639648436,
-          "sma_150": 342.59541982014974,
-          "sma_200": 316.0571633148193,
+          "sma_50": 408.73040283203125,
+          "sma_150": 343.36873931884764,
+          "sma_200": 316.79906311035154,
           "high_52w": 445.9100036621094,
-          "low_52w": 215.47747752249086,
+          "low_52w": 216.06770342427438,
           "distance_from_high": -15.42,
-          "distance_from_low": 75.03
+          "distance_from_low": 74.56
         }
       },
       "week_52_range": {
         "high": 445.91,
-        "low": 215.48,
+        "low": 216.07,
         "current_position": 84.6
       }
     },
@@ -1425,7 +1344,7 @@
         "inst_ownership": 107.01,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 39.86,
+        "volatility": 39.87,
         "price_momentum": -17.54
       },
       "ibd_ratings": {
@@ -1454,18 +1373,18 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 65.89400535583496,
-          "sma_150": 55.664850336710614,
-          "sma_200": 52.54975496292114,
+          "sma_50": 65.97259986877441,
+          "sma_150": 55.771006724039715,
+          "sma_200": 52.65499952316284,
           "high_52w": 78.81999969482422,
-          "low_52w": 33.81836026331376,
+          "low_52w": 33.89860019592649,
           "distance_from_high": -19.41,
-          "distance_from_low": 87.83
+          "distance_from_low": 87.38
         }
       },
       "week_52_range": {
         "high": 78.82,
-        "low": 33.82,
+        "low": 33.9,
         "current_position": 80.6
       }
     },
@@ -1502,8 +1421,8 @@
         "eps_growth": 149.5,
         "pct_from_high": -2.84,
         "volume_ratio": 0.73,
-        "rs_rating": 71,
-        "inst_ownership": 101.56,
+        "rs_rating": 72,
+        "inst_ownership": 101.5,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 17.32,
@@ -1511,7 +1430,7 @@
       },
       "ibd_ratings": {
         "composite": 73,
-        "rs": 71,
+        "rs": 72,
         "eps": 99,
         "smr": "B",
         "acc_dis": "C",
@@ -1536,10 +1455,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 117.56338577270508,
-          "sma_150": 107.02341639200846,
-          "sma_200": 104.00425983428956,
+          "sma_150": 107.0234164428711,
+          "sma_200": 104.00425987243652,
           "high_52w": 125.25281576686528,
-          "low_52w": 86.25565550585468,
+          "low_52w": 86.25566308304475,
           "distance_from_high": -2.84,
           "distance_from_low": 41.08
         }
@@ -1584,7 +1503,7 @@
         "pct_from_high": -19.32,
         "volume_ratio": 1.17,
         "rs_rating": 87,
-        "inst_ownership": 100.71,
+        "inst_ownership": 100.72,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 47.81,
@@ -1617,10 +1536,10 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 293.9250079345703,
-          "sma_150": 242.99747599283853,
-          "sma_200": 234.96586715698243,
+          "sma_150": 242.99747589111328,
+          "sma_200": 234.96586639404296,
           "high_52w": 338.8007685241799,
-          "low_52w": 180.63294606048376,
+          "low_52w": 180.63296122068985,
           "distance_from_high": -19.32,
           "distance_from_low": 51.33
         }
@@ -1665,7 +1584,7 @@
         "pct_from_high": 0.0,
         "volume_ratio": 0.68,
         "rs_rating": 73,
-        "inst_ownership": 87.9,
+        "inst_ownership": 87.92,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 18.44,
@@ -1678,7 +1597,7 @@
         "smr": "B",
         "acc_dis": "B",
         "atr_percent": 2.19,
-        "pe_ratio": 10.218209,
+        "pe_ratio": 10.21516,
         "roe": 25.27,
         "sales_growth": 1.0
       },
@@ -1698,8 +1617,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 304.9002508544922,
-          "sma_150": 295.3576611328125,
-          "sma_200": 289.88521881103514,
+          "sma_150": 295.3576601155599,
+          "sma_200": 289.88521697998044,
           "high_52w": 342.30999755859375,
           "low_52w": 245.2876526713804,
           "distance_from_high": 0.0,
@@ -1746,7 +1665,7 @@
         "pct_from_high": -0.21,
         "volume_ratio": 0.98,
         "rs_rating": 78,
-        "inst_ownership": 97.98,
+        "inst_ownership": 97.96,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 34.88,
@@ -1827,7 +1746,7 @@
         "pct_from_high": -13.01,
         "volume_ratio": 1.75,
         "rs_rating": 71,
-        "inst_ownership": 87.84,
+        "inst_ownership": 87.83,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 32.69,
@@ -1908,7 +1827,7 @@
         "pct_from_high": -22.27,
         "volume_ratio": 1.04,
         "rs_rating": 99,
-        "inst_ownership": 81.39,
+        "inst_ownership": 81.38,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 75.81,
@@ -1941,10 +1860,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 852.0854016113282,
-          "sma_150": 524.7997011311849,
-          "sma_200": 444.2228581237793,
+          "sma_150": 524.7997012329101,
+          "sma_200": 444.22285820007323,
           "high_52w": 1255.0,
-          "low_52w": 103.23021586705363,
+          "low_52w": 103.23020834677516,
           "distance_from_high": -22.27,
           "distance_from_low": 845.03
         }
@@ -1960,7 +1879,7 @@
       "name": "Seagate Technology Holdings PLC",
       "sector": "Technology",
       "industry": "Computer Hardware",
-      "market_cap": 183.9,
+      "market_cap": 185.56,
       "price": 820.16,
       "score": 79,
       "ml_probability": 0.5,
@@ -1989,7 +1908,7 @@
         "pct_from_high": -28.32,
         "volume_ratio": 1.31,
         "rs_rating": 98,
-        "inst_ownership": 88.22,
+        "inst_ownership": 88.23,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 68.2,
@@ -2022,8 +1941,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 839.6896154785156,
-          "sma_150": 528.1088903808594,
-          "sma_200": 455.89094612121585,
+          "sma_150": 528.1088905843098,
+          "sma_200": 455.8909465789795,
           "high_52w": 1144.184150716912,
           "low_52w": 137.16742889634483,
           "distance_from_high": -28.32,
@@ -2104,9 +2023,9 @@
         "values": {
           "sma_50": 384.6154473876953,
           "sma_150": 306.7400503540039,
-          "sma_200": 267.7719180679321,
+          "sma_200": 267.7719185256958,
           "high_52w": 487.9100036621094,
-          "low_52w": 88.37376575395444,
+          "low_52w": 88.37375840491858,
           "distance_from_high": -24.35,
           "distance_from_low": 317.65
         }
@@ -2151,7 +2070,7 @@
         "pct_from_high": -11.44,
         "volume_ratio": 0.88,
         "rs_rating": 99,
-        "inst_ownership": 72.08,
+        "inst_ownership": 72.07,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 68.18,
@@ -2232,7 +2151,7 @@
         "pct_from_high": -5.4,
         "volume_ratio": 0.68,
         "rs_rating": 84,
-        "inst_ownership": 81.58,
+        "inst_ownership": 81.52,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 28.26,
@@ -2266,9 +2185,9 @@
         "values": {
           "sma_50": 131.8937028503418,
           "sma_150": 119.9767820739746,
-          "sma_200": 114.57583869934082,
+          "sma_200": 114.57583862304688,
           "high_52w": 147.9600067138672,
-          "low_52w": 83.58502579934843,
+          "low_52w": 83.58503342071891,
           "distance_from_high": -5.4,
           "distance_from_low": 67.46
         }
@@ -2313,7 +2232,7 @@
         "pct_from_high": -18.31,
         "volume_ratio": 0.76,
         "rs_rating": 92,
-        "inst_ownership": 79.64,
+        "inst_ownership": 79.63,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 30.08,
@@ -2346,8 +2265,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 236.72196502685546,
-          "sma_150": 193.48954935709637,
-          "sma_200": 180.11292976379394,
+          "sma_150": 193.4895492553711,
+          "sma_200": 180.1129293823242,
           "high_52w": 270.2363088398427,
           "low_52w": 130.10937369852297,
           "distance_from_high": -18.31,
@@ -2430,7 +2349,7 @@
           "sma_150": 333.3423327636719,
           "sma_200": 315.809098739624,
           "high_52w": 408.36608091552193,
-          "low_52w": 172.27854501653255,
+          "low_52w": 172.27851516418144,
           "distance_from_high": -11.87,
           "distance_from_low": 108.91
         }
@@ -2475,7 +2394,7 @@
         "pct_from_high": -27.59,
         "volume_ratio": 1.18,
         "rs_rating": 96,
-        "inst_ownership": 73.74,
+        "inst_ownership": 73.75,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 64.65,
@@ -2509,7 +2428,7 @@
         "values": {
           "sma_50": 188.42658569335939,
           "sma_150": 141.35969380696613,
-          "sma_200": 126.88987281799317,
+          "sma_200": 126.8898726272583,
           "high_52w": 271.7799987792969,
           "low_52w": 50.76506912066068,
           "distance_from_high": -27.59,
@@ -2556,7 +2475,7 @@
         "pct_from_high": -15.65,
         "volume_ratio": 0.9,
         "rs_rating": 82,
-        "inst_ownership": 88.36,
+        "inst_ownership": 88.35,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 49.22,
@@ -2637,7 +2556,7 @@
         "pct_from_high": -6.96,
         "volume_ratio": 0.62,
         "rs_rating": 78,
-        "inst_ownership": 94.46,
+        "inst_ownership": 94.43,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 31.03,
@@ -2673,7 +2592,7 @@
           "sma_150": 237.79145365397136,
           "sma_200": 227.43031463623046,
           "high_52w": 290.6300048828125,
-          "low_52w": 169.17969224324384,
+          "low_52w": 169.17967720542993,
           "distance_from_high": -6.96,
           "distance_from_low": 59.84
         }
@@ -2718,7 +2637,7 @@
         "pct_from_high": -15.26,
         "volume_ratio": 0.85,
         "rs_rating": 90,
-        "inst_ownership": 94.89,
+        "inst_ownership": 94.92,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 38.77,
@@ -2731,7 +2650,7 @@
         "smr": "B",
         "acc_dis": "D",
         "atr_percent": 4.59,
-        "pe_ratio": 92.05372,
+        "pe_ratio": 91.80082,
         "roe": 13.53,
         "sales_growth": 26.3
       },
@@ -2751,8 +2670,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 711.5302380371094,
-          "sma_150": 574.891049601237,
-          "sma_200": 537.9320051574707,
+          "sma_150": 574.8910493977864,
+          "sma_200": 537.9320043945313,
           "high_52w": 788.6295298146063,
           "low_52w": 362.70112911258764,
           "distance_from_high": -15.26,
@@ -2763,6 +2682,87 @@
         "high": 788.63,
         "low": 362.7,
         "current_position": 84.7
+      }
+    },
+    {
+      "ticker": "BK",
+      "name": "The Bank of New York Mellon Cor",
+      "sector": "Financial Services",
+      "industry": "Banks - Diversified",
+      "market_cap": 94.14,
+      "price": 146.62,
+      "score": 76,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "C",
+        "L": "A",
+        "I": "A",
+        "M": "B"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 15,
+        "S": 2,
+        "L": 12,
+        "I": 10,
+        "M": 10
+      },
+      "metrics": {
+        "earnings_growth": 41.8,
+        "revenue_growth": 13.4,
+        "eps_growth": 33.8,
+        "pct_from_high": -1.27,
+        "volume_ratio": 0.64,
+        "rs_rating": 81,
+        "inst_ownership": 87.86,
+        "market_score": 70,
+        "market_phase": "UPTREND UNDER PRESSURE",
+        "volatility": 20.13,
+        "price_momentum": 1.81
+      },
+      "ibd_ratings": {
+        "composite": 73,
+        "rs": 81,
+        "eps": 83,
+        "smr": "B",
+        "acc_dis": "C",
+        "atr_percent": 2.38,
+        "pe_ratio": 17.01737,
+        "roe": 13.47,
+        "sales_growth": 13.4
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 139.15634735107423,
+          "sma_150": 125.55148722330729,
+          "sma_200": 120.8471155166626,
+          "high_52w": 148.5,
+          "low_52w": 90.26381890138386,
+          "distance_from_high": -1.27,
+          "distance_from_low": 62.43
+        }
+      },
+      "week_52_range": {
+        "high": 148.5,
+        "low": 90.26,
+        "current_position": 98.7
       }
     },
     {
@@ -2799,7 +2799,7 @@
         "pct_from_high": -1.64,
         "volume_ratio": 0.97,
         "rs_rating": 88,
-        "inst_ownership": 96.25,
+        "inst_ownership": 96.29,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 34.18,
@@ -2880,7 +2880,7 @@
         "pct_from_high": -0.04,
         "volume_ratio": 0.86,
         "rs_rating": 69,
-        "inst_ownership": 84.78,
+        "inst_ownership": 84.77,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 18.13,
@@ -2914,7 +2914,7 @@
         "values": {
           "sma_50": 325.8863037109375,
           "sma_150": 319.5196844482422,
-          "sma_200": 309.8619186401367,
+          "sma_200": 309.8619177246094,
           "high_52w": 361.3299865722656,
           "low_52w": 262.50362028836173,
           "distance_from_high": -0.04,
@@ -2994,10 +2994,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 167.99422241210937,
-          "sma_150": 150.64705856323243,
-          "sma_200": 144.6940944290161,
+          "sma_150": 150.6470593770345,
+          "sma_200": 144.6940951156616,
           "high_52w": 178.6999969482422,
-          "low_52w": 116.34902837747998,
+          "low_52w": 116.34903568506763,
           "distance_from_high": -1.23,
           "distance_from_low": 51.7
         }
@@ -3042,7 +3042,7 @@
         "pct_from_high": -23.5,
         "volume_ratio": 1.15,
         "rs_rating": 89,
-        "inst_ownership": 87.04,
+        "inst_ownership": 87.11,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 35.12,
@@ -3075,8 +3075,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 244.84356903076173,
-          "sma_150": 201.38079966227212,
-          "sma_200": 187.81911346435547,
+          "sma_150": 201.38079996744793,
+          "sma_200": 187.81911361694335,
           "high_52w": 288.08663551146503,
           "low_52w": 118.47295394820975,
           "distance_from_high": -23.5,
@@ -3156,8 +3156,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 37.72660003662109,
-          "sma_150": 36.38215176900228,
-          "sma_200": 35.97423873901367,
+          "sma_150": 36.382151718139646,
+          "sma_200": 35.9742387008667,
           "high_52w": 41.119998931884766,
           "low_52w": 32.15207637461423,
           "distance_from_high": -0.07,
@@ -3204,7 +3204,7 @@
         "pct_from_high": -11.89,
         "volume_ratio": 0.6,
         "rs_rating": 87,
-        "inst_ownership": 61.05,
+        "inst_ownership": 61.04,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 29.52,
@@ -3285,7 +3285,7 @@
         "pct_from_high": -18.47,
         "volume_ratio": 1.15,
         "rs_rating": 98,
-        "inst_ownership": 85.09,
+        "inst_ownership": 85.11,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 54.87,
@@ -3318,8 +3318,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 489.9698193359375,
-          "sma_150": 378.78608184814453,
-          "sma_200": 338.7531456756592,
+          "sma_150": 378.78608154296876,
+          "sma_200": 338.7531450653076,
           "high_52w": 739.6699829101562,
           "low_52w": 153.7846009301305,
           "distance_from_high": -18.47,
@@ -3365,8 +3365,8 @@
         "eps_growth": 38.6,
         "pct_from_high": -2.04,
         "volume_ratio": 1.08,
-        "rs_rating": 79,
-        "inst_ownership": 98.81,
+        "rs_rating": 80,
+        "inst_ownership": 98.79,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 26.03,
@@ -3374,7 +3374,7 @@
       },
       "ibd_ratings": {
         "composite": 71,
-        "rs": 79,
+        "rs": 80,
         "eps": 85,
         "smr": "C",
         "acc_dis": "C",
@@ -3400,9 +3400,9 @@
         "values": {
           "sma_50": 64.91333030700683,
           "sma_150": 61.7195144144694,
-          "sma_200": 58.97257091522217,
+          "sma_200": 58.97257087707519,
           "high_52w": 72.45999908447266,
-          "low_52w": 44.63631643024647,
+          "low_52w": 44.63632017266189,
           "distance_from_high": -2.04,
           "distance_from_low": 59.02
         }
@@ -3446,8 +3446,8 @@
         "eps_growth": 24.9,
         "pct_from_high": -0.65,
         "volume_ratio": 1.1,
-        "rs_rating": 81,
-        "inst_ownership": 81.98,
+        "rs_rating": 82,
+        "inst_ownership": 81.96,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 22.59,
@@ -3455,7 +3455,7 @@
       },
       "ibd_ratings": {
         "composite": 70,
-        "rs": 81,
+        "rs": 82,
         "eps": 69,
         "smr": "B",
         "acc_dis": "C",
@@ -3528,7 +3528,7 @@
         "pct_from_high": -16.3,
         "volume_ratio": 1.21,
         "rs_rating": 91,
-        "inst_ownership": 92.31,
+        "inst_ownership": 92.3,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 42.08,
@@ -3609,7 +3609,7 @@
         "pct_from_high": -19.86,
         "volume_ratio": 1.29,
         "rs_rating": 97,
-        "inst_ownership": 88.04,
+        "inst_ownership": 88.03,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 57.86,
@@ -3642,8 +3642,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 320.9159280395508,
-          "sma_150": 248.57109598795572,
-          "sma_200": 222.491658744812,
+          "sma_150": 248.57109629313152,
+          "sma_200": 222.49165885925294,
           "high_52w": 438.5,
           "low_52w": 90.43947230730471,
           "distance_from_high": -19.86,
@@ -3690,7 +3690,7 @@
         "pct_from_high": -1.34,
         "volume_ratio": 0.94,
         "rs_rating": 90,
-        "inst_ownership": 70.94,
+        "inst_ownership": 70.93,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 26.41,
@@ -3771,7 +3771,7 @@
         "pct_from_high": -0.68,
         "volume_ratio": 1.01,
         "rs_rating": 96,
-        "inst_ownership": 52.61,
+        "inst_ownership": 52.83,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 43.05,
@@ -3852,7 +3852,7 @@
         "pct_from_high": -15.61,
         "volume_ratio": 0.71,
         "rs_rating": 75,
-        "inst_ownership": 90.71,
+        "inst_ownership": 90.67,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 34.67,
@@ -3886,8 +3886,8 @@
         "values": {
           "sma_50": 23.335750160217284,
           "sma_150": 23.3898583984375,
-          "sma_200": 24.231755380630492,
-          "high_52w": 31.602873740291344,
+          "sma_200": 24.231755409240723,
+          "high_52w": 31.602871829384142,
           "low_52w": 17.685224575053827,
           "distance_from_high": -15.61,
           "distance_from_low": 50.8
@@ -3933,7 +3933,7 @@
         "pct_from_high": -5.16,
         "volume_ratio": 0.93,
         "rs_rating": 85,
-        "inst_ownership": 90.91,
+        "inst_ownership": 90.92,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 30.05,
@@ -3966,10 +3966,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 447.9816717529297,
-          "sma_150": 411.5147304280599,
+          "sma_150": 411.51473022460937,
           "sma_200": 397.22781784057617,
           "high_52w": 497.3599853515625,
-          "low_52w": 301.1794698525613,
+          "low_52w": 301.1794982131928,
           "distance_from_high": -5.16,
           "distance_from_low": 56.62
         }
@@ -4014,7 +4014,7 @@
         "pct_from_high": -13.56,
         "volume_ratio": 0.91,
         "rs_rating": 94,
-        "inst_ownership": 82.86,
+        "inst_ownership": 82.84,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 31.78,
@@ -4047,8 +4047,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 111.01940017700196,
-          "sma_150": 89.23297134399414,
-          "sma_200": 84.46414371490478,
+          "sma_150": 89.23297119140625,
+          "sma_200": 84.46414356231689,
           "high_52w": 130.3699951171875,
           "low_52w": 64.6571524864762,
           "distance_from_high": -13.56,
@@ -4095,7 +4095,7 @@
         "pct_from_high": -2.76,
         "volume_ratio": 0.61,
         "rs_rating": 80,
-        "inst_ownership": 106.11,
+        "inst_ownership": 106.08,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 25.9,
@@ -4140,87 +4140,6 @@
         "high": 230.18,
         "low": 155.45,
         "current_position": 97.2
-      }
-    },
-    {
-      "ticker": "KEY",
-      "name": "KeyCorp",
-      "sector": "Financial Services",
-      "industry": "Banks - Regional",
-      "market_cap": 24.85,
-      "price": 23.02,
-      "score": 72,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "A",
-        "A": "A",
-        "N": "A",
-        "S": "C",
-        "L": "B",
-        "I": "A",
-        "M": "B"
-      },
-      "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 15,
-        "S": 2,
-        "L": 8,
-        "I": 10,
-        "M": 10
-      },
-      "metrics": {
-        "earnings_growth": 33.3,
-        "revenue_growth": 11.8,
-        "eps_growth": 28.9,
-        "pct_from_high": -2.95,
-        "volume_ratio": 0.82,
-        "rs_rating": 71,
-        "inst_ownership": 88.83,
-        "market_score": 70,
-        "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 23.56,
-        "price_momentum": 6.23
-      },
-      "ibd_ratings": {
-        "composite": 66,
-        "rs": 71,
-        "eps": 81,
-        "smr": "C",
-        "acc_dis": "C",
-        "atr_percent": 2.0,
-        "pe_ratio": 14.1227,
-        "roe": 9.98,
-        "sales_growth": 11.8
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 21.838908348083496,
-          "sma_150": 20.905129534403482,
-          "sma_200": 20.030131664276123,
-          "high_52w": 23.719999313354492,
-          "low_52w": 15.970774597470841,
-          "distance_from_high": -2.95,
-          "distance_from_low": 44.14
-        }
-      },
-      "week_52_range": {
-        "high": 23.72,
-        "low": 15.97,
-        "current_position": 97.0
       }
     },
     {
@@ -4371,10 +4290,10 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 529.5487768554688,
-          "sma_150": 343.1529266357422,
-          "sma_200": 290.41336429595947,
+          "sma_150": 343.15292673746745,
+          "sma_200": 290.41336421966554,
           "high_52w": 799.8699951171875,
-          "low_52w": 63.49791707230577,
+          "low_52w": 63.49791327846353,
           "distance_from_high": -32.61,
           "distance_from_low": 748.85
         }
@@ -4419,7 +4338,7 @@
         "pct_from_high": -7.18,
         "volume_ratio": 0.6,
         "rs_rating": 87,
-        "inst_ownership": 62.71,
+        "inst_ownership": 62.66,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 26.43,
@@ -4452,10 +4371,10 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 203.72521911621095,
-          "sma_150": 183.46509348551433,
-          "sma_200": 177.14898681640625,
+          "sma_150": 183.46509358723958,
+          "sma_200": 177.14898735046387,
           "high_52w": 230.47000122070312,
-          "low_52w": 132.0722013712327,
+          "low_52w": 132.07223089986599,
           "distance_from_high": -7.18,
           "distance_from_low": 61.98
         }
@@ -4500,7 +4419,7 @@
         "pct_from_high": -10.24,
         "volume_ratio": 0.9,
         "rs_rating": 95,
-        "inst_ownership": 72.83,
+        "inst_ownership": 72.82,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 37.73,
@@ -4534,7 +4453,7 @@
         "values": {
           "sma_50": 913.1105981445312,
           "sma_150": 754.182148844401,
-          "sma_200": 695.1879513549804,
+          "sma_200": 695.1879515075684,
           "high_52w": 1073.4599609375,
           "low_52w": 383.9348106159338,
           "distance_from_high": -10.24,
@@ -4581,7 +4500,7 @@
         "pct_from_high": -2.06,
         "volume_ratio": 0.67,
         "rs_rating": 97,
-        "inst_ownership": 100.72,
+        "inst_ownership": 100.69,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 50.97,
@@ -4662,7 +4581,7 @@
         "pct_from_high": -3.1,
         "volume_ratio": 0.75,
         "rs_rating": 95,
-        "inst_ownership": 78.48,
+        "inst_ownership": 78.55,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 38.05,
@@ -4696,9 +4615,9 @@
         "values": {
           "sma_50": 265.69554260253904,
           "sma_150": 228.13511973063152,
-          "sma_200": 209.23013717651367,
+          "sma_200": 209.23013732910155,
           "high_52w": 294.9800109863281,
-          "low_52w": 129.28134447674842,
+          "low_52w": 129.28135924302433,
           "distance_from_high": -3.1,
           "distance_from_low": 121.09
         }
@@ -4743,7 +4662,7 @@
         "pct_from_high": -4.07,
         "volume_ratio": 0.78,
         "rs_rating": 74,
-        "inst_ownership": 102.21,
+        "inst_ownership": 102.18,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 37.45,
@@ -4857,10 +4776,10 @@
         "stage": "Stage 3 (Distribution)",
         "values": {
           "sma_50": 17.718883171081544,
-          "sma_150": 17.414863268534344,
-          "sma_200": 16.96314528465271,
+          "sma_150": 17.41486317952474,
+          "sma_200": 16.963145179748537,
           "high_52w": 21.853662502928902,
-          "low_52w": 13.525414419989424,
+          "low_52w": 13.525413481048796,
           "distance_from_high": -9.26,
           "distance_from_low": 46.61
         }
@@ -4876,7 +4795,7 @@
       "name": "Prologis, Inc.",
       "sector": "Real Estate",
       "industry": "REIT - Industrial",
-      "market_cap": 130.65,
+      "market_cap": 133.03,
       "price": 139.43,
       "score": 69,
       "ml_probability": 0.5,
@@ -4905,7 +4824,7 @@
         "pct_from_high": -6.48,
         "volume_ratio": 0.69,
         "rs_rating": 59,
-        "inst_ownership": 98.02,
+        "inst_ownership": 98.03,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 22.04,
@@ -4938,10 +4857,10 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 141.86033752441406,
-          "sma_150": 134.68149470011394,
-          "sma_200": 130.42683708190918,
+          "sma_150": 134.68149459838867,
+          "sma_200": 130.42683670043945,
           "high_52w": 149.0978957023848,
-          "low_52w": 100.16504776943994,
+          "low_52w": 100.16504024195463,
           "distance_from_high": -6.48,
           "distance_from_low": 39.2
         }
@@ -4986,7 +4905,7 @@
         "pct_from_high": -7.8,
         "volume_ratio": 0.86,
         "rs_rating": 85,
-        "inst_ownership": 97.75,
+        "inst_ownership": 97.71,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 42.88,
@@ -5067,7 +4986,7 @@
         "pct_from_high": -6.89,
         "volume_ratio": 1.1,
         "rs_rating": 66,
-        "inst_ownership": 93.77,
+        "inst_ownership": 93.79,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 29.44,
@@ -5100,8 +5019,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 141.74576171875,
-          "sma_150": 131.85431467692058,
-          "sma_200": 126.71985820770264,
+          "sma_150": 131.85431447347005,
+          "sma_200": 126.71985771179199,
           "high_52w": 151.17999267578125,
           "low_52w": 101.49541709188294,
           "distance_from_high": -6.89,
@@ -5112,6 +5031,87 @@
         "high": 151.18,
         "low": 101.5,
         "current_position": 93.1
+      }
+    },
+    {
+      "ticker": "KEY",
+      "name": "KeyCorp",
+      "sector": "Financial Services",
+      "industry": "Banks - Regional",
+      "market_cap": 24.85,
+      "price": 23.02,
+      "score": 68,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "C",
+        "L": "C",
+        "I": "A",
+        "M": "B"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 15,
+        "S": 2,
+        "L": 4,
+        "I": 10,
+        "M": 10
+      },
+      "metrics": {
+        "earnings_growth": 33.3,
+        "revenue_growth": 11.8,
+        "eps_growth": 28.9,
+        "pct_from_high": -2.95,
+        "volume_ratio": 0.82,
+        "rs_rating": 69,
+        "inst_ownership": 88.91,
+        "market_score": 70,
+        "market_phase": "UPTREND UNDER PRESSURE",
+        "volatility": 23.49,
+        "price_momentum": 6.23
+      },
+      "ibd_ratings": {
+        "composite": 65,
+        "rs": 69,
+        "eps": 81,
+        "smr": "C",
+        "acc_dis": "C",
+        "atr_percent": 2.0,
+        "pe_ratio": 14.1227,
+        "roe": 9.98,
+        "sales_growth": 11.8
+      },
+      "trend_template": {
+        "all_pass": true,
+        "score": 8,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": true,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 2 (Advancing)",
+        "values": {
+          "sma_50": 21.957200088500976,
+          "sma_150": 21.07953099568685,
+          "sma_200": 20.20403555870056,
+          "high_52w": 23.719999313354492,
+          "low_52w": 16.12897549969623,
+          "distance_from_high": -2.95,
+          "distance_from_low": 42.72
+        }
+      },
+      "week_52_range": {
+        "high": 23.72,
+        "low": 16.13,
+        "current_position": 97.0
       }
     },
     {
@@ -5147,8 +5147,8 @@
         "eps_growth": 29.1,
         "pct_from_high": -0.03,
         "volume_ratio": 0.93,
-        "rs_rating": 69,
-        "inst_ownership": 87.24,
+        "rs_rating": 70,
+        "inst_ownership": 87.19,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 23.1,
@@ -5156,7 +5156,7 @@
       },
       "ibd_ratings": {
         "composite": 66,
-        "rs": 69,
+        "rs": 70,
         "eps": 81,
         "smr": "B",
         "acc_dis": "C",
@@ -5310,7 +5310,7 @@
         "pct_from_high": 0.0,
         "volume_ratio": 1.08,
         "rs_rating": 58,
-        "inst_ownership": 91.55,
+        "inst_ownership": 91.56,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 21.67,
@@ -5343,8 +5343,8 @@
         "stage": "Stage 3 (Distribution)",
         "values": {
           "sma_50": 325.7851287841797,
-          "sma_150": 324.3363661702474,
-          "sma_200": 327.8470770263672,
+          "sma_150": 324.33636678059895,
+          "sma_200": 327.8470768737793,
           "high_52w": 362.1300048828125,
           "low_52w": 293.2820187246287,
           "distance_from_high": 0.0,
@@ -5391,7 +5391,7 @@
         "pct_from_high": -10.5,
         "volume_ratio": 0.9,
         "rs_rating": 43,
-        "inst_ownership": 92.14,
+        "inst_ownership": 92.12,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 25.55,
@@ -5439,6 +5439,87 @@
       }
     },
     {
+      "ticker": "BBY",
+      "name": "Best Buy Co., Inc.",
+      "sector": "Consumer Cyclical",
+      "industry": "Specialty Retail",
+      "market_cap": 16.44,
+      "price": 77.99,
+      "score": 65,
+      "ml_probability": 0.5,
+      "grades": {
+        "C": "A",
+        "A": "A",
+        "N": "A",
+        "S": "C",
+        "L": "C",
+        "I": "A",
+        "M": "B"
+      },
+      "scores": {
+        "C": 15,
+        "A": 12,
+        "N": 12,
+        "S": 2,
+        "L": 4,
+        "I": 10,
+        "M": 10
+      },
+      "metrics": {
+        "earnings_growth": 37.9,
+        "revenue_growth": 1.9,
+        "eps_growth": 36.6,
+        "pct_from_high": -4.35,
+        "volume_ratio": 0.88,
+        "rs_rating": 61,
+        "inst_ownership": 98.77,
+        "market_score": 70,
+        "market_phase": "UPTREND UNDER PRESSURE",
+        "volatility": 37.4,
+        "price_momentum": 11.32
+      },
+      "ibd_ratings": {
+        "composite": 69,
+        "rs": 61,
+        "eps": 84,
+        "smr": "B",
+        "acc_dis": "C",
+        "atr_percent": 3.24,
+        "pe_ratio": 14.442592,
+        "roe": 39.1,
+        "sales_growth": 1.9
+      },
+      "trend_template": {
+        "all_pass": false,
+        "score": 7,
+        "criteria": {
+          "Precio > SMA 50": true,
+          "Precio > SMA 150": true,
+          "Precio > SMA 200": true,
+          "SMA 50 > SMA 150": true,
+          "SMA 150 > SMA 200": false,
+          "SMA 200 Tendencia Alcista": true,
+          "Precio > 30% del minimo 52s": true,
+          "Precio dentro 25% del maximo 52s": true
+        },
+        "stage": "Stage 1/2 Transition",
+        "values": {
+          "sma_50": 66.81259384155274,
+          "sma_150": 65.91803530375162,
+          "sma_200": 68.00442949295044,
+          "high_52w": 81.53917572120406,
+          "low_52w": 54.37638824600882,
+          "distance_from_high": -4.35,
+          "distance_from_low": 43.43
+        }
+      },
+      "week_52_range": {
+        "high": 81.54,
+        "low": 54.38,
+        "current_position": 95.6
+      }
+    },
+    {
       "ticker": "CF",
       "name": "CF Industries Holdings, Inc.",
       "sector": "Basic Materials",
@@ -5472,7 +5553,7 @@
         "pct_from_high": -21.82,
         "volume_ratio": 0.67,
         "rs_rating": 69,
-        "inst_ownership": 103.53,
+        "inst_ownership": 103.47,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 41.74,
@@ -5505,10 +5586,10 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 115.83088088989258,
-          "sma_150": 104.18329004923503,
-          "sma_200": 99.18232372283936,
+          "sma_150": 104.18328994750976,
+          "sma_200": 99.18232364654541,
           "high_52w": 141.38278454012223,
-          "low_52w": 74.71447374614128,
+          "low_52w": 74.71448130835641,
           "distance_from_high": -21.82,
           "distance_from_low": 47.95
         }
@@ -5552,16 +5633,16 @@
         "eps_growth": 53.7,
         "pct_from_high": -15.52,
         "volume_ratio": 0.85,
-        "rs_rating": 47,
-        "inst_ownership": 92.14,
+        "rs_rating": 48,
+        "inst_ownership": 92.15,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 26.87,
         "price_momentum": 2.29
       },
       "ibd_ratings": {
-        "composite": 69,
-        "rs": 47,
+        "composite": 70,
+        "rs": 48,
         "eps": 90,
         "smr": "B",
         "acc_dis": "C",
@@ -5586,10 +5667,10 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 128.9690298461914,
-          "sma_150": 132.41391932169597,
-          "sma_200": 128.44036437988282,
+          "sma_150": 132.41391977945963,
+          "sma_200": 128.4403646850586,
           "high_52w": 155.3805941192722,
-          "low_52w": 105.014303159646,
+          "low_52w": 105.01431075169688,
           "distance_from_high": -15.52,
           "distance_from_low": 25.0
         }
@@ -5631,13 +5712,13 @@
         "earnings_growth": 133.5,
         "revenue_growth": -0.3,
         "eps_growth": 126.0,
-        "pct_from_high": -24.06,
+        "pct_from_high": -24.39,
         "volume_ratio": 0.74,
         "rs_rating": 63,
-        "inst_ownership": 89.38,
+        "inst_ownership": 89.37,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 36.23,
+        "volatility": 36.2,
         "price_momentum": -20.04
       },
       "ibd_ratings": {
@@ -5666,19 +5747,19 @@
         },
         "stage": "Stage 1/2 Transition",
         "values": {
-          "sma_50": 39.079423599243164,
-          "sma_150": 35.09009709676107,
-          "sma_200": 32.50052055358887,
-          "high_52w": 43.40534385121132,
-          "low_52w": 19.71264395945606,
-          "distance_from_high": -24.06,
-          "distance_from_low": 67.2
+          "sma_50": 39.17979995727539,
+          "sma_150": 35.21741996765137,
+          "sma_200": 32.62231647491455,
+          "high_52w": 43.59000015258789,
+          "low_52w": 19.796505470564636,
+          "distance_from_high": -24.39,
+          "distance_from_low": 66.49
         }
       },
       "week_52_range": {
-        "high": 43.41,
-        "low": 19.71,
-        "current_position": 75.9
+        "high": 43.59,
+        "low": 19.8,
+        "current_position": 75.6
       }
     },
     {
@@ -5715,7 +5796,7 @@
         "pct_from_high": -24.73,
         "volume_ratio": 0.99,
         "rs_rating": 81,
-        "inst_ownership": 100.96,
+        "inst_ownership": 100.97,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 51.63,
@@ -5749,7 +5830,7 @@
         "values": {
           "sma_50": 1540.125576171875,
           "sma_150": 1236.3636608886718,
-          "sma_200": 1165.4089666748048,
+          "sma_200": 1165.4089669799805,
           "high_52w": 1711.4785298274292,
           "low_52w": 682.0971142410851,
           "distance_from_high": -24.73,
@@ -5829,8 +5910,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 202.03924896240235,
-          "sma_150": 167.00634938557943,
-          "sma_200": 166.97128746032715,
+          "sma_150": 167.00634928385418,
+          "sma_200": 166.9712875366211,
           "high_52w": 258.9635412258548,
           "low_52w": 121.54109371821322,
           "distance_from_high": -31.94,
@@ -5911,9 +5992,9 @@
         "values": {
           "sma_50": 224.82189880371095,
           "sma_150": 206.28612508138022,
-          "sma_200": 193.51018348693847,
+          "sma_200": 193.5101831817627,
           "high_52w": 242.80999755859375,
-          "low_52w": 125.18414662728972,
+          "low_52w": 125.18413916218462,
           "distance_from_high": -12.1,
           "distance_from_low": 70.49
         }
@@ -5958,7 +6039,7 @@
         "pct_from_high": -10.47,
         "volume_ratio": 0.88,
         "rs_rating": 60,
-        "inst_ownership": 98.25,
+        "inst_ownership": 98.2,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 40.61,
@@ -5994,7 +6075,7 @@
           "sma_150": 138.39589207967123,
           "sma_200": 131.18742256164552,
           "high_52w": 161.07692252971748,
-          "low_52w": 85.57767754135533,
+          "low_52w": 85.577670209693,
           "distance_from_high": -10.47,
           "distance_from_low": 68.51
         }
@@ -6038,16 +6119,16 @@
         "eps_growth": 19.4,
         "pct_from_high": -2.76,
         "volume_ratio": 1.09,
-        "rs_rating": 73,
-        "inst_ownership": 65.8,
+        "rs_rating": 74,
+        "inst_ownership": 65.78,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 24.17,
         "price_momentum": -0.84
       },
       "ibd_ratings": {
-        "composite": 75,
-        "rs": 73,
+        "composite": 76,
+        "rs": 74,
         "eps": 64,
         "smr": "A",
         "acc_dis": "C",
@@ -6073,9 +6154,9 @@
         "values": {
           "sma_50": 293.4565985107422,
           "sma_150": 273.89637552897136,
-          "sma_200": 270.3212229156494,
+          "sma_200": 270.3212233734131,
           "high_52w": 317.3999938964844,
-          "low_52w": 200.7037642416869,
+          "low_52w": 200.7037794341265,
           "distance_from_high": -2.76,
           "distance_from_low": 53.77
         }
@@ -6153,8 +6234,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 359.1488330078125,
-          "sma_150": 286.9795189412435,
-          "sma_200": 267.7773115539551,
+          "sma_150": 286.97951833089195,
+          "sma_200": 267.77731094360354,
           "high_52w": 428.92999267578125,
           "low_52w": 189.4976236113212,
           "distance_from_high": -20.43,
@@ -6201,7 +6282,7 @@
         "pct_from_high": -12.88,
         "volume_ratio": 0.76,
         "rs_rating": 56,
-        "inst_ownership": 67.98,
+        "inst_ownership": 67.96,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 31.09,
@@ -6282,7 +6363,7 @@
         "pct_from_high": -0.53,
         "volume_ratio": 0.7,
         "rs_rating": 83,
-        "inst_ownership": 105.99,
+        "inst_ownership": 105.87,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 32.84,
@@ -6315,8 +6396,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 71.98744705200195,
-          "sma_150": 67.75338638305664,
-          "sma_200": 67.28112968444825,
+          "sma_150": 67.7533866628011,
+          "sma_200": 67.281130027771,
           "high_52w": 83.20999908447266,
           "low_52w": 57.7649348292224,
           "distance_from_high": -0.53,
@@ -6376,7 +6457,7 @@
         "smr": "A",
         "acc_dis": "C",
         "atr_percent": 3.25,
-        "pe_ratio": 29.881903,
+        "pe_ratio": 29.83614,
         "roe": 114.29,
         "sales_growth": 85.2
       },
@@ -6397,7 +6478,7 @@
         "values": {
           "sma_50": 209.6465234375,
           "sma_150": 192.31982076009115,
-          "sma_200": 190.8195566558838,
+          "sma_200": 190.81955657958986,
           "high_52w": 236.26463268418732,
           "low_52w": 157.1307137305003,
           "distance_from_high": -17.54,
@@ -6477,8 +6558,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 207.1469577026367,
-          "sma_150": 193.32345052083335,
-          "sma_200": 188.61149536132814,
+          "sma_150": 193.32344950358072,
+          "sma_200": 188.6114939880371,
           "high_52w": 228.5800018310547,
           "low_52w": 152.09703098378446,
           "distance_from_high": -1.1,
@@ -6525,7 +6606,7 @@
         "pct_from_high": -28.65,
         "volume_ratio": 0.91,
         "rs_rating": 74,
-        "inst_ownership": 105.81,
+        "inst_ownership": 105.77,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 45.83,
@@ -6573,84 +6654,84 @@
       }
     },
     {
-      "ticker": "BBY",
-      "name": "Best Buy Co., Inc.",
-      "sector": "Consumer Cyclical",
-      "industry": "Specialty Retail",
-      "market_cap": 16.44,
-      "price": 77.99,
+      "ticker": "KO",
+      "name": "Coca-Cola Company (The)",
+      "sector": "Consumer Defensive",
+      "industry": "Beverages - Non-Alcoholic",
+      "market_cap": 362.01,
+      "price": 84.14,
       "score": 61,
       "ml_probability": 0.5,
       "grades": {
-        "C": "A",
-        "A": "A",
+        "C": "B",
+        "A": "B",
         "N": "A",
         "S": "C",
-        "L": "D",
+        "L": "B",
         "I": "A",
         "M": "B"
       },
       "scores": {
-        "C": 15,
-        "A": 12,
-        "N": 12,
+        "C": 10,
+        "A": 8,
+        "N": 15,
         "S": 2,
-        "L": 0,
-        "I": 10,
+        "L": 8,
+        "I": 8,
         "M": 10
       },
       "metrics": {
-        "earnings_growth": 37.9,
-        "revenue_growth": 1.9,
-        "eps_growth": 36.6,
-        "pct_from_high": -4.35,
-        "volume_ratio": 0.88,
-        "rs_rating": 60,
-        "inst_ownership": 98.72,
+        "earnings_growth": 18.2,
+        "revenue_growth": 12.1,
+        "eps_growth": 17.8,
+        "pct_from_high": 0.0,
+        "volume_ratio": 0.86,
+        "rs_rating": 71,
+        "inst_ownership": 68.22,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 37.4,
-        "price_momentum": 11.32
+        "volatility": 17.24,
+        "price_momentum": 10.24
       },
       "ibd_ratings": {
         "composite": 69,
-        "rs": 60,
-        "eps": 84,
-        "smr": "B",
+        "rs": 71,
+        "eps": 62,
+        "smr": "A",
         "acc_dis": "C",
-        "atr_percent": 3.24,
-        "pe_ratio": 14.442592,
-        "roe": 39.1,
-        "sales_growth": 1.9
+        "atr_percent": 1.85,
+        "pe_ratio": 26.459118,
+        "roe": 43.37,
+        "sales_growth": 12.1
       },
       "trend_template": {
-        "all_pass": false,
-        "score": 7,
+        "all_pass": true,
+        "score": 8,
         "criteria": {
           "Precio > SMA 50": true,
           "Precio > SMA 150": true,
           "Precio > SMA 200": true,
           "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": false,
+          "SMA 150 > SMA 200": true,
           "SMA 200 Tendencia Alcista": true,
           "Precio > 30% del minimo 52s": true,
           "Precio dentro 25% del maximo 52s": true
         },
-        "stage": "Stage 1/2 Transition",
+        "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 66.81259384155274,
-          "sma_150": 65.91803530375162,
-          "sma_200": 68.00442949295044,
-          "high_52w": 81.53917572120406,
-          "low_52w": 54.37638824600882,
-          "distance_from_high": -4.35,
-          "distance_from_low": 43.43
+          "sma_50": 79.51086883544922,
+          "sma_150": 75.56087290445963,
+          "sma_200": 73.45599849700928,
+          "high_52w": 84.13999938964844,
+          "low_52w": 64.03758462860179,
+          "distance_from_high": 0.0,
+          "distance_from_low": 31.39
         }
       },
       "week_52_range": {
-        "high": 81.54,
-        "low": 54.38,
-        "current_position": 95.6
+        "high": 84.14,
+        "low": 64.04,
+        "current_position": 100.0
       }
     },
     {
@@ -6686,8 +6767,8 @@
         "eps_growth": 33.3,
         "pct_from_high": -6.86,
         "volume_ratio": 0.97,
-        "rs_rating": 46,
-        "inst_ownership": 99.56,
+        "rs_rating": 47,
+        "inst_ownership": 99.21,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 25.43,
@@ -6695,7 +6776,7 @@
       },
       "ibd_ratings": {
         "composite": 68,
-        "rs": 46,
+        "rs": 47,
         "eps": 83,
         "smr": "B",
         "acc_dis": "C",
@@ -6720,8 +6801,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 201.62639892578125,
-          "sma_150": 198.44383544921874,
-          "sma_200": 194.01780265808105,
+          "sma_150": 198.4438353474935,
+          "sma_200": 194.01780250549317,
           "high_52w": 219.3800048828125,
           "low_52w": 166.46657282886,
           "distance_from_high": -6.86,
@@ -6768,7 +6849,7 @@
         "pct_from_high": -20.82,
         "volume_ratio": 0.63,
         "rs_rating": 49,
-        "inst_ownership": 102.41,
+        "inst_ownership": 102.46,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 40.18,
@@ -6848,16 +6929,16 @@
         "eps_growth": 72.5,
         "pct_from_high": -27.74,
         "volume_ratio": 0.91,
-        "rs_rating": 37,
-        "inst_ownership": 81.32,
+        "rs_rating": 38,
+        "inst_ownership": 81.28,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 47.96,
         "price_momentum": -10.42
       },
       "ibd_ratings": {
-        "composite": 71,
-        "rs": 37,
+        "composite": 72,
+        "rs": 38,
         "eps": 94,
         "smr": "A",
         "acc_dis": "D",
@@ -6883,7 +6964,7 @@
         "values": {
           "sma_50": 106.42788619995117,
           "sma_150": 108.96102193196614,
-          "sma_200": 102.94073318481445,
+          "sma_200": 102.94073307037354,
           "high_52w": 134.2940212296047,
           "low_52w": 54.787474273304476,
           "distance_from_high": -27.74,
@@ -6930,7 +7011,7 @@
         "pct_from_high": -9.26,
         "volume_ratio": 0.77,
         "rs_rating": 34,
-        "inst_ownership": 93.95,
+        "inst_ownership": 93.96,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 19.25,
@@ -6963,8 +7044,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 157.0480514526367,
-          "sma_150": 155.88317240397134,
-          "sma_200": 152.4121378326416,
+          "sma_150": 155.88317270914715,
+          "sma_200": 152.4121385192871,
           "high_52w": 170.0,
           "low_52w": 118.3926794663703,
           "distance_from_high": -9.26,
@@ -7011,7 +7092,7 @@
         "pct_from_high": -30.03,
         "volume_ratio": 1.17,
         "rs_rating": 47,
-        "inst_ownership": 94.44,
+        "inst_ownership": 94.45,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 54.59,
@@ -7092,7 +7173,7 @@
         "pct_from_high": -5.31,
         "volume_ratio": 0.85,
         "rs_rating": 71,
-        "inst_ownership": 107.87,
+        "inst_ownership": 107.83,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 34.55,
@@ -7125,8 +7206,8 @@
         "stage": "Stage 2 (Advancing)",
         "values": {
           "sma_50": 372.6368389892578,
-          "sma_150": 362.65370890299477,
-          "sma_200": 352.09672088623046,
+          "sma_150": 362.65370971679687,
+          "sma_200": 352.09672271728516,
           "high_52w": 420.5719821943956,
           "low_52w": 270.12621450178005,
           "distance_from_high": -5.31,
@@ -7173,7 +7254,7 @@
         "pct_from_high": -27.07,
         "volume_ratio": 0.76,
         "rs_rating": 55,
-        "inst_ownership": 79.86,
+        "inst_ownership": 79.84,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 46.53,
@@ -7206,8 +7287,8 @@
         "stage": "Stage 1/2 Transition",
         "values": {
           "sma_50": 408.88879638671875,
-          "sma_150": 364.7857476806641,
-          "sma_200": 360.1986973571777,
+          "sma_150": 364.7857480875651,
+          "sma_200": 360.19869705200193,
           "high_52w": 494.21781760890264,
           "low_52w": 267.6191060163645,
           "distance_from_high": -27.07,
@@ -7253,16 +7334,16 @@
         "eps_growth": 12.7,
         "pct_from_high": -0.56,
         "volume_ratio": 0.67,
-        "rs_rating": 80,
-        "inst_ownership": 101.1,
+        "rs_rating": 79,
+        "inst_ownership": 101.12,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 30.51,
+        "volatility": 30.49,
         "price_momentum": 4.65
       },
       "ibd_ratings": {
         "composite": 70,
-        "rs": 80,
+        "rs": 79,
         "eps": 59,
         "smr": "B",
         "acc_dis": "B",
@@ -7286,18 +7367,18 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 157.1844760131836,
-          "sma_150": 152.28826975504558,
-          "sma_200": 145.40370155334472,
+          "sma_50": 157.60900024414062,
+          "sma_150": 152.94456013997396,
+          "sma_200": 146.0566384124756,
           "high_52w": 168.52000427246094,
-          "low_52w": 109.33745350947017,
+          "low_52w": 109.90090423931615,
           "distance_from_high": -0.56,
-          "distance_from_low": 53.26
+          "distance_from_low": 52.47
         }
       },
       "week_52_range": {
         "high": 168.52,
-        "low": 109.34,
+        "low": 109.9,
         "current_position": 99.4
       }
     },
@@ -7335,7 +7416,7 @@
         "pct_from_high": -20.05,
         "volume_ratio": 0.64,
         "rs_rating": 92,
-        "inst_ownership": 105.85,
+        "inst_ownership": 105.83,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 40.77,
@@ -7415,16 +7496,16 @@
         "eps_growth": 18.8,
         "pct_from_high": -9.24,
         "volume_ratio": 0.63,
-        "rs_rating": 77,
-        "inst_ownership": 74.61,
+        "rs_rating": 76,
+        "inst_ownership": 74.55,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 28.67,
+        "volatility": 28.64,
         "price_momentum": -6.55
       },
       "ibd_ratings": {
         "composite": 65,
-        "rs": 77,
+        "rs": 76,
         "eps": 63,
         "smr": "B",
         "acc_dis": "C",
@@ -7448,18 +7529,18 @@
         },
         "stage": "Stage 2 (Advancing)",
         "values": {
-          "sma_50": 996.1940893554688,
-          "sma_150": 918.6800252278646,
-          "sma_200": 882.645531616211,
+          "sma_50": 998.4461999511718,
+          "sma_150": 922.0160546875,
+          "sma_200": 886.000940246582,
           "high_52w": 1125.0,
-          "low_52w": 677.6583500663052,
+          "low_52w": 680.6449156490067,
           "distance_from_high": -9.24,
-          "distance_from_low": 50.67
+          "distance_from_low": 50.0
         }
       },
       "week_52_range": {
         "high": 1125.0,
-        "low": 677.66,
+        "low": 680.64,
         "current_position": 90.8
       }
     },
@@ -7496,7 +7577,7 @@
         "eps_growth": 25.7,
         "pct_from_high": -11.02,
         "volume_ratio": 1.18,
-        "rs_rating": 69,
+        "rs_rating": 70,
         "inst_ownership": 72.77,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
@@ -7505,7 +7586,7 @@
       },
       "ibd_ratings": {
         "composite": 77,
-        "rs": 69,
+        "rs": 70,
         "eps": 80,
         "smr": "A",
         "acc_dis": "C",
@@ -7545,87 +7626,6 @@
       }
     },
     {
-      "ticker": "KO",
-      "name": "Coca-Cola Company (The)",
-      "sector": "Consumer Defensive",
-      "industry": "Beverages - Non-Alcoholic",
-      "market_cap": 362.01,
-      "price": 84.14,
-      "score": 57,
-      "ml_probability": 0.5,
-      "grades": {
-        "C": "B",
-        "A": "B",
-        "N": "A",
-        "S": "C",
-        "L": "C",
-        "I": "A",
-        "M": "B"
-      },
-      "scores": {
-        "C": 10,
-        "A": 8,
-        "N": 15,
-        "S": 2,
-        "L": 4,
-        "I": 8,
-        "M": 10
-      },
-      "metrics": {
-        "earnings_growth": 18.2,
-        "revenue_growth": 12.1,
-        "eps_growth": 17.8,
-        "pct_from_high": 0.0,
-        "volume_ratio": 0.86,
-        "rs_rating": 70,
-        "inst_ownership": 68.21,
-        "market_score": 70,
-        "market_phase": "UPTREND UNDER PRESSURE",
-        "volatility": 17.24,
-        "price_momentum": 10.24
-      },
-      "ibd_ratings": {
-        "composite": 69,
-        "rs": 70,
-        "eps": 62,
-        "smr": "A",
-        "acc_dis": "C",
-        "atr_percent": 1.85,
-        "pe_ratio": 26.459118,
-        "roe": 43.37,
-        "sales_growth": 12.1
-      },
-      "trend_template": {
-        "all_pass": true,
-        "score": 8,
-        "criteria": {
-          "Precio > SMA 50": true,
-          "Precio > SMA 150": true,
-          "Precio > SMA 200": true,
-          "SMA 50 > SMA 150": true,
-          "SMA 150 > SMA 200": true,
-          "SMA 200 Tendencia Alcista": true,
-          "Precio > 30% del minimo 52s": true,
-          "Precio dentro 25% del maximo 52s": true
-        },
-        "stage": "Stage 2 (Advancing)",
-        "values": {
-          "sma_50": 79.51086883544922,
-          "sma_150": 75.56087295532227,
-          "sma_200": 73.45599857330322,
-          "high_52w": 84.13999938964844,
-          "low_52w": 64.03758462860179,
-          "distance_from_high": 0.0,
-          "distance_from_low": 31.39
-        }
-      },
-      "week_52_range": {
-        "high": 84.14,
-        "low": 64.04,
-        "current_position": 100.0
-      }
-    },
-    {
       "ticker": "CDNS",
       "name": "Cadence Design Systems, Inc.",
       "sector": "Technology",
@@ -7659,7 +7659,7 @@
         "pct_from_high": -10.45,
         "volume_ratio": 0.79,
         "rs_rating": 73,
-        "inst_ownership": 91.09,
+        "inst_ownership": 91.08,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 38.98,
@@ -7740,7 +7740,7 @@
         "pct_from_high": -2.01,
         "volume_ratio": 1.53,
         "rs_rating": 98,
-        "inst_ownership": 78.91,
+        "inst_ownership": 78.88,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 68.2,
@@ -7821,7 +7821,7 @@
         "pct_from_high": -2.8,
         "volume_ratio": 1.0,
         "rs_rating": 97,
-        "inst_ownership": 83.08,
+        "inst_ownership": 83.1,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 40.31,
@@ -7834,7 +7834,7 @@
         "smr": "B",
         "acc_dis": "B",
         "atr_percent": 3.62,
-        "pe_ratio": 300.05173,
+        "pe_ratio": 302.6609,
         "roe": 4.83,
         "sales_growth": 31.1
       },
@@ -7902,7 +7902,7 @@
         "pct_from_high": -3.94,
         "volume_ratio": 0.64,
         "rs_rating": 89,
-        "inst_ownership": 96.33,
+        "inst_ownership": 96.26,
         "market_score": 70,
         "market_phase": "UPTREND UNDER PRESSURE",
         "volatility": 42.28,
@@ -7936,7 +7936,7 @@
         "values": {
           "sma_50": 1008.5258337402344,
           "sma_150": 882.7088309733073,
-          "sma_200": 888.967790222168,
+          "sma_200": 888.9677911376953,
           "high_52w": 1143.68994140625,
           "low_52w": 700.143922366459,
           "distance_from_high": -3.94,

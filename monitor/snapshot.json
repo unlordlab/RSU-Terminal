@@ -1,8 +1,4 @@
 {
-  "HOOD": {
-    "precio_compra": 74.83,
-    "fecha": "16/03/2026"
-  },
   "RKLB": {
     "precio_compra": 39.12,
     "fecha": "11/07/2025"
@@ -118,6 +114,10 @@
   "URG": {
     "precio_compra": 1.58,
     "fecha": "12/03/2026"
+  },
+  "HOOD": {
+    "precio_compra": 74.83,
+    "fecha": "16/03/2026"
   },
   "GLD": {
     "precio_compra": 410.0,

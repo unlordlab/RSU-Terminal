@@ -5479,3 +5479,69 @@
 2026-07-20 06:14:33,567 [INFO] Completo: 104 candidatos
 2026-07-20 06:14:33,583 [INFO] Guardado: data/scan_cache.json
 2026-07-20 06:14:33,584 [INFO] Tiempo: 5.5 min — OK
+2026-07-21 05:42:20,739 [INFO] ============================================================
+2026-07-21 05:42:20,739 [INFO] CAN SLIM Nightly Scan v4.0.1 — 2026-07-21 05:42 UTC
+2026-07-21 05:42:20,920 [WARNING] Wikipedia no disponible: HTTP Error 403: Forbidden
+2026-07-21 05:42:20,921 [INFO] Universo: 480 tickers
+2026-07-21 05:42:20,922 [INFO] PASO 1/4 — Historico batch...
+2026-07-21 05:42:20,923 [INFO] Failed to create TzCache, reason: Error creating TzCache folder: '/home/runner/.cache/py-yfinance' reason: [Errno 17] File exists: '/home/runner/.cache/py-yfinance'. TzCache will not be used. Tip: You can direct cache to use a different location with 'set_tz_cache_location(mylocation)'
+2026-07-21 05:42:25,533 [INFO]   Batch 1 — 50 descargados
+2026-07-21 05:42:29,664 [INFO]   Batch 2 — 99 descargados
+2026-07-21 05:42:31,836 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: CTRA"}}}
+2026-07-21 05:42:32,103 [ERROR] $CTRA: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:35,833 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-07-21 05:42:36,195 [ERROR] $DAY: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:36,205 [ERROR] 
+2 Failed downloads:
+2026-07-21 05:42:36,205 [ERROR] ['CTRA', 'DAY']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:36,233 [INFO]   Batch 3 — 147 descargados
+2026-07-21 05:42:37,766 [ERROR] $EXAS: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:41,947 [ERROR] 
+1 Failed download:
+2026-07-21 05:42:41,947 [ERROR] ['EXAS']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:41,976 [INFO]   Batch 4 — 196 descargados
+2026-07-21 05:42:46,363 [ERROR] $HOLX: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:46,990 [ERROR] 
+1 Failed download:
+2026-07-21 05:42:46,990 [ERROR] ['HOLX']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:47,018 [INFO]   Batch 5 — 245 descargados
+2026-07-21 05:42:51,313 [ERROR] $MMC: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:55,270 [ERROR] 
+1 Failed download:
+2026-07-21 05:42:55,270 [ERROR] ['MMC']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+2026-07-21 05:42:55,299 [INFO]   Batch 6 — 294 descargados
+2026-07-21 05:43:01,439 [INFO]   Batch 7 — 344 descargados
+2026-07-21 05:43:07,989 [INFO]   Batch 8 — 394 descargados
+2026-07-21 05:43:14,963 [INFO]   Batch 9 — 444 descargados
+2026-07-21 05:43:18,895 [INFO]   Batch 10 — 474 descargados
+2026-07-21 05:43:18,895 [INFO] PASO 2/4 — Info fundamental...
+2026-07-21 05:43:44,210 [INFO]   Info: 50/480
+2026-07-21 05:44:11,709 [INFO]   Info: 100/480
+2026-07-21 05:44:27,449 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: CTRA"}}}
+2026-07-21 05:44:31,840 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: DAY"}}}
+2026-07-21 05:44:38,834 [INFO]   Info: 150/480
+2026-07-21 05:44:53,950 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: EXAS"}}}
+2026-07-21 05:45:06,111 [INFO]   Info: 200/480
+2026-07-21 05:45:33,524 [INFO]   Info: 250/480
+2026-07-21 05:46:00,708 [INFO]   Info: 300/480
+2026-07-21 05:46:28,431 [INFO]   Info: 350/480
+2026-07-21 05:46:55,582 [INFO]   Info: 400/480
+2026-07-21 05:47:22,853 [INFO]   Info: 450/480
+2026-07-21 05:47:40,444 [INFO]   477 tickers
+2026-07-21 05:47:40,445 [INFO] PASO 3/4 — Pre-filtro...
+2026-07-21 05:47:40,530 [INFO]   459 tickers
+2026-07-21 05:47:40,530 [INFO] PASO 3b — SPY + RS + Market Score...
+2026-07-21 05:47:41,433 [INFO]   Market: 40/100 MARKET IN TRANSITION
+2026-07-21 05:47:41,433 [INFO] PASO 4/4 — Scores CAN SLIM...
+2026-07-21 05:47:41,598 [INFO]   50/459 — candidatos: 14
+2026-07-21 05:47:41,762 [INFO]   100/459 — candidatos: 26
+2026-07-21 05:47:41,926 [INFO]   150/459 — candidatos: 35
+2026-07-21 05:47:42,089 [INFO]   200/459 — candidatos: 45
+2026-07-21 05:47:42,253 [INFO]   250/459 — candidatos: 56
+2026-07-21 05:47:42,417 [INFO]   300/459 — candidatos: 61
+2026-07-21 05:47:42,580 [INFO]   350/459 — candidatos: 71
+2026-07-21 05:47:42,744 [INFO]   400/459 — candidatos: 80
+2026-07-21 05:47:42,908 [INFO]   450/459 — candidatos: 94
+2026-07-21 05:47:42,938 [INFO] Completo: 94 candidatos
+2026-07-21 05:47:42,953 [INFO] Guardado: data/scan_cache.json
+2026-07-21 05:47:42,953 [INFO] Tiempo: 5.4 min — OK
